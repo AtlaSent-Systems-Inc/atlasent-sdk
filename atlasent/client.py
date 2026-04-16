@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+import uuid
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -17,6 +18,9 @@ from .models import (
     VerifyRequest,
     VerifyResult,
 )
+
+if TYPE_CHECKING:
+    from .cache import TTLCache
 
 logger = logging.getLogger("atlasent")
 
@@ -40,6 +44,8 @@ class AtlaSentClient:
         timeout: HTTP request timeout in seconds.
         max_retries: Retries on transient errors (5xx, timeouts).
         retry_backoff: Base backoff in seconds (doubles each retry).
+        cache: Optional :class:`~atlasent.cache.TTLCache` for caching
+            evaluate results and avoiding redundant API calls.
 
     Usage::
 
@@ -65,6 +71,7 @@ class AtlaSentClient:
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         retry_backoff: float = DEFAULT_RETRY_BACKOFF,
+        cache: TTLCache | None = None,
     ) -> None:
         self._api_key = api_key
         self._anon_key = anon_key
@@ -72,6 +79,7 @@ class AtlaSentClient:
         self._timeout = timeout
         self._max_retries = max_retries
         self._retry_backoff = retry_backoff
+        self._cache = cache
         self._client = httpx.Client(
             headers={
                 "Content-Type": "application/json",
@@ -103,10 +111,22 @@ class AtlaSentClient:
             AtlaSentError: Network error, timeout, or unexpected response.
             RateLimitError: HTTP 429.
         """
+        ctx = context or {}
+
+        # Check cache
+        if self._cache is not None:
+            from .cache import TTLCache
+
+            cache_key = TTLCache.make_key(action_type, actor_id, ctx)
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                logger.debug("evaluate cache hit for %s", cache_key)
+                return cached
+
         req = EvaluateRequest(
             action_type=action_type,
             actor_id=actor_id,
-            context=context or {},
+            context=ctx,
             api_key=self._api_key,
         )
         logger.debug("evaluate action=%r actor=%r", action_type, actor_id)
@@ -128,6 +148,11 @@ class AtlaSentClient:
             actor_id,
             result.permit_token,
         )
+
+        # Store in cache
+        if self._cache is not None:
+            self._cache.put(cache_key, result)
+
         return result
 
     def verify(
@@ -206,10 +231,12 @@ class AtlaSentClient:
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         """POST with retry on transient failures (5xx, timeouts)."""
         url = f"{self._base_url}{path}"
+        request_id = uuid.uuid4().hex[:12]
+        headers = {"X-Request-ID": request_id}
 
         for attempt in range(1 + self._max_retries):
             try:
-                response = self._client.post(url, json=payload)
+                response = self._client.post(url, json=payload, headers=headers)
             except httpx.TimeoutException as exc:
                 logger.warning(
                     "%s timeout (attempt %d/%d)",
