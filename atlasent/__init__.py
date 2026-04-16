@@ -34,4 +34,5 @@ __all__ = [
     "ConfigurationError",
     "PermissionDeniedError",
     "RateLimitError",
+    "__version__",
 ]

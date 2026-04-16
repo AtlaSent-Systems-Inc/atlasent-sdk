@@ -2,14 +2,11 @@
 
 import pytest
 
-import atlasent
 from atlasent import authorize, configure
 from atlasent.authorize import _reset_default_client
 from atlasent.client import AtlaSentClient
 from atlasent.config import reset
 from atlasent.exceptions import ConfigurationError
-from atlasent.models import AuthorizationResult
-
 
 EVALUATE_OK = {
     "permitted": True,

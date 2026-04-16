@@ -15,9 +15,7 @@ def client():
 
 @pytest.fixture
 def client_with_retries():
-    return AtlaSentClient(
-        api_key="test_key_123", max_retries=2, retry_backoff=0.01
-    )
+    return AtlaSentClient(api_key="test_key_123", max_retries=2, retry_backoff=0.01)
 
 
 def _mock_response(mocker, status_code=200, json_data=None, text="", headers=None):
@@ -258,9 +256,7 @@ class TestRetryLogic:
         assert client_with_retries._session.post.call_count == 2
 
     def test_retries_on_5xx(self, client_with_retries, mocker):
-        error_resp = _mock_response(
-            mocker, status_code=502, text="Bad Gateway"
-        )
+        error_resp = _mock_response(mocker, status_code=502, text="Bad Gateway")
         ok_resp = _mock_response(mocker, json_data=EVALUATE_OK)
         mocker.patch.object(
             client_with_retries._session,
@@ -286,9 +282,7 @@ class TestRetryLogic:
         assert client_with_retries._session.post.call_count == 3
 
     def test_no_retry_on_4xx(self, client_with_retries, mocker):
-        mock_response = _mock_response(
-            mocker, status_code=422, text="Unprocessable"
-        )
+        mock_response = _mock_response(mocker, status_code=422, text="Unprocessable")
         mocker.patch.object(
             client_with_retries._session,
             "post",
@@ -380,9 +374,7 @@ class TestResourceManagement:
 class TestResponseTextTruncation:
     def test_large_error_response_truncated(self, client, mocker):
         long_text = "x" * 1000
-        mock_response = _mock_response(
-            mocker, status_code=400, text=long_text
-        )
+        mock_response = _mock_response(mocker, status_code=400, text=long_text)
         mocker.patch.object(client._session, "post", return_value=mock_response)
 
         with pytest.raises(AtlaSentError) as exc_info:

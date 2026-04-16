@@ -1,7 +1,7 @@
 """Top-level convenience function for authorization."""
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from .client import AtlaSentClient
 from .config import get_api_key, get_base_url, get_environment
@@ -36,8 +36,8 @@ def _reset_default_client() -> None:
 def authorize(
     agent: str,
     action: str,
-    context: Optional[dict[str, Any]] = None,
-    client: Optional[AtlaSentClient] = None,
+    context: dict[str, Any] | None = None,
+    client: AtlaSentClient | None = None,
 ) -> AuthorizationResult:
     """Evaluate whether an agent action is authorized.
 

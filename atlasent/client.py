@@ -2,13 +2,13 @@
 
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
-from ._version import __version__ as SDK_VERSION
+from ._version import __version__
 from .config import DEFAULT_BASE_URL, get_api_key
-from .exceptions import AtlaSentError, PermissionDeniedError, RateLimitError
+from .exceptions import AtlaSentError, RateLimitError
 from .models import AuthorizationResult
 
 logger = logging.getLogger("atlasent")
@@ -41,7 +41,7 @@ class AtlaSentClient:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         environment: str = "production",
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = DEFAULT_TIMEOUT,
@@ -58,7 +58,7 @@ class AtlaSentClient:
         self._session.headers.update(
             {
                 "Content-Type": "application/json",
-                "User-Agent": f"atlasent-python/{SDK_VERSION}",
+                "User-Agent": f"atlasent-python/{__version__}",
             }
         )
 
@@ -73,7 +73,7 @@ class AtlaSentClient:
         self,
         agent: str,
         action: str,
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> AuthorizationResult:
         """Evaluate whether an agent action is authorized.
 
@@ -97,9 +97,7 @@ class AtlaSentClient:
             "context": context or {},
             "api_key": self.api_key,
         }
-        logger.debug(
-            "Evaluating action=%r for agent=%r", action, agent
-        )
+        logger.debug("Evaluating action=%r for agent=%r", action, agent)
         data = self._post("/v1-evaluate", payload)
         result = AuthorizationResult(
             permitted=data["permitted"],
@@ -165,15 +163,11 @@ class AtlaSentClient:
         with exponential backoff. Raises immediately on client errors (4xx).
         """
         url = f"{self._base_url}{path}"
-        last_exception: Exception | None = None
 
         for attempt in range(1 + self._max_retries):
             try:
-                response = self._session.post(
-                    url, json=payload, timeout=self._timeout
-                )
+                response = self._session.post(url, json=payload, timeout=self._timeout)
             except requests.exceptions.Timeout as exc:
-                last_exception = exc
                 logger.warning(
                     "Request to %s timed out (attempt %d/%d)",
                     path,
@@ -188,7 +182,6 @@ class AtlaSentClient:
                     f"{1 + self._max_retries} attempts"
                 ) from exc
             except requests.exceptions.ConnectionError as exc:
-                last_exception = exc
                 logger.warning(
                     "Connection to %s failed (attempt %d/%d): %s",
                     self._base_url,
@@ -209,9 +202,7 @@ class AtlaSentClient:
             # Handle HTTP status codes
             if response.status_code == 429:
                 retry_after = self._parse_retry_after(response)
-                logger.warning(
-                    "Rate limited on %s (retry_after=%s)", path, retry_after
-                )
+                logger.warning("Rate limited on %s (retry_after=%s)", path, retry_after)
                 raise RateLimitError(retry_after=retry_after)
 
             if response.status_code == 401:
@@ -235,15 +226,13 @@ class AtlaSentClient:
                     self._backoff(attempt)
                     continue
                 raise AtlaSentError(
-                    f"API error {response.status_code}: "
-                    f"{response.text[:500]}",
+                    f"API error {response.status_code}: " f"{response.text[:500]}",
                     status_code=response.status_code,
                 )
 
             if response.status_code >= 400:
                 raise AtlaSentError(
-                    f"API error {response.status_code}: "
-                    f"{response.text[:500]}",
+                    f"API error {response.status_code}: " f"{response.text[:500]}",
                     status_code=response.status_code,
                 )
 
@@ -251,9 +240,7 @@ class AtlaSentClient:
             try:
                 return response.json()
             except ValueError as exc:
-                raise AtlaSentError(
-                    "Invalid JSON response from AtlaSent API"
-                ) from exc
+                raise AtlaSentError("Invalid JSON response from AtlaSent API") from exc
 
         # Should not reach here, but guard against it
         raise AtlaSentError(

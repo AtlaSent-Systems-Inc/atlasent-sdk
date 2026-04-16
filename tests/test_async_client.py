@@ -11,7 +11,6 @@ from atlasent.async_client import AsyncAtlaSentClient
 from atlasent.exceptions import AtlaSentError, ConfigurationError, RateLimitError
 from atlasent.models import AuthorizationResult
 
-
 EVALUATE_OK = {
     "permitted": True,
     "decision_id": "dec_100",
@@ -55,9 +54,7 @@ class TestAsyncEvaluate:
     @pytest.mark.asyncio
     async def test_permitted_response(self, async_client, mocker):
         mock_response = _mock_httpx_response(mocker, json_data=EVALUATE_OK)
-        mocker.patch.object(
-            async_client._client, "post", return_value=mock_response
-        )
+        mocker.patch.object(async_client._client, "post", return_value=mock_response)
 
         result = await async_client.evaluate(
             "test-agent", "read_data", {"study": "S001"}
@@ -70,9 +67,7 @@ class TestAsyncEvaluate:
     @pytest.mark.asyncio
     async def test_denied_response(self, async_client, mocker):
         mock_response = _mock_httpx_response(mocker, json_data=EVALUATE_DENIED)
-        mocker.patch.object(
-            async_client._client, "post", return_value=mock_response
-        )
+        mocker.patch.object(async_client._client, "post", return_value=mock_response)
 
         result = await async_client.evaluate("test-agent", "update_record")
 
@@ -104,9 +99,7 @@ class TestAsyncEvaluate:
     @pytest.mark.asyncio
     async def test_401_raises_error(self, async_client, mocker):
         mock_response = _mock_httpx_response(mocker, status_code=401)
-        mocker.patch.object(
-            async_client._client, "post", return_value=mock_response
-        )
+        mocker.patch.object(async_client._client, "post", return_value=mock_response)
 
         with pytest.raises(AtlaSentError, match="Invalid API key"):
             await async_client.evaluate("test-agent", "read_data")
@@ -121,9 +114,7 @@ class TestAsyncVerifyPermit:
             "timestamp": "2025-01-15T12:05:00Z",
         }
         mock_response = _mock_httpx_response(mocker, json_data=verify_data)
-        mocker.patch.object(
-            async_client._client, "post", return_value=mock_response
-        )
+        mocker.patch.object(async_client._client, "post", return_value=mock_response)
 
         result = await async_client.verify_permit("dec_100")
 
@@ -165,9 +156,7 @@ class TestAsyncRetryLogic:
         assert result.permitted is True
 
     @pytest.mark.asyncio
-    async def test_exhausted_retries_raises(
-        self, async_client_with_retries, mocker
-    ):
+    async def test_exhausted_retries_raises(self, async_client_with_retries, mocker):
         mocker.patch.object(
             async_client_with_retries._client,
             "post",
@@ -184,9 +173,7 @@ class TestAsyncRateLimiting:
         mock_response = _mock_httpx_response(
             mocker, status_code=429, headers={"retry-after": "30"}
         )
-        mocker.patch.object(
-            async_client._client, "post", return_value=mock_response
-        )
+        mocker.patch.object(async_client._client, "post", return_value=mock_response)
 
         with pytest.raises(RateLimitError) as exc_info:
             await async_client.evaluate("agent", "action")
@@ -197,9 +184,7 @@ class TestAsyncRateLimiting:
 class TestAsyncResourceManagement:
     @pytest.mark.asyncio
     async def test_async_context_manager(self, mocker):
-        async with AsyncAtlaSentClient(
-            api_key="key", max_retries=0
-        ) as client:
+        async with AsyncAtlaSentClient(api_key="key", max_retries=0) as client:
             mock_close = mocker.patch.object(client._client, "aclose")
 
         mock_close.assert_called_once()

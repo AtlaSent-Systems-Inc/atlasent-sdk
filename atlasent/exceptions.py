@@ -19,9 +19,7 @@ class PermissionDeniedError(AtlaSentError):
         audit_hash: The audit trail hash for this decision.
     """
 
-    def __init__(
-        self, reason: str, decision_id: str, audit_hash: str = ""
-    ) -> None:
+    def __init__(self, reason: str, decision_id: str, audit_hash: str = "") -> None:
         self.reason = reason
         self.decision_id = decision_id
         self.audit_hash = audit_hash

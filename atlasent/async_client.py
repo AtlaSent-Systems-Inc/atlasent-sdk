@@ -2,14 +2,14 @@
 
 import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any
 
 try:
     import httpx
 except ImportError:  # pragma: no cover
     httpx = None  # type: ignore[assignment]
 
-from ._version import __version__ as SDK_VERSION
+from ._version import __version__
 from .config import DEFAULT_BASE_URL, get_api_key
 from .exceptions import AtlaSentError, RateLimitError
 from .models import AuthorizationResult
@@ -56,7 +56,7 @@ class AsyncAtlaSentClient:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         environment: str = "production",
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = DEFAULT_TIMEOUT,
@@ -73,7 +73,7 @@ class AsyncAtlaSentClient:
         self._client = httpx.AsyncClient(
             headers={
                 "Content-Type": "application/json",
-                "User-Agent": f"atlasent-python/{SDK_VERSION}",
+                "User-Agent": f"atlasent-python/{__version__}",
             },
             timeout=self._timeout,
         )
@@ -89,7 +89,7 @@ class AsyncAtlaSentClient:
         self,
         agent: str,
         action: str,
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> AuthorizationResult:
         """Evaluate whether an agent action is authorized.
 
@@ -213,9 +213,7 @@ class AsyncAtlaSentClient:
 
             if response.status_code == 429:
                 retry_after = self._parse_retry_after(response)
-                logger.warning(
-                    "Rate limited on %s (retry_after=%s)", path, retry_after
-                )
+                logger.warning("Rate limited on %s (retry_after=%s)", path, retry_after)
                 raise RateLimitError(retry_after=retry_after)
 
             if response.status_code == 401:
@@ -238,24 +236,20 @@ class AsyncAtlaSentClient:
                     await self._backoff(attempt)
                     continue
                 raise AtlaSentError(
-                    f"API error {response.status_code}: "
-                    f"{response.text[:500]}",
+                    f"API error {response.status_code}: " f"{response.text[:500]}",
                     status_code=response.status_code,
                 )
 
             if response.status_code >= 400:
                 raise AtlaSentError(
-                    f"API error {response.status_code}: "
-                    f"{response.text[:500]}",
+                    f"API error {response.status_code}: " f"{response.text[:500]}",
                     status_code=response.status_code,
                 )
 
             try:
                 return response.json()
             except ValueError as exc:
-                raise AtlaSentError(
-                    "Invalid JSON response from AtlaSent API"
-                ) from exc
+                raise AtlaSentError("Invalid JSON response from AtlaSent API") from exc
 
         raise AtlaSentError(
             f"Request to {path} failed after {1 + self._max_retries} attempts"
