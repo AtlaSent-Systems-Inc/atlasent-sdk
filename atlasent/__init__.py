@@ -16,6 +16,7 @@ Quick start::
 from ._version import __version__
 from .async_client import AsyncAtlaSentClient
 from .authorize import evaluate, gate, verify
+from .cache import TTLCache
 from .client import AtlaSentClient
 from .config import configure
 from .exceptions import (
@@ -24,6 +25,7 @@ from .exceptions import (
     ConfigurationError,
     RateLimitError,
 )
+from .guard import async_atlasent_guard, atlasent_guard
 from .models import EvaluateResult, GateResult, VerifyResult
 
 __all__ = [
@@ -47,4 +49,9 @@ __all__ = [
     "AtlaSentDenied",
     "ConfigurationError",
     "RateLimitError",
+    # guard decorators
+    "atlasent_guard",
+    "async_atlasent_guard",
+    # cache
+    "TTLCache",
 ]

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.0 — 2025-04-16
+
+### Added
+
+- **`atlasent_guard` / `async_atlasent_guard` decorators** — gate any
+  function behind AtlaSent authorization with a single decorator. Supports
+  dynamic actor IDs and context from function kwargs.
+- **Structured JSON logging** — `atlasent.logging.configure_logging()` sets
+  up the ``atlasent`` logger with a JSON formatter suitable for SIEM/CloudWatch.
+  Includes ``timestamp``, ``level``, ``logger``, ``message``, and optional
+  fields: ``action_type``, ``actor_id``, ``permit_token``, ``request_id``.
+- **TTLCache** — in-memory TTL cache for evaluate results. Pass
+  ``cache=TTLCache(ttl=30)`` to ``AtlaSentClient`` to avoid redundant
+  API calls for identical (action, actor, context) tuples.
+- **Request ID correlation** — every HTTP request now includes an
+  ``X-Request-ID`` header (UUID-based) for end-to-end tracing.
+
+### Changed
+
+- ``AtlaSentClient`` and ``AsyncAtlaSentClient`` now accept an optional
+  ``cache`` parameter.
+- Version bumped to 0.2.0.
+
 ## 0.1.0 — 2025-01-15
 
 Initial release of the AtlaSent Python SDK.
