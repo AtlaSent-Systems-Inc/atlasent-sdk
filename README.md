@@ -1,97 +1,128 @@
 # AtlaSent Python SDK
 
-Execution-time authorization for AI agents in GxP-regulated environments. Fail-closed by design — no action proceeds without an explicit permit.
+Execution-time authorization for AI agents. One function call, one decision — fail-closed by design.
 
-```
+```bash
 pip install atlasent
 ```
 
 ## Quickstart
 
 ```python
-from atlasent import AtlaSentClient, AtlaSentDenied
+from atlasent import authorize
 
-client = AtlaSentClient(api_key="ask_live_...")
+result = authorize(
+    agent="clinical-data-agent",
+    action="modify_patient_record",
+    context={"user": "dr_smith", "environment": "production"},
+)
+
+if result.permitted:
+    # execute action
+    update_patient_record(...)
+else:
+    log.warning("Blocked: %s", result.reason)
+```
+
+That's it. `authorize()` calls the AtlaSent policy engine, generates a hash-chained audit entry (21 CFR Part 11 / GxP-ready), and returns a result you can branch on. No SDK setup, no client lifecycle, no boilerplate.
+
+## Configure once
+
+The SDK reads `ATLASENT_API_KEY` from the environment by default:
+
+```bash
+export ATLASENT_API_KEY=ask_live_...
+```
+
+Or configure it explicitly:
+
+```python
+import atlasent
+
+atlasent.configure(api_key="ask_live_...")
+```
+
+## What `result` gives you
+
+`authorize()` returns an `AuthorizationResult`:
+
+| Field          | Type   | Description                                                  |
+|----------------|--------|--------------------------------------------------------------|
+| `permitted`    | `bool` | `True` if the action is authorized.                          |
+| `reason`       | `str`  | Human-readable explanation from the policy engine.           |
+| `permit_token` | `str`  | Opaque decision ID for audit lookup.                         |
+| `audit_hash`   | `str`  | Hash-chained audit-trail entry.                              |
+| `permit_hash`  | `str`  | Verification hash bound to the permit.                       |
+| `verified`     | `bool` | `True` if the permit was server-verified end-to-end.         |
+| `timestamp`    | `str`  | ISO 8601 timestamp of the decision.                          |
+| `agent`        | `str`  | Echo of the `agent` you passed.                              |
+| `action`       | `str`  | Echo of the `action` you passed.                             |
+| `context`      | `dict` | Echo of the `context` you passed.                            |
+| `raw`          | `dict` | The raw JSON response body.                                  |
+
+`AuthorizationResult` is also truthy when permitted, so this works:
+
+```python
+if authorize(agent="a", action="b"):
+    do_the_thing()
+```
+
+## Fail-closed by design
+
+`authorize()` returns `permitted=False` on a clean policy denial. **Any other failure raises** — there is no silent permit:
+
+| Scenario                  | Behavior                                       |
+|---------------------------|------------------------------------------------|
+| Action denied             | `result.permitted == False`                    |
+| Network error / timeout   | raises `AtlaSentError`                         |
+| Invalid API key (401)     | raises `AtlaSentError(status_code=401)`        |
+| Rate limited (429)        | raises `RateLimitError(retry_after=...)`       |
+| Missing config            | raises `ConfigurationError`                    |
+
+For call sites that prefer exceptions on deny:
+
+```python
+from atlasent import authorize, PermissionDeniedError
 
 try:
-    result = client.gate(
-        action_type="modify_patient_record",
-        actor_id="clinical-data-agent",
-        context={"patient_id": "PT-2024-001", "operator": "dr_smith"},
+    authorize(
+        agent="clinical-data-agent",
+        action="delete_audit_log",
+        context={"user": "dr_smith"},
+        raise_on_deny=True,
     )
-    # Action permitted and verified
-    print(result.evaluation.permit_token)
-    print(result.verification.permit_hash)
-except AtlaSentDenied as e:
-    # Action explicitly denied
-    print(f"Blocked: {e.reason}")
+except PermissionDeniedError as exc:
+    log.error("Blocked: %s", exc.reason)
 ```
 
-## What just happened
-
-AtlaSent evaluated your agent action against your GxP policy, generated a hash-chained audit entry, and verified the permit — all before your agent touched any data. Every call is logged, timestamped, and exportable for FDA inspection.
-
-## Three methods
-
-### `evaluate()` — ask for permission
-
-```python
-result = client.evaluate("read_patient_record", "my-agent", {"patient_id": "PT-001"})
-# → EvaluateResult(decision=True, permit_token="dec_...", reason="...", audit_hash="...")
-```
-
-Raises `AtlaSentDenied` if the action is denied. Returns `EvaluateResult` on permit.
-
-### `verify()` — confirm a permit token
-
-```python
-verification = client.verify(result.permit_token, "read_patient_record", "my-agent")
-# → VerifyResult(valid=True, permit_hash="...", timestamp="...")
-```
-
-### `gate()` — evaluate + verify in one call
-
-```python
-gate_result = client.gate("read_patient_record", "my-agent", {"patient_id": "PT-001"})
-# → GateResult(evaluation=EvaluateResult(...), verification=VerifyResult(...))
-```
-
-The happy-path shortcut. Calls `evaluate()`, then immediately `verify()` with the resulting permit token.
-
-## Async support
+## Async
 
 ```python
 from atlasent import AsyncAtlaSentClient
 
 async with AsyncAtlaSentClient(api_key="ask_live_...") as client:
-    result = await client.gate("read_data", "my-agent")
+    result = await client.authorize(
+        agent="clinical-data-agent",
+        action="modify_patient_record",
+        context={"user": "dr_smith", "environment": "production"},
+    )
+    if result.permitted:
+        ...
 ```
 
-Full parity with the sync client — same methods, same exceptions, same models.
+Full parity with the sync surface — same fields, same exceptions.
 
-## Fail-closed design
+## Skip verification when you don't need it
 
-The SDK raises on any failure. No action can proceed without an explicit permit.
-
-| Scenario | Exception |
-|---|---|
-| Action denied | `AtlaSentDenied` |
-| Network error / timeout | `AtlaSentError` |
-| Invalid API key | `AtlaSentError` (status 401) |
-| Rate limited | `RateLimitError` (with `retry_after`) |
-| Missing config | `ConfigurationError` |
+By default `authorize()` calls both `POST /v1-evaluate` and `POST /v1-verify-permit`, returning a fully-verified result. To skip the verification round-trip (one fewer HTTP call):
 
 ```python
-from atlasent import AtlaSentDenied, AtlaSentError, RateLimitError
-
-try:
-    result = client.gate("write_data", "agent-1")
-except AtlaSentDenied as e:
-    print(e.reason, e.permit_token, e.decision)
-except RateLimitError as e:
-    time.sleep(e.retry_after or 30)
-except AtlaSentError as e:
-    print(e.message, e.status_code)
+result = authorize(
+    agent="agent-1",
+    action="read_data",
+    verify=False,
+)
+# result.permit_hash and result.verified will be empty / False
 ```
 
 ## Configuration
@@ -99,30 +130,22 @@ except AtlaSentError as e:
 ```python
 from atlasent import AtlaSentClient
 
-# Explicit
 client = AtlaSentClient(
     api_key="ask_live_...",
-    anon_key="ask_anon_...",        # optional, for client-side contexts
     base_url="https://api.atlasent.io",  # default
-    timeout=10,                      # seconds, default
-    max_retries=2,                   # on 5xx/timeouts, default
-    retry_backoff=0.5,               # seconds, doubles each retry
+    timeout=10,                          # seconds, default
+    max_retries=2,                       # on 5xx / timeouts, default
+    retry_backoff=0.5,                   # seconds, doubles each retry
 )
 
-# Or use environment variables
-# ATLASENT_API_KEY=ask_live_...
-# ATLASENT_ANON_KEY=ask_anon_...
+result = client.authorize(
+    agent="clinical-data-agent",
+    action="modify_patient_record",
+    context={"user": "dr_smith"},
+)
 ```
 
-### Global config (convenience functions)
-
-```python
-import atlasent
-
-atlasent.configure(api_key="ask_live_...")
-result = atlasent.evaluate("read_data", "my-agent")
-result = atlasent.gate("read_data", "my-agent")
-```
+Environment variables: `ATLASENT_API_KEY`, `ATLASENT_ANON_KEY`.
 
 ## Framework integration
 
@@ -130,75 +153,69 @@ result = atlasent.gate("read_data", "my-agent")
 
 ```python
 from fastapi import FastAPI, HTTPException
-from atlasent import AsyncAtlaSentClient, AtlaSentDenied
+from atlasent import AsyncAtlaSentClient
 
 app = FastAPI()
 client = AsyncAtlaSentClient(api_key="ask_live_...")
 
 @app.post("/modify-record")
 async def modify_record(patient_id: str, agent_id: str):
-    try:
-        gate = await client.gate(
-            "modify_patient_record", agent_id,
-            {"patient_id": patient_id},
-        )
-    except AtlaSentDenied as e:
-        raise HTTPException(403, detail=e.reason)
-
-    # Proceed — action is permitted and verified
-    return {"permit_hash": gate.verification.permit_hash}
+    result = await client.authorize(
+        agent=agent_id,
+        action="modify_patient_record",
+        context={"patient_id": patient_id},
+    )
+    if not result.permitted:
+        raise HTTPException(403, detail=result.reason)
+    return {"permit_hash": result.permit_hash}
 ```
 
 ### Flask
 
 ```python
-from flask import Flask, jsonify, abort
-from atlasent import AtlaSentClient, AtlaSentDenied
+from flask import Flask, jsonify, abort, request
+from atlasent import AtlaSentClient
 
 app = Flask(__name__)
 client = AtlaSentClient(api_key="ask_live_...")
 
-@app.route("/modify-record", methods=["POST"])
+@app.post("/modify-record")
 def modify_record():
-    try:
-        gate = client.gate(
-            "modify_patient_record", "flask-agent",
-            {"patient_id": request.json["patient_id"]},
-        )
-    except AtlaSentDenied as e:
-        abort(403, description=e.reason)
-
-    return jsonify(permit_hash=gate.verification.permit_hash)
+    result = client.authorize(
+        agent="flask-agent",
+        action="modify_patient_record",
+        context={"patient_id": request.json["patient_id"]},
+    )
+    if not result.permitted:
+        abort(403, description=result.reason)
+    return jsonify(permit_hash=result.permit_hash)
 ```
 
-## Response models
+## Lower-level methods
 
-All responses are Pydantic v2 models.
+`authorize()` is the recommended surface, but the underlying primitives are exported too:
 
-**`EvaluateResult`** — returned by `evaluate()` on permit:
-- `decision: bool` — `True` when permitted
-- `permit_token: str` — opaque token for verification
-- `reason: str` — human-readable explanation
-- `audit_hash: str` — hash-chained audit trail entry
-- `timestamp: str` — ISO 8601
+- `client.evaluate(action, agent, context)` — policy decision only; raises `AtlaSentDenied` on denial.
+- `client.verify(permit_token, ...)` — verify a previously issued permit.
+- `client.gate(action, agent, context)` — evaluate + verify; raises on denial; returns `GateResult` with both response objects.
+- `@atlasent_guard(...)` / `@async_atlasent_guard(...)` — decorators for Flask / FastAPI routes.
+- `TTLCache` — opt-in in-process cache for hot-path evaluations.
 
-**`VerifyResult`** — returned by `verify()`:
-- `valid: bool` — whether the permit is still valid
-- `permit_hash: str` — the permit hash
-- `timestamp: str` — ISO 8601
+See the docstrings and `examples/` for details.
 
-**`GateResult`** — returned by `gate()`:
-- `evaluation: EvaluateResult`
-- `verification: VerifyResult`
+## API endpoints
 
-## Get your API key
+The SDK calls:
 
-Sign up at [atlasent.io](https://atlasent.io) → Settings → API Keys
+- `POST https://api.atlasent.io/v1-evaluate`
+- `POST https://api.atlasent.io/v1-verify-permit`
 
-## Docs
+Override the base URL with the `base_url` argument or `AtlaSentClient`.
 
-Full documentation at [docs.atlasent.io](https://docs.atlasent.io)
+## Get an API key
+
+Sign up at [atlasent.io](https://atlasent.io) → Settings → API Keys.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
