@@ -283,3 +283,96 @@ class TestLifecycle:
         with AtlaSentClient(api_key="k", max_retries=0) as c:
             mock_close = mocker.patch.object(c._client, "close")
         mock_close.assert_called_once()
+
+
+# ── Edge Cases ────────────────────────────────────────────────────────
+
+
+class TestEdgeCases:
+    def test_malformed_json_response(self, client, mocker):
+        """Server returns 200 but invalid JSON."""
+        resp = mocker.Mock(spec=httpx.Response)
+        resp.status_code = 200
+        resp.json.side_effect = ValueError("No JSON")
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        with pytest.raises(AtlaSentError, match="Invalid JSON"):
+            client.evaluate("a", "b")
+
+    def test_partial_evaluate_response(self, client, mocker):
+        """Server returns 200 but missing required fields."""
+        resp = _mock_resp(mocker, json_data={"permitted": True})
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        with pytest.raises(Exception):
+            # Pydantic validation fails on missing decision_id
+            client.evaluate("a", "b")
+
+    def test_none_context_treated_as_empty(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+
+        client.evaluate("action", "actor", None)
+
+        payload = mock_post.call_args[1]["json"]
+        assert payload["context"] == {}
+
+    def test_empty_context_dict(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+
+        client.evaluate("action", "actor", {})
+
+        payload = mock_post.call_args[1]["json"]
+        assert payload["context"] == {}
+
+    def test_gate_does_not_call_verify_on_deny(self, client, mocker):
+        """gate() should stop after evaluate if denied."""
+        resp = _mock_resp(mocker, json_data=EVALUATE_DENY)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+
+        with pytest.raises(AtlaSentDenied):
+            client.gate("a", "b")
+
+        assert mock_post.call_count == 1
+
+    def test_denied_response_body_preserved(self, client, mocker):
+        """AtlaSentDenied should carry the full response body."""
+        deny_data = {
+            "permitted": False,
+            "decision_id": "dec_999",
+            "reason": "policy violation",
+            "audit_hash": "h",
+            "timestamp": "t",
+            "extra_field": "preserved",
+        }
+        resp = _mock_resp(mocker, json_data=deny_data)
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        with pytest.raises(AtlaSentDenied) as exc_info:
+            client.evaluate("a", "b")
+
+        assert exc_info.value.response_body["extra_field"] == "preserved"
+
+    def test_large_error_body_truncated(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=400)
+        resp.text = "x" * 1000
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+
+        assert len(exc_info.value.message) < 600
+
+    def test_verify_with_minimal_params(self, client, mocker):
+        """verify() works with just permit_token."""
+        resp = _mock_resp(mocker, json_data=VERIFY_OK)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+
+        result = client.verify("dec_100")
+
+        assert result.valid is True
+        payload = mock_post.call_args[1]["json"]
+        assert payload["decision_id"] == "dec_100"
+        assert payload["action"] == ""
+        assert payload["agent"] == ""

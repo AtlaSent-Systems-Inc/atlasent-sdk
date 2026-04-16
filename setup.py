@@ -35,7 +35,7 @@ setup(
         ],
     },
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.10",
@@ -43,6 +43,7 @@ setup(
         "Programming Language :: Python :: 3.12",
         "Topic :: Security",
         "Topic :: Software Development :: Libraries :: Python Modules",
+        "Typing :: Typed",
     ],
     keywords="atlasent authorization ai agents gxp compliance",
 )
