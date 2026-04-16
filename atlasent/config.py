@@ -1,9 +1,12 @@
 """Global configuration for the AtlaSent SDK."""
 
+import logging
 import os
 from typing import Optional
 
 from .exceptions import ConfigurationError
+
+logger = logging.getLogger("atlasent")
 
 DEFAULT_BASE_URL = "https://api.atlasent.io"
 
@@ -32,6 +35,9 @@ def configure(
     _global_config["api_key"] = api_key
     _global_config["environment"] = environment
     _global_config["base_url"] = base_url
+    logger.debug(
+        "Configured: environment=%s, base_url=%s", environment, base_url
+    )
 
 
 def get_api_key() -> str:

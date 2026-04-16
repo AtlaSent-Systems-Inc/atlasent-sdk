@@ -4,32 +4,38 @@ import pytest
 
 import atlasent
 from atlasent import authorize, configure
+from atlasent.authorize import _reset_default_client
 from atlasent.client import AtlaSentClient
 from atlasent.config import reset
 from atlasent.exceptions import ConfigurationError
 from atlasent.models import AuthorizationResult
 
 
+EVALUATE_OK = {
+    "permitted": True,
+    "decision_id": "dec_200",
+    "reason": "OK",
+    "audit_hash": "hash_200",
+    "timestamp": "2025-01-15T14:00:00Z",
+}
+
+
 @pytest.fixture(autouse=True)
 def _clean_config():
-    """Reset global config before each test."""
+    """Reset global config and cached client before each test."""
     reset()
+    _reset_default_client()
     yield
     reset()
+    _reset_default_client()
 
 
 class TestAuthorizeWithClient:
     def test_uses_provided_client(self, mocker):
-        client = AtlaSentClient(api_key="explicit_key")
+        client = AtlaSentClient(api_key="explicit_key", max_retries=0)
         mock_response = mocker.Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "permitted": True,
-            "decision_id": "dec_200",
-            "reason": "OK",
-            "audit_hash": "hash_200",
-            "timestamp": "2025-01-15T14:00:00Z",
-        }
+        mock_response.json.return_value = EVALUATE_OK
         mocker.patch.object(client._session, "post", return_value=mock_response)
 
         result = authorize("my-agent", "read_data", client=client)
@@ -44,13 +50,7 @@ class TestAuthorizeWithGlobalConfig:
 
         mock_post = mocker.patch("atlasent.client.requests.Session.post")
         mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {
-            "permitted": True,
-            "decision_id": "dec_201",
-            "reason": "OK",
-            "audit_hash": "hash_201",
-            "timestamp": "2025-01-15T14:01:00Z",
-        }
+        mock_post.return_value.json.return_value = EVALUATE_OK
 
         result = authorize("my-agent", "read_data")
 
@@ -63,13 +63,7 @@ class TestAuthorizeWithGlobalConfig:
 
         mock_post = mocker.patch("atlasent.client.requests.Session.post")
         mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {
-            "permitted": True,
-            "decision_id": "dec_202",
-            "reason": "OK",
-            "audit_hash": "hash_202",
-            "timestamp": "2025-01-15T14:02:00Z",
-        }
+        mock_post.return_value.json.return_value = EVALUATE_OK
 
         result = authorize("my-agent", "read_data")
 
@@ -84,19 +78,43 @@ class TestAuthorizeWithGlobalConfig:
             authorize("my-agent", "read_data")
 
 
+class TestAuthorizeSingleton:
+    def test_reuses_client_across_calls(self, mocker):
+        configure(api_key="key")
+
+        mock_post = mocker.patch("atlasent.client.requests.Session.post")
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = EVALUATE_OK
+
+        authorize("agent", "action1")
+        authorize("agent", "action2")
+
+        # Session.post should be called twice, but Session() constructor
+        # only once (same client reused)
+        assert mock_post.call_count == 2
+
+    def test_reset_clears_cached_client(self, mocker):
+        configure(api_key="key")
+
+        mock_post = mocker.patch("atlasent.client.requests.Session.post")
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = EVALUATE_OK
+
+        authorize("agent", "action1")
+        _reset_default_client()
+
+        # After reset, a new client should be created
+        authorize("agent", "action2")
+        assert mock_post.call_count == 2
+
+
 class TestAuthorizeContext:
     def test_context_passed_through(self, mocker):
         configure(api_key="key")
 
         mock_post = mocker.patch("atlasent.client.requests.Session.post")
         mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {
-            "permitted": True,
-            "decision_id": "dec_203",
-            "reason": "OK",
-            "audit_hash": "hash_203",
-            "timestamp": "2025-01-15T14:03:00Z",
-        }
+        mock_post.return_value.json.return_value = EVALUATE_OK
 
         authorize(
             "my-agent",

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atlasent"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Python SDK for the AtlaSent authorization API"
 readme = "README.md"
 license = "MIT"
@@ -29,9 +29,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+async = [
+    "httpx>=0.24.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-mock>=3.10",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.24.0",
     "black>=23.0",
     "ruff>=0.1.0",
 ]
@@ -41,6 +46,12 @@ Homepage = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-python"
 Documentation = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-python#readme"
 Repository = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-python"
 Issues = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-python/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "atlasent._version.__version__"}
+
+[tool.setuptools.package-data]
+atlasent = ["py.typed"]
 
 [tool.ruff]
 line-length = 88
