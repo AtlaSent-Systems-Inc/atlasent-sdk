@@ -7,7 +7,7 @@ from typing import Any
 
 from .client import AtlaSentClient
 from .config import get_anon_key, get_api_key, get_base_url
-from .models import EvaluateResult, GateResult, VerifyResult
+from .models import AuthorizationResult, EvaluateResult, GateResult, VerifyResult
 
 logger = logging.getLogger("atlasent")
 
@@ -65,3 +65,51 @@ def gate(
 ) -> GateResult:
     """Evaluate then verify using the globally configured client."""
     return _get_default_client().gate(action_type, actor_id, context)
+
+
+def authorize(
+    *,
+    agent: str,
+    action: str,
+    context: dict[str, Any] | None = None,
+    verify: bool = True,
+    raise_on_deny: bool = False,
+) -> AuthorizationResult:
+    """Authorize an agent action — the one-call public SDK entrypoint.
+
+    Stripe-style convenience wrapper that uses the globally configured
+    client (see :func:`atlasent.configure` or ``ATLASENT_API_KEY``).
+
+    Example::
+
+        from atlasent import authorize
+
+        result = authorize(
+            agent="clinical-data-agent",
+            action="modify_patient_record",
+            context={"user": "dr_smith", "environment": "production"},
+        )
+        if result.permitted:
+            # execute action
+            ...
+        else:
+            logger.warning("Denied: %s", result.reason)
+
+    Args:
+        agent: Identifier of the calling agent.
+        action: The action being authorized.
+        context: Arbitrary policy context.
+        verify: If ``True`` (default), verify the permit end-to-end.
+        raise_on_deny: Raise :class:`PermissionDeniedError` on denial
+            instead of returning ``permitted=False``.
+
+    Returns:
+        :class:`AuthorizationResult`.
+    """
+    return _get_default_client().authorize(
+        agent=agent,
+        action=action,
+        context=context,
+        verify=verify,
+        raise_on_deny=raise_on_deny,
+    )

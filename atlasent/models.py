@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -88,3 +89,55 @@ class GateResult(BaseModel):
 
     evaluation: EvaluateResult
     verification: VerifyResult
+
+
+# ── Authorize (public top-level API) ─────────────────────────────────
+
+
+@dataclass
+class AuthorizationResult:
+    """Result of an :func:`atlasent.authorize` call.
+
+    This is the primary return type for the public SDK surface.
+    Check :attr:`permitted` to decide whether to proceed.
+
+    Attributes:
+        permitted: ``True`` if the action is authorized and verified.
+        agent: The agent identifier passed to ``authorize``.
+        action: The action name passed to ``authorize``.
+        context: The context dict passed to ``authorize``.
+        reason: Human-readable explanation from the policy engine.
+        permit_token: Opaque decision identifier for audit lookup.
+        audit_hash: Hash-chained audit trail entry (21 CFR Part 11).
+        permit_hash: Verification hash bound to the permit.
+        verified: ``True`` if the permit was server-verified end-to-end.
+        timestamp: ISO 8601 timestamp of the authorization decision.
+        raw: The raw JSON response body from the API.
+
+    Example::
+
+        result = authorize(agent="clinical-agent", action="read_phi")
+        if result.permitted:
+            do_the_thing()
+        else:
+            logger.warning("Denied: %s", result.reason)
+    """
+
+    permitted: bool
+    agent: str = ""
+    action: str = ""
+    context: dict[str, Any] = field(default_factory=dict)
+    reason: str = ""
+    permit_token: str = ""
+    audit_hash: str = ""
+    permit_hash: str = ""
+    verified: bool = False
+    timestamp: str = ""
+    raw: dict[str, Any] = field(default_factory=dict)
+
+    def __bool__(self) -> bool:
+        """Truthy iff the action was permitted.
+
+        Allows the idiomatic ``if authorize(...):`` check.
+        """
+        return self.permitted

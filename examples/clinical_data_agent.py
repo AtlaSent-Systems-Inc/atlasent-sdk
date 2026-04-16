@@ -1,55 +1,100 @@
 """Clinical Data Agent — GxP authorization example.
 
-Demonstrates an AI agent that:
-1. Attempts to modify a patient record WITHOUT required context → denied
-2. Retries WITH full context → permitted + verified
-3. Prints the audit hash for 21 CFR Part 11 records
+Demonstrates the one-call ``authorize()`` API for an AI agent that
+modifies clinical-trial patient records under 21 CFR Part 11 / GxP.
+
+Three scenarios:
+    1. Missing context  →  result.permitted is False (denied)
+    2. Full context     →  result.permitted is True  (permitted + verified)
+    3. raise_on_deny    →  PermissionDeniedError raised on denial
+
+Run::
+
+    export ATLASENT_API_KEY=ask_live_...
+    python examples/clinical_data_agent.py
 """
 
-from atlasent import AtlaSentClient, AtlaSentDenied
+from __future__ import annotations
 
-client = AtlaSentClient(api_key="ask_live_your_key_here")
+import os
 
-AGENT_ID = "clinical-data-agent-v2"
+from atlasent import (
+    PermissionDeniedError,
+    authorize,
+    configure,
+)
 
-# ── Attempt 1: missing context ────────────────────────────────────────
+configure(api_key=os.environ.get("ATLASENT_API_KEY", "ask_live_your_key_here"))
 
-print("── Attempt 1: update patient record (no context) ──")
+AGENT = "clinical-data-agent"
+ACTION = "modify_patient_record"
+
+
+def banner(title: str) -> None:
+    print(f"\n── {title} " + "─" * (60 - len(title)))
+
+
+# ── Scenario 1: missing context → permitted is False ─────────────────
+
+banner("Scenario 1: missing context")
+
+result = authorize(
+    agent=AGENT,
+    action=ACTION,
+    context={"user": "dr_smith"},  # missing change_reason, study_id
+)
+
+if result.permitted:
+    print("Permitted — proceeding (unexpected)")
+else:
+    print(f"Denied: {result.reason}")
+    print(f"  decision_id: {result.permit_token}")
+
+
+# ── Scenario 2: full GxP context → permitted + verified ──────────────
+
+banner("Scenario 2: full GxP context")
+
+result = authorize(
+    agent=AGENT,
+    action=ACTION,
+    context={
+        "user": "dr_smith",
+        "environment": "production",
+        "patient_id": "PT-2024-001",
+        "study_id": "TRIAL-GXP-042",
+        "site_id": "SITE-US-003",
+        "change_reason": "Correcting lab value transcription error",
+        "gxp_classification": "critical",
+    },
+)
+
+if result.permitted:
+    # ── execute the action — authorization is on file ────────────────
+    print(f"Permitted: {result.reason}")
+    print(f"  permit_token: {result.permit_token}")
+    print(f"  permit_hash:  {result.permit_hash}")
+    print(f"  audit_hash:   {result.audit_hash}")
+    print(f"  verified:     {result.verified}")
+    print(f"  timestamp:    {result.timestamp}")
+    print("  → 21 CFR Part 11 audit trail recorded")
+else:
+    print(f"Denied: {result.reason}")
+
+
+# ── Scenario 3: raise_on_deny for fail-closed call sites ─────────────
+
+banner("Scenario 3: raise_on_deny")
 
 try:
-    client.evaluate(
-        action_type="update_patient_record",
-        actor_id=AGENT_ID,
+    authorize(
+        agent=AGENT,
+        action="delete_audit_log",  # never permitted under GxP
+        context={"user": "dr_smith", "environment": "production"},
+        raise_on_deny=True,
     )
-    print("Permitted — proceeding with update")
-except AtlaSentDenied as e:
-    print(f"Denied — {e.reason}")
-    print(f"Decision ID: {e.permit_token}")
-
-# ── Attempt 2: full context provided ─────────────────────────────────
-
-print("\n── Attempt 2: update patient record (full context) ──")
-
-try:
-    result = client.gate(
-        action_type="update_patient_record",
-        actor_id=AGENT_ID,
-        context={
-            "patient_id": "PT-2024-001",
-            "study_id": "TRIAL-GXP-042",
-            "site_id": "SITE-US-003",
-            "change_reason": "Correcting lab value transcription error",
-            "operator": "Dr. Jane Smith",
-            "gxp_classification": "critical",
-        },
-    )
-    print(f"Permitted — token: {result.evaluation.permit_token}")
-    print(f"  reason: {result.evaluation.reason}")
-    if result.verification.valid:
-        print(f"  permit_hash:  {result.verification.permit_hash}")
-        print(f"  audit_hash:   {result.evaluation.audit_hash}")
-        print("  Ready for 21 CFR Part 11 audit trail")
-    else:
-        print("  Permit verification failed — do not proceed")
-except AtlaSentDenied as e:
-    print(f"Denied again — {e.reason}")
+    print("Permitted (unexpected)")
+except PermissionDeniedError as exc:
+    print(f"Blocked at the SDK boundary: {exc.reason}")
+    print(f"  decision: {exc.decision}")
+    print(f"  token:    {exc.permit_token}")

@@ -69,6 +69,14 @@ class ConfigurationError(AtlaSentError):
         super().__init__(message)
 
 
+class PermissionDeniedError(AtlaSentDenied):
+    """Raised when ``authorize(..., raise_on_deny=True)`` is denied.
+
+    Alias-style subclass of :class:`AtlaSentDenied` that reads more
+    naturally in authorization-centric code paths.
+    """
+
+
 class RateLimitError(AtlaSentError):
     """Raised when the API returns HTTP 429 (Too Many Requests).
 

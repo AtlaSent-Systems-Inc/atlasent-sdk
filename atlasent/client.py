@@ -10,8 +10,14 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from ._version import __version__
-from .exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
+from .exceptions import (
+    AtlaSentDenied,
+    AtlaSentError,
+    PermissionDeniedError,
+    RateLimitError,
+)
 from .models import (
+    AuthorizationResult,
     EvaluateRequest,
     EvaluateResult,
     GateResult,
@@ -212,6 +218,87 @@ class AtlaSentClient:
             eval_result.permit_token, action_type, actor_id, ctx
         )
         return GateResult(evaluation=eval_result, verification=verify_result)
+
+    def authorize(
+        self,
+        *,
+        agent: str,
+        action: str,
+        context: dict[str, Any] | None = None,
+        verify: bool = True,
+        raise_on_deny: bool = False,
+    ) -> AuthorizationResult:
+        """Authorize an agent action — the one-call public API.
+
+        Calls ``POST /v1-evaluate`` and (unless ``verify=False``)
+        ``POST /v1-verify-permit`` and returns an
+        :class:`AuthorizationResult` whose :attr:`permitted` field
+        tells you whether to proceed.
+
+        Unlike :meth:`evaluate`, this method does **not** raise on
+        denial by default — the caller inspects ``result.permitted``.
+        Network, configuration, rate-limit, and server errors still
+        raise, keeping the SDK fail-closed.
+
+        Args:
+            agent: Identifier of the calling agent (e.g. ``"clinical-data-agent"``).
+            action: The action being authorized (e.g. ``"modify_patient_record"``).
+            context: Arbitrary policy context (user, env, resource IDs).
+            verify: If ``True`` (default), immediately verify the permit
+                and populate ``permit_hash`` / ``verified`` on the result.
+            raise_on_deny: If ``True``, raise :class:`PermissionDeniedError`
+                instead of returning a non-permitted result.
+
+        Returns:
+            :class:`AuthorizationResult` with ``.permitted``,
+            ``.permit_token``, ``.audit_hash``, ``.permit_hash``, etc.
+
+        Raises:
+            PermissionDeniedError: When denied and ``raise_on_deny=True``.
+            AtlaSentError: Network / server / configuration errors.
+            RateLimitError: HTTP 429.
+        """
+        ctx = context or {}
+        try:
+            eval_result = self.evaluate(action, agent, ctx)
+        except AtlaSentDenied as exc:
+            if raise_on_deny:
+                raise PermissionDeniedError(
+                    decision=exc.decision,
+                    permit_token=exc.permit_token,
+                    reason=exc.reason,
+                    response_body=exc.response_body,
+                ) from None
+            return AuthorizationResult(
+                permitted=False,
+                agent=agent,
+                action=action,
+                context=dict(ctx),
+                reason=exc.reason,
+                permit_token=exc.permit_token,
+                raw=exc.response_body or {},
+            )
+
+        permit_hash = ""
+        verified = False
+        if verify:
+            verify_result = self.verify(eval_result.permit_token, action, agent, ctx)
+            permit_hash = verify_result.permit_hash
+            verified = verify_result.valid
+
+        return AuthorizationResult(
+            permitted=True,
+            agent=agent,
+            action=action,
+            context=dict(ctx),
+            reason=eval_result.reason,
+            permit_token=eval_result.permit_token,
+            audit_hash=eval_result.audit_hash,
+            permit_hash=permit_hash,
+            verified=verified,
+            timestamp=eval_result.timestamp,
+            raw=eval_result.model_dump(by_alias=True),
+        )
 
     # ── lifecycle ─────────────────────────────────────────────────
 
