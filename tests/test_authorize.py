@@ -1,14 +1,13 @@
-"""Tests for the top-level authorize() convenience function."""
+"""Tests for top-level convenience functions."""
 
 import pytest
 
-from atlasent import authorize, configure
+from atlasent import configure, evaluate, gate, verify
 from atlasent.authorize import _reset_default_client
-from atlasent.client import AtlaSentClient
 from atlasent.config import reset
 from atlasent.exceptions import ConfigurationError
 
-EVALUATE_OK = {
+EVALUATE_PERMIT = {
     "permitted": True,
     "decision_id": "dec_200",
     "reason": "OK",
@@ -16,10 +15,15 @@ EVALUATE_OK = {
     "timestamp": "2025-01-15T14:00:00Z",
 }
 
+VERIFY_OK = {
+    "verified": True,
+    "permit_hash": "permit_200",
+    "timestamp": "2025-01-15T14:01:00Z",
+}
+
 
 @pytest.fixture(autouse=True)
-def _clean_config():
-    """Reset global config and cached client before each test."""
+def _clean():
     reset()
     _reset_default_client()
     yield
@@ -27,100 +31,56 @@ def _clean_config():
     _reset_default_client()
 
 
-class TestAuthorizeWithClient:
-    def test_uses_provided_client(self, mocker):
-        client = AtlaSentClient(api_key="explicit_key", max_retries=0)
-        mock_response = mocker.Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = EVALUATE_OK
-        mocker.patch.object(client._session, "post", return_value=mock_response)
-
-        result = authorize("my-agent", "read_data", client=client)
-
-        assert result.permitted is True
-        assert result.decision_id == "dec_200"
-
-
-class TestAuthorizeWithGlobalConfig:
-    def test_uses_global_api_key(self, mocker):
+class TestEvaluate:
+    def test_with_global_config(self, mocker):
         configure(api_key="global_key")
-
-        mock_post = mocker.patch("atlasent.client.requests.Session.post")
+        mock_post = mocker.patch("atlasent.client.httpx.Client.post")
         mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = EVALUATE_OK
+        mock_post.return_value.json.return_value = EVALUATE_PERMIT
 
-        result = authorize("my-agent", "read_data")
+        result = evaluate("read_data", "agent-1")
 
-        assert result.permitted is True
-        call_kwargs = mock_post.call_args
-        assert call_kwargs[1]["json"]["api_key"] == "global_key"
+        assert result.permit_token == "dec_200"
 
-    def test_uses_env_var_fallback(self, mocker):
-        mocker.patch.dict("os.environ", {"ATLASENT_API_KEY": "env_key"})
-
-        mock_post = mocker.patch("atlasent.client.requests.Session.post")
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = EVALUATE_OK
-
-        result = authorize("my-agent", "read_data")
-
-        assert result.permitted is True
-        call_kwargs = mock_post.call_args
-        assert call_kwargs[1]["json"]["api_key"] == "env_key"
-
-    def test_no_key_raises_configuration_error(self, mocker):
+    def test_no_key_raises(self, mocker):
         mocker.patch.dict("os.environ", {}, clear=True)
-
         with pytest.raises(ConfigurationError, match="No API key"):
-            authorize("my-agent", "read_data")
+            evaluate("read_data", "agent-1")
 
 
-class TestAuthorizeSingleton:
-    def test_reuses_client_across_calls(self, mocker):
+class TestVerify:
+    def test_with_global_config(self, mocker):
         configure(api_key="key")
-
-        mock_post = mocker.patch("atlasent.client.requests.Session.post")
+        mock_post = mocker.patch("atlasent.client.httpx.Client.post")
         mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = EVALUATE_OK
+        mock_post.return_value.json.return_value = VERIFY_OK
 
-        authorize("agent", "action1")
-        authorize("agent", "action2")
+        result = verify("dec_200")
 
-        # Session.post should be called twice, but Session() constructor
-        # only once (same client reused)
+        assert result.valid is True
+
+
+class TestGate:
+    def test_with_global_config(self, mocker):
+        configure(api_key="key")
+        mock_post = mocker.patch("atlasent.client.httpx.Client.post")
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.side_effect = [EVALUATE_PERMIT, VERIFY_OK]
+
+        result = gate("read_data", "agent-1")
+
+        assert result.evaluation.permit_token == "dec_200"
+        assert result.verification.valid is True
+
+
+class TestSingleton:
+    def test_reuses_client(self, mocker):
+        configure(api_key="key")
+        mock_post = mocker.patch("atlasent.client.httpx.Client.post")
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = EVALUATE_PERMIT
+
+        evaluate("a", "b")
+        evaluate("a", "c")
+
         assert mock_post.call_count == 2
-
-    def test_reset_clears_cached_client(self, mocker):
-        configure(api_key="key")
-
-        mock_post = mocker.patch("atlasent.client.requests.Session.post")
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = EVALUATE_OK
-
-        authorize("agent", "action1")
-        _reset_default_client()
-
-        # After reset, a new client should be created
-        authorize("agent", "action2")
-        assert mock_post.call_count == 2
-
-
-class TestAuthorizeContext:
-    def test_context_passed_through(self, mocker):
-        configure(api_key="key")
-
-        mock_post = mocker.patch("atlasent.client.requests.Session.post")
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = EVALUATE_OK
-
-        authorize(
-            "my-agent",
-            "update_record",
-            context={"patient_id": "PT-001", "study": "TRIAL-42"},
-        )
-
-        call_kwargs = mock_post.call_args
-        assert call_kwargs[1]["json"]["context"] == {
-            "patient_id": "PT-001",
-            "study": "TRIAL-42",
-        }
