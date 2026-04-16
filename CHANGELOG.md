@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.3.0 — 2026-04-16
+
+### Added
+
+- **`authorize()` — the one-call public API.** Stripe-style entrypoint:
+
+      from atlasent import authorize
+
+      result = authorize(
+          agent="clinical-data-agent",
+          action="modify_patient_record",
+          context={"user": "dr_smith", "environment": "production"},
+      )
+      if result.permitted:
+          ...
+
+  Available as a top-level function (using the global config) and as a
+  method on both `AtlaSentClient` and `AsyncAtlaSentClient`.
+- **`AuthorizationResult` dataclass** — the return type of `authorize()`.
+  Exposes `permitted`, `reason`, `permit_token`, `audit_hash`,
+  `permit_hash`, `verified`, `timestamp`, `agent`, `action`, `context`,
+  and `raw`. Truthy when permitted, so `if authorize(...):` works.
+- **`PermissionDeniedError`** — subclass of `AtlaSentDenied`, raised by
+  `authorize(..., raise_on_deny=True)` for fail-closed call sites that
+  prefer exceptions on denial.
+- **`verify=False` opt-out** — skip the `/v1-verify-permit` round-trip
+  when the caller doesn't need an end-to-end verified permit.
+
+### Changed
+
+- `authorize()` returns `permitted=False` on a clean policy denial
+  rather than raising — the caller branches on `result.permitted`.
+  Network, configuration, and rate-limit failures still raise (the
+  SDK remains fail-closed).
+- README rewritten to lead with `authorize()`; `evaluate()` / `verify()`
+  / `gate()` are now documented as lower-level primitives.
+- `examples/clinical_data_agent.py`, `examples/basic_authorize.py`,
+  `examples/fastapi_integration.py`, `examples/flask_integration.py`
+  rewritten to use `authorize()`.
+- `.env.example` documents both `ATLASENT_API_KEY` and
+  `ATLASENT_ANON_KEY`.
+- Version bumped to 0.3.0.
+
+### Tests
+
+- 22 new tests covering the dataclass, sync + async client methods,
+  global-config wrapper, deny / `raise_on_deny`, network and 429 paths,
+  payload shape, and the documented quickstart idiom (112 total).
+
 ## 0.2.0 — 2025-04-16
 
 ### Added
