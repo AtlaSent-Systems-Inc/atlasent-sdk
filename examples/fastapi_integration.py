@@ -1,6 +1,7 @@
 """FastAPI integration example.
 
-Run with:
+Run with::
+
     pip install fastapi uvicorn atlasent
     ATLASENT_API_KEY=ask_live_... uvicorn fastapi_integration:app
 """
@@ -8,7 +9,7 @@ Run with:
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
-from atlasent import AsyncAtlaSentClient, AtlaSentDenied, AtlaSentError
+from atlasent import AsyncAtlaSentClient, AtlaSentError
 
 app = FastAPI(title="AtlaSent + FastAPI Example")
 
@@ -38,24 +39,27 @@ async def modify_record(
 ):
     """Modify a patient record — gated by AtlaSent authorization."""
     try:
-        gate = await client.gate(
-            action_type="modify_patient_record",
-            actor_id="fastapi-clinical-agent",
+        result = await client.authorize(
+            agent="fastapi-clinical-agent",
+            action="modify_patient_record",
             context={
                 "patient_id": body.patient_id,
                 "change_reason": body.change_reason,
             },
         )
-    except AtlaSentDenied as e:
-        raise HTTPException(status_code=403, detail=e.reason)
-    except AtlaSentError as e:
-        raise HTTPException(status_code=502, detail=f"Authorization service error: {e.message}")
+    except AtlaSentError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Authorization service error: {exc.message}",
+        ) from exc
 
-    # Action is permitted and verified — proceed
+    if not result.permitted:
+        raise HTTPException(status_code=403, detail=result.reason)
+
     return ModifyRecordResponse(
         status="modified",
-        permit_hash=gate.verification.permit_hash,
-        audit_hash=gate.evaluation.audit_hash,
+        permit_hash=result.permit_hash,
+        audit_hash=result.audit_hash,
     )
 
 
