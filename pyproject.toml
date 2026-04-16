@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlasent"
+version = "0.1.0"
+description = "Python SDK for the AtlaSent authorization API"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "AtlaSent Systems Inc.", email = "sdk@atlasent.io" },
+]
+keywords = ["atlasent", "authorization", "ai", "agents", "gxp", "compliance"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "requests>=2.28.0",
+    "python-dotenv>=0.20.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-mock>=3.10",
+    "black>=23.0",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-python"
+Documentation = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-python#readme"
+Repository = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-python"
+Issues = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-python/issues"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
