@@ -1,10 +1,13 @@
-"""AtlaSent API client."""
+"""Async AtlaSent API client using httpx."""
 
+import asyncio
 import logging
-import time
 from typing import Any
 
-import requests
+try:
+    import httpx
+except ImportError:  # pragma: no cover
+    httpx = None  # type: ignore[assignment]
 
 from ._version import __version__
 from .config import DEFAULT_BASE_URL, get_api_key
@@ -15,11 +18,23 @@ logger = logging.getLogger("atlasent")
 
 DEFAULT_TIMEOUT = 10
 DEFAULT_MAX_RETRIES = 2
-DEFAULT_RETRY_BACKOFF = 0.5  # seconds; doubles each retry
+DEFAULT_RETRY_BACKOFF = 0.5
 
 
-class AtlaSentClient:
-    """Client for the AtlaSent authorization API.
+def _require_httpx() -> None:
+    if httpx is None:
+        raise ImportError(
+            "httpx is required for the async client. "
+            "Install it with: pip install atlasent[async]"
+        )
+
+
+class AsyncAtlaSentClient:
+    """Async client for the AtlaSent authorization API.
+
+    Requires the ``httpx`` package. Install with::
+
+        pip install atlasent[async]
 
     Args:
         api_key: Your AtlaSent API key. If not provided, the global
@@ -28,15 +43,15 @@ class AtlaSentClient:
         base_url: Override the base API URL. Defaults to
             https://api.atlasent.io.
         timeout: Request timeout in seconds. Defaults to 10.
-        max_retries: Maximum number of retries on transient errors (5xx,
-            timeouts, connection errors). Defaults to 2.
+        max_retries: Maximum number of retries on transient errors.
+            Defaults to 2.
         retry_backoff: Base backoff time in seconds between retries.
             Doubles after each attempt. Defaults to 0.5.
 
-    Supports the context manager protocol::
+    Supports the async context manager protocol::
 
-        with AtlaSentClient(api_key="ask_live_...") as client:
-            result = client.evaluate("my-agent", "read_data")
+        async with AsyncAtlaSentClient(api_key="ask_live_...") as client:
+            result = await client.evaluate("my-agent", "read_data")
     """
 
     def __init__(
@@ -48,18 +63,19 @@ class AtlaSentClient:
         max_retries: int = DEFAULT_MAX_RETRIES,
         retry_backoff: float = DEFAULT_RETRY_BACKOFF,
     ) -> None:
+        _require_httpx()
         self._api_key = api_key
         self._environment = environment
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries
         self._retry_backoff = retry_backoff
-        self._session = requests.Session()
-        self._session.headers.update(
-            {
+        self._client = httpx.AsyncClient(
+            headers={
                 "Content-Type": "application/json",
                 "User-Agent": f"atlasent-python/{__version__}",
-            }
+            },
+            timeout=self._timeout,
         )
 
     @property
@@ -69,7 +85,7 @@ class AtlaSentClient:
             return self._api_key
         return get_api_key()
 
-    def evaluate(
+    async def evaluate(
         self,
         agent: str,
         action: str,
@@ -81,7 +97,7 @@ class AtlaSentClient:
             agent: Identifier of the AI agent requesting authorization.
             action: The action the agent wants to perform.
             context: Optional dictionary of additional context for the
-                authorization decision (e.g., patient ID, study phase).
+                authorization decision.
 
         Returns:
             An AuthorizationResult indicating whether the action is permitted.
@@ -97,8 +113,8 @@ class AtlaSentClient:
             "context": context or {},
             "api_key": self.api_key,
         }
-        logger.debug("Evaluating action=%r for agent=%r", action, agent)
-        data = self._post("/v1-evaluate", payload)
+        logger.debug("Evaluating action=%r for agent=%r (async)", action, agent)
+        data = await self._post("/v1-evaluate", payload)
         result = AuthorizationResult(
             permitted=data["permitted"],
             decision_id=data["decision_id"],
@@ -123,7 +139,7 @@ class AtlaSentClient:
             )
         return result
 
-    def verify_permit(self, decision_id: str) -> dict:
+    async def verify_permit(self, decision_id: str) -> dict:
         """Verify a previously issued permit.
 
         Args:
@@ -142,32 +158,28 @@ class AtlaSentClient:
             "decision_id": decision_id,
             "api_key": self.api_key,
         }
-        logger.debug("Verifying permit for decision=%s", decision_id)
-        return self._post("/v1-verify-permit", payload)
+        logger.debug("Verifying permit for decision=%s (async)", decision_id)
+        return await self._post("/v1-verify-permit", payload)
 
-    def close(self) -> None:
-        """Close the underlying HTTP session and release resources."""
-        self._session.close()
-        logger.debug("AtlaSentClient session closed")
+    async def close(self) -> None:
+        """Close the underlying HTTP client and release resources."""
+        await self._client.aclose()
+        logger.debug("AsyncAtlaSentClient session closed")
 
-    def __enter__(self) -> "AtlaSentClient":
+    async def __aenter__(self) -> "AsyncAtlaSentClient":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
-        self.close()
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
+        await self.close()
 
-    def _post(self, path: str, payload: dict) -> dict:
-        """Send a POST request with retry logic.
-
-        Retries on transient failures (5xx, timeouts, connection errors)
-        with exponential backoff. Raises immediately on client errors (4xx).
-        """
+    async def _post(self, path: str, payload: dict) -> dict:
+        """Send a POST request with retry logic."""
         url = f"{self._base_url}{path}"
 
         for attempt in range(1 + self._max_retries):
             try:
-                response = self._session.post(url, json=payload, timeout=self._timeout)
-            except requests.exceptions.Timeout as exc:
+                response = await self._client.post(url, json=payload)
+            except httpx.TimeoutException as exc:
                 logger.warning(
                     "Request to %s timed out (attempt %d/%d)",
                     path,
@@ -175,13 +187,13 @@ class AtlaSentClient:
                     1 + self._max_retries,
                 )
                 if attempt < self._max_retries:
-                    self._backoff(attempt)
+                    await self._backoff(attempt)
                     continue
                 raise AtlaSentError(
                     f"Request to {path} timed out after "
                     f"{1 + self._max_retries} attempts"
                 ) from exc
-            except requests.exceptions.ConnectionError as exc:
+            except httpx.ConnectError as exc:
                 logger.warning(
                     "Connection to %s failed (attempt %d/%d): %s",
                     self._base_url,
@@ -190,16 +202,15 @@ class AtlaSentClient:
                     exc,
                 )
                 if attempt < self._max_retries:
-                    self._backoff(attempt)
+                    await self._backoff(attempt)
                     continue
                 raise AtlaSentError(
                     f"Failed to connect to AtlaSent API at "
                     f"{self._base_url} after {1 + self._max_retries} attempts"
                 ) from exc
-            except requests.exceptions.RequestException as exc:
+            except httpx.HTTPError as exc:
                 raise AtlaSentError(f"Request failed: {exc}") from exc
 
-            # Handle HTTP status codes
             if response.status_code == 429:
                 retry_after = self._parse_retry_after(response)
                 logger.warning("Rate limited on %s (retry_after=%s)", path, retry_after)
@@ -213,7 +224,6 @@ class AtlaSentClient:
                     status_code=403,
                 )
 
-            # Retry on 5xx server errors
             if response.status_code >= 500:
                 logger.warning(
                     "Server error %d on %s (attempt %d/%d)",
@@ -223,7 +233,7 @@ class AtlaSentClient:
                     1 + self._max_retries,
                 )
                 if attempt < self._max_retries:
-                    self._backoff(attempt)
+                    await self._backoff(attempt)
                     continue
                 raise AtlaSentError(
                     f"API error {response.status_code}: " f"{response.text[:500]}",
@@ -236,27 +246,25 @@ class AtlaSentClient:
                     status_code=response.status_code,
                 )
 
-            # Success
             try:
                 return response.json()
             except ValueError as exc:
                 raise AtlaSentError("Invalid JSON response from AtlaSent API") from exc
 
-        # Should not reach here, but guard against it
         raise AtlaSentError(
             f"Request to {path} failed after {1 + self._max_retries} attempts"
         )
 
-    def _backoff(self, attempt: int) -> None:
+    async def _backoff(self, attempt: int) -> None:
         """Sleep with exponential backoff."""
         delay = self._retry_backoff * (2**attempt)
-        logger.debug("Retrying in %.1fs...", delay)
-        time.sleep(delay)
+        logger.debug("Retrying in %.1fs... (async)", delay)
+        await asyncio.sleep(delay)
 
     @staticmethod
-    def _parse_retry_after(response: requests.Response) -> float | None:
+    def _parse_retry_after(response: "httpx.Response") -> float | None:
         """Parse the Retry-After header from a 429 response."""
-        value = response.headers.get("Retry-After")
+        value = response.headers.get("retry-after")
         if value is None:
             return None
         try:

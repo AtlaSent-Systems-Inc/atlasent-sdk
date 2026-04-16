@@ -11,20 +11,28 @@ Quick start::
         ...
 """
 
+from ._version import __version__
+from .async_client import AsyncAtlaSentClient
 from .authorize import authorize
 from .client import AtlaSentClient
 from .config import configure
-from .exceptions import AtlaSentError, ConfigurationError, PermissionDeniedError
+from .exceptions import (
+    AtlaSentError,
+    ConfigurationError,
+    PermissionDeniedError,
+    RateLimitError,
+)
 from .models import AuthorizationResult
-
-__version__ = "0.1.0"
 
 __all__ = [
     "authorize",
     "configure",
     "AtlaSentClient",
+    "AsyncAtlaSentClient",
     "AuthorizationResult",
     "AtlaSentError",
     "ConfigurationError",
     "PermissionDeniedError",
+    "RateLimitError",
+    "__version__",
 ]

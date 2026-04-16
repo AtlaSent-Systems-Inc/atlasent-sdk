@@ -1,13 +1,18 @@
 """Package setup for atlasent."""
 
+import re
+
 from setuptools import find_packages, setup
 
 with open("README.md", encoding="utf-8") as f:
     long_description = f.read()
 
+with open("atlasent/_version.py", encoding="utf-8") as f:
+    version = re.search(r'__version__\s*=\s*"(.+?)"', f.read()).group(1)
+
 setup(
     name="atlasent",
-    version="0.1.0",
+    version=version,
     description="Python SDK for the AtlaSent authorization API",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -21,9 +26,14 @@ setup(
         "python-dotenv>=0.20.0",
     ],
     extras_require={
+        "async": [
+            "httpx>=0.24.0",
+        ],
         "dev": [
             "pytest>=7.0",
             "pytest-mock>=3.10",
+            "pytest-asyncio>=0.21.0",
+            "httpx>=0.24.0",
             "black>=23.0",
             "ruff>=0.1.0",
         ],
