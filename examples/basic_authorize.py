@@ -4,25 +4,20 @@ Before running, set your API key:
     export ATLASENT_API_KEY=ask_live_...
 """
 
-import atlasent
+from atlasent import AtlaSentClient, AtlaSentDenied
 
-# Option 1: Configure explicitly
-atlasent.configure(api_key="ask_live_your_key_here")
+client = AtlaSentClient(api_key="ask_live_your_key_here")
 
-# Option 2: Let the SDK read ATLASENT_API_KEY from the environment
-# (no configure() call needed)
-
-# Evaluate an action
-result = atlasent.authorize(
-    agent="my-agent",
-    action="read_patient_record",
-    context={"patient_id": "PT-2024-001"},
-)
-
-# AuthorizationResult is truthy when permitted
-if result:
-    print(f"Permitted  — decision {result.decision_id}")
-    print(f"  reason:     {result.reason}")
-    print(f"  audit_hash: {result.audit_hash}")
-else:
-    print(f"Denied — {result.reason}")
+try:
+    # gate() calls evaluate() then verify() in one shot
+    result = client.gate(
+        action_type="read_patient_record",
+        actor_id="my-agent",
+        context={"patient_id": "PT-2024-001"},
+    )
+    print(f"Permitted — permit_token: {result.evaluation.permit_token}")
+    print(f"  verified: {result.verification.valid}")
+    print(f"  permit_hash: {result.verification.permit_hash}")
+except AtlaSentDenied as e:
+    print(f"Denied — {e.reason}")
+    print(f"  decision: {e.decision}")

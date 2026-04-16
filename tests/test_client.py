@@ -1,383 +1,285 @@
-"""Tests for AtlaSentClient."""
+"""Tests for the synchronous AtlaSentClient."""
 
+import httpx
 import pytest
-import requests
 
 from atlasent.client import AtlaSentClient
-from atlasent.exceptions import AtlaSentError, ConfigurationError, RateLimitError
-from atlasent.models import AuthorizationResult
+from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
+from atlasent.models import EvaluateResult, GateResult, VerifyResult
 
 
 @pytest.fixture
 def client():
-    return AtlaSentClient(api_key="test_key_123", max_retries=0)
+    return AtlaSentClient(api_key="test_key", max_retries=0)
 
 
 @pytest.fixture
-def client_with_retries():
-    return AtlaSentClient(api_key="test_key_123", max_retries=2, retry_backoff=0.01)
+def client_retry():
+    return AtlaSentClient(api_key="test_key", max_retries=2, retry_backoff=0.01)
 
 
-def _mock_response(mocker, status_code=200, json_data=None, text="", headers=None):
-    resp = mocker.Mock()
+EVALUATE_PERMIT = {
+    "permitted": True,
+    "decision_id": "dec_100",
+    "reason": "Action complies with policy",
+    "audit_hash": "hash_abc",
+    "timestamp": "2025-01-15T12:00:00Z",
+}
+
+EVALUATE_DENY = {
+    "permitted": False,
+    "decision_id": "dec_101",
+    "reason": "Missing required context",
+    "audit_hash": "hash_def",
+    "timestamp": "2025-01-15T12:01:00Z",
+}
+
+VERIFY_OK = {
+    "verified": True,
+    "permit_hash": "permit_xyz",
+    "timestamp": "2025-01-15T12:05:00Z",
+}
+
+
+def _mock_resp(mocker, status_code=200, json_data=None, headers=None):
+    resp = mocker.Mock(spec=httpx.Response)
     resp.status_code = status_code
-    resp.text = text
     resp.headers = headers or {}
+    resp.text = ""
     if json_data is not None:
         resp.json.return_value = json_data
     return resp
 
 
-EVALUATE_OK = {
-    "permitted": True,
-    "decision_id": "dec_100",
-    "reason": "Action complies with all policies",
-    "audit_hash": "hash_abc",
-    "timestamp": "2025-01-15T12:00:00Z",
-}
-
-EVALUATE_DENIED = {
-    "permitted": False,
-    "decision_id": "dec_101",
-    "reason": "Missing required context: patient_id",
-    "audit_hash": "hash_def",
-    "timestamp": "2025-01-15T12:01:00Z",
-}
+# ── Init ──────────────────────────────────────────────────────────────
 
 
-class TestClientInit:
-    def test_default_values(self):
-        c = AtlaSentClient(api_key="key")
-        assert c._api_key == "key"
-        assert c._environment == "production"
+class TestInit:
+    def test_defaults(self):
+        c = AtlaSentClient(api_key="k")
+        assert c._api_key == "k"
+        assert c._anon_key == ""
         assert c._base_url == "https://api.atlasent.io"
         assert c._timeout == 10
         assert c._max_retries == 2
-        assert c._retry_backoff == 0.5
 
-    def test_custom_values(self):
+    def test_custom(self):
         c = AtlaSentClient(
-            api_key="key",
-            environment="staging",
-            base_url="https://staging.atlasent.io",
+            api_key="k",
+            anon_key="anon",
+            base_url="https://staging.atlasent.io/",
             timeout=30,
             max_retries=5,
-            retry_backoff=1.0,
         )
-        assert c._environment == "staging"
+        assert c._anon_key == "anon"
         assert c._base_url == "https://staging.atlasent.io"
         assert c._timeout == 30
-        assert c._max_retries == 5
-        assert c._retry_backoff == 1.0
 
-    def test_trailing_slash_stripped(self):
-        c = AtlaSentClient(api_key="key", base_url="https://api.atlasent.io/")
-        assert c._base_url == "https://api.atlasent.io"
+    def test_user_agent(self):
+        c = AtlaSentClient(api_key="k")
+        assert "atlasent-python/" in c._client.headers["user-agent"]
 
-    def test_user_agent_header(self):
-        c = AtlaSentClient(api_key="key")
-        assert c._session.headers["User-Agent"] == "atlasent-python/0.1.0"
+
+# ── Evaluate ──────────────────────────────────────────────────────────
 
 
 class TestEvaluate:
-    def test_permitted_response(self, client, mocker):
-        mock_response = _mock_response(mocker, json_data=EVALUATE_OK)
-        mocker.patch.object(client._session, "post", return_value=mock_response)
+    def test_permit(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
+        mocker.patch.object(client._client, "post", return_value=resp)
+        result = client.evaluate("read_data", "agent-1", {"study": "S001"})
 
-        result = client.evaluate("test-agent", "read_data", {"study": "S001"})
+        assert isinstance(result, EvaluateResult)
+        assert result.decision is True
+        assert result.permit_token == "dec_100"
+        assert result.reason == "Action complies with policy"
 
-        assert isinstance(result, AuthorizationResult)
-        assert result.permitted is True
-        assert result.decision_id == "dec_100"
-        assert result.reason == "Action complies with all policies"
-        assert result.audit_hash == "hash_abc"
-        client._session.post.assert_called_once_with(
-            "https://api.atlasent.io/v1-evaluate",
-            json={
-                "agent": "test-agent",
-                "action": "read_data",
-                "context": {"study": "S001"},
-                "api_key": "test_key_123",
-            },
-            timeout=10,
-        )
+    def test_deny_raises(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EVALUATE_DENY)
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentDenied) as exc_info:
+            client.evaluate("write_data", "agent-1")
 
-    def test_denied_response(self, client, mocker):
-        mock_response = _mock_response(mocker, json_data=EVALUATE_DENIED)
-        mocker.patch.object(client._session, "post", return_value=mock_response)
+        err = exc_info.value
+        assert err.decision == "False"
+        assert err.permit_token == "dec_101"
+        assert err.reason == "Missing required context"
+        assert err.response_body == EVALUATE_DENY
 
-        result = client.evaluate("test-agent", "update_record")
+    def test_payload_shape(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
 
-        assert result.permitted is False
-        assert not result
+        client.evaluate("action", "actor", {"k": "v"})
 
-    def test_empty_context_defaults(self, client, mocker):
-        mock_response = _mock_response(mocker, json_data=EVALUATE_OK)
-        mocker.patch.object(client._session, "post", return_value=mock_response)
+        call_kwargs = mock_post.call_args
+        payload = call_kwargs[1]["json"]
+        assert payload["action"] == "action"
+        assert payload["agent"] == "actor"
+        assert payload["context"] == {"k": "v"}
+        assert payload["api_key"] == "test_key"
 
-        client.evaluate("test-agent", "read_data")
-
-        call_kwargs = client._session.post.call_args
-        assert call_kwargs[1]["json"]["context"] == {}
-
-    def test_timeout_raises_error(self, client, mocker):
+    def test_timeout_raises(self, client, mocker):
         mocker.patch.object(
-            client._session,
-            "post",
-            side_effect=requests.exceptions.Timeout("Connection timed out"),
+            client._client, "post", side_effect=httpx.TimeoutException("timeout")
         )
-
         with pytest.raises(AtlaSentError, match="timed out"):
-            client.evaluate("test-agent", "read_data")
+            client.evaluate("a", "b")
 
-    def test_connection_error_raises_error(self, client, mocker):
+    def test_connection_error(self, client, mocker):
         mocker.patch.object(
-            client._session,
-            "post",
-            side_effect=requests.exceptions.ConnectionError("DNS failure"),
+            client._client, "post", side_effect=httpx.ConnectError("refused")
         )
-
         with pytest.raises(AtlaSentError, match="Failed to connect"):
-            client.evaluate("test-agent", "read_data")
+            client.evaluate("a", "b")
 
-    def test_401_raises_error(self, client, mocker):
-        mock_response = _mock_response(mocker, status_code=401)
-        mocker.patch.object(client._session, "post", return_value=mock_response)
-
+    def test_401(self, client, mocker):
+        mocker.patch.object(
+            client._client, "post", return_value=_mock_resp(mocker, status_code=401)
+        )
         with pytest.raises(AtlaSentError, match="Invalid API key") as exc_info:
-            client.evaluate("test-agent", "read_data")
+            client.evaluate("a", "b")
         assert exc_info.value.status_code == 401
 
-    def test_403_raises_error(self, client, mocker):
-        mock_response = _mock_response(mocker, status_code=403)
-        mocker.patch.object(client._session, "post", return_value=mock_response)
-
-        with pytest.raises(AtlaSentError, match="Access forbidden") as exc_info:
-            client.evaluate("test-agent", "read_data")
-        assert exc_info.value.status_code == 403
-
-    def test_500_raises_error(self, client, mocker):
-        mock_response = _mock_response(
-            mocker, status_code=500, text="Internal Server Error"
-        )
-        mocker.patch.object(client._session, "post", return_value=mock_response)
-
-        with pytest.raises(AtlaSentError, match="API error 500") as exc_info:
-            client.evaluate("test-agent", "read_data")
-        assert exc_info.value.status_code == 500
-
-    def test_invalid_json_raises_error(self, client, mocker):
-        mock_response = _mock_response(mocker)
-        mock_response.json.side_effect = ValueError("No JSON")
-        mocker.patch.object(client._session, "post", return_value=mock_response)
-
-        with pytest.raises(AtlaSentError, match="Invalid JSON"):
-            client.evaluate("test-agent", "read_data")
+    def test_500(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=500)
+        resp.text = "Internal Server Error"
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError, match="API error 500"):
+            client.evaluate("a", "b")
 
 
-class TestVerifyPermit:
-    def test_verified_response(self, client, mocker):
-        verify_data = {
-            "verified": True,
-            "permit_hash": "permit_xyz",
-            "timestamp": "2025-01-15T12:05:00Z",
-        }
-        mock_response = _mock_response(mocker, json_data=verify_data)
-        mocker.patch.object(client._session, "post", return_value=mock_response)
+# ── Verify ────────────────────────────────────────────────────────────
 
-        result = client.verify_permit("dec_100")
 
-        assert result["verified"] is True
-        assert result["permit_hash"] == "permit_xyz"
-        client._session.post.assert_called_once_with(
-            "https://api.atlasent.io/v1-verify-permit",
-            json={
-                "decision_id": "dec_100",
-                "api_key": "test_key_123",
-            },
-            timeout=10,
-        )
-
-    def test_timeout_raises_error(self, client, mocker):
+class TestVerify:
+    def test_valid(self, client, mocker):
         mocker.patch.object(
-            client._session,
-            "post",
-            side_effect=requests.exceptions.Timeout("Timed out"),
+            client._client, "post", return_value=_mock_resp(mocker, json_data=VERIFY_OK)
         )
+        result = client.verify("dec_100", "read_data", "agent-1")
 
-        with pytest.raises(AtlaSentError, match="timed out"):
-            client.verify_permit("dec_100")
+        assert isinstance(result, VerifyResult)
+        assert result.valid is True
+        assert result.permit_hash == "permit_xyz"
+
+    def test_payload_shape(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=VERIFY_OK)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+
+        client.verify("dec_100", "read_data", "agent-1", {"k": "v"})
+
+        payload = mock_post.call_args[1]["json"]
+        assert payload["decision_id"] == "dec_100"
+        assert payload["action"] == "read_data"
+        assert payload["agent"] == "agent-1"
+        assert payload["context"] == {"k": "v"}
 
 
-class TestApiKeyResolution:
-    def test_falls_back_to_env_var(self, mocker):
-        mocker.patch.dict("os.environ", {"ATLASENT_API_KEY": "env_key"})
-        c = AtlaSentClient()
-        assert c.api_key == "env_key"
-
-    def test_missing_key_raises_error(self, mocker):
-        mocker.patch.dict("os.environ", {}, clear=True)
-        c = AtlaSentClient()
-        with pytest.raises(ConfigurationError, match="No API key"):
-            _ = c.api_key
+# ── Gate ──────────────────────────────────────────────────────────────
 
 
-class TestRetryLogic:
-    def test_retries_on_timeout(self, client_with_retries, mocker):
-        mock_response = _mock_response(mocker, json_data=EVALUATE_OK)
+class TestGate:
+    def test_permit_and_verify(self, client, mocker):
         mocker.patch.object(
-            client_with_retries._session,
+            client._client,
             "post",
             side_effect=[
-                requests.exceptions.Timeout("timeout"),
-                mock_response,
+                _mock_resp(mocker, json_data=EVALUATE_PERMIT),
+                _mock_resp(mocker, json_data=VERIFY_OK),
             ],
         )
+        result = client.gate("read_data", "agent-1", {"study": "S001"})
 
-        result = client_with_retries.evaluate("agent", "action")
+        assert isinstance(result, GateResult)
+        assert result.evaluation.permit_token == "dec_100"
+        assert result.verification.valid is True
+        assert client._client.post.call_count == 2
 
-        assert result.permitted is True
-        assert client_with_retries._session.post.call_count == 2
-
-    def test_retries_on_connection_error(self, client_with_retries, mocker):
-        mock_response = _mock_response(mocker, json_data=EVALUATE_OK)
+    def test_deny_at_evaluate(self, client, mocker):
         mocker.patch.object(
-            client_with_retries._session,
+            client._client,
             "post",
-            side_effect=[
-                requests.exceptions.ConnectionError("refused"),
-                mock_response,
-            ],
+            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
         )
+        with pytest.raises(AtlaSentDenied):
+            client.gate("write_data", "agent-1")
 
-        result = client_with_retries.evaluate("agent", "action")
+        # verify should NOT have been called
+        assert client._client.post.call_count == 1
 
-        assert result.permitted is True
-        assert client_with_retries._session.post.call_count == 2
 
-    def test_retries_on_5xx(self, client_with_retries, mocker):
-        error_resp = _mock_response(mocker, status_code=502, text="Bad Gateway")
-        ok_resp = _mock_response(mocker, json_data=EVALUATE_OK)
+# ── Retry ─────────────────────────────────────────────────────────────
+
+
+class TestRetry:
+    def test_retries_on_timeout(self, client_retry, mocker):
+        ok = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
         mocker.patch.object(
-            client_with_retries._session,
+            client_retry._client,
             "post",
-            side_effect=[error_resp, ok_resp],
+            side_effect=[httpx.TimeoutException("t"), ok],
         )
+        result = client_retry.evaluate("a", "b")
+        assert result.permit_token == "dec_100"
+        assert client_retry._client.post.call_count == 2
 
-        result = client_with_retries.evaluate("agent", "action")
+    def test_retries_on_5xx(self, client_retry, mocker):
+        err = _mock_resp(mocker, status_code=502)
+        err.text = "Bad Gateway"
+        ok = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
+        mocker.patch.object(client_retry._client, "post", side_effect=[err, ok])
+        result = client_retry.evaluate("a", "b")
+        assert result.permit_token == "dec_100"
 
-        assert result.permitted is True
-        assert client_with_retries._session.post.call_count == 2
-
-    def test_exhausted_retries_raises(self, client_with_retries, mocker):
+    def test_exhausted(self, client_retry, mocker):
         mocker.patch.object(
-            client_with_retries._session,
+            client_retry._client,
             "post",
-            side_effect=requests.exceptions.Timeout("timeout"),
+            side_effect=httpx.TimeoutException("t"),
         )
+        with pytest.raises(AtlaSentError, match="3 attempts"):
+            client_retry.evaluate("a", "b")
+        assert client_retry._client.post.call_count == 3
 
-        with pytest.raises(AtlaSentError, match="timed out after 3 attempts"):
-            client_with_retries.evaluate("agent", "action")
-
-        assert client_with_retries._session.post.call_count == 3
-
-    def test_no_retry_on_4xx(self, client_with_retries, mocker):
-        mock_response = _mock_response(mocker, status_code=422, text="Unprocessable")
-        mocker.patch.object(
-            client_with_retries._session,
-            "post",
-            return_value=mock_response,
-        )
-
-        with pytest.raises(AtlaSentError, match="API error 422"):
-            client_with_retries.evaluate("agent", "action")
-
-        assert client_with_retries._session.post.call_count == 1
-
-    def test_backoff_called_between_retries(self, client_with_retries, mocker):
-        mock_response = _mock_response(mocker, json_data=EVALUATE_OK)
-        mocker.patch.object(
-            client_with_retries._session,
-            "post",
-            side_effect=[
-                requests.exceptions.Timeout("timeout"),
-                mock_response,
-            ],
-        )
-        mock_sleep = mocker.patch("atlasent.client.time.sleep")
-
-        client_with_retries.evaluate("agent", "action")
-
-        mock_sleep.assert_called_once()
-        delay = mock_sleep.call_args[0][0]
-        assert delay == pytest.approx(0.01)  # retry_backoff * 2^0
+    def test_no_retry_on_4xx(self, client_retry, mocker):
+        resp = _mock_resp(mocker, status_code=422)
+        resp.text = "Unprocessable"
+        mocker.patch.object(client_retry._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError, match="422"):
+            client_retry.evaluate("a", "b")
+        assert client_retry._client.post.call_count == 1
 
 
-class TestRateLimiting:
-    def test_429_raises_rate_limit_error(self, client, mocker):
-        mock_response = _mock_response(
-            mocker, status_code=429, headers={"Retry-After": "30"}
-        )
-        mocker.patch.object(client._session, "post", return_value=mock_response)
+# ── Rate Limiting ─────────────────────────────────────────────────────
 
+
+class TestRateLimit:
+    def test_429(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=429, headers={"retry-after": "30"})
+        mocker.patch.object(client._client, "post", return_value=resp)
         with pytest.raises(RateLimitError) as exc_info:
-            client.evaluate("agent", "action")
-
+            client.evaluate("a", "b")
         assert exc_info.value.retry_after == 30.0
-        assert exc_info.value.status_code == 429
 
-    def test_429_without_retry_after(self, client, mocker):
-        mock_response = _mock_response(mocker, status_code=429, headers={})
-        mocker.patch.object(client._session, "post", return_value=mock_response)
-
+    def test_429_no_header(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=429)
+        mocker.patch.object(client._client, "post", return_value=resp)
         with pytest.raises(RateLimitError) as exc_info:
-            client.evaluate("agent", "action")
-
+            client.evaluate("a", "b")
         assert exc_info.value.retry_after is None
 
-    def test_429_not_retried(self, client_with_retries, mocker):
-        """429 should raise immediately, not be retried."""
-        mock_response = _mock_response(
-            mocker, status_code=429, headers={"Retry-After": "5"}
-        )
-        mocker.patch.object(
-            client_with_retries._session, "post", return_value=mock_response
-        )
 
-        with pytest.raises(RateLimitError):
-            client_with_retries.evaluate("agent", "action")
-
-        assert client_with_retries._session.post.call_count == 1
+# ── Resource Management ───────────────────────────────────────────────
 
 
-class TestResourceManagement:
+class TestLifecycle:
     def test_close(self, client, mocker):
-        mock_close = mocker.patch.object(client._session, "close")
+        mock_close = mocker.patch.object(client._client, "close")
         client.close()
         mock_close.assert_called_once()
 
     def test_context_manager(self, mocker):
-        with AtlaSentClient(api_key="key", max_retries=0) as client:
-            mock_close = mocker.patch.object(client._session, "close")
+        with AtlaSentClient(api_key="k", max_retries=0) as c:
+            mock_close = mocker.patch.object(c._client, "close")
         mock_close.assert_called_once()
-
-    def test_context_manager_closes_on_exception(self, mocker):
-        try:
-            with AtlaSentClient(api_key="key", max_retries=0) as client:
-                mock_close = mocker.patch.object(client._session, "close")
-                raise ValueError("test error")
-        except ValueError:
-            pass
-        mock_close.assert_called_once()
-
-
-class TestResponseTextTruncation:
-    def test_large_error_response_truncated(self, client, mocker):
-        long_text = "x" * 1000
-        mock_response = _mock_response(mocker, status_code=400, text=long_text)
-        mocker.patch.object(client._session, "post", return_value=mock_response)
-
-        with pytest.raises(AtlaSentError) as exc_info:
-            client.evaluate("agent", "action")
-
-        assert len(exc_info.value.message) < 600

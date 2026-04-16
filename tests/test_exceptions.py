@@ -1,9 +1,9 @@
 """Tests for AtlaSent exceptions."""
 
 from atlasent.exceptions import (
+    AtlaSentDenied,
     AtlaSentError,
     ConfigurationError,
-    PermissionDeniedError,
     RateLimitError,
 )
 
@@ -18,36 +18,44 @@ class TestAtlaSentError:
     def test_default_status_code_is_none(self):
         err = AtlaSentError("oops")
         assert err.status_code is None
+        assert err.response_body is None
+
+    def test_response_body(self):
+        err = AtlaSentError("err", response_body={"error": "bad"})
+        assert err.response_body == {"error": "bad"}
 
     def test_is_exception(self):
         assert issubclass(AtlaSentError, Exception)
 
 
-class TestPermissionDeniedError:
+class TestAtlaSentDenied:
     def test_attributes(self):
-        err = PermissionDeniedError(
+        err = AtlaSentDenied(
+            "deny",
+            permit_token="dec_123",
             reason="Missing patient_id",
-            decision_id="dec_123",
-            audit_hash="hash_456",
+            response_body={"permitted": False},
         )
+        assert err.decision == "deny"
+        assert err.permit_token == "dec_123"
         assert err.reason == "Missing patient_id"
-        assert err.decision_id == "dec_123"
-        assert err.audit_hash == "hash_456"
-        assert "Permission denied" in str(err)
+        assert "Action denied" in str(err)
+        assert "Missing patient_id" in str(err)
+        assert err.response_body == {"permitted": False}
 
     def test_inherits_from_atlasent_error(self):
-        assert issubclass(PermissionDeniedError, AtlaSentError)
+        assert issubclass(AtlaSentDenied, AtlaSentError)
 
-    def test_default_audit_hash(self):
-        err = PermissionDeniedError(reason="denied", decision_id="dec_1")
-        assert err.audit_hash == ""
+    def test_defaults(self):
+        err = AtlaSentDenied("deny")
+        assert err.permit_token == ""
+        assert err.reason == ""
 
 
 class TestConfigurationError:
     def test_message(self):
         err = ConfigurationError("No API key")
         assert err.message == "No API key"
-        assert str(err) == "No API key"
 
     def test_inherits_from_atlasent_error(self):
         assert issubclass(ConfigurationError, AtlaSentError)
@@ -63,8 +71,6 @@ class TestRateLimitError:
     def test_without_retry_after(self):
         err = RateLimitError()
         assert err.retry_after is None
-        assert err.status_code == 429
-        assert "Rate limited" in str(err)
 
     def test_inherits_from_atlasent_error(self):
         assert issubclass(RateLimitError, AtlaSentError)

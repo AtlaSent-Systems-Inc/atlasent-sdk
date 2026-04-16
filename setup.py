@@ -22,18 +22,14 @@ setup(
     packages=find_packages(exclude=["tests", "tests.*", "examples"]),
     python_requires=">=3.10",
     install_requires=[
-        "requests>=2.28.0",
-        "python-dotenv>=0.20.0",
+        "httpx>=0.24.0",
+        "pydantic>=2.0.0",
     ],
     extras_require={
-        "async": [
-            "httpx>=0.24.0",
-        ],
         "dev": [
             "pytest>=7.0",
             "pytest-mock>=3.10",
             "pytest-asyncio>=0.21.0",
-            "httpx>=0.24.0",
             "black>=23.0",
             "ruff>=0.1.0",
         ],

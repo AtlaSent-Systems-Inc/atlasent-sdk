@@ -1,71 +1,63 @@
-"""Async AtlaSent API client using httpx."""
+"""Asynchronous AtlaSent API client (httpx.AsyncClient-based)."""
+
+from __future__ import annotations
 
 import asyncio
 import logging
 from typing import Any
 
-try:
-    import httpx
-except ImportError:  # pragma: no cover
-    httpx = None  # type: ignore[assignment]
+import httpx
 
 from ._version import __version__
-from .config import DEFAULT_BASE_URL, get_api_key
-from .exceptions import AtlaSentError, RateLimitError
-from .models import AuthorizationResult
+from .exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
+from .models import (
+    EvaluateRequest,
+    EvaluateResult,
+    GateResult,
+    VerifyRequest,
+    VerifyResult,
+)
 
 logger = logging.getLogger("atlasent")
 
+DEFAULT_BASE_URL = "https://api.atlasent.io"
 DEFAULT_TIMEOUT = 10
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BACKOFF = 0.5
 
 
-def _require_httpx() -> None:
-    if httpx is None:
-        raise ImportError(
-            "httpx is required for the async client. "
-            "Install it with: pip install atlasent[async]"
-        )
-
-
 class AsyncAtlaSentClient:
     """Async client for the AtlaSent authorization API.
 
-    Requires the ``httpx`` package. Install with::
-
-        pip install atlasent[async]
+    Mirrors :class:`AtlaSentClient` but with ``async``/``await``.
+    Uses ``httpx.AsyncClient`` under the hood.
 
     Args:
-        api_key: Your AtlaSent API key. If not provided, the global
-            configuration or ATLASENT_API_KEY environment variable is used.
-        environment: Deployment environment name. Defaults to "production".
-        base_url: Override the base API URL. Defaults to
-            https://api.atlasent.io.
-        timeout: Request timeout in seconds. Defaults to 10.
-        max_retries: Maximum number of retries on transient errors.
-            Defaults to 2.
-        retry_backoff: Base backoff time in seconds between retries.
-            Doubles after each attempt. Defaults to 0.5.
+        api_key: Your AtlaSent API key (required).
+        anon_key: An anonymous / public key for client-side contexts.
+        base_url: Override the API base URL.
+        timeout: HTTP request timeout in seconds.
+        max_retries: Retries on transient errors (5xx, timeouts).
+        retry_backoff: Base backoff in seconds (doubles each retry).
 
-    Supports the async context manager protocol::
+    Usage::
 
         async with AsyncAtlaSentClient(api_key="ask_live_...") as client:
-            result = await client.evaluate("my-agent", "read_data")
+            result = await client.gate("read_data", "agent-1")
     """
 
     def __init__(
         self,
-        api_key: str | None = None,
-        environment: str = "production",
+        api_key: str,
+        *,
+        anon_key: str = "",
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         retry_backoff: float = DEFAULT_RETRY_BACKOFF,
     ) -> None:
-        _require_httpx()
         self._api_key = api_key
-        self._environment = environment
+        self._anon_key = anon_key
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries
@@ -78,102 +70,98 @@ class AsyncAtlaSentClient:
             timeout=self._timeout,
         )
 
-    @property
-    def api_key(self) -> str:
-        """Resolve the API key from the instance, global config, or env var."""
-        if self._api_key:
-            return self._api_key
-        return get_api_key()
+    # ── public API ────────────────────────────────────────────────
 
     async def evaluate(
         self,
-        agent: str,
-        action: str,
+        action_type: str,
+        actor_id: str,
         context: dict[str, Any] | None = None,
-    ) -> AuthorizationResult:
-        """Evaluate whether an agent action is authorized.
+    ) -> EvaluateResult:
+        """Evaluate whether an action is authorized.
 
-        Args:
-            agent: Identifier of the AI agent requesting authorization.
-            action: The action the agent wants to perform.
-            context: Optional dictionary of additional context for the
-                authorization decision.
-
-        Returns:
-            An AuthorizationResult indicating whether the action is permitted.
-
-        Raises:
-            AtlaSentError: On network errors, timeouts, or unexpected
-                API responses.
-            RateLimitError: When the API returns HTTP 429.
+        Returns an :class:`EvaluateResult` on permit.
+        Raises :class:`AtlaSentDenied` on deny (fail-closed).
         """
-        payload = {
-            "agent": agent,
-            "action": action,
-            "context": context or {},
-            "api_key": self.api_key,
-        }
-        logger.debug("Evaluating action=%r for agent=%r (async)", action, agent)
-        data = await self._post("/v1-evaluate", payload)
-        result = AuthorizationResult(
-            permitted=data["permitted"],
-            decision_id=data["decision_id"],
-            reason=data["reason"],
-            audit_hash=data["audit_hash"],
-            timestamp=data["timestamp"],
+        req = EvaluateRequest(
+            action_type=action_type,
+            actor_id=actor_id,
+            context=context or {},
+            api_key=self._api_key,
         )
-        if result.permitted:
-            logger.info(
-                "Action %r permitted for agent %r (decision=%s)",
-                action,
-                agent,
-                result.decision_id,
+        logger.debug("evaluate action=%r actor=%r (async)", action_type, actor_id)
+        data = await self._post("/v1-evaluate", req.model_dump(by_alias=True))
+
+        permitted = data.get("permitted")
+        if not permitted:
+            raise AtlaSentDenied(
+                decision=str(permitted),
+                permit_token=data.get("decision_id", ""),
+                reason=data.get("reason", ""),
+                response_body=data,
             )
-        else:
-            logger.info(
-                "Action %r denied for agent %r: %s (decision=%s)",
-                action,
-                agent,
-                result.reason,
-                result.decision_id,
-            )
+
+        result = EvaluateResult.model_validate(data)
+        logger.info(
+            "evaluate permitted action=%r actor=%r token=%s",
+            action_type,
+            actor_id,
+            result.permit_token,
+        )
         return result
 
-    async def verify_permit(self, decision_id: str) -> dict:
-        """Verify a previously issued permit.
+    async def verify(
+        self,
+        permit_token: str,
+        action_type: str = "",
+        actor_id: str = "",
+        context: dict[str, Any] | None = None,
+    ) -> VerifyResult:
+        """Verify a previously issued permit token."""
+        req = VerifyRequest(
+            permit_token=permit_token,
+            action_type=action_type,
+            actor_id=actor_id,
+            context=context or {},
+            api_key=self._api_key,
+        )
+        logger.debug("verify token=%s (async)", permit_token)
+        data = await self._post("/v1-verify-permit", req.model_dump(by_alias=True))
+        result = VerifyResult.model_validate(data)
+        logger.info("verify token=%s valid=%s", permit_token, result.valid)
+        return result
 
-        Args:
-            decision_id: The decision ID returned by a prior evaluate() call.
+    async def gate(
+        self,
+        action_type: str,
+        actor_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> GateResult:
+        """Evaluate then verify in one call — the happy-path shortcut."""
+        ctx = context or {}
+        eval_result = await self.evaluate(action_type, actor_id, ctx)
+        verify_result = await self.verify(
+            eval_result.permit_token, action_type, actor_id, ctx
+        )
+        return GateResult(evaluation=eval_result, verification=verify_result)
 
-        Returns:
-            A dictionary containing ``verified``, ``permit_hash``, and
-            ``timestamp`` fields.
-
-        Raises:
-            AtlaSentError: On network errors, timeouts, or unexpected
-                API responses.
-            RateLimitError: When the API returns HTTP 429.
-        """
-        payload = {
-            "decision_id": decision_id,
-            "api_key": self.api_key,
-        }
-        logger.debug("Verifying permit for decision=%s (async)", decision_id)
-        return await self._post("/v1-verify-permit", payload)
+    # ── lifecycle ─────────────────────────────────────────────────
 
     async def close(self) -> None:
         """Close the underlying HTTP client and release resources."""
         await self._client.aclose()
-        logger.debug("AsyncAtlaSentClient session closed")
+        logger.debug("AsyncAtlaSentClient closed")
 
-    async def __aenter__(self) -> "AsyncAtlaSentClient":
+    async def __aenter__(self) -> AsyncAtlaSentClient:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
         await self.close()
 
-    async def _post(self, path: str, payload: dict) -> dict:
-        """Send a POST request with retry logic."""
+    # ── internals ─────────────────────────────────────────────────
+
+    async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """POST with retry on transient failures."""
         url = f"{self._base_url}{path}"
 
         for attempt in range(1 + self._max_retries):
@@ -181,7 +169,7 @@ class AsyncAtlaSentClient:
                 response = await self._client.post(url, json=payload)
             except httpx.TimeoutException as exc:
                 logger.warning(
-                    "Request to %s timed out (attempt %d/%d)",
+                    "%s timeout (attempt %d/%d)",
                     path,
                     attempt + 1,
                     1 + self._max_retries,
@@ -195,11 +183,10 @@ class AsyncAtlaSentClient:
                 ) from exc
             except httpx.ConnectError as exc:
                 logger.warning(
-                    "Connection to %s failed (attempt %d/%d): %s",
+                    "%s connection failed (attempt %d/%d)",
                     self._base_url,
                     attempt + 1,
                     1 + self._max_retries,
-                    exc,
                 )
                 if attempt < self._max_retries:
                     await self._backoff(attempt)
@@ -212,10 +199,8 @@ class AsyncAtlaSentClient:
                 raise AtlaSentError(f"Request failed: {exc}") from exc
 
             if response.status_code == 429:
-                retry_after = self._parse_retry_after(response)
-                logger.warning("Rate limited on %s (retry_after=%s)", path, retry_after)
+                retry_after = _parse_retry_after(response)
                 raise RateLimitError(retry_after=retry_after)
-
             if response.status_code == 401:
                 raise AtlaSentError("Invalid API key", status_code=401)
             if response.status_code == 403:
@@ -223,10 +208,9 @@ class AsyncAtlaSentClient:
                     "Access forbidden — check your API key permissions",
                     status_code=403,
                 )
-
             if response.status_code >= 500:
                 logger.warning(
-                    "Server error %d on %s (attempt %d/%d)",
+                    "Server %d on %s (attempt %d/%d)",
                     response.status_code,
                     path,
                     attempt + 1,
@@ -239,7 +223,6 @@ class AsyncAtlaSentClient:
                     f"API error {response.status_code}: " f"{response.text[:500]}",
                     status_code=response.status_code,
                 )
-
             if response.status_code >= 400:
                 raise AtlaSentError(
                     f"API error {response.status_code}: " f"{response.text[:500]}",
@@ -256,18 +239,16 @@ class AsyncAtlaSentClient:
         )
 
     async def _backoff(self, attempt: int) -> None:
-        """Sleep with exponential backoff."""
         delay = self._retry_backoff * (2**attempt)
-        logger.debug("Retrying in %.1fs... (async)", delay)
+        logger.debug("Retrying in %.1fs… (async)", delay)
         await asyncio.sleep(delay)
 
-    @staticmethod
-    def _parse_retry_after(response: "httpx.Response") -> float | None:
-        """Parse the Retry-After header from a 429 response."""
-        value = response.headers.get("retry-after")
-        if value is None:
-            return None
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            return None
+
+def _parse_retry_after(response: httpx.Response) -> float | None:
+    value = response.headers.get("retry-after")
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None

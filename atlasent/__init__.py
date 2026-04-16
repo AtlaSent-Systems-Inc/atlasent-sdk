@@ -1,38 +1,50 @@
 """AtlaSent SDK — execution-time authorization for AI agents.
 
+Fail-closed by design: any failure to confirm authorization raises
+an exception, so no action can proceed without an explicit permit.
+
 Quick start::
 
-    import atlasent
+    from atlasent import AtlaSentClient
 
-    atlasent.configure(api_key="ask_live_...")
-    result = atlasent.authorize("my-agent", "read_patient_record")
-    if result:
-        # proceed with the action
-        ...
+    client = AtlaSentClient(api_key="ask_live_...")
+    result = client.gate("read_patient_record", "agent-1",
+                         {"patient_id": "PT-001"})
+    print(result.verification.permit_hash)
 """
 
 from ._version import __version__
 from .async_client import AsyncAtlaSentClient
-from .authorize import authorize
+from .authorize import evaluate, gate, verify
 from .client import AtlaSentClient
 from .config import configure
 from .exceptions import (
+    AtlaSentDenied,
     AtlaSentError,
     ConfigurationError,
-    PermissionDeniedError,
     RateLimitError,
 )
-from .models import AuthorizationResult
+from .models import EvaluateResult, GateResult, VerifyResult
 
 __all__ = [
-    "authorize",
-    "configure",
+    # version
+    "__version__",
+    # clients
     "AtlaSentClient",
     "AsyncAtlaSentClient",
-    "AuthorizationResult",
+    # config
+    "configure",
+    # convenience functions
+    "evaluate",
+    "verify",
+    "gate",
+    # models
+    "EvaluateResult",
+    "VerifyResult",
+    "GateResult",
+    # exceptions
     "AtlaSentError",
+    "AtlaSentDenied",
     "ConfigurationError",
-    "PermissionDeniedError",
     "RateLimitError",
-    "__version__",
 ]

@@ -1,67 +1,94 @@
-"""Tests for AtlaSent data models."""
+"""Tests for Pydantic models."""
 
-from atlasent.models import AuthorizationResult
+from atlasent.models import (
+    EvaluateRequest,
+    EvaluateResult,
+    GateResult,
+    VerifyRequest,
+    VerifyResult,
+)
 
 
-class TestAuthorizationResult:
-    def test_permitted_result_is_truthy(self):
-        result = AuthorizationResult(
-            permitted=True,
-            decision_id="dec_001",
-            reason="Action complies with policy",
-            audit_hash="abc123",
-            timestamp="2025-01-15T10:30:00Z",
+class TestEvaluateRequest:
+    def test_serializes_with_aliases(self):
+        req = EvaluateRequest(
+            action_type="read_data",
+            actor_id="agent-1",
+            context={"study": "S001"},
+            api_key="key",
         )
-        assert result
-        assert bool(result) is True
+        data = req.model_dump(by_alias=True)
+        assert data["action"] == "read_data"
+        assert data["agent"] == "agent-1"
+        assert data["context"] == {"study": "S001"}
+        assert data["api_key"] == "key"
 
-    def test_denied_result_is_falsy(self):
-        result = AuthorizationResult(
-            permitted=False,
-            decision_id="dec_002",
-            reason="Insufficient context",
-            audit_hash="def456",
-            timestamp="2025-01-15T10:31:00Z",
+    def test_default_context(self):
+        req = EvaluateRequest(action_type="x", actor_id="y", api_key="k")
+        assert req.context == {}
+
+
+class TestEvaluateResult:
+    def test_from_api_response(self):
+        result = EvaluateResult.model_validate(
+            {
+                "permitted": True,
+                "decision_id": "dec_100",
+                "reason": "OK",
+                "audit_hash": "hash_abc",
+                "timestamp": "2025-01-15T12:00:00Z",
+            }
         )
-        assert not result
-        assert bool(result) is False
+        assert result.decision is True
+        assert result.permit_token == "dec_100"
+        assert result.reason == "OK"
+        assert result.audit_hash == "hash_abc"
+        assert result.timestamp == "2025-01-15T12:00:00Z"
 
-    def test_fields_accessible(self):
-        result = AuthorizationResult(
-            permitted=True,
-            decision_id="dec_003",
-            reason="Allowed",
-            audit_hash="ghi789",
-            timestamp="2025-01-15T10:32:00Z",
+
+class TestVerifyRequest:
+    def test_serializes_with_aliases(self):
+        req = VerifyRequest(
+            permit_token="dec_100",
+            action_type="read_data",
+            actor_id="agent-1",
+            api_key="key",
         )
-        assert result.permitted is True
-        assert result.decision_id == "dec_003"
-        assert result.reason == "Allowed"
-        assert result.audit_hash == "ghi789"
-        assert result.timestamp == "2025-01-15T10:32:00Z"
+        data = req.model_dump(by_alias=True)
+        assert data["decision_id"] == "dec_100"
+        assert data["action"] == "read_data"
+        assert data["agent"] == "agent-1"
 
-    def test_if_pattern_permitted(self):
-        result = AuthorizationResult(
-            permitted=True,
-            decision_id="dec_004",
+
+class TestVerifyResult:
+    def test_from_api_response(self):
+        result = VerifyResult.model_validate(
+            {
+                "verified": True,
+                "permit_hash": "permit_xyz",
+                "timestamp": "2025-01-15T12:05:00Z",
+            }
+        )
+        assert result.valid is True
+        assert result.permit_hash == "permit_xyz"
+        assert result.timestamp == "2025-01-15T12:05:00Z"
+
+    def test_outcome_default(self):
+        result = VerifyResult.model_validate({"verified": False})
+        assert result.valid is False
+        assert result.outcome == ""
+
+
+class TestGateResult:
+    def test_combines_eval_and_verify(self):
+        ev = EvaluateResult(
+            decision=True,
+            permit_token="dec_1",
             reason="OK",
-            audit_hash="jkl012",
-            timestamp="2025-01-15T10:33:00Z",
+            audit_hash="h1",
+            timestamp="t1",
         )
-        executed = False
-        if result:
-            executed = True
-        assert executed
-
-    def test_if_pattern_denied(self):
-        result = AuthorizationResult(
-            permitted=False,
-            decision_id="dec_005",
-            reason="Denied",
-            audit_hash="mno345",
-            timestamp="2025-01-15T10:34:00Z",
-        )
-        executed = False
-        if result:
-            executed = True
-        assert not executed
+        vr = VerifyResult(valid=True, permit_hash="ph1", timestamp="t2")
+        gate = GateResult(evaluation=ev, verification=vr)
+        assert gate.evaluation.permit_token == "dec_1"
+        assert gate.verification.valid is True

@@ -1,175 +1,218 @@
-"""AtlaSent API client."""
+"""Synchronous AtlaSent API client (httpx-based)."""
+
+from __future__ import annotations
 
 import logging
 import time
 from typing import Any
 
-import requests
+import httpx
 
 from ._version import __version__
-from .config import DEFAULT_BASE_URL, get_api_key
-from .exceptions import AtlaSentError, RateLimitError
-from .models import AuthorizationResult
+from .exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
+from .models import (
+    EvaluateRequest,
+    EvaluateResult,
+    GateResult,
+    VerifyRequest,
+    VerifyResult,
+)
 
 logger = logging.getLogger("atlasent")
 
+DEFAULT_BASE_URL = "https://api.atlasent.io"
 DEFAULT_TIMEOUT = 10
 DEFAULT_MAX_RETRIES = 2
-DEFAULT_RETRY_BACKOFF = 0.5  # seconds; doubles each retry
+DEFAULT_RETRY_BACKOFF = 0.5
 
 
 class AtlaSentClient:
-    """Client for the AtlaSent authorization API.
+    """Synchronous client for the AtlaSent authorization API.
+
+    The client is **fail-closed**: any failure to confirm authorization
+    raises an exception, so no action can proceed without an explicit
+    permit.
 
     Args:
-        api_key: Your AtlaSent API key. If not provided, the global
-            configuration or ATLASENT_API_KEY environment variable is used.
-        environment: Deployment environment name. Defaults to "production".
-        base_url: Override the base API URL. Defaults to
-            https://api.atlasent.io.
-        timeout: Request timeout in seconds. Defaults to 10.
-        max_retries: Maximum number of retries on transient errors (5xx,
-            timeouts, connection errors). Defaults to 2.
-        retry_backoff: Base backoff time in seconds between retries.
-            Doubles after each attempt. Defaults to 0.5.
+        api_key: Your AtlaSent API key (required).
+        anon_key: An anonymous / public key for client-side contexts.
+        base_url: Override the API base URL.
+        timeout: HTTP request timeout in seconds.
+        max_retries: Retries on transient errors (5xx, timeouts).
+        retry_backoff: Base backoff in seconds (doubles each retry).
 
-    Supports the context manager protocol::
+    Usage::
+
+        from atlasent import AtlaSentClient
+
+        client = AtlaSentClient(api_key="ask_live_...")
+        result = client.gate("modify_patient_record", "agent-1",
+                             {"patient_id": "PT-001"})
+        print(result.verification.permit_hash)
+
+    Supports the context-manager protocol::
 
         with AtlaSentClient(api_key="ask_live_...") as client:
-            result = client.evaluate("my-agent", "read_data")
+            result = client.evaluate("read_data", "agent-1")
     """
 
     def __init__(
         self,
-        api_key: str | None = None,
-        environment: str = "production",
+        api_key: str,
+        *,
+        anon_key: str = "",
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         retry_backoff: float = DEFAULT_RETRY_BACKOFF,
     ) -> None:
         self._api_key = api_key
-        self._environment = environment
+        self._anon_key = anon_key
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries
         self._retry_backoff = retry_backoff
-        self._session = requests.Session()
-        self._session.headers.update(
-            {
+        self._client = httpx.Client(
+            headers={
                 "Content-Type": "application/json",
                 "User-Agent": f"atlasent-python/{__version__}",
-            }
+            },
+            timeout=self._timeout,
         )
 
-    @property
-    def api_key(self) -> str:
-        """Resolve the API key from the instance, global config, or env var."""
-        if self._api_key:
-            return self._api_key
-        return get_api_key()
+    # ── public API ────────────────────────────────────────────────
 
     def evaluate(
         self,
-        agent: str,
-        action: str,
+        action_type: str,
+        actor_id: str,
         context: dict[str, Any] | None = None,
-    ) -> AuthorizationResult:
-        """Evaluate whether an agent action is authorized.
+    ) -> EvaluateResult:
+        """Evaluate whether an action is authorized.
+
+        Returns an :class:`EvaluateResult` on permit.
+        Raises :class:`AtlaSentDenied` on deny (fail-closed).
 
         Args:
-            agent: Identifier of the AI agent requesting authorization.
-            action: The action the agent wants to perform.
-            context: Optional dictionary of additional context for the
-                authorization decision (e.g., patient ID, study phase).
-
-        Returns:
-            An AuthorizationResult indicating whether the action is permitted.
+            action_type: The action to authorize (e.g. ``"modify_patient_record"``).
+            actor_id: Identifier of the actor (agent or user).
+            context: Arbitrary context dict for policy evaluation.
 
         Raises:
-            AtlaSentError: On network errors, timeouts, or unexpected
-                API responses.
-            RateLimitError: When the API returns HTTP 429.
+            AtlaSentDenied: The action was explicitly denied.
+            AtlaSentError: Network error, timeout, or unexpected response.
+            RateLimitError: HTTP 429.
         """
-        payload = {
-            "agent": agent,
-            "action": action,
-            "context": context or {},
-            "api_key": self.api_key,
-        }
-        logger.debug("Evaluating action=%r for agent=%r", action, agent)
-        data = self._post("/v1-evaluate", payload)
-        result = AuthorizationResult(
-            permitted=data["permitted"],
-            decision_id=data["decision_id"],
-            reason=data["reason"],
-            audit_hash=data["audit_hash"],
-            timestamp=data["timestamp"],
+        req = EvaluateRequest(
+            action_type=action_type,
+            actor_id=actor_id,
+            context=context or {},
+            api_key=self._api_key,
         )
-        if result.permitted:
-            logger.info(
-                "Action %r permitted for agent %r (decision=%s)",
-                action,
-                agent,
-                result.decision_id,
+        logger.debug("evaluate action=%r actor=%r", action_type, actor_id)
+        data = self._post("/v1-evaluate", req.model_dump(by_alias=True))
+
+        permitted = data.get("permitted")
+        if not permitted:
+            raise AtlaSentDenied(
+                decision=str(permitted),
+                permit_token=data.get("decision_id", ""),
+                reason=data.get("reason", ""),
+                response_body=data,
             )
-        else:
-            logger.info(
-                "Action %r denied for agent %r: %s (decision=%s)",
-                action,
-                agent,
-                result.reason,
-                result.decision_id,
-            )
+
+        result = EvaluateResult.model_validate(data)
+        logger.info(
+            "evaluate permitted action=%r actor=%r token=%s",
+            action_type,
+            actor_id,
+            result.permit_token,
+        )
         return result
 
-    def verify_permit(self, decision_id: str) -> dict:
-        """Verify a previously issued permit.
+    def verify(
+        self,
+        permit_token: str,
+        action_type: str = "",
+        actor_id: str = "",
+        context: dict[str, Any] | None = None,
+    ) -> VerifyResult:
+        """Verify a previously issued permit token.
 
         Args:
-            decision_id: The decision ID returned by a prior evaluate() call.
+            permit_token: The token from :meth:`evaluate`.
+            action_type: Optionally re-state the action for cross-check.
+            actor_id: Optionally re-state the actor for cross-check.
+            context: Optionally re-state context for cross-check.
 
         Returns:
-            A dictionary containing ``verified``, ``permit_hash``, and
-            ``timestamp`` fields.
+            A :class:`VerifyResult`.
 
         Raises:
-            AtlaSentError: On network errors, timeouts, or unexpected
-                API responses.
-            RateLimitError: When the API returns HTTP 429.
+            AtlaSentError: Network error, timeout, or unexpected response.
+            RateLimitError: HTTP 429.
         """
-        payload = {
-            "decision_id": decision_id,
-            "api_key": self.api_key,
-        }
-        logger.debug("Verifying permit for decision=%s", decision_id)
-        return self._post("/v1-verify-permit", payload)
+        req = VerifyRequest(
+            permit_token=permit_token,
+            action_type=action_type,
+            actor_id=actor_id,
+            context=context or {},
+            api_key=self._api_key,
+        )
+        logger.debug("verify token=%s", permit_token)
+        data = self._post("/v1-verify-permit", req.model_dump(by_alias=True))
+        result = VerifyResult.model_validate(data)
+        logger.info("verify token=%s valid=%s", permit_token, result.valid)
+        return result
+
+    def gate(
+        self,
+        action_type: str,
+        actor_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> GateResult:
+        """Evaluate then verify in one call — the happy-path shortcut.
+
+        Calls :meth:`evaluate`; if permitted, immediately calls
+        :meth:`verify` with the resulting permit token.  Returns a
+        :class:`GateResult` containing both results.
+
+        Raises:
+            AtlaSentDenied: The action was denied at evaluation.
+            AtlaSentError: Any failure at either step.
+        """
+        ctx = context or {}
+        eval_result = self.evaluate(action_type, actor_id, ctx)
+        verify_result = self.verify(
+            eval_result.permit_token, action_type, actor_id, ctx
+        )
+        return GateResult(evaluation=eval_result, verification=verify_result)
+
+    # ── lifecycle ─────────────────────────────────────────────────
 
     def close(self) -> None:
-        """Close the underlying HTTP session and release resources."""
-        self._session.close()
-        logger.debug("AtlaSentClient session closed")
+        """Close the underlying HTTP client and release resources."""
+        self._client.close()
+        logger.debug("AtlaSentClient closed")
 
-    def __enter__(self) -> "AtlaSentClient":
+    def __enter__(self) -> AtlaSentClient:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
         self.close()
 
-    def _post(self, path: str, payload: dict) -> dict:
-        """Send a POST request with retry logic.
+    # ── internals ─────────────────────────────────────────────────
 
-        Retries on transient failures (5xx, timeouts, connection errors)
-        with exponential backoff. Raises immediately on client errors (4xx).
-        """
+    def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """POST with retry on transient failures (5xx, timeouts)."""
         url = f"{self._base_url}{path}"
 
         for attempt in range(1 + self._max_retries):
             try:
-                response = self._session.post(url, json=payload, timeout=self._timeout)
-            except requests.exceptions.Timeout as exc:
+                response = self._client.post(url, json=payload)
+            except httpx.TimeoutException as exc:
                 logger.warning(
-                    "Request to %s timed out (attempt %d/%d)",
+                    "%s timeout (attempt %d/%d)",
                     path,
                     attempt + 1,
                     1 + self._max_retries,
@@ -181,13 +224,12 @@ class AtlaSentClient:
                     f"Request to {path} timed out after "
                     f"{1 + self._max_retries} attempts"
                 ) from exc
-            except requests.exceptions.ConnectionError as exc:
+            except httpx.ConnectError as exc:
                 logger.warning(
-                    "Connection to %s failed (attempt %d/%d): %s",
+                    "%s connection failed (attempt %d/%d)",
                     self._base_url,
                     attempt + 1,
                     1 + self._max_retries,
-                    exc,
                 )
                 if attempt < self._max_retries:
                     self._backoff(attempt)
@@ -196,15 +238,12 @@ class AtlaSentClient:
                     f"Failed to connect to AtlaSent API at "
                     f"{self._base_url} after {1 + self._max_retries} attempts"
                 ) from exc
-            except requests.exceptions.RequestException as exc:
+            except httpx.HTTPError as exc:
                 raise AtlaSentError(f"Request failed: {exc}") from exc
 
-            # Handle HTTP status codes
             if response.status_code == 429:
-                retry_after = self._parse_retry_after(response)
-                logger.warning("Rate limited on %s (retry_after=%s)", path, retry_after)
+                retry_after = _parse_retry_after(response)
                 raise RateLimitError(retry_after=retry_after)
-
             if response.status_code == 401:
                 raise AtlaSentError("Invalid API key", status_code=401)
             if response.status_code == 403:
@@ -212,11 +251,9 @@ class AtlaSentClient:
                     "Access forbidden — check your API key permissions",
                     status_code=403,
                 )
-
-            # Retry on 5xx server errors
             if response.status_code >= 500:
                 logger.warning(
-                    "Server error %d on %s (attempt %d/%d)",
+                    "Server %d on %s (attempt %d/%d)",
                     response.status_code,
                     path,
                     attempt + 1,
@@ -229,37 +266,32 @@ class AtlaSentClient:
                     f"API error {response.status_code}: " f"{response.text[:500]}",
                     status_code=response.status_code,
                 )
-
             if response.status_code >= 400:
                 raise AtlaSentError(
                     f"API error {response.status_code}: " f"{response.text[:500]}",
                     status_code=response.status_code,
                 )
 
-            # Success
             try:
                 return response.json()
             except ValueError as exc:
                 raise AtlaSentError("Invalid JSON response from AtlaSent API") from exc
 
-        # Should not reach here, but guard against it
         raise AtlaSentError(
             f"Request to {path} failed after {1 + self._max_retries} attempts"
         )
 
     def _backoff(self, attempt: int) -> None:
-        """Sleep with exponential backoff."""
         delay = self._retry_backoff * (2**attempt)
-        logger.debug("Retrying in %.1fs...", delay)
+        logger.debug("Retrying in %.1fs…", delay)
         time.sleep(delay)
 
-    @staticmethod
-    def _parse_retry_after(response: requests.Response) -> float | None:
-        """Parse the Retry-After header from a 429 response."""
-        value = response.headers.get("Retry-After")
-        if value is None:
-            return None
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            return None
+
+def _parse_retry_after(response: httpx.Response) -> float | None:
+    value = response.headers.get("retry-after")
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
