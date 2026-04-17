@@ -5,11 +5,15 @@ on:
     branches: [main]
     paths:
       - "python/**"
+      - "contract/vectors/**"
+      - "contract/schemas/**"
       - ".github/workflows/python-ci.yml"
   pull_request:
     branches: [main]
     paths:
       - "python/**"
+      - "contract/vectors/**"
+      - "contract/schemas/**"
       - ".github/workflows/python-ci.yml"
 
 defaults:
