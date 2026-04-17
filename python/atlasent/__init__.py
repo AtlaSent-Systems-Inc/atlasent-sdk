@@ -1,67 +1,81 @@
-"""AtlaSent SDK — execution-time authorization for AI agents.
+"""AtlaSent Python SDK."""
 
-Fail-closed by design: any failure to confirm authorization raises
-an exception, so no action can proceed without an explicit permit.
-
-Quick start::
-
-    from atlasent import authorize
-
-    result = authorize(
-        agent="clinical-data-agent",
-        action="modify_patient_record",
-        context={"user": "dr_smith", "environment": "production"},
-    )
-    if result.permitted:
-        # execute action
-        ...
-"""
-
-from ._version import __version__
-from .async_client import AsyncAtlaSentClient
-from .authorize import authorize, evaluate, gate, verify
-from .cache import TTLCache
 from .client import AtlaSentClient
-from .config import configure
+from .async_client import AsyncAtlaSentClient
 from .exceptions import (
-    AtlaSentDenied,
     AtlaSentError,
-    AtlaSentErrorCode,
-    ConfigurationError,
-    PermissionDeniedError,
-    RateLimitError,
+    AtlaSentDeniedError,
+    AtlaSentHoldError,
+    AtlaSentEscalateError,
+    AtlaSentAPIError,
 )
-from .guard import async_atlasent_guard, atlasent_guard
-from .models import AuthorizationResult, EvaluateResult, GateResult, VerifyResult
+from .guard import atlasent_guard, async_atlasent_guard
+from .models import AuthorizeResult, Decision
+
+import os as _os
+
+_default_client: AtlaSentClient | None = None
+_default_async_client: AsyncAtlaSentClient | None = None
+
+
+def _get_client() -> AtlaSentClient:
+    global _default_client
+    if _default_client is None:
+        _default_client = AtlaSentClient(
+            api_key=_os.environ["ATLASENT_API_KEY"],
+            base_url=_os.environ.get("ATLASENT_BASE_URL", "https://api.atlasent.io"),
+            timeout=float(_os.environ.get("ATLASENT_TIMEOUT", "10")),
+        )
+    return _default_client
+
+
+def _get_async_client() -> AsyncAtlaSentClient:
+    global _default_async_client
+    if _default_async_client is None:
+        _default_async_client = AsyncAtlaSentClient(
+            api_key=_os.environ["ATLASENT_API_KEY"],
+            base_url=_os.environ.get("ATLASENT_BASE_URL", "https://api.atlasent.io"),
+            timeout=float(_os.environ.get("ATLASENT_TIMEOUT", "10")),
+        )
+    return _default_async_client
+
+
+def authorize(
+    agent: str,
+    action: str,
+    context: dict | None = None,
+    *,
+    client: AtlaSentClient | None = None,
+) -> AuthorizeResult:
+    """Authorize an action synchronously. Raises on deny/hold/escalate."""
+    c = client or _get_client()
+    return c.authorize(agent=agent, action=action, context=context or {})
+
+
+async def async_authorize(
+    agent: str,
+    action: str,
+    context: dict | None = None,
+    *,
+    client: AsyncAtlaSentClient | None = None,
+) -> AuthorizeResult:
+    """Authorize an action asynchronously. Raises on deny/hold/escalate."""
+    c = client or _get_async_client()
+    return await c.authorize(agent=agent, action=action, context=context or {})
+
 
 __all__ = [
-    # version
-    "__version__",
-    # clients
     "AtlaSentClient",
     "AsyncAtlaSentClient",
-    # config
-    "configure",
-    # convenience functions
-    "authorize",
-    "evaluate",
-    "verify",
-    "gate",
-    # models
-    "AuthorizationResult",
-    "EvaluateResult",
-    "VerifyResult",
-    "GateResult",
-    # exceptions
     "AtlaSentError",
-    "AtlaSentErrorCode",
-    "AtlaSentDenied",
-    "PermissionDeniedError",
-    "ConfigurationError",
-    "RateLimitError",
-    # guard decorators
+    "AtlaSentDeniedError",
+    "AtlaSentHoldError",
+    "AtlaSentEscalateError",
+    "AtlaSentAPIError",
     "atlasent_guard",
     "async_atlasent_guard",
-    # cache
-    "TTLCache",
+    "AuthorizeResult",
+    "Decision",
+    "authorize",
+    "async_authorize",
 ]

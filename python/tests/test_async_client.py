@@ -1,253 +1,45 @@
-"""Tests for AsyncAtlaSentClient."""
+"""Unit tests for AsyncAtlaSentClient."""
 
-import httpx
 import pytest
+from pytest_httpx import HTTPXMock
 
 from atlasent.async_client import AsyncAtlaSentClient
-from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
-from atlasent.models import EvaluateResult, GateResult, VerifyResult
+from atlasent.exceptions import AtlaSentDeniedError
+from atlasent.models import Decision
 
-EVALUATE_PERMIT = {
-    "permitted": True,
-    "decision_id": "dec_100",
-    "reason": "OK",
-    "audit_hash": "hash_abc",
-    "timestamp": "2025-01-15T12:00:00Z",
-}
-
-EVALUATE_DENY = {
-    "permitted": False,
-    "decision_id": "dec_101",
-    "reason": "Denied",
-    "audit_hash": "hash_def",
-    "timestamp": "2025-01-15T12:01:00Z",
-}
-
-VERIFY_OK = {
-    "verified": True,
-    "permit_hash": "permit_xyz",
-    "timestamp": "2025-01-15T12:05:00Z",
-}
+BASE = "https://api.atlasent.io"
 
 
 @pytest.fixture
-def async_client():
-    return AsyncAtlaSentClient(api_key="test_key", max_retries=0)
+def client() -> AsyncAtlaSentClient:
+    return AsyncAtlaSentClient(api_key="test-key", base_url=BASE)
 
 
-@pytest.fixture
-def async_client_retry():
-    return AsyncAtlaSentClient(api_key="test_key", max_retries=2, retry_backoff=0.01)
+async def test_async_evaluate_allow(client: AsyncAtlaSentClient, httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url=f"{BASE}/v1/evaluate",
+        json={"decision": "allow", "permitToken": "tok-async"},
+    )
+    resp = await client.evaluate("agent-async", "production.deploy")
+    assert resp.decision == Decision.allow
+    assert resp.permit_token == "tok-async"
 
 
-def _mock_resp(mocker, status_code=200, json_data=None, headers=None):
-    resp = mocker.Mock(spec=httpx.Response)
-    resp.status_code = status_code
-    resp.headers = headers or {}
-    resp.text = ""
-    if json_data is not None:
-        resp.json.return_value = json_data
-    return resp
+async def test_async_authorize_deny(client: AsyncAtlaSentClient, httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url=f"{BASE}/v1/evaluate",
+        json={"decision": "deny", "denyCode": "OUTSIDE_CHANGE_WINDOW"},
+    )
+    with pytest.raises(AtlaSentDeniedError) as exc_info:
+        await client.authorize("agent-async", "production.deploy")
+    assert exc_info.value.code == "OUTSIDE_CHANGE_WINDOW"
 
 
-class TestAsyncInit:
-    def test_authorization_header(self):
-        c = AsyncAtlaSentClient(api_key="ask_live_xyz")
-        assert c._client.headers["authorization"] == "Bearer ask_live_xyz"
-
-    def test_accept_header(self):
-        c = AsyncAtlaSentClient(api_key="k")
-        assert c._client.headers["accept"] == "application/json"
-
-    def test_user_agent_header(self):
-        c = AsyncAtlaSentClient(api_key="k")
-        assert "atlasent-python/" in c._client.headers["user-agent"]
-
-
-class TestAsyncEvaluate:
-    @pytest.mark.asyncio
-    async def test_permit(self, async_client, mocker):
-        mocker.patch.object(
-            async_client._client,
-            "post",
-            return_value=_mock_resp(mocker, json_data=EVALUATE_PERMIT),
-        )
-        result = await async_client.evaluate("read_data", "agent-1")
-        assert isinstance(result, EvaluateResult)
-        assert result.decision is True
-        assert result.permit_token == "dec_100"
-
-    @pytest.mark.asyncio
-    async def test_deny_raises(self, async_client, mocker):
-        mocker.patch.object(
-            async_client._client,
-            "post",
-            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
-        )
-        with pytest.raises(AtlaSentDenied) as exc_info:
-            await async_client.evaluate("write_data", "agent-1")
-        assert exc_info.value.reason == "Denied"
-
-    @pytest.mark.asyncio
-    async def test_timeout(self, async_client, mocker):
-        mocker.patch.object(
-            async_client._client,
-            "post",
-            side_effect=httpx.TimeoutException("t"),
-        )
-        with pytest.raises(AtlaSentError, match="timed out"):
-            await async_client.evaluate("a", "b")
-
-    @pytest.mark.asyncio
-    async def test_connection_error(self, async_client, mocker):
-        mocker.patch.object(
-            async_client._client,
-            "post",
-            side_effect=httpx.ConnectError("refused"),
-        )
-        with pytest.raises(AtlaSentError, match="Failed to connect"):
-            await async_client.evaluate("a", "b")
-
-
-class TestAsyncVerify:
-    @pytest.mark.asyncio
-    async def test_valid(self, async_client, mocker):
-        mocker.patch.object(
-            async_client._client,
-            "post",
-            return_value=_mock_resp(mocker, json_data=VERIFY_OK),
-        )
-        result = await async_client.verify("dec_100")
-        assert isinstance(result, VerifyResult)
-        assert result.valid is True
-
-
-class TestAsyncGate:
-    @pytest.mark.asyncio
-    async def test_permit_and_verify(self, async_client, mocker):
-        mocker.patch.object(
-            async_client._client,
-            "post",
-            side_effect=[
-                _mock_resp(mocker, json_data=EVALUATE_PERMIT),
-                _mock_resp(mocker, json_data=VERIFY_OK),
-            ],
-        )
-        result = await async_client.gate("read_data", "agent-1")
-        assert isinstance(result, GateResult)
-        assert result.evaluation.permit_token == "dec_100"
-        assert result.verification.valid is True
-
-    @pytest.mark.asyncio
-    async def test_deny_at_evaluate(self, async_client, mocker):
-        mocker.patch.object(
-            async_client._client,
-            "post",
-            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
-        )
-        with pytest.raises(AtlaSentDenied):
-            await async_client.gate("write_data", "agent-1")
-        assert async_client._client.post.call_count == 1
-
-
-class TestAsyncRetry:
-    @pytest.mark.asyncio
-    async def test_retries_on_timeout(self, async_client_retry, mocker):
-        ok = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
-        mocker.patch.object(
-            async_client_retry._client,
-            "post",
-            side_effect=[httpx.TimeoutException("t"), ok],
-        )
-        result = await async_client_retry.evaluate("a", "b")
-        assert result.permit_token == "dec_100"
-
-    @pytest.mark.asyncio
-    async def test_retries_on_5xx(self, async_client_retry, mocker):
-        err = _mock_resp(mocker, status_code=502)
-        err.text = "Bad Gateway"
-        ok = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
-        mocker.patch.object(async_client_retry._client, "post", side_effect=[err, ok])
-        result = await async_client_retry.evaluate("a", "b")
-        assert result.permit_token == "dec_100"
-
-    @pytest.mark.asyncio
-    async def test_exhausted(self, async_client_retry, mocker):
-        mocker.patch.object(
-            async_client_retry._client,
-            "post",
-            side_effect=httpx.TimeoutException("t"),
-        )
-        with pytest.raises(AtlaSentError, match="3 attempts"):
-            await async_client_retry.evaluate("a", "b")
-
-
-class TestAsyncRateLimit:
-    @pytest.mark.asyncio
-    async def test_429(self, async_client, mocker):
-        resp = _mock_resp(mocker, status_code=429, headers={"retry-after": "5"})
-        mocker.patch.object(async_client._client, "post", return_value=resp)
-        with pytest.raises(RateLimitError) as exc_info:
-            await async_client.evaluate("a", "b")
-        assert exc_info.value.retry_after == 5.0
-
-
-class TestAsyncErrorCodes:
-    @pytest.mark.asyncio
-    async def test_401_has_invalid_api_key_code(self, async_client, mocker):
-        mocker.patch.object(
-            async_client._client,
-            "post",
-            return_value=_mock_resp(mocker, status_code=401),
-        )
-        with pytest.raises(AtlaSentError) as exc_info:
-            await async_client.evaluate("a", "b")
-        assert exc_info.value.code == "invalid_api_key"
-
-    @pytest.mark.asyncio
-    async def test_timeout_has_timeout_code(self, async_client, mocker):
-        mocker.patch.object(
-            async_client._client, "post", side_effect=httpx.TimeoutException("t")
-        )
-        with pytest.raises(AtlaSentError) as exc_info:
-            await async_client.evaluate("a", "b")
-        assert exc_info.value.code == "timeout"
-
-    @pytest.mark.asyncio
-    async def test_connection_error_has_network_code(self, async_client, mocker):
-        mocker.patch.object(
-            async_client._client, "post", side_effect=httpx.ConnectError("refused")
-        )
-        with pytest.raises(AtlaSentError) as exc_info:
-            await async_client.evaluate("a", "b")
-        assert exc_info.value.code == "network"
-
-    @pytest.mark.asyncio
-    async def test_malformed_evaluate_body_is_bad_response(self, async_client, mocker):
-        resp = _mock_resp(mocker, json_data={"foo": "bar"})
-        mocker.patch.object(async_client._client, "post", return_value=resp)
-        with pytest.raises(AtlaSentError) as exc_info:
-            await async_client.evaluate("a", "b")
-        assert exc_info.value.code == "bad_response"
-
-    @pytest.mark.asyncio
-    async def test_malformed_verify_body_is_bad_response(self, async_client, mocker):
-        resp = _mock_resp(mocker, json_data={"outcome": "ok"})
-        mocker.patch.object(async_client._client, "post", return_value=resp)
-        with pytest.raises(AtlaSentError) as exc_info:
-            await async_client.verify("dec_100")
-        assert exc_info.value.code == "bad_response"
-
-
-class TestAsyncLifecycle:
-    @pytest.mark.asyncio
-    async def test_context_manager(self, mocker):
-        async with AsyncAtlaSentClient(api_key="k", max_retries=0) as c:
-            mock_close = mocker.patch.object(c._client, "aclose")
-        mock_close.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_close(self, async_client, mocker):
-        mock_close = mocker.patch.object(async_client._client, "aclose")
-        await async_client.close()
-        mock_close.assert_called_once()
+async def test_async_context_manager(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url=f"{BASE}/v1/evaluate",
+        json={"decision": "allow"},
+    )
+    async with AsyncAtlaSentClient(api_key="test-key", base_url=BASE) as c:
+        resp = await c.evaluate("agent-1", "staging.deploy")
+    assert resp.decision == Decision.allow

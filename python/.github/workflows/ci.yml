@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths: ["python/**"]
+  pull_request:
+    paths: ["python/**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check atlasent tests
+      - run: mypy atlasent
+      - run: pytest -v
