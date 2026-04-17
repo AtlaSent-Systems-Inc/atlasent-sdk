@@ -1,16 +1,10 @@
-/**
- * @atlasent/sdk — execution-time authorization for AI agents.
- *
- * Two methods:
- *   - {@link AtlaSentClient.evaluate}     → POST /v1-evaluate
- *   - {@link AtlaSentClient.verifyPermit} → POST /v1-verify-permit
- */
-
 export { AtlaSentClient } from "./client.js";
 export {
   AtlaSentError,
-  type AtlaSentErrorCode,
-  type AtlaSentErrorInit,
+  AtlaSentDeniedError,
+  AtlaSentHoldError,
+  AtlaSentEscalateError,
+  AtlaSentAPIError,
 } from "./errors.js";
 export type {
   AtlaSentClientOptions,

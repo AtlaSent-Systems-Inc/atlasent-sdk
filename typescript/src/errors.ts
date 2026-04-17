@@ -1,60 +1,50 @@
-/**
- * Error types for the AtlaSent TypeScript SDK.
- *
- * The SDK follows a fail-closed design: a clean policy DENY is
- * returned as `EvaluateResponse.decision === "DENY"` (not thrown),
- * but any failure to confirm authorization — network, timeout,
- * bad response, invalid key, rate limit — throws an
- * {@link AtlaSentError}.
- */
+import type { EvaluateResponse } from "./types.js";
 
-/** Discriminator for {@link AtlaSentError.code}. */
-export type AtlaSentErrorCode =
-  | "invalid_api_key"
-  | "forbidden"
-  | "rate_limited"
-  | "timeout"
-  | "network"
-  | "bad_response"
-  | "bad_request"
-  | "server_error";
-
-/** Initialization options for {@link AtlaSentError}. */
-export interface AtlaSentErrorInit {
-  status?: number;
-  code?: AtlaSentErrorCode;
-  requestId?: string;
-  retryAfterMs?: number;
-  cause?: unknown;
+export class AtlaSentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = this.constructor.name;
+  }
 }
 
-/**
- * The only error type this SDK throws.
- *
- * Flat top-level properties mirror the convention used by Stripe,
- * Octokit, and Supabase. `cause` is forwarded to the standard
- * ES2022 `Error` constructor.
- */
-export class AtlaSentError extends Error {
-  override readonly name = "AtlaSentError";
+export class AtlaSentDeniedError extends AtlaSentError {
+  readonly code: string;
+  readonly response: EvaluateResponse;
 
-  /** HTTP status code, when the error originated from an API response. */
-  readonly status: number | undefined;
-  /** Coarse category — useful for `switch` statements at call sites. */
-  readonly code: AtlaSentErrorCode | undefined;
-  /** Correlation ID echoed from the `X-Request-ID` header the SDK sent. */
-  readonly requestId: string | undefined;
-  /** Parsed `Retry-After` header value, in milliseconds. Only set for 429. */
-  readonly retryAfterMs: number | undefined;
+  constructor(code: string, response: EvaluateResponse) {
+    super(`Authorization denied: ${code}`);
+    this.code = code;
+    this.response = response;
+  }
+}
 
-  constructor(message: string, init: AtlaSentErrorInit = {}) {
-    super(
-      message,
-      init.cause !== undefined ? { cause: init.cause } : undefined,
-    );
-    this.status = init.status;
-    this.code = init.code;
-    this.requestId = init.requestId;
-    this.retryAfterMs = init.retryAfterMs;
+export class AtlaSentHoldError extends AtlaSentError {
+  readonly code: string;
+  readonly response: EvaluateResponse;
+
+  constructor(code: string, response: EvaluateResponse) {
+    super(`Authorization held: ${code}`);
+    this.code = code;
+    this.response = response;
+  }
+}
+
+export class AtlaSentEscalateError extends AtlaSentError {
+  readonly escalateTo: string;
+  readonly response: EvaluateResponse;
+
+  constructor(escalateTo: string, response: EvaluateResponse) {
+    super(`Authorization requires escalation to: ${escalateTo}`);
+    this.escalateTo = escalateTo;
+    this.response = response;
+  }
+}
+
+export class AtlaSentAPIError extends AtlaSentError {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(`AtlaSent API error ${status}: ${message}`);
+    this.status = status;
   }
 }

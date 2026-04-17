@@ -1,68 +1,38 @@
 {
-  "name": "@atlasent/sdk",
+  "name": "@atlasent/sdk-ts",
   "version": "0.1.0",
-  "description": "TypeScript SDK for the AtlaSent authorization API",
-  "license": "Apache-2.0",
+  "description": "TypeScript SDK for AtlaSent authorization",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
-    },
-    "./package.json": "./package.json"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
-  "sideEffects": false,
-  "engines": {
-    "node": ">=20"
-  },
+  "files": ["dist"],
   "scripts": {
-    "build": "tsup",
-    "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run typecheck && npm test && npm run build",
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
     "test": "vitest run",
-    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": [
-    "atlasent",
-    "authorization",
-    "ai",
-    "agents",
-    "gxp",
-    "compliance",
-    "policy"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/AtlaSent-Systems-Inc/atlasent-sdk.git",
-    "directory": "typescript"
-  },
-  "homepage": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/tree/main/typescript#readme",
-  "bugs": {
-    "url": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues"
-  },
-  "publishConfig": {
-    "access": "public"
+  "dependencies": {
+    "zod": "^3.22.0"
   },
   "devDependencies": {
-    "@types/node": "^20.12.7",
-    "tsup": "^8.0.2",
-    "tsx": "^4.7.2",
-    "typescript": "^5.4.5",
-    "vitest": "^1.5.0"
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/atlasent-systems-inc/atlasent-sdk-python",
+    "directory": "typescript"
   }
 }
