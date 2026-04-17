@@ -18,7 +18,12 @@ setup(
     long_description_content_type="text/markdown",
     author="AtlaSent Systems Inc.",
     author_email="sdk@atlasent.io",
-    url="https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-python",
+    url="https://github.com/AtlaSent-Systems-Inc/atlasent-sdk",
+    project_urls={
+        "Homepage": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk",
+        "Source": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/tree/main/python",
+        "Issues": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues",
+    },
     packages=find_packages(exclude=["tests", "tests.*", "examples"]),
     python_requires=">=3.10",
     install_requires=[

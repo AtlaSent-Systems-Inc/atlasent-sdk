@@ -30,6 +30,12 @@ htmlcov/
 .coverage
 coverage.xml
 
+# Node / TypeScript
+node_modules/
+.npm/
+*.tsbuildinfo
+coverage/
+
 # OS
 .DS_Store
 Thumbs.db
