@@ -147,9 +147,7 @@ class TestClientAuthorize:
             "post",
             return_value=_mock_resp(mocker, json_data=EVALUATE_PERMIT),
         )
-        result = client.authorize(
-            agent="agent-1", action="read_data", verify=False
-        )
+        result = client.authorize(agent="agent-1", action="read_data", verify=False)
         assert result.permitted is True
         assert result.verified is False
         assert result.permit_hash == ""
@@ -177,9 +175,7 @@ class TestClientAuthorize:
             return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
         )
         with pytest.raises(PermissionDeniedError) as exc_info:
-            client.authorize(
-                agent="a", action="b", raise_on_deny=True
-            )
+            client.authorize(agent="a", action="b", raise_on_deny=True)
         assert exc_info.value.reason == "Missing change_reason for critical field"
         assert exc_info.value.permit_token == "dec_beta"
 
@@ -335,9 +331,7 @@ class TestAsyncClientAuthorize:
                     ]
                 ),
             )
-            result = await client.authorize(
-                agent="agent-async", action="read"
-            )
+            result = await client.authorize(agent="agent-async", action="read")
             assert result.permitted is True
             assert result.verified is True
             assert result.permit_hash == "permit_alpha"
@@ -371,8 +365,6 @@ class TestAsyncClientAuthorize:
                 mocker.AsyncMock(return_value=deny_resp),
             )
             with pytest.raises(PermissionDeniedError):
-                await client.authorize(
-                    agent="a", action="b", raise_on_deny=True
-                )
+                await client.authorize(agent="a", action="b", raise_on_deny=True)
         finally:
             await client.close()
