@@ -1,10 +1,7 @@
 """Contract vector runner for the Python SDK.
 
 Loads the shared test vectors from ``contract/vectors/`` and asserts
-that the Python SDK round-trips each one. Vectors that depend on
-behavior not yet shipped in this SDK version are listed in
-``_FEATURE_GATED`` with a pointer to the follow-up branch that wires
-them up.
+that the Python SDK round-trips each one.
 
 The runner uses httpx mocking rather than a live server — the contract
 is about wire-format parity, not transport.
@@ -38,34 +35,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-# Vectors that need work on a later branch. Each entry maps a vector
-# name to the branch that unblocks it. When that branch lands and this
-# test starts passing, delete the entry.
-_ERROR_CODE_BRANCH = "claude/py-sdk-error-code"
-_FEATURE_GATED: dict[str, str] = {
-    "evaluate_response_missing_required_fields": f"{_ERROR_CODE_BRANCH} (SDK-PY-003)",
-    "verify_response_missing_verified": f"{_ERROR_CODE_BRANCH} (SDK-PY-003)",
-    "http_401_invalid_api_key": f"{_ERROR_CODE_BRANCH} (SDK-PY-002)",
-    "http_403_forbidden": f"{_ERROR_CODE_BRANCH} (SDK-PY-002)",
-    "http_500_server_error": f"{_ERROR_CODE_BRANCH} (SDK-PY-002)",
-    "http_422_bad_request_surfaces_message": f"{_ERROR_CODE_BRANCH} (SDK-PY-002)",
-    "transport_timeout": f"{_ERROR_CODE_BRANCH} (SDK-PY-002)",
-    "transport_network_error": f"{_ERROR_CODE_BRANCH} (SDK-PY-002)",
-}
-
-
 def _load(name: str) -> dict[str, Any]:
     return json.loads((VECTORS / name).read_text())
 
 
 def _vectors(name: str) -> list[dict[str, Any]]:
     return _load(name)["vectors"]
-
-
-def _should_skip(vector_name: str) -> str | None:
-    if vector_name in _FEATURE_GATED:
-        return f"Feature-gated — see {_FEATURE_GATED[vector_name]}"
-    return None
 
 
 def _mock_json_response(mocker, body: Any, status_code: int = 200, headers=None):
@@ -91,10 +66,6 @@ class TestEvaluateVectors:
         ids=lambda v: v["name"],
     )
     def test_evaluate_vector(self, vector, mocker):
-        skip_reason = _should_skip(vector["name"])
-        if skip_reason:
-            pytest.skip(skip_reason)
-
         client = AtlaSentClient(api_key=API_KEY, max_retries=0)
         mock_post = mocker.patch.object(
             client._client,
@@ -107,22 +78,27 @@ class TestEvaluateVectors:
         action = sdk_input["action"]
         context = sdk_input.get("context")
 
-        expected_output = vector.get("sdk_output")
-        if expected_output is None:
-            pytest.fail(f"{vector['name']} has no sdk_output and is not feature-gated")
-
-        if expected_output["decision"] == "ALLOW":
-            result = client.evaluate(action, agent, context)
-            assert result.decision is True
-            assert result.permit_token == expected_output["permit_id"]
-            assert result.reason == expected_output["reason"]
-            assert result.audit_hash == expected_output["audit_hash"]
-            assert result.timestamp == expected_output["timestamp"]
-        else:
-            with pytest.raises(AtlaSentDenied) as exc_info:
+        sdk_error = vector.get("sdk_error")
+        if sdk_error is not None:
+            with pytest.raises(AtlaSentError) as exc_info:
                 client.evaluate(action, agent, context)
-            assert exc_info.value.permit_token == expected_output["permit_id"]
-            assert exc_info.value.reason == expected_output["reason"]
+            assert exc_info.value.code == sdk_error["kind"]
+            if "message_contains" in sdk_error:
+                assert sdk_error["message_contains"] in exc_info.value.message
+        else:
+            expected_output = vector["sdk_output"]
+            if expected_output["decision"] == "ALLOW":
+                result = client.evaluate(action, agent, context)
+                assert result.decision is True
+                assert result.permit_token == expected_output["permit_id"]
+                assert result.reason == expected_output["reason"]
+                assert result.audit_hash == expected_output["audit_hash"]
+                assert result.timestamp == expected_output["timestamp"]
+            else:
+                with pytest.raises(AtlaSentDenied) as exc_info:
+                    client.evaluate(action, agent, context)
+                assert exc_info.value.permit_token == expected_output["permit_id"]
+                assert exc_info.value.reason == expected_output["reason"]
 
         # Wire-format assertion: body sent MUST match vector.wire_request.
         payload = mock_post.call_args[1]["json"]
@@ -143,10 +119,6 @@ class TestVerifyVectors:
         ids=lambda v: v["name"],
     )
     def test_verify_vector(self, vector, mocker):
-        skip_reason = _should_skip(vector["name"])
-        if skip_reason:
-            pytest.skip(skip_reason)
-
         client = AtlaSentClient(api_key=API_KEY, max_retries=0)
         mock_post = mocker.patch.object(
             client._client,
@@ -160,12 +132,20 @@ class TestVerifyVectors:
         agent = sdk_input.get("agent", "")
         context = sdk_input.get("context", {})
 
-        expected_output = vector["sdk_output"]
-        result = client.verify(permit_id, action, agent, context)
-        assert result.valid is expected_output["verified"]
-        assert result.outcome == expected_output["outcome"]
-        assert result.permit_hash == expected_output["permit_hash"]
-        assert result.timestamp == expected_output["timestamp"]
+        sdk_error = vector.get("sdk_error")
+        if sdk_error is not None:
+            with pytest.raises(AtlaSentError) as exc_info:
+                client.verify(permit_id, action, agent, context)
+            assert exc_info.value.code == sdk_error["kind"]
+            if "message_contains" in sdk_error:
+                assert sdk_error["message_contains"] in exc_info.value.message
+        else:
+            expected_output = vector["sdk_output"]
+            result = client.verify(permit_id, action, agent, context)
+            assert result.valid is expected_output["verified"]
+            assert result.outcome == expected_output["outcome"]
+            assert result.permit_hash == expected_output["permit_hash"]
+            assert result.timestamp == expected_output["timestamp"]
 
         payload = mock_post.call_args[1]["json"]
         assert payload == vector["wire_request"]
@@ -181,10 +161,6 @@ class TestErrorVectors:
         ids=lambda v: v["name"],
     )
     def test_error_vector(self, vector, mocker):
-        skip_reason = _should_skip(vector["name"])
-        if skip_reason:
-            pytest.skip(skip_reason)
-
         client = AtlaSentClient(api_key=API_KEY, max_retries=0)
         sdk_error = vector["sdk_error"]
 

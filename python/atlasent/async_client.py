@@ -310,11 +310,14 @@ class AsyncAtlaSentClient:
                 raise RateLimitError(retry_after=retry_after)
             if response.status_code == 401:
                 raise AtlaSentError(
-                    "Invalid API key", status_code=401, code="invalid_api_key"
+                    _server_message(response) or "Invalid API key",
+                    status_code=401,
+                    code="invalid_api_key",
                 )
             if response.status_code == 403:
                 raise AtlaSentError(
-                    "Access forbidden — check your API key permissions",
+                    _server_message(response)
+                    or "Access forbidden — check your API key permissions",
                     status_code=403,
                     code="forbidden",
                 )
@@ -358,6 +361,20 @@ class AsyncAtlaSentClient:
         delay = self._retry_backoff * (2**attempt)
         logger.debug("Retrying in %.1fs… (async)", delay)
         await asyncio.sleep(delay)
+
+
+def _server_message(response: httpx.Response) -> str | None:
+    """Return `message` / `reason` from a JSON error body, if present."""
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    if isinstance(body, dict):
+        for key in ("message", "reason"):
+            value = body.get(key)
+            if isinstance(value, str) and value:
+                return value
+    return None
 
 
 def _parse_retry_after(response: httpx.Response) -> float | None:
