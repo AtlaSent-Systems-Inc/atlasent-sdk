@@ -50,6 +50,20 @@ def _mock_resp(mocker, status_code=200, json_data=None, headers=None):
     return resp
 
 
+class TestAsyncInit:
+    def test_authorization_header(self):
+        c = AsyncAtlaSentClient(api_key="ask_live_xyz")
+        assert c._client.headers["authorization"] == "Bearer ask_live_xyz"
+
+    def test_accept_header(self):
+        c = AsyncAtlaSentClient(api_key="k")
+        assert c._client.headers["accept"] == "application/json"
+
+    def test_user_agent_header(self):
+        c = AsyncAtlaSentClient(api_key="k")
+        assert "atlasent-python/" in c._client.headers["user-agent"]
+
+
 class TestAsyncEvaluate:
     @pytest.mark.asyncio
     async def test_permit(self, async_client, mocker):
