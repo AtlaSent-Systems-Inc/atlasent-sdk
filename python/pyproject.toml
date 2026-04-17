@@ -56,7 +56,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
-ignore = ["N818"]  # AtlaSentDenied is intentionally not suffixed "Error"
+ignore = ["N818"]
 
 [tool.black]
 line-length = 88
