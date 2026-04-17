@@ -118,7 +118,17 @@ class AsyncAtlaSentClient:
         logger.debug("evaluate action=%r actor=%r (async)", action_type, actor_id)
         data = await self._post("/v1-evaluate", req.model_dump(by_alias=True))
 
-        permitted = data.get("permitted")
+        if not isinstance(data.get("permitted"), bool) or not isinstance(
+            data.get("decision_id"), str
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-evaluate response: missing or non-scalar "
+                "`permitted` or `decision_id`",
+                code="bad_response",
+                response_body=data,
+            )
+
+        permitted = data["permitted"]
         if not permitted:
             raise AtlaSentDenied(
                 decision=str(permitted),
@@ -158,6 +168,12 @@ class AsyncAtlaSentClient:
         )
         logger.debug("verify token=%s (async)", permit_token)
         data = await self._post("/v1-verify-permit", req.model_dump(by_alias=True))
+        if not isinstance(data.get("verified"), bool):
+            raise AtlaSentError(
+                "Malformed /v1-verify-permit response: missing `verified`",
+                code="bad_response",
+                response_body=data,
+            )
         result = VerifyResult.model_validate(data)
         logger.info("verify token=%s valid=%s", permit_token, result.valid)
         return result
@@ -268,7 +284,8 @@ class AsyncAtlaSentClient:
                     continue
                 raise AtlaSentError(
                     f"Request to {path} timed out after "
-                    f"{1 + self._max_retries} attempts"
+                    f"{1 + self._max_retries} attempts",
+                    code="timeout",
                 ) from exc
             except httpx.ConnectError as exc:
                 logger.warning(
@@ -282,20 +299,24 @@ class AsyncAtlaSentClient:
                     continue
                 raise AtlaSentError(
                     f"Failed to connect to AtlaSent API at "
-                    f"{self._base_url} after {1 + self._max_retries} attempts"
+                    f"{self._base_url} after {1 + self._max_retries} attempts",
+                    code="network",
                 ) from exc
             except httpx.HTTPError as exc:
-                raise AtlaSentError(f"Request failed: {exc}") from exc
+                raise AtlaSentError(f"Request failed: {exc}", code="network") from exc
 
             if response.status_code == 429:
                 retry_after = _parse_retry_after(response)
                 raise RateLimitError(retry_after=retry_after)
             if response.status_code == 401:
-                raise AtlaSentError("Invalid API key", status_code=401)
+                raise AtlaSentError(
+                    "Invalid API key", status_code=401, code="invalid_api_key"
+                )
             if response.status_code == 403:
                 raise AtlaSentError(
                     "Access forbidden — check your API key permissions",
                     status_code=403,
+                    code="forbidden",
                 )
             if response.status_code >= 500:
                 logger.warning(
@@ -309,22 +330,28 @@ class AsyncAtlaSentClient:
                     await self._backoff(attempt)
                     continue
                 raise AtlaSentError(
-                    f"API error {response.status_code}: " f"{response.text[:500]}",
+                    f"API error {response.status_code}: {response.text[:500]}",
                     status_code=response.status_code,
+                    code="server_error",
                 )
             if response.status_code >= 400:
                 raise AtlaSentError(
-                    f"API error {response.status_code}: " f"{response.text[:500]}",
+                    f"API error {response.status_code}: {response.text[:500]}",
                     status_code=response.status_code,
+                    code="bad_request",
                 )
 
             try:
                 return response.json()
             except ValueError as exc:
-                raise AtlaSentError("Invalid JSON response from AtlaSent API") from exc
+                raise AtlaSentError(
+                    "Invalid JSON response from AtlaSent API",
+                    code="bad_response",
+                ) from exc
 
         raise AtlaSentError(
-            f"Request to {path} failed after {1 + self._max_retries} attempts"
+            f"Request to {path} failed after {1 + self._max_retries} attempts",
+            code="network",
         )
 
     async def _backoff(self, attempt: int) -> None:

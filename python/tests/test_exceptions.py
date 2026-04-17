@@ -66,11 +66,24 @@ class TestRateLimitError:
         err = RateLimitError(retry_after=30.0)
         assert err.retry_after == 30.0
         assert err.status_code == 429
+        assert err.code == "rate_limited"
         assert "retry after 30.0s" in str(err)
 
     def test_without_retry_after(self):
         err = RateLimitError()
         assert err.retry_after is None
+        assert err.code == "rate_limited"
 
     def test_inherits_from_atlasent_error(self):
         assert issubclass(RateLimitError, AtlaSentError)
+
+
+class TestAtlaSentErrorCode:
+    def test_default_code_is_none(self):
+        err = AtlaSentError("oops")
+        assert err.code is None
+
+    def test_code_passthrough(self):
+        err = AtlaSentError("bad", code="invalid_api_key", status_code=401)
+        assert err.code == "invalid_api_key"
+        assert err.status_code == 401

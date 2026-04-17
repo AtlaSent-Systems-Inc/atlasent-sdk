@@ -192,6 +192,53 @@ class TestAsyncRateLimit:
         assert exc_info.value.retry_after == 5.0
 
 
+class TestAsyncErrorCodes:
+    @pytest.mark.asyncio
+    async def test_401_has_invalid_api_key_code(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, status_code=401),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.code == "invalid_api_key"
+
+    @pytest.mark.asyncio
+    async def test_timeout_has_timeout_code(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client, "post", side_effect=httpx.TimeoutException("t")
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.code == "timeout"
+
+    @pytest.mark.asyncio
+    async def test_connection_error_has_network_code(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client, "post", side_effect=httpx.ConnectError("refused")
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.code == "network"
+
+    @pytest.mark.asyncio
+    async def test_malformed_evaluate_body_is_bad_response(self, async_client, mocker):
+        resp = _mock_resp(mocker, json_data={"foo": "bar"})
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.code == "bad_response"
+
+    @pytest.mark.asyncio
+    async def test_malformed_verify_body_is_bad_response(self, async_client, mocker):
+        resp = _mock_resp(mocker, json_data={"outcome": "ok"})
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.verify("dec_100")
+        assert exc_info.value.code == "bad_response"
+
+
 class TestAsyncLifecycle:
     @pytest.mark.asyncio
     async def test_context_manager(self, mocker):
