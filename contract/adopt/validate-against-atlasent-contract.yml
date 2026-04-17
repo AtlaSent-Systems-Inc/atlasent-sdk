@@ -1,0 +1,84 @@
+# Drop-in GitHub Actions workflow for adopter repos (engine, downstream
+# SDKs, integration harnesses) to validate their request / response
+# bodies against the AtlaSent contract.
+#
+# How to use
+# ──────────
+#
+# 1. Vendor or submodule `atlasent-sdk-python/contract/` into your repo
+#    at `third_party/atlasent-contract/` (or any path — update
+#    CONTRACT_DIR below to match).
+#
+# 2. Copy this file to `.github/workflows/atlasent-contract.yml` in
+#    your repo.
+#
+# 3. Point `FIXTURES_DIR` at wherever your repo stores example
+#    engine responses. One JSON file per fixture; filename convention:
+#      - evaluate_<name>.json      → validated against evaluate-response
+#      - verify_<name>.json        → validated against verify-permit-response
+#      - error_<status>_<name>.json → validated against error-response
+#    Any file that doesn't match is skipped (not failed) so you can
+#    mix fixtures with other JSON.
+#
+# 4. Commit. CI now fails any PR that introduces a fixture which
+#    violates the shared contract.
+
+name: AtlaSent Contract
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  # Path (relative to $GITHUB_WORKSPACE) where contract/ is vendored.
+  CONTRACT_DIR: third_party/atlasent-contract
+  # Directory of engine response fixtures to validate.
+  FIXTURES_DIR: tests/fixtures/engine_responses
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive  # harmless if you vendor-by-copy
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install jsonschema
+        run: pip install "jsonschema>=4.21.0"
+
+      - name: Sanity-check that the contract is vendored
+        run: |
+          test -f "$CONTRACT_DIR/schemas/evaluate-response.schema.json" \
+            || { echo "::error::$CONTRACT_DIR/schemas/ is missing — vendor or submodule the contract"; exit 1; }
+
+      - name: Validate every engine-response fixture
+        env:
+          ATLASENT_CONTRACT_SCHEMAS: ${{ github.workspace }}/${{ env.CONTRACT_DIR }}/schemas
+        run: |
+          set -e
+          script="$CONTRACT_DIR/adopt/validate_response.py"
+          failed=0
+          shopt -s nullglob
+          for f in "$FIXTURES_DIR"/*.json; do
+            name=$(basename "$f")
+            case "$name" in
+              evaluate_*)    endpoint=evaluate-response ;;
+              verify_*)      endpoint=verify-permit-response ;;
+              error_*)       endpoint=error-response ;;
+              *)             echo "skip: $name (no endpoint convention match)"; continue ;;
+            esac
+            if ! python "$script" "$endpoint" "$f"; then
+              failed=$((failed + 1))
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::$failed fixture(s) failed contract validation"
+            exit 1
+          fi
+          echo "All engine-response fixtures conform to the AtlaSent contract."

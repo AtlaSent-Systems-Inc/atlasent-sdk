@@ -19,6 +19,11 @@ contract/
 │   ├── errors.json              # HTTP + transport error mapping
 │   ├── headers.json              # Required request headers
 │   └── policies/                # Positive + negative policy fixtures
+├── adopt/                       # Drop-in kit for non-SDK consumers
+│   ├── validate_response.py     # CLI: validate a body against a schema
+│   ├── validate-against-atlasent-contract.yml  # GH Actions workflow
+│   ├── EXPECTED_ENVELOPES.md    # Plain-English request/response ref
+│   └── README.md                # Vendoring + integration guide
 ├── tools/
 │   ├── drift.py                 # SDK ↔ contract drift detector
 │   ├── policy_lint.py           # Validates policies against schema
@@ -111,7 +116,18 @@ schema honest — if the schema is accidentally relaxed so that an
 5. Bump the `$id` version (`/contract/v1/` → `/contract/v2/`) ONLY
    for a breaking wire change; otherwise the contract stays on v1.
 
+## For non-SDK consumers (engine, downstream repos)
+
+If you're **producing** or **consuming** AtlaSent envelopes but don't
+ship an SDK yourself — the policy engine, an integration harness, a
+partner adapter — use [`adopt/`](./adopt/README.md). It gives you a
+single-file CLI validator, a drop-in GitHub Actions workflow, and a
+plain-English reference for the required envelopes. You don't need
+to read the schemas to be compliant.
+
 ## Related
 
+- [`adopt/README.md`](./adopt/README.md) — adopter kit (vendoring +
+  CI recipe for engines and downstream repos).
 - [`SDK_COMPATIBILITY.md`](./SDK_COMPATIBILITY.md) — per-SDK
   conformance checklist (Python, TypeScript, and any future client).
