@@ -1,0 +1,27 @@
+{
+  "policy_id": "finance_wire_transfer",
+  "version": "1.2.0",
+  "description": "Cap autonomous wire transfers by finance agents.",
+  "default": "deny",
+  "rules": [
+    {
+      "id": "allow_small_transfers",
+      "effect": "allow",
+      "match": {
+        "agent": { "equals": "finance-agent" },
+        "action": "wire_transfer",
+        "context": { "amount_usd": { "lte": 10000 } }
+      },
+      "require": ["counterparty_id", "memo"],
+      "obligations": ["log_audit"]
+    },
+    {
+      "id": "deny_high_value",
+      "effect": "deny",
+      "match": {
+        "action": "wire_transfer",
+        "context": { "amount_usd": { "gt": 10000 } }
+      }
+    }
+  ]
+}

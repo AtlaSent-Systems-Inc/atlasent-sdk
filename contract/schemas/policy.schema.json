@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/policy.schema.json",
+  "title": "AtlaSentPolicy",
+  "description": "AtlaSent policy document (v1). A policy bundles a set of rules that decide whether an (agent, action, context) tuple is permitted. Policies are authored in JSON (or YAML compiled to JSON) and evaluated server-side; the SDKs never parse policies directly, but the linter in this contract enforces the shared schema for any SDK-shipped examples, fixtures, or dashboards.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policy_id", "version", "rules"],
+  "properties": {
+    "policy_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "Stable identifier, lowercase snake- or kebab-case."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "SemVer. Breaking rule changes require a major bump."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of what this policy enforces."
+    },
+    "default": {
+      "type": "string",
+      "enum": ["allow", "deny"],
+      "default": "deny",
+      "description": "Decision returned when no rule matches. Fail-closed = 'deny'."
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/rule" }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Opaque author metadata (owner, team, references). Not evaluated.",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "effect", "match"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
+          "description": "Unique rule ID within the policy."
+        },
+        "description": {
+          "type": "string"
+        },
+        "effect": {
+          "type": "string",
+          "enum": ["allow", "deny"]
+        },
+        "match": {
+          "$ref": "#/$defs/match"
+        },
+        "require": {
+          "type": "array",
+          "description": "List of context keys that MUST be present (and non-empty) for the rule to fire.",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "obligations": {
+          "type": "array",
+          "description": "Server-side obligations (e.g. 'log_audit', 'require_reauth'). Opaque to SDKs.",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Predicate over (agent, action, context). All specified fields must match for the rule to fire.",
+      "properties": {
+        "agent": { "$ref": "#/$defs/stringMatcher" },
+        "action": { "$ref": "#/$defs/stringMatcher" },
+        "context": {
+          "type": "object",
+          "description": "Per-key matchers against request context.",
+          "additionalProperties": { "$ref": "#/$defs/valueMatcher" }
+        }
+      }
+    },
+    "stringMatcher": {
+      "oneOf": [
+        { "type": "string", "description": "Exact match." },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "equals": { "type": "string" },
+            "in": {
+              "type": "array",
+              "items": { "type": "string" },
+              "uniqueItems": true,
+              "minItems": 1
+            },
+            "prefix": { "type": "string", "minLength": 1 },
+            "regex": { "type": "string", "minLength": 1 }
+          },
+          "minProperties": 1,
+          "maxProperties": 1
+        }
+      ]
+    },
+    "valueMatcher": {
+      "oneOf": [
+        { "type": ["string", "number", "boolean", "null"], "description": "Exact match." },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "equals": { "type": ["string", "number", "boolean", "null"] },
+            "in": {
+              "type": "array",
+              "items": { "type": ["string", "number", "boolean", "null"] },
+              "uniqueItems": true,
+              "minItems": 1
+            },
+            "exists": { "type": "boolean" },
+            "regex": { "type": "string", "minLength": 1 },
+            "gt": { "type": "number" },
+            "gte": { "type": "number" },
+            "lt": { "type": "number" },
+            "lte": { "type": "number" }
+          },
+          "minProperties": 1,
+          "maxProperties": 1
+        }
+      ]
+    }
+  }
+}

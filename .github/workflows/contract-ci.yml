@@ -1,0 +1,48 @@
+name: Contract CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contract/**"
+      - "python/atlasent/models.py"
+      - "typescript/src/client.ts"
+      - "typescript/src/types.ts"
+      - ".github/workflows/contract-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "contract/**"
+      - "python/atlasent/models.py"
+      - "typescript/src/client.ts"
+      - "typescript/src/types.ts"
+      - ".github/workflows/contract-ci.yml"
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install contract tooling + Python SDK
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r contract/requirements.txt
+          pip install -e python/
+          pip install pytest
+
+      - name: Validate vectors against schemas
+        run: python contract/tools/validate_vectors.py
+
+      - name: Policy lint
+        run: python contract/tools/policy_lint.py
+
+      - name: SDK drift detector
+        run: python contract/tools/drift.py
+
+      - name: Pytest (contract suite)
+        run: pytest contract/tests/ -v

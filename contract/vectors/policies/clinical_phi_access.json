@@ -1,0 +1,48 @@
+{
+  "policy_id": "clinical_phi_access",
+  "version": "1.0.0",
+  "description": "Gate PHI reads/writes for clinical-data agents under GxP. Default deny; explicit allow for approved agents.",
+  "default": "deny",
+  "rules": [
+    {
+      "id": "allow_read_phi_for_clinical_agents",
+      "description": "Clinical data agents may read PHI in production if user and patient_id are present.",
+      "effect": "allow",
+      "match": {
+        "agent": { "prefix": "clinical-" },
+        "action": { "in": ["read_patient_record", "read_phi"] },
+        "context": {
+          "environment": "production"
+        }
+      },
+      "require": ["user", "patient_id"],
+      "obligations": ["log_audit"]
+    },
+    {
+      "id": "allow_write_phi_with_reason",
+      "description": "Clinical data agents may modify PHI only with a change_reason.",
+      "effect": "allow",
+      "match": {
+        "agent": { "prefix": "clinical-" },
+        "action": "modify_patient_record",
+        "context": {
+          "environment": "production"
+        }
+      },
+      "require": ["user", "patient_id", "change_reason"],
+      "obligations": ["log_audit", "require_reauth"]
+    },
+    {
+      "id": "deny_bulk_export",
+      "effect": "deny",
+      "match": {
+        "action": "export_patient_records",
+        "context": { "count": { "gt": 1000 } }
+      }
+    }
+  ],
+  "metadata": {
+    "owner": "clinical-platform",
+    "compliance": ["21 CFR Part 11", "HIPAA"]
+  }
+}

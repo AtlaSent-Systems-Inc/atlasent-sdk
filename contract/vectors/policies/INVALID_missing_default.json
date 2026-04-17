@@ -1,0 +1,6 @@
+{
+  "policy_id": "invalid_missing_rules",
+  "version": "0.1.0",
+  "description": "INVALID fixture: rules array is empty. Used to verify the policy linter fails this input.",
+  "rules": []
+}

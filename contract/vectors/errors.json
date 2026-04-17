@@ -1,0 +1,69 @@
+{
+  "description": "HTTP error mapping vectors. Every SDK MUST surface these as a single error type (Python: AtlaSentError / RateLimitError; TypeScript: AtlaSentError) carrying status + a coarse code.",
+  "vectors": [
+    {
+      "name": "http_401_invalid_api_key",
+      "http_status": 401,
+      "response_headers": {},
+      "response_body": { "message": "Invalid API key" },
+      "sdk_error": {
+        "kind": "invalid_api_key",
+        "status": 401,
+        "message_contains": "Invalid API key"
+      }
+    },
+    {
+      "name": "http_403_forbidden",
+      "http_status": 403,
+      "response_headers": {},
+      "response_body": { "message": "scope mismatch" },
+      "sdk_error": {
+        "kind": "forbidden",
+        "status": 403,
+        "message_contains": "scope mismatch"
+      }
+    },
+    {
+      "name": "http_429_rate_limited_with_retry_after_seconds",
+      "http_status": 429,
+      "response_headers": { "Retry-After": "30" },
+      "response_body": { "message": "slow down" },
+      "sdk_error": {
+        "kind": "rate_limited",
+        "status": 429,
+        "retry_after_seconds": 30
+      }
+    },
+    {
+      "name": "http_500_server_error",
+      "http_status": 500,
+      "response_headers": {},
+      "response_body": "oops",
+      "sdk_error": {
+        "kind": "server_error",
+        "status": 500
+      }
+    },
+    {
+      "name": "http_422_bad_request_surfaces_message",
+      "http_status": 422,
+      "response_headers": { "Content-Type": "application/json" },
+      "response_body": { "message": "bad field: agent" },
+      "sdk_error": {
+        "kind": "bad_request",
+        "status": 422,
+        "message_contains": "bad field: agent"
+      }
+    },
+    {
+      "name": "transport_timeout",
+      "transport": "timeout",
+      "sdk_error": { "kind": "timeout" }
+    },
+    {
+      "name": "transport_network_error",
+      "transport": "connection_refused",
+      "sdk_error": { "kind": "network" }
+    }
+  ]
+}
