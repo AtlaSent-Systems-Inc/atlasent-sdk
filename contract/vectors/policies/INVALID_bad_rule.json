@@ -1,0 +1,13 @@
+{
+  "policy_id": "invalid_bad_rule",
+  "version": "0.1.0",
+  "description": "INVALID fixture: a rule has an unknown effect. Used to verify the policy linter fails this input.",
+  "default": "deny",
+  "rules": [
+    {
+      "id": "bogus_rule",
+      "effect": "maybe",
+      "match": { "action": "noop" }
+    }
+  ]
+}

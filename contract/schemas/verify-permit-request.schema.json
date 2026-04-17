@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/verify-permit-request.schema.json",
+  "title": "VerifyPermitRequest",
+  "description": "Wire payload sent to POST /v1-verify-permit.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision_id", "action", "agent", "context", "api_key"],
+  "properties": {
+    "decision_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The decision_id returned by a prior /v1-evaluate call."
+    },
+    "action": {
+      "type": "string",
+      "description": "Optional cross-check — re-state the action. May be empty."
+    },
+    "agent": {
+      "type": "string",
+      "description": "Optional cross-check — re-state the agent. May be empty."
+    },
+    "context": {
+      "type": "object",
+      "description": "Optional cross-check — re-state the context. May be empty.",
+      "additionalProperties": true
+    },
+    "api_key": {
+      "type": "string",
+      "description": "API key echoed in the body. Also sent as Authorization: Bearer <key>."
+    }
+  }
+}

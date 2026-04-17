@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/evaluate-request.schema.json",
+  "title": "EvaluateRequest",
+  "description": "Wire payload sent to POST /v1-evaluate. SDKs translate their camelCase surface into this snake_case body.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "agent", "context", "api_key"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Action being authorized (e.g. 'modify_patient_record'). Stable identifier, snake_case recommended."
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Identifier of the calling agent or actor (e.g. 'clinical-data-agent')."
+    },
+    "context": {
+      "type": "object",
+      "description": "Arbitrary policy context (user, environment, resource IDs). Values MUST be JSON-serializable.",
+      "additionalProperties": true
+    },
+    "api_key": {
+      "type": "string",
+      "description": "API key echoed in the body. Also sent as Authorization: Bearer <key>; both MUST be present for wire parity."
+    }
+  }
+}

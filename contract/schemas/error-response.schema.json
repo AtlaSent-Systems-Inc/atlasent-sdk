@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/error-response.schema.json",
+  "title": "ErrorResponse",
+  "description": "Shape of the body returned on non-2xx HTTP responses. SDKs surface `message` (preferred) or `reason` to callers.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "message": {
+      "type": "string",
+      "description": "Preferred human-readable error string."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Fallback human-readable error string when message is not present."
+    },
+    "code": {
+      "type": "string",
+      "description": "Optional machine-readable code (e.g. 'invalid_api_key', 'rate_limited')."
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Optional echo of the X-Request-ID header."
+    }
+  }
+}

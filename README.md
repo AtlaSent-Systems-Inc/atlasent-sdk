@@ -60,9 +60,20 @@ TypeScript SDK and vice-versa.
 atlasent-sdk/
 ├── python/         # Python SDK (full-featured: authorize(), async, cache, guard decorators)
 ├── typescript/     # TypeScript SDK (minimal: evaluate + verifyPermit)
+├── contract/       # Shared API contract — schemas, vectors, drift detector, policy linter
 └── .github/
-    └── workflows/  # per-language CI, path-filtered
+    └── workflows/  # per-language + contract CI, path-filtered
 ```
+
+## The contract
+
+All SDKs target the same two endpoints and the same wire shapes. The
+canonical definitions — JSON Schemas, test vectors, and the
+machine-enforced drift detector + policy linter — live in
+[`contract/`](./contract/). If you're building a new AtlaSent SDK or
+verifying an existing one, start with
+[`contract/README.md`](./contract/README.md) and
+[`contract/SDK_COMPATIBILITY.md`](./contract/SDK_COMPATIBILITY.md).
 
 ## Contributing
 
