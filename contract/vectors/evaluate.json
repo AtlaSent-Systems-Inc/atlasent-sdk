@@ -1,125 +1,58 @@
-{
-  "$schema": "../schemas/evaluate-request.schema.json",
-  "description": "Round-trip vectors for POST /v1-evaluate. Every SDK MUST: (a) serialize `sdk_input` into exactly `wire_request` on the wire; (b) when the server returns `wire_response`, produce `sdk_output` (keys in the idiomatic casing of that language).",
-  "vectors": [
-    {
-      "name": "evaluate_allow_minimal",
-      "description": "Minimal ALLOW. No context supplied by the caller; SDK MUST default context to {}.",
-      "sdk_input": {
-        "agent": "clinical-data-agent",
-        "action": "read_patient_record"
-      },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "action": "read_patient_record",
-        "agent": "clinical-data-agent",
-        "context": {},
-        "api_key": "ask_live_test_key"
-      },
-      "wire_response": {
-        "permitted": true,
-        "decision_id": "dec_minimal_allow_001",
-        "reason": "",
-        "audit_hash": "hash_a1b2c3",
-        "timestamp": "2026-04-17T10:00:00Z"
-      },
-      "sdk_output": {
-        "decision": "ALLOW",
-        "permitted": true,
-        "permit_id": "dec_minimal_allow_001",
-        "reason": "",
-        "audit_hash": "hash_a1b2c3",
-        "timestamp": "2026-04-17T10:00:00Z"
-      }
+[
+  {
+    "id": "allow-basic",
+    "description": "Simple allow — no context required",
+    "request": { "agent": "test-agent", "action": "read" },
+    "mock_response": { "decision": "ALLOW", "permitted": true, "permit_token": "pt_test_allow" },
+    "expect": { "decision": "ALLOW", "permitted": true }
+  },
+  {
+    "id": "deny-basic",
+    "description": "Simple deny",
+    "request": { "agent": "test-agent", "action": "delete" },
+    "mock_response": { "decision": "DENY", "permitted": false, "deny_code": "ACTION_NOT_PERMITTED", "reason": "Delete not allowed" },
+    "expect": { "decision": "DENY", "permitted": false, "deny_code": "ACTION_NOT_PERMITTED" },
+    "expect_exception": "AtlaSentDeniedError"
+  },
+  {
+    "id": "hold-basic",
+    "description": "Hold for manual review",
+    "request": { "agent": "test-agent", "action": "deploy", "context": { "environment": "production" } },
+    "mock_response": { "decision": "HOLD", "permitted": false, "reason": "Requires human review", "hold_id": "hold_abc" },
+    "expect": { "decision": "HOLD", "permitted": false },
+    "expect_exception": "AtlaSentHoldError"
+  },
+  {
+    "id": "escalate-basic",
+    "description": "Escalate to higher authority",
+    "request": { "agent": "test-agent", "action": "data.export", "context": { "record_count": 50000 } },
+    "mock_response": { "decision": "ESCALATE", "permitted": false, "reason": "Requires escalation" },
+    "expect": { "decision": "ESCALATE", "permitted": false }
+  },
+  {
+    "id": "allow-with-context",
+    "description": "Allow with full context",
+    "request": {
+      "agent": "github:deploy-bot",
+      "action": "production.deploy",
+      "context": { "environment": "prod", "approvals": 2, "change_window": true }
     },
-    {
-      "name": "evaluate_allow_with_context",
-      "description": "ALLOW with a rich context object. Context MUST be forwarded verbatim; no key remapping.",
-      "sdk_input": {
-        "agent": "clinical-data-agent",
-        "action": "modify_patient_record",
-        "context": {
-          "user": "dr_smith",
-          "environment": "production",
-          "patient_id": "PT-001",
-          "change_reason": "Correct date-of-birth"
-        }
-      },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "action": "modify_patient_record",
-        "agent": "clinical-data-agent",
-        "context": {
-          "user": "dr_smith",
-          "environment": "production",
-          "patient_id": "PT-001",
-          "change_reason": "Correct date-of-birth"
-        },
-        "api_key": "ask_live_test_key"
-      },
-      "wire_response": {
-        "permitted": true,
-        "decision_id": "dec_ctx_allow_002",
-        "reason": "Operator authorized under GxP policy",
-        "audit_hash": "hash_ctx_002",
-        "timestamp": "2026-04-17T10:01:00Z"
-      },
-      "sdk_output": {
-        "decision": "ALLOW",
-        "permitted": true,
-        "permit_id": "dec_ctx_allow_002",
-        "reason": "Operator authorized under GxP policy",
-        "audit_hash": "hash_ctx_002",
-        "timestamp": "2026-04-17T10:01:00Z"
-      }
-    },
-    {
-      "name": "evaluate_deny_no_throw",
-      "description": "DENY MUST be returned as data, NOT thrown as a transport error. Public authorize() / evaluate() surfaces MAY raise — but the HTTP layer MUST treat this as a normal 200.",
-      "sdk_input": {
-        "agent": "finance-agent",
-        "action": "wire_transfer",
-        "context": { "amount_usd": 50000 }
-      },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "action": "wire_transfer",
-        "agent": "finance-agent",
-        "context": { "amount_usd": 50000 },
-        "api_key": "ask_live_test_key"
-      },
-      "wire_response": {
-        "permitted": false,
-        "decision_id": "dec_deny_003",
-        "reason": "Amount exceeds agent limit",
-        "audit_hash": "hash_deny_003",
-        "timestamp": "2026-04-17T10:02:00Z"
-      },
-      "sdk_output": {
-        "decision": "DENY",
-        "permitted": false,
-        "permit_id": "dec_deny_003",
-        "reason": "Amount exceeds agent limit",
-        "audit_hash": "hash_deny_003",
-        "timestamp": "2026-04-17T10:02:00Z"
-      }
-    },
-    {
-      "name": "evaluate_response_missing_required_fields",
-      "description": "Malformed response: missing `permitted` or `decision_id`. SDKs MUST raise a bad-response error (do NOT silently default to DENY or ALLOW).",
-      "sdk_input": { "agent": "a", "action": "b" },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "action": "b",
-        "agent": "a",
-        "context": {},
-        "api_key": "ask_live_test_key"
-      },
-      "wire_response": { "foo": "bar" },
-      "sdk_error": {
-        "kind": "bad_response",
-        "message_contains": "permitted"
-      }
-    }
-  ]
-}
+    "mock_response": { "decision": "ALLOW", "permitted": true, "permit_token": "pt_test_deploy" },
+    "expect": { "decision": "ALLOW", "permitted": true }
+  },
+  {
+    "id": "allow-fail-open",
+    "description": "Fail-open mode allows when no rule matches",
+    "request": { "agent": "test-agent", "action": "unknown", "fail_mode": "open" },
+    "mock_response": { "decision": "ALLOW", "permitted": true, "permit_token": "pt_failopen" },
+    "expect": { "decision": "ALLOW", "permitted": true }
+  },
+  {
+    "id": "http-401",
+    "description": "Invalid API key → AtlaSentAPIError",
+    "request": { "agent": "test-agent", "action": "read" },
+    "mock_status": 401,
+    "mock_response": { "error": "Unauthorized" },
+    "expect_exception": "AtlaSentAPIError"
+  }
+]

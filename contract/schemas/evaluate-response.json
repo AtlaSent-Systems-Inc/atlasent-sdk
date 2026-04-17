@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EvaluateResponse",
+  "type": "object",
+  "required": ["decision"],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["ALLOW", "DENY", "HOLD", "ESCALATE"],
+      "description": "Authorization decision"
+    },
+    "permitted": {
+      "type": "boolean",
+      "description": "Convenience alias: true iff decision == ALLOW"
+    },
+    "permit_token": {
+      "type": "string",
+      "description": "Opaque single-use token issued on ALLOW decisions; pass to verify_permit after execution"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable explanation of the decision"
+    },
+    "deny_code": {
+      "type": "string",
+      "description": "Machine-readable deny code (e.g. 'OUTSIDE_CHANGE_WINDOW')"
+    },
+    "hold_id": {
+      "type": "string",
+      "description": "Tracking ID for HOLD decisions"
+    },
+    "audit_id": {
+      "type": "string",
+      "description": "Server-side audit log ID"
+    },
+    "evaluation_ms": {
+      "type": "number",
+      "description": "Server-side evaluation latency in milliseconds"
+    }
+  },
+  "additionalProperties": true
+}

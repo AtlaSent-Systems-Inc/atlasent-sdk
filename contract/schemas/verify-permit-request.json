@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VerifyPermitRequest",
+  "type": "object",
+  "required": ["permit_token"],
+  "properties": {
+    "permit_token": {
+      "type": "string",
+      "description": "The permit_token returned by a prior evaluate call"
+    },
+    "action": {
+      "type": "string",
+      "description": "Action type (optional; used for additional audit context)"
+    },
+    "agent": {
+      "type": "string",
+      "description": "Agent identifier (optional; must match the original evaluate call)"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EvaluateRequest",
+  "type": "object",
+  "required": ["agent", "action"],
+  "properties": {
+    "agent": {
+      "type": "string",
+      "description": "Identifier for the agent or actor requesting the action"
+    },
+    "action": {
+      "type": "string",
+      "description": "Action type being requested (e.g. 'deploy', 'data.export')"
+    },
+    "context": {
+      "type": "object",
+      "description": "Free-form key-value context for policy evaluation",
+      "additionalProperties": true
+    },
+    "bundle_id": {
+      "type": "string",
+      "description": "Specific policy bundle to evaluate against (optional; uses default if omitted)"
+    },
+    "fail_mode": {
+      "type": "string",
+      "enum": ["open", "closed"],
+      "default": "closed",
+      "description": "Behavior when no rule matches: 'closed' denies (default), 'open' allows"
+    }
+  },
+  "additionalProperties": false
+}

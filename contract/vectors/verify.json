@@ -1,113 +1,30 @@
-{
-  "description": "Round-trip vectors for POST /v1-verify-permit.",
-  "vectors": [
-    {
-      "name": "verify_permit_happy",
-      "description": "Happy-path verification of a previously issued permit.",
-      "sdk_input": {
-        "permit_id": "dec_ctx_allow_002",
-        "action": "modify_patient_record",
-        "agent": "clinical-data-agent",
-        "context": {
-          "user": "dr_smith",
-          "environment": "production",
-          "patient_id": "PT-001",
-          "change_reason": "Correct date-of-birth"
-        }
-      },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "decision_id": "dec_ctx_allow_002",
-        "action": "modify_patient_record",
-        "agent": "clinical-data-agent",
-        "context": {
-          "user": "dr_smith",
-          "environment": "production",
-          "patient_id": "PT-001",
-          "change_reason": "Correct date-of-birth"
-        },
-        "api_key": "ask_live_test_key"
-      },
-      "wire_response": {
-        "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_002_hash",
-        "timestamp": "2026-04-17T10:01:05Z"
-      },
-      "sdk_output": {
-        "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_002_hash",
-        "timestamp": "2026-04-17T10:01:05Z"
-      }
-    },
-    {
-      "name": "verify_permit_minimum_payload",
-      "description": "Verification when the caller only supplies permit_id. SDK MUST default action/agent to '' and context to {}.",
-      "sdk_input": { "permit_id": "dec_minimal_allow_001" },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "decision_id": "dec_minimal_allow_001",
-        "action": "",
-        "agent": "",
-        "context": {},
-        "api_key": "ask_live_test_key"
-      },
-      "wire_response": {
-        "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_001_hash",
-        "timestamp": "2026-04-17T10:00:05Z"
-      },
-      "sdk_output": {
-        "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_001_hash",
-        "timestamp": "2026-04-17T10:00:05Z"
-      }
-    },
-    {
-      "name": "verify_permit_not_verified",
-      "description": "verified=false is NOT a transport error; SDKs MUST return the body, not throw.",
-      "sdk_input": { "permit_id": "dec_expired" },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "decision_id": "dec_expired",
-        "action": "",
-        "agent": "",
-        "context": {},
-        "api_key": "ask_live_test_key"
-      },
-      "wire_response": {
-        "verified": false,
-        "outcome": "expired",
-        "permit_hash": "",
-        "timestamp": "2026-04-17T10:03:00Z"
-      },
-      "sdk_output": {
-        "verified": false,
-        "outcome": "expired",
-        "permit_hash": "",
-        "timestamp": "2026-04-17T10:03:00Z"
-      }
-    },
-    {
-      "name": "verify_response_missing_verified",
-      "description": "Malformed response: missing `verified`. SDKs MUST raise a bad-response error.",
-      "sdk_input": { "permit_id": "dec_x" },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "decision_id": "dec_x",
-        "action": "",
-        "agent": "",
-        "context": {},
-        "api_key": "ask_live_test_key"
-      },
-      "wire_response": { "outcome": "ok" },
-      "sdk_error": {
-        "kind": "bad_response",
-        "message_contains": "verified"
-      }
-    }
-  ]
-}
+[
+  {
+    "id": "verify-valid",
+    "description": "Valid permit token verifies successfully",
+    "request": { "permit_token": "pt_test_valid" },
+    "mock_response": { "valid": true, "outcome": "verified" },
+    "expect": { "valid": true, "outcome": "verified" }
+  },
+  {
+    "id": "verify-expired",
+    "description": "Expired permit token returns valid=false",
+    "request": { "permit_token": "pt_test_expired" },
+    "mock_response": { "valid": false, "outcome": "expired", "reason": "Permit token has expired" },
+    "expect": { "valid": false, "outcome": "expired" }
+  },
+  {
+    "id": "verify-invalid",
+    "description": "Malformed or tampered token returns valid=false",
+    "request": { "permit_token": "pt_bad_token" },
+    "mock_response": { "valid": false, "outcome": "invalid" },
+    "expect": { "valid": false }
+  },
+  {
+    "id": "verify-replay",
+    "description": "Replayed (already-used) token returns valid=false",
+    "request": { "permit_token": "pt_test_used" },
+    "mock_response": { "valid": false, "outcome": "invalid", "reason": "Permit already consumed" },
+    "expect": { "valid": false }
+  }
+]
