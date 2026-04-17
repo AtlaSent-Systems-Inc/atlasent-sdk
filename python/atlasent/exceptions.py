@@ -7,7 +7,24 @@ without an explicit permit.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
+
+AtlaSentErrorCode = Literal[
+    "invalid_api_key",
+    "forbidden",
+    "rate_limited",
+    "timeout",
+    "network",
+    "bad_response",
+    "bad_request",
+    "server_error",
+]
+"""Coarse error category — shared across AtlaSent SDKs.
+
+Call sites MAY ``switch`` / ``match`` on this field. The set is
+defined by ``contract/vectors/errors.json`` in the SDK repo; any new
+code MUST be added there first.
+"""
 
 
 class AtlaSentError(Exception):
@@ -17,6 +34,15 @@ class AtlaSentError(Exception):
     configuration errors, and any other unexpected condition.
     Because the SDK is fail-closed, an ``AtlaSentError`` means
     the action must NOT proceed.
+
+    Attributes:
+        message: Human-readable error message.
+        status_code: HTTP status code when the error originated from
+            an API response. ``None`` for transport errors.
+        code: Coarse category from :data:`AtlaSentErrorCode`.
+            ``None`` only on the deprecated legacy construction path;
+            every raise site inside the SDK sets it.
+        response_body: Decoded JSON body when available.
     """
 
     def __init__(
@@ -24,10 +50,12 @@ class AtlaSentError(Exception):
         message: str,
         *,
         status_code: int | None = None,
+        code: AtlaSentErrorCode | None = None,
         response_body: dict[str, Any] | None = None,
     ) -> None:
         self.message = message
         self.status_code = status_code
+        self.code: AtlaSentErrorCode | None = code
         self.response_body = response_body
         super().__init__(self.message)
 
@@ -90,4 +118,4 @@ class RateLimitError(AtlaSentError):
         msg = "Rate limited by AtlaSent API"
         if retry_after is not None:
             msg += f" — retry after {retry_after}s"
-        super().__init__(msg, status_code=429)
+        super().__init__(msg, status_code=429, code="rate_limited")

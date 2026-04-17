@@ -26,6 +26,7 @@ from .config import configure
 from .exceptions import (
     AtlaSentDenied,
     AtlaSentError,
+    AtlaSentErrorCode,
     ConfigurationError,
     PermissionDeniedError,
     RateLimitError,
@@ -53,6 +54,7 @@ __all__ = [
     "GateResult",
     # exceptions
     "AtlaSentError",
+    "AtlaSentErrorCode",
     "AtlaSentDenied",
     "PermissionDeniedError",
     "ConfigurationError",

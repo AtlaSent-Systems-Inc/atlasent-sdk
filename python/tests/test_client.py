@@ -270,6 +270,86 @@ class TestRateLimit:
         assert exc_info.value.retry_after is None
 
 
+# ── Error codes (SDK-PY-002 / SDK-PY-003) ────────────────────────────
+
+
+class TestErrorCodes:
+    def test_401_has_invalid_api_key_code(self, client, mocker):
+        mocker.patch.object(
+            client._client, "post", return_value=_mock_resp(mocker, status_code=401)
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.code == "invalid_api_key"
+        assert exc_info.value.status_code == 401
+
+    def test_403_has_forbidden_code(self, client, mocker):
+        mocker.patch.object(
+            client._client, "post", return_value=_mock_resp(mocker, status_code=403)
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.code == "forbidden"
+
+    def test_500_has_server_error_code(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=500)
+        resp.text = "boom"
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.code == "server_error"
+
+    def test_422_has_bad_request_code(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=422)
+        resp.text = "bad field"
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.code == "bad_request"
+
+    def test_timeout_has_timeout_code(self, client, mocker):
+        mocker.patch.object(
+            client._client, "post", side_effect=httpx.TimeoutException("t")
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.code == "timeout"
+
+    def test_connection_error_has_network_code(self, client, mocker):
+        mocker.patch.object(
+            client._client, "post", side_effect=httpx.ConnectError("refused")
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.code == "network"
+
+    def test_malformed_evaluate_body_is_bad_response(self, client, mocker):
+        # Valid JSON, but missing `permitted` and `decision_id`.
+        resp = _mock_resp(mocker, json_data={"foo": "bar"})
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.code == "bad_response"
+        assert exc_info.value.response_body == {"foo": "bar"}
+        assert "permitted" in exc_info.value.message
+
+    def test_malformed_verify_body_is_bad_response(self, client, mocker):
+        resp = _mock_resp(mocker, json_data={"outcome": "ok"})
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.verify("dec_100")
+        assert exc_info.value.code == "bad_response"
+        assert "verified" in exc_info.value.message
+
+    def test_invalid_json_is_bad_response(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=200)
+        resp.json.side_effect = ValueError("not json")
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.code == "bad_response"
+
+
 # ── Resource Management ───────────────────────────────────────────────
 
 

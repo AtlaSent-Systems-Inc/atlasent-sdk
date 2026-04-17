@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.4.0 — 2026-04-17
+
+### Added
+
+- **Coarse `code` attribute on `AtlaSentError`.** New
+  `AtlaSentErrorCode` Literal (`"invalid_api_key" | "forbidden" |
+  "rate_limited" | "timeout" | "network" | "bad_response" |
+  "bad_request" | "server_error"`) aligned with the shared SDK
+  contract. Every raise site in `client._post` / `async_client._post`
+  sets it, and `RateLimitError` is pre-populated with
+  `code="rate_limited"`. Lets call sites `match err.code:` rather
+  than regex the message:
+
+      try:
+          result = authorize(...)
+      except RateLimitError as err:
+          ...  # err.code == "rate_limited"
+      except AtlaSentError as err:
+          if err.code == "invalid_api_key":
+              ...
+
+- **Dedicated `bad_response` errors for malformed bodies.** When the
+  server returns HTTP 200 with valid JSON that is missing
+  `permitted` / `decision_id` (evaluate) or `verified` (verify), the
+  SDK now raises `AtlaSentError(code="bad_response", response_body=…)`
+  instead of a generic pydantic `ValidationError`. Matches the
+  TypeScript SDK and the `evaluate_response_missing_required_fields`
+  /  `verify_response_missing_verified` contract vectors.
+
+### Notes
+
+- This is an additive minor bump — no existing attribute changes
+  type. The new `code` field on `AtlaSentError` defaults to `None`
+  for user-constructed errors; all SDK-internal raise sites set it.
+
 ## 0.3.0 — 2026-04-16
 
 ### Added
