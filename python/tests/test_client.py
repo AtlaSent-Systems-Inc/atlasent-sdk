@@ -79,6 +79,14 @@ class TestInit:
         c = AtlaSentClient(api_key="k")
         assert "atlasent-python/" in c._client.headers["user-agent"]
 
+    def test_authorization_header(self):
+        c = AtlaSentClient(api_key="ask_live_xyz")
+        assert c._client.headers["authorization"] == "Bearer ask_live_xyz"
+
+    def test_accept_header(self):
+        c = AtlaSentClient(api_key="k")
+        assert c._client.headers["accept"] == "application/json"
+
 
 # ── Evaluate ──────────────────────────────────────────────────────────
 

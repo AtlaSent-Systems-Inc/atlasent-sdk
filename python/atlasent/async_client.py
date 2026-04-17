@@ -77,6 +77,8 @@ class AsyncAtlaSentClient:
         self._client = httpx.AsyncClient(
             headers={
                 "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": f"Bearer {api_key}",
                 "User-Agent": f"atlasent-python/{__version__}",
             },
             timeout=self._timeout,
