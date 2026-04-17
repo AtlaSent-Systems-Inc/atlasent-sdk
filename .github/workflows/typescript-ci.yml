@@ -5,11 +5,15 @@ on:
     branches: [main]
     paths:
       - "typescript/**"
+      - "contract/vectors/**"
+      - "contract/schemas/**"
       - ".github/workflows/typescript-ci.yml"
   pull_request:
     branches: [main]
     paths:
       - "typescript/**"
+      - "contract/vectors/**"
+      - "contract/schemas/**"
       - ".github/workflows/typescript-ci.yml"
 
 defaults:
