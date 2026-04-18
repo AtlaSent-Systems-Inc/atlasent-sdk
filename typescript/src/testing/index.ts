@@ -1,75 +1,40 @@
-/**
- * AtlaSentMock — drop-in test double for {@link AtlaSentClient}.
- *
- * ```typescript
- * import { AtlaSentMock } from '@atlasent/sdk/testing';
- *
- * const mock = new AtlaSentMock();
- * mock.allowAll();
- * // or
- * mock.denyAll();
- * // or
- * mock.setDecision('deployment.production', 'deny');
- *
- * const result = await mock.evaluate({ action: { id: 'deployment.production' }, actor });
- * // result.outcome === 'deny'
- * ```
- */
+import type { EvaluationPayload, EvaluationResult, Decision, RiskLevel } from '@atlasent/types';
+import { AtlaSentClient, type AtlaSentClientOptions } from '../client.ts';
 
-import type { EvaluationPayload, EvaluationResult } from '@atlasent/types';
+type MockRule = { actorId?: string; actionType?: string; decision: Decision; riskLevel?: RiskLevel };
 
-type Outcome = 'allow' | 'deny';
+export class AtlaSentMock extends AtlaSentClient {
+  private rules: MockRule[] = [];
+  private defaultDecision: Decision = 'allow';
+  private calls: EvaluationPayload[] = [];
 
-export class AtlaSentMock {
-  private defaultOutcome: Outcome = 'allow';
-  private decisions = new Map<string, Outcome>();
-
-  /** All evaluations return `allow` (default). */
-  allowAll(): void {
-    this.defaultOutcome = 'allow';
-    this.decisions.clear();
+  constructor() {
+    super({ apiUrl: 'http://mock', apiKey: 'mock' });
   }
 
-  /** All evaluations return `deny`. */
-  denyAll(): void {
-    this.defaultOutcome = 'deny';
-    this.decisions.clear();
-  }
+  allowAll() { this.defaultDecision = 'allow'; return this; }
+  denyAll() { this.defaultDecision = 'deny'; return this; }
+  requireApprovalAll() { this.defaultDecision = 'require_approval'; return this; }
 
-  /** Override the outcome for a specific action ID. */
-  setDecision(actionId: string, outcome: Outcome): void {
-    this.decisions.set(actionId, outcome);
-  }
+  setDecision(rule: MockRule) { this.rules.unshift(rule); return this; }
+  getCalls() { return this.calls; }
+  reset() { this.rules = []; this.calls = []; this.defaultDecision = 'allow'; return this; }
 
-  /** Evaluate a payload — returns a synthetic {@link EvaluationResult}. */
-  async evaluate(payload: EvaluationPayload): Promise<EvaluationResult> {
-    const actionId = payload.action?.id ?? '';
-    const outcome = this.decisions.get(actionId) ?? this.defaultOutcome;
+  override async evaluate(payload: EvaluationPayload): Promise<EvaluationResult> {
+    this.calls.push(payload);
+    const rule = this.rules.find(r =>
+      (!r.actorId || r.actorId === payload.actor.id) &&
+      (!r.actionType || r.actionType === payload.action.type)
+    );
+    const decision = rule?.decision ?? this.defaultDecision;
+    const level = rule?.riskLevel ?? (decision === 'deny' ? 'high' : 'low');
+    const scoreMap: Record<RiskLevel, number> = { low: 15, medium: 45, high: 75, critical: 95 };
     return {
-      outcome,
-      permit_id: `mock-permit-${Date.now()}`,
-      risk: {
-        level: outcome === 'deny' ? 'high' : 'low',
-        score: outcome === 'deny' ? 1.0 : 0.0,
-        reasons: outcome === 'deny' ? [`Action '${actionId}' is mocked as denied`] : [],
-      },
-      audit_hash: 'mock-audit-hash',
-      timestamp: new Date().toISOString(),
-    } as unknown as EvaluationResult;
-  }
-
-  /** Verify a permit — always returns `{ verified: true }` in mock mode. */
-  async verifyPermit(_id: string): Promise<{ verified: boolean }> {
-    return { verified: true };
-  }
-
-  /** Consume a permit — no-op in mock mode. */
-  async consumePermit(_id: string): Promise<void> {
-    return;
-  }
-
-  /** Get session — returns a minimal mock session. */
-  async getSession(): Promise<{ mock: true }> {
-    return { mock: true };
+      id: crypto.randomUUID(),
+      decision,
+      risk: { score: scoreMap[level], level, factors: [] },
+      evaluatedAt: new Date().toISOString(),
+      ...(decision === 'allow' ? { permitId: crypto.randomUUID() } : {}),
+    };
   }
 }

@@ -1,46 +1,30 @@
-/**
- * AsyncClient — v1.1 parallel evaluation helper.
- *
- * Wraps {@link AtlaSentClient} and adds:
- *   - `evaluate()` — single evaluation (delegates to AtlaSentClient)
- *   - `authorizeMany()` — parallel batch evaluation via Promise.all
- */
-
-import { AtlaSentClient, type AtlaSentClientOptions } from './client.js';
+import { AtlaSentClient, type AtlaSentClientOptions } from './client.ts';
 import type { EvaluationPayload, EvaluationResult } from '@atlasent/types';
 
-export type { AtlaSentClientOptions };
+export type AuthorizeManyResult = {
+  payload: EvaluationPayload;
+  result: EvaluationResult | null;
+  error: Error | null;
+};
 
-export class AsyncClient {
-  private readonly client: AtlaSentClient;
-
+export class AsyncClient extends AtlaSentClient {
   constructor(options: AtlaSentClientOptions) {
-    this.client = new AtlaSentClient(options);
+    super(options);
   }
 
-  /**
-   * Evaluate a single action. Delegates to {@link AtlaSentClient.evaluate}.
-   */
-  evaluate(payload: EvaluationPayload): Promise<EvaluationResult> {
-    return this.client.evaluate(payload);
+  async authorizeMany(payloads: EvaluationPayload[]): Promise<AuthorizeManyResult[]> {
+    const settled = await Promise.allSettled(payloads.map(p => this.evaluate(p)));
+    return payloads.map((payload, i) => {
+      const s = settled[i]!;
+      return {
+        payload,
+        result: s.status === 'fulfilled' ? s.value : null,
+        error: s.status === 'rejected' ? (s.reason as Error) : null,
+      };
+    });
   }
 
-  /**
-   * Evaluate multiple actions concurrently.
-   *
-   * Results are returned in the same order as the input array.
-   * Each item either resolves to an {@link EvaluationResult} or rejects
-   * independently — use `Promise.allSettled` at the call site if you
-   * need partial-failure semantics.
-   *
-   * ```typescript
-   * const results = await client.authorizeMany([
-   *   { action: { id: 'deployment.production' }, actor },
-   *   { action: { id: 'data.export' }, actor },
-   * ]);
-   * ```
-   */
-  authorizeMany(payloads: EvaluationPayload[]): Promise<EvaluationResult[]> {
-    return Promise.all(payloads.map((p) => this.client.evaluate(p)));
+  async authorizeAll(payloads: EvaluationPayload[]): Promise<EvaluationResult[]> {
+    return Promise.all(payloads.map(p => this.evaluate(p)));
   }
 }

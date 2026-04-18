@@ -1,3 +1,8 @@
-export { AtlaSentClient } from './client.js';
-export { AsyncClient } from './async-client.js';
-export type * from '@atlasent/types';
+export { AtlaSentClient } from './client.ts';
+export { AsyncClient } from './async-client.ts';
+export { withSpan } from './otel.ts';
+export type {
+  AtlaSentClientOptions,
+  EvaluateOptions,
+  AuthorizeResult,
+} from './client.ts';

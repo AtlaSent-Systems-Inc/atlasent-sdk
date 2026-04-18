@@ -1,24 +1,21 @@
-import type { Tracer } from '@opentelemetry/api';
+type Span = { end(): void; setAttribute(k: string, v: unknown): void; recordException(e: unknown): void; setStatus(s: { code: number; message?: string }): void };
+type Tracer = { startSpan(name: string): Span };
 
-export interface TracingOptions {
-  tracer: Tracer;
-}
+let tracer: Tracer | undefined;
 
-export async function withSpan<T>(
-  tracer: Tracer | undefined,
-  name: string,
-  attrs: Record<string, string | number>,
-  fn: () => Promise<T>,
-): Promise<T> {
-  if (!tracer) return fn();
-  const span = tracer.startSpan(name, { attributes: attrs });
+export function configureTracing(t: Tracer) { tracer = t; }
+
+export async function withSpan<T>(name: string, fn: (span: Span) => Promise<T>): Promise<T> {
+  if (!tracer) return fn({ end() {}, setAttribute() {}, recordException() {}, setStatus() {} });
+  const span = tracer.startSpan(name);
   try {
-    const result = await fn();
-    span.setStatus({ code: 1 }); // OK
+    const result = await fn(span);
+    span.setStatus({ code: 1 });
     return result;
-  } catch (err) {
-    span.setStatus({ code: 2, message: String(err) }); // ERROR
-    throw err;
+  } catch (e) {
+    span.recordException(e);
+    span.setStatus({ code: 2, message: e instanceof Error ? e.message : String(e) });
+    throw e;
   } finally {
     span.end();
   }
