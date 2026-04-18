@@ -1,14 +1,19 @@
+> [!NOTE]
+> **Repo rename pending:** This repo is named `atlasent-sdk-python` but contains `python/`, `typescript/`, and `contract/` — it is a multi-language SDK monorepo. It will be renamed to `atlasent-sdk`.
+>
+> - **Python SDK** (`pip install atlasent`) — canonical here, in [`./python/`](./python/)
+> - **TypeScript SDK** (`npm install @atlasent/sdk`) — canonical in [`atlasent-sdk-typescript`](https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-typescript)
+> - **`./typescript/`** — deprecated in favour of `atlasent-sdk-typescript`
+
 # AtlaSent SDKs
 
 Execution-time authorization for AI agents in GxP-regulated environments.
 Fail-closed by design — no action proceeds without an explicit permit.
 
-This repository is the home of AtlaSent's official SDKs.
-
-| Language   | Package           | Install                    | Docs                                                           | Version |
-|------------|-------------------|----------------------------|----------------------------------------------------------------|---------|
-| Python     | `atlasent`        | `pip install atlasent`     | [`./python/`](./python/README.md)                              | 0.3.0   |
-| TypeScript | `@atlasent/sdk`   | `npm i @atlasent/sdk`      | [`./typescript/`](./typescript/README.md)                      | 0.1.0   |
+| Language   | Package           | Install                    | Canonical repo                                                                   |
+|------------|-------------------|----------------------------|----------------------------------------------------------------------------------|
+| Python     | `atlasent`        | `pip install atlasent`     | this repo → [`./python/`](./python/)                                             |
+| TypeScript | `@atlasent/sdk`   | `npm i @atlasent/sdk`      | [`atlasent-sdk-typescript`](https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-typescript) |
 
 ## 30-second quickstart
 
@@ -29,17 +34,17 @@ if result.permitted:
 ### TypeScript
 
 ```ts
-import { AtlaSentClient } from "@atlasent/sdk";
+import { configure, authorize } from "@atlasent/sdk";
 
-const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
+configure({ apiKey: process.env.ATLASENT_API_KEY! });
 
-const result = await client.evaluate({
+const result = await authorize({
   agent: "clinical-data-agent",
   action: "modify_patient_record",
   context: { user: "dr_smith", environment: "production" },
 });
 
-if (result.decision === "ALLOW") {
+if (result.permitted) {
   // execute action
 }
 ```
@@ -51,34 +56,22 @@ Both SDKs target the same two endpoints:
 - `POST https://api.atlasent.io/v1-evaluate`
 - `POST https://api.atlasent.io/v1-verify-permit`
 
-Full wire-format parity: a Python permit token is verifiable from the
-TypeScript SDK and vice-versa.
+Full wire-format parity: a Python permit token is verifiable from the TypeScript SDK and vice-versa.
 
 ## Repository layout
 
 ```
-atlasent-sdk/
-├── python/         # Python SDK (full-featured: authorize(), async, cache, guard decorators)
-├── typescript/     # TypeScript SDK (minimal: evaluate + verifyPermit)
-├── contract/       # Shared API contract — schemas, vectors, drift detector, policy linter
+atlasent-sdk/  (this repo — currently named atlasent-sdk-python)
+├── python/         # Python SDK — pip install atlasent
+├── typescript/     # DEPRECATED — use atlasent-sdk-typescript instead
+├── contract/       # Shared API contract — schemas, vectors, drift detector
 └── .github/
-    └── workflows/  # per-language + contract CI, path-filtered
+    └── workflows/  # per-language CI, path-filtered
 ```
 
 ## The contract
 
-All SDKs target the same two endpoints and the same wire shapes. The
-canonical definitions — JSON Schemas, test vectors, and the
-machine-enforced drift detector + policy linter — live in
-[`contract/`](./contract/). If you're building a new AtlaSent SDK or
-verifying an existing one, start with
-[`contract/README.md`](./contract/README.md) and
-[`contract/SDK_COMPATIBILITY.md`](./contract/SDK_COMPATIBILITY.md).
-
-## Contributing
-
-Per-language setup lives in each subdirectory's README. CI runs
-automatically on PRs that touch the corresponding subdir.
+All SDKs target the same two endpoints and wire shapes. Canonical definitions live in [`contract/`](./contract/).
 
 ## Getting an API key
 
