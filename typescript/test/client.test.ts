@@ -127,7 +127,9 @@ describe("evaluate()", () => {
     const [, init] = fetchImpl.mock.calls[0]!;
     const headers = init!.headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer ask_live_test");
-    expect(headers["User-Agent"]).toMatch(/^@atlasent\/sdk\/\d+\.\d+\.\d+ node\//);
+    expect(headers["User-Agent"]).toMatch(
+      /^@atlasent\/sdk\/[\w.\-+]+ (node|bun|deno|browser|edge|unknown)(\/[\w.\-+]+)?$/,
+    );
     expect(headers["X-Request-ID"]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     expect(headers["Content-Type"]).toBe("application/json");
     expect(headers.Accept).toBe("application/json");

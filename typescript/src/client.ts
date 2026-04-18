@@ -15,6 +15,7 @@ import {
   type AtlaSentErrorCode,
   type AtlaSentErrorInit,
 } from "./errors.js";
+import { detectRuntime } from "./runtime.js";
 import type {
   AtlaSentClientOptions,
   EvaluateRequest,
@@ -22,10 +23,10 @@ import type {
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "./types.js";
+import { SDK_VERSION } from "./version.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const SDK_VERSION = "0.1.0";
 
 /** Raw JSON shape received from `POST /v1-evaluate`. */
 interface EvaluateWire {
@@ -59,7 +60,18 @@ export class AtlaSentClient {
     this.apiKey = options.apiKey;
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+    if (options.fetch) {
+      this.fetchImpl = options.fetch;
+    } else {
+      const f = globalThis.fetch;
+      if (typeof f !== "function") {
+        throw new AtlaSentError(
+          "globalThis.fetch is not available — install a fetch polyfill or pass `fetch` in the constructor options",
+          { code: "network" },
+        );
+      }
+      this.fetchImpl = f.bind(globalThis);
+    }
   }
 
   /**
@@ -133,26 +145,29 @@ export class AtlaSentClient {
 
   private async post<T>(path: string, body: unknown): Promise<T> {
     const url = `${this.baseUrl}${path}`;
-    const requestId = globalThis.crypto.randomUUID();
+    const requestId = newRequestId();
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Accept: "application/json",
       Authorization: `Bearer ${this.apiKey}`,
-      "User-Agent": `@atlasent/sdk/${SDK_VERSION} node/${process.version}`,
+      "User-Agent": `@atlasent/sdk/${SDK_VERSION} ${detectRuntime()}`,
       "X-Request-ID": requestId,
     };
 
+    const { signal, cancel } = newTimeoutSignal(this.timeoutMs);
     let response: Response;
     try {
       response = await this.fetchImpl(url, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal,
       });
     } catch (err) {
       throw mapFetchError(err, requestId);
+    } finally {
+      cancel();
     }
 
     if (!response.ok) {
@@ -181,6 +196,52 @@ export class AtlaSentClient {
 
     return parsed as T;
   }
+}
+
+interface TimeoutHandle {
+  signal: AbortSignal;
+  cancel: () => void;
+}
+
+function newTimeoutSignal(ms: number): TimeoutHandle {
+  const ASignal = (globalThis as { AbortSignal?: typeof AbortSignal })
+    .AbortSignal;
+  if (ASignal && typeof (ASignal as { timeout?: unknown }).timeout === "function") {
+    return { signal: ASignal.timeout(ms), cancel: () => {} };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    const err =
+      typeof DOMException === "function"
+        ? new DOMException("timed out", "TimeoutError")
+        : Object.assign(new Error("timed out"), { name: "TimeoutError" });
+    controller.abort(err);
+  }, ms);
+  return { signal: controller.signal, cancel: () => clearTimeout(timer) };
+}
+
+interface CryptoLike {
+  randomUUID?: () => string;
+  getRandomValues?: (array: Uint8Array) => Uint8Array;
+}
+
+function newRequestId(): string {
+  const c = (globalThis as { crypto?: CryptoLike }).crypto;
+  if (c && typeof c.randomUUID === "function") return c.randomUUID();
+  // RFC 4122 v4 fallback for runtimes without crypto.randomUUID.
+  // Used only as a request-correlation ID, not for security.
+  const bytes = new Uint8Array(16);
+  if (c && typeof c.getRandomValues === "function") {
+    c.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const h = Array.from(bytes, (b) => b.toString(16).padStart(2, "0"));
+  return `${h.slice(0, 4).join("")}-${h.slice(4, 6).join("")}-${h
+    .slice(6, 8)
+    .join("")}-${h.slice(8, 10).join("")}-${h.slice(10, 16).join("")}`;
 }
 
 function mapFetchError(err: unknown, requestId: string): AtlaSentError {

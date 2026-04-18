@@ -121,8 +121,38 @@ Every `AtlaSentError` carries `err.requestId` — the UUID the SDK sent as `X-Re
 
 ## Requirements
 
-- Node.js **20** or newer (native `fetch`, `AbortSignal.timeout`, `crypto.randomUUID`).
 - TypeScript **5.0+** for best type-inference ergonomics (older is fine — types are plain interfaces).
+- A runtime with the WHATWG `fetch` API.
+
+### Runtime support matrix
+
+| Runtime           | Status     | Notes                                               |
+|-------------------|------------|-----------------------------------------------------|
+| Node.js ≥ 20      | Supported  | Default Node-shaped build (`dist/index.{js,cjs}`).  |
+| Bun ≥ 1.1         | Supported  | Uses the Node-shaped build; native `fetch`.         |
+| Deno ≥ 1.40       | Supported  | Resolves the `deno` export → browser-shaped build.  |
+| Cloudflare Workers / `workerd` | Supported | Resolves the `workerd` export.        |
+| Vercel Edge / EdgeRuntime      | Supported | Browser-shaped build, no Node built-ins.    |
+| Modern browsers   | See below  | Use `@atlasent/sdk/browser`; secret keys rejected.  |
+| Node.js ≤ 18      | Unsupported | No native `fetch` / `AbortSignal.timeout`.         |
+
+### Using the SDK from a browser
+
+The SDK ships a separate **browser entry** that refuses to construct
+the client when it sees a secret-style API key (`ask_live_*`,
+`ask_test_*`, `sk_*`) in a window context — secret keys belong on the
+server. You should normally call AtlaSent from your backend, not from
+the browser.
+
+```ts
+// Only safe with non-secret keys, e.g. via a token-exchange endpoint.
+import { AtlaSentClient } from "@atlasent/sdk/browser";
+```
+
+For trusted internal dashboards already gated by SSO, an explicit
+opt-in (`{ allowBrowser: true }`) is provided. **Roadmap:** publishable
+client-side keys with a scoped permit-exchange flow — see the AtlaSent
+roadmap.
 
 ## Related
 
