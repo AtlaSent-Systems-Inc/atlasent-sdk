@@ -1,8 +1,12 @@
 export { AtlaSentClient } from './client.ts';
 export { AsyncClient } from './async-client.ts';
-export { withSpan } from './otel.ts';
+export { AtlaSentError } from './errors.ts';
+export { withSpan, configureTracing } from './otel.ts';
 export type {
   AtlaSentClientOptions,
-  EvaluateOptions,
-  AuthorizeResult,
-} from './client.ts';
+  EvaluateRequest,
+  EvaluateResponse,
+  VerifyPermitRequest,
+  VerifyPermitResponse,
+  Decision,
+} from './types.ts';

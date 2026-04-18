@@ -23,9 +23,7 @@
     "test": "vitest run",
     "dev": "tsup --watch"
   },
-  "dependencies": {
-    "@atlasent/types": "^2.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "typescript": "^5.4.5",
     "tsup": "^8.0.2",

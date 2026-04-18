@@ -1,9 +1,9 @@
-import { AtlaSentClient, type AtlaSentClientOptions } from './client.ts';
-import type { EvaluationPayload, EvaluationResult } from '@atlasent/types';
+import { AtlaSentClient } from './client.ts';
+import type { AtlaSentClientOptions, EvaluateRequest, EvaluateResponse } from './types.ts';
 
 export type AuthorizeManyResult = {
-  payload: EvaluationPayload;
-  result: EvaluationResult | null;
+  request: EvaluateRequest;
+  result: EvaluateResponse | null;
   error: Error | null;
 };
 
@@ -12,19 +12,19 @@ export class AsyncClient extends AtlaSentClient {
     super(options);
   }
 
-  async authorizeMany(payloads: EvaluationPayload[]): Promise<AuthorizeManyResult[]> {
-    const settled = await Promise.allSettled(payloads.map(p => this.evaluate(p)));
-    return payloads.map((payload, i) => {
+  async authorizeMany(requests: EvaluateRequest[]): Promise<AuthorizeManyResult[]> {
+    const settled = await Promise.allSettled(requests.map(r => this.evaluate(r)));
+    return requests.map((request, i) => {
       const s = settled[i]!;
       return {
-        payload,
+        request,
         result: s.status === 'fulfilled' ? s.value : null,
         error: s.status === 'rejected' ? (s.reason as Error) : null,
       };
     });
   }
 
-  async authorizeAll(payloads: EvaluationPayload[]): Promise<EvaluationResult[]> {
-    return Promise.all(payloads.map(p => this.evaluate(p)));
+  async authorizeAll(requests: EvaluateRequest[]): Promise<EvaluateResponse[]> {
+    return Promise.all(requests.map(r => this.evaluate(r)));
   }
 }
