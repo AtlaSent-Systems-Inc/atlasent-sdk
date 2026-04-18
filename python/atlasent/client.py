@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from ._response_adapter import (
+    normalize_evaluate_response,
+    normalize_verify_response,
+)
 from ._version import __version__
 from .exceptions import (
     AtlaSentDenied,
@@ -138,7 +142,8 @@ class AtlaSentClient:
             api_key=self._api_key,
         )
         logger.debug("evaluate action=%r actor=%r", action_type, actor_id)
-        data = self._post("/v1-evaluate", req.model_dump(by_alias=True))
+        raw = self._post("/v1-evaluate", req.model_dump(by_alias=True))
+        data = normalize_evaluate_response(raw)
 
         if not isinstance(data.get("permitted"), bool) or not isinstance(
             data.get("decision_id"), str
@@ -203,7 +208,8 @@ class AtlaSentClient:
             api_key=self._api_key,
         )
         logger.debug("verify token=%s", permit_token)
-        data = self._post("/v1-verify-permit", req.model_dump(by_alias=True))
+        raw = self._post("/v1-verify-permit", req.model_dump(by_alias=True))
+        data = normalize_verify_response(raw)
         if not isinstance(data.get("verified"), bool):
             raise AtlaSentError(
                 "Malformed /v1-verify-permit response: missing `verified`",

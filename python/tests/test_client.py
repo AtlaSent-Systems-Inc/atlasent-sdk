@@ -40,6 +40,27 @@ VERIFY_OK = {
     "timestamp": "2025-01-15T12:05:00Z",
 }
 
+# Legacy server shape — no SDK aliases, only native fields. The response
+# adapter normalizes this into the canonical form the SDK expects.
+EVALUATE_PERMIT_LEGACY = {
+    "decision": "allow",
+    "permit_token": "pmt_legacy",
+    "deny_reason": None,
+    "audit_entry_hash": "h_legacy",
+    "request_id": "req_legacy",
+}
+EVALUATE_DENY_LEGACY = {
+    "decision": "deny",
+    "deny_reason": "Missing change_reason",
+    "request_id": "req_legacy_deny",
+}
+VERIFY_OK_LEGACY = {
+    "valid": True,
+    "outcome": "allow",
+    "decision": "allow",
+    "reason": "Permit verified and consumed",
+}
+
 
 def _mock_resp(mocker, status_code=200, json_data=None, headers=None):
     resp = mocker.Mock(spec=httpx.Response)
@@ -155,6 +176,42 @@ class TestEvaluate:
         mocker.patch.object(client._client, "post", return_value=resp)
         with pytest.raises(AtlaSentError, match="API error 500"):
             client.evaluate("a", "b")
+
+
+# ── Legacy (pre-realignment) server response shape ────────────────────
+#
+# The server used to return only native fields (`decision: "allow"`,
+# `permit_token`, `audit_entry_hash`, `valid`). The response adapter
+# normalizes those into the SDK's canonical shape so the SDK keeps
+# working against servers that haven't shipped the realignment yet.
+
+
+class TestLegacyResponseShape:
+    def test_evaluate_legacy_allow(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT_LEGACY)
+        mocker.patch.object(client._client, "post", return_value=resp)
+        result = client.evaluate("read_data", "agent-1")
+        assert result.decision is True
+        assert result.permit_token == "pmt_legacy"
+        assert result.audit_hash == "h_legacy"
+
+    def test_evaluate_legacy_deny_raises(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EVALUATE_DENY_LEGACY)
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentDenied) as exc_info:
+            client.evaluate("write_data", "agent-1")
+        err = exc_info.value
+        # No permit_token on deny; decision_id falls back to request_id.
+        assert err.permit_token == "req_legacy_deny"
+        assert err.reason == "Missing change_reason"
+
+    def test_verify_legacy_valid(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=VERIFY_OK_LEGACY)
+        mocker.patch.object(client._client, "post", return_value=resp)
+        result = client.verify("pmt_legacy")
+        assert result.valid is True
+        # Legacy server didn't return permit_hash → empty string.
+        assert result.permit_hash == ""
 
 
 # ── Verify ────────────────────────────────────────────────────────────
@@ -332,13 +389,17 @@ class TestErrorCodes:
         assert exc_info.value.code == "network"
 
     def test_malformed_evaluate_body_is_bad_response(self, client, mocker):
-        # Valid JSON, but missing `permitted` and `decision_id`.
+        # Valid JSON, but missing every field the adapter knows about
+        # (no `permitted`, `decision`, `permit_token`, ...). The adapter
+        # fills in a synthetic timestamp but leaves `permitted` absent,
+        # which the caller then reports as bad_response.
         resp = _mock_resp(mocker, json_data={"foo": "bar"})
         mocker.patch.object(client._client, "post", return_value=resp)
         with pytest.raises(AtlaSentError) as exc_info:
             client.evaluate("a", "b")
         assert exc_info.value.code == "bad_response"
-        assert exc_info.value.response_body == {"foo": "bar"}
+        assert exc_info.value.response_body["foo"] == "bar"
+        assert "permitted" not in exc_info.value.response_body
         assert "permitted" in exc_info.value.message
 
     def test_malformed_verify_body_is_bad_response(self, client, mocker):

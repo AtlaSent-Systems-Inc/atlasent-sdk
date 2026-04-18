@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.1.0 — 2026-04-18
+
+### Added
+
+- **Response-shape adapter** (`atlasent._response_adapter`). The SDK
+  now normalizes both the legacy server shape (`decision: "allow"`,
+  `permit_token`, `audit_entry_hash`, `valid`) and the realigned
+  shape (`permitted`, `decision_id`, `audit_hash`, `verified`) into
+  the canonical contract form *before* Pydantic validation.
+- New test module `tests/test_response_adapter.py` (11 tests) and a
+  legacy-shape test class in `tests/test_client.py` (3 tests) that
+  pin down the behavior against both server versions.
+
+### Fixed
+
+- **`evaluate()` / `verify()` no longer raise `bad_response` against
+  servers that only send native fields.** Before this release, a
+  production API that returned `{decision: "allow", permit_token: ...}`
+  would cause every call to fail with "Malformed /v1-evaluate
+  response: missing or non-scalar `permitted` or `decision_id`".
+  The adapter makes the SDK work against legacy *and* realigned
+  servers during the rollout.
+- Verify responses now default `permit_hash` to `""` when the server
+  doesn't return one (legacy servers don't), matching the TS SDK's
+  tolerance.
+
+### Unchanged
+
+- Error classes, retries, rate-limit parsing, the public
+  `authorize()` / `evaluate()` / `verify()` / `gate()` surfaces,
+  and all existing response fields.
+
 ## 0.4.0 — 2026-04-17
 
 ### Added
