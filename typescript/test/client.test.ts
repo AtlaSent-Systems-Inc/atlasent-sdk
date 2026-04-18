@@ -1,8 +1,8 @@
-import { describe, expect, it, vi, type MockedFunction } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 
 import { AtlaSentClient, AtlaSentError } from "../src/index.js";
 
-type FetchMock = MockedFunction<typeof fetch>;
+type FetchMock = Mock<typeof fetch>;
 
 const EVALUATE_PERMIT_WIRE = {
   permitted: true,
@@ -152,14 +152,14 @@ describe("verifyPermit()", () => {
     expect(result.outcome).toBe("verified");
   });
 
-  it("maps permit_hash → permitHash", async () => {
+  it("maps permit_hash \u2192 permitHash", async () => {
     const client = makeClient(mockFetch(() => jsonResponse(VERIFY_OK_WIRE)));
     const result = await client.verifyPermit({ permitId: "dec_alpha" });
     expect(result.permitHash).toBe("permit_alpha");
     expect(result.verified).toBe(true);
   });
 
-  it("sends the wire-format body with permit_id → decision_id", async () => {
+  it("sends the wire-format body with permit_id \u2192 decision_id", async () => {
     const fetchImpl = mockFetch(() => jsonResponse(VERIFY_OK_WIRE));
     const client = makeClient(fetchImpl);
     await client.verifyPermit({
@@ -182,7 +182,7 @@ describe("verifyPermit()", () => {
 });
 
 describe("HTTP error mapping", () => {
-  it("401 → AtlaSentError(code: invalid_api_key)", async () => {
+  it("401 \u2192 AtlaSentError(code: invalid_api_key)", async () => {
     const client = makeClient(
       mockFetch(() => new Response("unauthorized", { status: 401 })),
     );
@@ -193,7 +193,7 @@ describe("HTTP error mapping", () => {
     });
   });
 
-  it("403 → AtlaSentError(code: forbidden)", async () => {
+  it("403 \u2192 AtlaSentError(code: forbidden)", async () => {
     const client = makeClient(
       mockFetch(() => new Response("nope", { status: 403 })),
     );
@@ -203,7 +203,7 @@ describe("HTTP error mapping", () => {
     });
   });
 
-  it("429 → AtlaSentError(code: rate_limited) with retryAfterMs from Retry-After header", async () => {
+  it("429 \u2192 AtlaSentError(code: rate_limited) with retryAfterMs from Retry-After header", async () => {
     const client = makeClient(
       mockFetch(() =>
         new Response("too many", {
@@ -219,7 +219,7 @@ describe("HTTP error mapping", () => {
     });
   });
 
-  it("500 → AtlaSentError(code: server_error)", async () => {
+  it("500 \u2192 AtlaSentError(code: server_error)", async () => {
     const client = makeClient(
       mockFetch(() => new Response("oops", { status: 500 })),
     );
@@ -229,7 +229,7 @@ describe("HTTP error mapping", () => {
     });
   });
 
-  it("422 (other 4xx) → AtlaSentError(code: bad_request) surfaces server message", async () => {
+  it("422 (other 4xx) \u2192 AtlaSentError(code: bad_request) surfaces server message", async () => {
     const client = makeClient(
       mockFetch(
         () =>
@@ -271,7 +271,7 @@ describe("Network / transport errors", () => {
     });
   });
 
-  it("invalid JSON body → code: bad_response", async () => {
+  it("invalid JSON body \u2192 code: bad_response", async () => {
     const client = makeClient(
       mockFetch(
         () =>
@@ -286,14 +286,14 @@ describe("Network / transport errors", () => {
     });
   });
 
-  it("JSON object missing required evaluate fields → code: bad_response", async () => {
+  it("JSON object missing required evaluate fields \u2192 code: bad_response", async () => {
     const client = makeClient(mockFetch(() => jsonResponse({ foo: "bar" })));
     await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
       code: "bad_response",
     });
   });
 
-  it("JSON object missing required verifyPermit fields → code: bad_response", async () => {
+  it("JSON object missing required verifyPermit fields \u2192 code: bad_response", async () => {
     const client = makeClient(mockFetch(() => jsonResponse({ outcome: "ok" })));
     await expect(client.verifyPermit({ permitId: "x" })).rejects.toMatchObject({
       code: "bad_response",
