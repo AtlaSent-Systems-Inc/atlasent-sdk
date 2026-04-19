@@ -34,8 +34,11 @@
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run typecheck && npm test && npm run build",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:examples": "tsc --noEmit --project tsconfig.examples.json"
   },
   "keywords": [
     "atlasent",
@@ -60,6 +63,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
+    "@vitest/coverage-v8": "^1.5.0",
     "tsup": "^8.0.2",
     "tsx": "^4.7.2",
     "typescript": "^5.4.5",

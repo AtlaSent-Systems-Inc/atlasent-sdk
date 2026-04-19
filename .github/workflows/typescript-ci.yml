@@ -40,11 +40,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
+      - name: Typecheck (src + test)
         run: npm run typecheck
 
-      - name: Test
-        run: npm test
+      - name: Typecheck examples
+        run: npm run typecheck:examples
+
+      - name: Test (with coverage)
+        run: npm run test:coverage
 
       - name: Build
         run: npm run build

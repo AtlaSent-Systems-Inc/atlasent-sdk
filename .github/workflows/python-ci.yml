@@ -46,5 +46,21 @@ jobs:
       - name: Check formatting with black
         run: black --check atlasent/ tests/
 
-      - name: Run tests
-        run: pytest tests/ -v
+      - name: Run tests (with coverage)
+        run: pytest tests/ -v --cov --cov-report=term --cov-report=xml
+
+      - name: Examples parse-check (no import side effects)
+        run: |
+          python - <<'PY'
+          import ast, sys
+          from pathlib import Path
+          ok = True
+          for f in sorted(Path("examples").glob("*.py")):
+              try:
+                  ast.parse(f.read_text())
+                  print(f"  OK  {f}")
+              except SyntaxError as e:
+                  print(f"  FAIL {f}: {e}")
+                  ok = False
+          sys.exit(0 if ok else 1)
+          PY
