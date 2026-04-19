@@ -34,6 +34,7 @@ dev = [
     "pytest>=7.0",
     "pytest-mock>=3.10",
     "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
     "black>=23.0",
     "ruff>=0.1.0",
 ]
@@ -64,3 +65,23 @@ target-version = ["py310"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: hits the real AtlaSent API (skipped unless ATLASENT_API_KEY is set)",
+]
+
+[tool.coverage.run]
+source = ["atlasent"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]
+# Floor set to current-minus-small-margin so CI catches regressions.
+# V1 target per docs/V1_PLAN.md is 95 — ratchet up as tests are added
+# for async_client error paths and the guard decorators.
+fail_under = 88
+show_missing = true
