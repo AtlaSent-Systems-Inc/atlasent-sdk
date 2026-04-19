@@ -1,19 +1,12 @@
-> [!NOTE]
-> **Repo rename pending:** This repo is named `atlasent-sdk-python` but contains `python/`, `typescript/`, and `contract/` — it is a multi-language SDK monorepo. It will be renamed to `atlasent-sdk`.
->
-> - **Python SDK** (`pip install atlasent`) — canonical here, in [`./python/`](./python/)
-> - **TypeScript SDK** (`npm install @atlasent/sdk`) — canonical in [`atlasent-sdk-typescript`](https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-typescript)
-> - **`./typescript/`** — deprecated in favour of `atlasent-sdk-typescript`
-
 # AtlaSent SDKs
 
 Execution-time authorization for AI agents in GxP-regulated environments.
 Fail-closed by design — no action proceeds without an explicit permit.
 
-| Language   | Package           | Install                    | Canonical repo                                                                   |
-|------------|-------------------|----------------------------|----------------------------------------------------------------------------------|
-| Python     | `atlasent`        | `pip install atlasent`     | this repo → [`./python/`](./python/)                                             |
-| TypeScript | `@atlasent/sdk`   | `npm i @atlasent/sdk`      | [`atlasent-sdk-typescript`](https://github.com/AtlaSent-Systems-Inc/atlasent-sdk-typescript) |
+| Language   | Package           | Install                    | Source                                   |
+|------------|-------------------|----------------------------|------------------------------------------|
+| Python     | `atlasent`        | `pip install atlasent`     | [`./python/`](./python/)                 |
+| TypeScript | `@atlasent/sdk`   | `npm i @atlasent/sdk`      | [`./typescript/`](./typescript/)         |
 
 ## 30-second quickstart
 
@@ -34,17 +27,17 @@ if result.permitted:
 ### TypeScript
 
 ```ts
-import { configure, authorize } from "@atlasent/sdk";
+import { AtlaSentClient } from "@atlasent/sdk";
 
-configure({ apiKey: process.env.ATLASENT_API_KEY! });
+const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
 
-const result = await authorize({
+const result = await client.evaluate({
   agent: "clinical-data-agent",
   action: "modify_patient_record",
   context: { user: "dr_smith", environment: "production" },
 });
 
-if (result.permitted) {
+if (result.decision === "ALLOW") {
   // execute action
 }
 ```
@@ -61,9 +54,9 @@ Full wire-format parity: a Python permit token is verifiable from the TypeScript
 ## Repository layout
 
 ```
-atlasent-sdk/  (this repo — currently named atlasent-sdk-python)
+atlasent-sdk/
 ├── python/         # Python SDK — pip install atlasent
-├── typescript/     # DEPRECATED — use atlasent-sdk-typescript instead
+├── typescript/     # TypeScript SDK — npm i @atlasent/sdk
 ├── contract/       # Shared API contract — schemas, vectors, drift detector
 └── .github/
     └── workflows/  # per-language CI, path-filtered
