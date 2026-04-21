@@ -219,6 +219,64 @@ describe("HTTP error mapping", () => {
     });
   });
 
+  it("429 → retryAfterMs parsed from HTTP-date Retry-After header", async () => {
+    const future = new Date(Date.now() + 45_000).toUTCString();
+    const client = makeClient(
+      mockFetch(() =>
+        new Response("too many", {
+          status: 429,
+          headers: { "Retry-After": future },
+        }),
+      ),
+    );
+    let thrown: AtlaSentError | undefined;
+    try {
+      await client.evaluate({ agent: "a", action: "b" });
+    } catch (err) {
+      thrown = err as AtlaSentError;
+    }
+    expect(thrown).toBeDefined();
+    expect(thrown!.code).toBe("rate_limited");
+    // Allow some slack for scheduling; the header encodes ~45s out.
+    expect(thrown!.retryAfterMs).toBeGreaterThan(30_000);
+    expect(thrown!.retryAfterMs).toBeLessThanOrEqual(45_000);
+  });
+
+  it("429 → Retry-After HTTP-date in the past clamps to 0", async () => {
+    const past = new Date(Date.now() - 10_000).toUTCString();
+    const client = makeClient(
+      mockFetch(() =>
+        new Response("too many", {
+          status: 429,
+          headers: { "Retry-After": past },
+        }),
+      ),
+    );
+    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+      code: "rate_limited",
+      retryAfterMs: 0,
+    });
+  });
+
+  it("500 with a body whose .text() throws still yields code: server_error", async () => {
+    // Simulate a Response whose body stream errors on consumption — the
+    // SDK should swallow the read failure and fall back to a default
+    // server_error message rather than crash.
+    const client = makeClient(
+      mockFetch(() => {
+        const response = new Response(null, { status: 500 });
+        Object.defineProperty(response, "text", {
+          value: () => Promise.reject(new Error("stream broken")),
+        });
+        return response;
+      }),
+    );
+    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+      status: 500,
+      code: "server_error",
+    });
+  });
+
   it("500 → AtlaSentError(code: server_error)", async () => {
     const client = makeClient(
       mockFetch(() => new Response("oops", { status: 500 })),
@@ -263,6 +321,21 @@ describe("Network / transport errors", () => {
     const client = makeClient(
       mockFetch(() => {
         const err = new DOMException("timed out", "TimeoutError");
+        throw err;
+      }),
+    );
+    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+      code: "timeout",
+    });
+  });
+
+  it("generic AbortError (non-DOMException) also maps to code: timeout", async () => {
+    // Some runtimes surface an Error whose name is "AbortError" rather
+    // than a DOMException("TimeoutError"). Both should map to timeout.
+    const client = makeClient(
+      mockFetch(() => {
+        const err = new Error("aborted");
+        err.name = "AbortError";
         throw err;
       }),
     );
