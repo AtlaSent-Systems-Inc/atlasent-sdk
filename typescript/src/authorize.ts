@@ -14,7 +14,7 @@
  */
 
 import { AtlaSentClient } from "./client.js";
-import { AtlaSentError } from "./errors.js";
+import { fromEnv } from "./config.js";
 import type {
   AtlaSentClientOptions,
   AuthorizationResult,
@@ -46,17 +46,9 @@ export function resetDefaultClient(): void {
 
 function getDefaultClient(): AtlaSentClient {
   if (defaultClient) return defaultClient;
-  const envKey = typeof process !== "undefined" ? process.env.ATLASENT_API_KEY : undefined;
-  if (!envKey) {
-    throw new AtlaSentError(
-      "No default client configured. Call configure({ apiKey }) or set ATLASENT_API_KEY.",
-      { code: "invalid_api_key" },
-    );
-  }
-  const options: AtlaSentClientOptions = { apiKey: envKey };
-  const envBase = typeof process !== "undefined" ? process.env.ATLASENT_BASE_URL : undefined;
-  if (envBase) options.baseUrl = envBase;
-  defaultClient = new AtlaSentClient(options);
+  // fromEnv() throws a well-formed AtlaSentError when ATLASENT_API_KEY
+  // is missing, so no additional branch is needed here.
+  defaultClient = new AtlaSentClient(fromEnv());
   return defaultClient;
 }
 

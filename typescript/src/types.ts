@@ -122,6 +122,12 @@ export interface AtlaSentClientOptions {
    */
   cache?: EvaluateCache;
   /**
+   * Optional structured logger. Defaults to a no-op. Pass `consoleLogger`
+   * (or any object matching the {@link Logger} interface) to surface
+   * retries, cache hits, and deny decisions.
+   */
+  logger?: import("./logger.js").Logger;
+  /**
    * Inject a fetch implementation (primarily for testing).
    * Defaults to `globalThis.fetch`.
    */

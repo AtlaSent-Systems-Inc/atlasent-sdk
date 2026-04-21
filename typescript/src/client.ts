@@ -21,6 +21,7 @@ import {
   type AtlaSentErrorCode,
   type AtlaSentErrorInit,
 } from "./errors.js";
+import { noopLogger, type Logger } from "./logger.js";
 import type {
   AtlaSentClientOptions,
   AuthorizationResult,
@@ -37,7 +38,7 @@ const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_BACKOFF_MS = 500;
-const SDK_VERSION = "0.1.0";
+const SDK_VERSION = "1.2.0";
 
 /** Raw JSON shape received from `POST /v1-evaluate`. */
 interface EvaluateWire {
@@ -63,6 +64,7 @@ export class AtlaSentClient {
   private readonly maxRetries: number;
   private readonly retryBackoffMs: number;
   private readonly cache: EvaluateCache | undefined;
+  private readonly logger: Logger;
   private readonly fetchImpl: typeof fetch;
   private readonly sleep: (ms: number) => Promise<void>;
 
@@ -78,6 +80,7 @@ export class AtlaSentClient {
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
     this.retryBackoffMs = options.retryBackoffMs ?? DEFAULT_RETRY_BACKOFF_MS;
     this.cache = options.cache;
+    this.logger = options.logger ?? noopLogger;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.sleep = options.sleep ?? defaultSleep;
   }
@@ -98,9 +101,17 @@ export class AtlaSentClient {
 
     if (this.cache && cacheKey) {
       const hit = this.cache.get(cacheKey);
-      if (hit !== undefined) return hit;
+      if (hit !== undefined) {
+        this.logger.debug("evaluate cache hit", {
+          cacheKey,
+          agent: input.agent,
+          action: input.action,
+        });
+        return hit;
+      }
     }
 
+    this.logger.debug("evaluate", { agent: input.agent, action: input.action });
     const body = {
       action: input.action,
       agent: input.agent,
@@ -124,10 +135,22 @@ export class AtlaSentClient {
       timestamp: wire.timestamp ?? "",
     };
 
-    // Only cache permits: caching a DENY would block legitimate
-    // re-evaluation after policy changes.
-    if (this.cache && cacheKey && result.decision === "ALLOW") {
-      this.cache.put(cacheKey, result);
+    if (result.decision === "ALLOW") {
+      this.logger.info("evaluate permitted", {
+        agent: input.agent,
+        action: input.action,
+        permitId: result.permitId,
+      });
+      // Only cache permits: caching a DENY would block legitimate
+      // re-evaluation after policy changes.
+      if (this.cache && cacheKey) this.cache.put(cacheKey, result);
+    } else {
+      this.logger.warn("evaluate denied", {
+        agent: input.agent,
+        action: input.action,
+        permitId: result.permitId,
+        reason: result.reason,
+      });
     }
 
     return result;
@@ -289,6 +312,13 @@ export class AtlaSentClient {
         const mapped = mapFetchError(err, requestId);
         if (shouldRetry(mapped.code) && attempt < this.maxRetries) {
           lastTransient = mapped;
+          this.logger.warn("request retrying", {
+            path,
+            attempt: attempt + 1,
+            maxAttempts: 1 + this.maxRetries,
+            code: mapped.code,
+            requestId,
+          });
           await this.sleep(this.retryBackoffMs * 2 ** attempt);
           continue;
         }
@@ -299,6 +329,14 @@ export class AtlaSentClient {
         const httpError = await buildHttpError(response, requestId);
         if (shouldRetry(httpError.code) && attempt < this.maxRetries) {
           lastTransient = httpError;
+          this.logger.warn("request retrying", {
+            path,
+            attempt: attempt + 1,
+            maxAttempts: 1 + this.maxRetries,
+            status: httpError.status,
+            code: httpError.code,
+            requestId,
+          });
           await this.sleep(this.retryBackoffMs * 2 ** attempt);
           continue;
         }

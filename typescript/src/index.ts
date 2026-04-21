@@ -11,6 +11,9 @@
  *
  * And module-level helpers backed by a lazily-initialized default
  * client — see {@link configure}, {@link authorize}, {@link gate}.
+ *
+ * Plus framework guards and an env-based config reader — see
+ * {@link expressGuard}, {@link fastifyGuard}, {@link fromEnv}.
  */
 
 export { AtlaSentClient } from "./client.js";
@@ -22,6 +25,20 @@ export {
   type AtlaSentErrorInit,
   type PermissionDeniedErrorInit,
 } from "./errors.js";
+export {
+  consoleLogger,
+  noopLogger,
+  type Logger,
+} from "./logger.js";
+export { fromEnv, type FromEnvOptions } from "./config.js";
+export {
+  expressGuard,
+  fastifyGuard,
+  guard,
+  type ExpressLikeNext,
+  type ExpressLikeRequest,
+  type GuardOptions,
+} from "./middleware.js";
 export type {
   AtlaSentClientOptions,
   AuthorizationResult,

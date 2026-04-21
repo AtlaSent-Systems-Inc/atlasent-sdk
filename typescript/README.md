@@ -1,6 +1,6 @@
 # @atlasent/sdk
 
-Execution-time authorization for AI agents, in TypeScript. Two methods, zero runtime dependencies, one function call per decision.
+Execution-time authorization for AI agents, in TypeScript. Zero runtime dependencies, one function call per decision — or wrap a route handler in a single line with the Express / Fastify guards.
 
 ```bash
 npm i @atlasent/sdk
@@ -28,7 +28,9 @@ if (result.decision === "ALLOW") {
 
 That's it. `evaluate()` calls the AtlaSent policy engine, generates a hash-chained audit entry (21 CFR Part 11 / GxP-ready), and returns a result you branch on. A clean `DENY` is **not** thrown — network / server / auth failures are.
 
-## Two methods, that's the whole surface
+## The surface
+
+Two canonical endpoints, plus two convenience compositions:
 
 ```ts
 client.evaluate({ agent, action, context? })
@@ -36,9 +38,102 @@ client.evaluate({ agent, action, context? })
 
 client.verifyPermit({ permitId, agent?, action?, context? })
   // → { verified, outcome, permitHash, timestamp }
+
+client.gate({ agent, action, context? })
+  // → { evaluation, verification }  — throws PermissionDeniedError on deny
+
+client.authorize({ agent, action, context?, verify?, raiseOnDeny? })
+  // → { permitted, permitId, permitHash, auditHash, verified, reason, ... }
 ```
 
-`verifyPermit()` confirms a previously-issued permit end-to-end — use it as a second-factor gate (e.g., in a CI deploy pipeline before side-effects run).
+`verifyPermit()` confirms a previously-issued permit end-to-end. `gate()` is the throw-on-deny shortcut for route handlers. `authorize()` is the result-based one-call API for code that prefers branching over catching.
+
+## One-call authorization
+
+```ts
+const result = await client.authorize({
+  agent: "clinical-data-agent",
+  action: "modify_patient_record",
+  context: { user: "dr_smith" },
+});
+
+if (!result.permitted) {
+  console.warn("Denied:", result.reason);
+  return;
+}
+// result.permitHash is populated — a verified permit is in hand.
+```
+
+Pass `raiseOnDeny: true` for exception-style flow, or `verify: false` to skip the second round-trip.
+
+## Decision cache
+
+`TTLCache` deduplicates `evaluate()` calls for the same `(agent, action, context)` within a short window. Only `ALLOW` results are cached — a `DENY` is never cached, so policy changes take effect immediately:
+
+```ts
+import { AtlaSentClient, TTLCache } from "@atlasent/sdk";
+
+const client = new AtlaSentClient({
+  apiKey: process.env.ATLASENT_API_KEY!,
+  cache: new TTLCache({ ttlMs: 30_000 }),
+});
+```
+
+The cache key derivation is byte-compatible with the Python SDK, so a single cache entry is addressable across languages (useful if you proxy from one to the other).
+
+## Express / Fastify guards
+
+```ts
+import { AtlaSentClient, expressGuard } from "@atlasent/sdk";
+
+const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
+
+app.post(
+  "/modify-record",
+  expressGuard(client, {
+    action: "modify_patient_record",
+    agent: (req) => req.user.id,
+    context: (req) => ({ patientId: req.params.patientId }),
+  }),
+  (req, res) => {
+    // req.atlasent holds the verified GateResult
+    res.json({ permitHash: req.atlasent!.verification.permitHash });
+  },
+);
+```
+
+`fastifyGuard()` is identical in shape — use it as a `preHandler`. A generic `guard()` HOF is also exported for non-framework code.
+
+## Retries
+
+`AtlaSentClient` retries transient failures (5xx, timeouts, network) with exponential backoff. It does **not** retry on 401/403/429/4xx (those are policy / client errors, not transients).
+
+```ts
+new AtlaSentClient({
+  apiKey: "ask_live_...",
+  maxRetries: 2,       // default
+  retryBackoffMs: 500, // default (doubles each attempt: 500, 1000, 2000…)
+});
+```
+
+## Environment-based config
+
+```ts
+import { AtlaSentClient, fromEnv } from "@atlasent/sdk";
+
+const client = new AtlaSentClient(fromEnv());
+// Reads: ATLASENT_API_KEY (required),
+//        ATLASENT_BASE_URL, ATLASENT_TIMEOUT(_MS),
+//        ATLASENT_MAX_RETRIES, ATLASENT_RETRY_BACKOFF
+```
+
+Or, for script-style code, call `configure()` once and use the top-level `authorize()` / `gate()` helpers:
+
+```ts
+import { configure, authorize } from "@atlasent/sdk";
+configure({ apiKey: process.env.ATLASENT_API_KEY! });
+const result = await authorize({ agent: "a", action: "b" });
+```
 
 ## CI deploy-gate pattern
 
@@ -76,11 +171,24 @@ See [`examples/deploy-gate.ts`](./examples/deploy-gate.ts) for a complete CI-sha
 
 ```ts
 new AtlaSentClient({
-  apiKey: "ask_live_...",           // required
+  apiKey: "ask_live_...",             // required
   baseUrl: "https://api.atlasent.io", // default
   timeoutMs: 10_000,                  // default — per-request
+  maxRetries: 2,                      // default — 5xx / timeout / network
+  retryBackoffMs: 500,                // default — doubled per attempt
+  cache: new TTLCache(),              // optional — dedupe repeated ALLOWs
+  logger: consoleLogger,              // optional — noopLogger by default
   fetch: customFetch,                 // default: globalThis.fetch
 });
+```
+
+## Structured logging
+
+Pass any `{ debug, info, warn, error }` object as `logger`. The client emits structured fields at key points (retry, cache hit, DENY, permit issued) — drop in `consoleLogger` for local debugging, or wire your own pino / winston / Datadog adapter:
+
+```ts
+import { AtlaSentClient, consoleLogger } from "@atlasent/sdk";
+const client = new AtlaSentClient({ apiKey, logger: consoleLogger });
 ```
 
 ## Error handling
