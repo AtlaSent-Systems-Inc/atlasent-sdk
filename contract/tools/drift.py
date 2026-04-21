@@ -92,7 +92,12 @@ def _python_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
 # ── TypeScript SDK introspection ──────────────────────────────────────
 
 
-_BODY_KEY_RE = re.compile(r"(?m)^\s*([a-z_][a-z0-9_]*)\s*:")
+# Matches object-literal keys in both forms:
+#   action: input.action,   ← explicit key: value
+#   context,                ← ES2015 shorthand (key equals variable name)
+# Trailing `[:,]` gates on the terminator so we don't accept bare
+# identifiers from statements like `const context = ...`.
+_BODY_KEY_RE = re.compile(r"(?m)^\s*([a-z_][a-z0-9_]*)\s*[:,]")
 
 _INTERFACE_RE = re.compile(
     r"interface\s+(?P<name>\w+)\s*\{(?P<body>[^}]*)\}",

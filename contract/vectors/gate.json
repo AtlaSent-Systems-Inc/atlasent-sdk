@@ -1,0 +1,170 @@
+{
+  "description": "Round-trip vectors for client.gate() — evaluate + verify composed into one call. Each vector's `wire_calls` array lists the HTTP round-trips the SDK MUST make in order. gate() MUST throw/raise a permission-denied error on DENY without calling verify.",
+  "vectors": [
+    {
+      "name": "gate_allow_happy",
+      "description": "Happy path: evaluate says ALLOW, SDK immediately verifies the permit, returns GateResult with both legs populated.",
+      "sdk_input": {
+        "agent": "clinical-data-agent",
+        "action": "modify_patient_record",
+        "context": {
+          "user": "dr_smith",
+          "environment": "production",
+          "patient_id": "PT-001",
+          "change_reason": "Correct date-of-birth"
+        }
+      },
+      "api_key": "ask_live_test_key",
+      "wire_calls": [
+        {
+          "path": "/v1-evaluate",
+          "request": {
+            "action": "modify_patient_record",
+            "agent": "clinical-data-agent",
+            "context": {
+              "user": "dr_smith",
+              "environment": "production",
+              "patient_id": "PT-001",
+              "change_reason": "Correct date-of-birth"
+            },
+            "api_key": "ask_live_test_key"
+          },
+          "response": {
+            "permitted": true,
+            "decision_id": "dec_gate_allow_001",
+            "reason": "Operator authorized under GxP policy",
+            "audit_hash": "hash_gate_001",
+            "timestamp": "2026-04-17T10:00:00Z"
+          }
+        },
+        {
+          "path": "/v1-verify-permit",
+          "request": {
+            "decision_id": "dec_gate_allow_001",
+            "action": "modify_patient_record",
+            "agent": "clinical-data-agent",
+            "context": {
+              "user": "dr_smith",
+              "environment": "production",
+              "patient_id": "PT-001",
+              "change_reason": "Correct date-of-birth"
+            },
+            "api_key": "ask_live_test_key"
+          },
+          "response": {
+            "verified": true,
+            "outcome": "verified",
+            "permit_hash": "permit_gate_001_hash",
+            "timestamp": "2026-04-17T10:00:01Z"
+          }
+        }
+      ],
+      "sdk_output": {
+        "evaluation": {
+          "decision": "ALLOW",
+          "permit_id": "dec_gate_allow_001",
+          "reason": "Operator authorized under GxP policy",
+          "audit_hash": "hash_gate_001",
+          "timestamp": "2026-04-17T10:00:00Z"
+        },
+        "verification": {
+          "verified": true,
+          "outcome": "verified",
+          "permit_hash": "permit_gate_001_hash",
+          "timestamp": "2026-04-17T10:00:01Z"
+        }
+      }
+    },
+    {
+      "name": "gate_allow_no_context",
+      "description": "No context supplied by caller. SDK MUST default context to {} on BOTH the evaluate and verify wire bodies.",
+      "sdk_input": {
+        "agent": "ci-bot",
+        "action": "read_build_status"
+      },
+      "api_key": "ask_live_test_key",
+      "wire_calls": [
+        {
+          "path": "/v1-evaluate",
+          "request": {
+            "action": "read_build_status",
+            "agent": "ci-bot",
+            "context": {},
+            "api_key": "ask_live_test_key"
+          },
+          "response": {
+            "permitted": true,
+            "decision_id": "dec_gate_nobody_002",
+            "reason": "",
+            "audit_hash": "hash_gate_002",
+            "timestamp": "2026-04-17T11:00:00Z"
+          }
+        },
+        {
+          "path": "/v1-verify-permit",
+          "request": {
+            "decision_id": "dec_gate_nobody_002",
+            "action": "read_build_status",
+            "agent": "ci-bot",
+            "context": {},
+            "api_key": "ask_live_test_key"
+          },
+          "response": {
+            "verified": true,
+            "outcome": "verified",
+            "permit_hash": "permit_gate_002_hash",
+            "timestamp": "2026-04-17T11:00:01Z"
+          }
+        }
+      ],
+      "sdk_output": {
+        "evaluation": {
+          "decision": "ALLOW",
+          "permit_id": "dec_gate_nobody_002",
+          "reason": "",
+          "audit_hash": "hash_gate_002",
+          "timestamp": "2026-04-17T11:00:00Z"
+        },
+        "verification": {
+          "verified": true,
+          "outcome": "verified",
+          "permit_hash": "permit_gate_002_hash",
+          "timestamp": "2026-04-17T11:00:01Z"
+        }
+      }
+    },
+    {
+      "name": "gate_deny_raises",
+      "description": "DENY decision: gate() MUST raise a permission-denied error and MUST NOT call /v1-verify-permit. The error carries the decision_id + reason so the caller can audit.",
+      "sdk_input": {
+        "agent": "finance-agent",
+        "action": "wire_funds",
+        "context": {"amount_usd": 99999999}
+      },
+      "api_key": "ask_live_test_key",
+      "wire_calls": [
+        {
+          "path": "/v1-evaluate",
+          "request": {
+            "action": "wire_funds",
+            "agent": "finance-agent",
+            "context": {"amount_usd": 99999999},
+            "api_key": "ask_live_test_key"
+          },
+          "response": {
+            "permitted": false,
+            "decision_id": "dec_gate_deny_003",
+            "reason": "Amount exceeds daily limit for agent role",
+            "audit_hash": "",
+            "timestamp": "2026-04-17T12:00:00Z"
+          }
+        }
+      ],
+      "sdk_error": {
+        "kind": "permission_denied",
+        "permit_id": "dec_gate_deny_003",
+        "reason_contains": "daily limit"
+      }
+    }
+  ]
+}

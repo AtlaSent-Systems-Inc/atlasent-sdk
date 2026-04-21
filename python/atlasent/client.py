@@ -287,6 +287,7 @@ class AtlaSentClient:
                     reason=exc.reason,
                     response_body=exc.response_body,
                 ) from None
+            body = exc.response_body or {}
             return AuthorizationResult(
                 permitted=False,
                 agent=agent,
@@ -294,7 +295,8 @@ class AtlaSentClient:
                 context=dict(ctx),
                 reason=exc.reason,
                 permit_token=exc.permit_token,
-                raw=exc.response_body or {},
+                timestamp=str(body.get("timestamp", "")),
+                raw=body,
             )
 
         permit_hash = ""

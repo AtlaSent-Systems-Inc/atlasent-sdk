@@ -12,7 +12,11 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
-import { AtlaSentClient, AtlaSentError } from "../src/index.js";
+import {
+  AtlaSentClient,
+  AtlaSentError,
+  PermissionDeniedError,
+} from "../src/index.js";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const VECTORS_DIR = resolve(HERE, "..", "..", "contract", "vectors");
@@ -252,6 +256,202 @@ describe("error vectors", () => {
           expect(err.message).toContain(vector.sdk_error.message_contains!);
         });
       }
+    });
+  }
+});
+
+// ── composed-call helpers (gate.json, authorize.json) ────────────────
+
+interface WireCall {
+  path: "/v1-evaluate" | "/v1-verify-permit";
+  request: Record<string, unknown>;
+  response: Record<string, unknown>;
+}
+
+interface ComposedVectorSdkOutputGate {
+  evaluation: {
+    decision: "ALLOW" | "DENY";
+    permit_id: string;
+    reason: string;
+    audit_hash: string;
+    timestamp: string;
+  };
+  verification: {
+    verified: boolean;
+    outcome: string;
+    permit_hash: string;
+    timestamp: string;
+  };
+}
+
+interface GateVector {
+  name: string;
+  sdk_input: { agent: string; action: string; context?: Record<string, unknown> };
+  api_key: string;
+  wire_calls: WireCall[];
+  sdk_output?: ComposedVectorSdkOutputGate;
+  sdk_error?: { kind: string; permit_id?: string; reason_contains?: string };
+}
+
+interface AuthorizeVector {
+  name: string;
+  sdk_input: {
+    agent: string;
+    action: string;
+    context?: Record<string, unknown>;
+    verify?: boolean;
+    raise_on_deny?: boolean;
+  };
+  api_key: string;
+  wire_calls: WireCall[];
+  sdk_output?: {
+    permitted: boolean;
+    agent: string;
+    action: string;
+    context: Record<string, unknown>;
+    reason: string;
+    permit_id: string;
+    audit_hash: string;
+    permit_hash: string;
+    verified: boolean;
+    timestamp: string;
+  };
+  sdk_error?: { kind: string; permit_id?: string; reason_contains?: string };
+}
+
+/**
+ * A fetch mock that serves each vector's `wire_calls` in order. Each
+ * call asserts the path + body match the vector up-front, so a
+ * single mismatch surfaces in the failing test rather than leaking
+ * into downstream assertions.
+ */
+function mockFromWireCalls(
+  calls: WireCall[],
+): { fetch: typeof fetch; sent: Array<{ url: string; body: Record<string, unknown> }> } {
+  const sent: Array<{ url: string; body: Record<string, unknown> }> = [];
+  let i = 0;
+  const impl = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    const body = JSON.parse((init?.body as string | undefined) ?? "{}");
+    sent.push({ url, body });
+    const spec = calls[i++];
+    if (!spec) {
+      throw new Error(`contract vector made an unexpected extra HTTP call (#${i}) to ${url}`);
+    }
+    // Assert up-front so the failing vector is clear.
+    expect(url.endsWith(spec.path)).toBe(true);
+    expect(body).toEqual(spec.request);
+    return jsonResponse(spec.response);
+  }) as unknown as typeof fetch;
+  return { fetch: impl, sent };
+}
+
+// ── gate.json ────────────────────────────────────────────────────────
+
+describe("gate vectors", () => {
+  for (const vector of loadVectors<GateVector>("gate.json")) {
+    it(vector.name, async () => {
+      const { fetch: fetchImpl, sent } = mockFromWireCalls(vector.wire_calls);
+      const client = makeClient(fetchImpl);
+
+      const input: { agent: string; action: string; context?: Record<string, unknown> } = {
+        agent: vector.sdk_input.agent,
+        action: vector.sdk_input.action,
+      };
+      if (vector.sdk_input.context !== undefined) input.context = vector.sdk_input.context;
+
+      if (vector.sdk_error) {
+        const err = await client.gate(input).then(
+          () => null,
+          (e: unknown) => e,
+        );
+        expect(err).toBeInstanceOf(PermissionDeniedError);
+        const denied = err as PermissionDeniedError;
+        expect(denied.code).toBe("forbidden");
+        if (vector.sdk_error.permit_id !== undefined) {
+          expect(denied.permitId).toBe(vector.sdk_error.permit_id);
+        }
+        if (vector.sdk_error.reason_contains !== undefined) {
+          expect(denied.reason).toContain(vector.sdk_error.reason_contains);
+        }
+      } else {
+        const result = await client.gate(input);
+        const expected = vector.sdk_output!;
+        expect(result.evaluation.decision).toBe(expected.evaluation.decision);
+        expect(result.evaluation.permitId).toBe(expected.evaluation.permit_id);
+        expect(result.evaluation.reason).toBe(expected.evaluation.reason);
+        expect(result.evaluation.auditHash).toBe(expected.evaluation.audit_hash);
+        expect(result.evaluation.timestamp).toBe(expected.evaluation.timestamp);
+        expect(result.verification.verified).toBe(expected.verification.verified);
+        expect(result.verification.outcome).toBe(expected.verification.outcome);
+        expect(result.verification.permitHash).toBe(expected.verification.permit_hash);
+        expect(result.verification.timestamp).toBe(expected.verification.timestamp);
+      }
+
+      // Confirm the SDK made exactly the expected sequence of calls.
+      expect(sent).toHaveLength(vector.wire_calls.length);
+    });
+  }
+});
+
+// ── authorize.json ───────────────────────────────────────────────────
+
+describe("authorize vectors", () => {
+  for (const vector of loadVectors<AuthorizeVector>("authorize.json")) {
+    it(vector.name, async () => {
+      const { fetch: fetchImpl, sent } = mockFromWireCalls(vector.wire_calls);
+      const client = makeClient(fetchImpl);
+
+      const input: {
+        agent: string;
+        action: string;
+        context?: Record<string, unknown>;
+        verify?: boolean;
+        raiseOnDeny?: boolean;
+      } = {
+        agent: vector.sdk_input.agent,
+        action: vector.sdk_input.action,
+      };
+      if (vector.sdk_input.context !== undefined) input.context = vector.sdk_input.context;
+      if (vector.sdk_input.verify !== undefined) input.verify = vector.sdk_input.verify;
+      if (vector.sdk_input.raise_on_deny !== undefined) {
+        input.raiseOnDeny = vector.sdk_input.raise_on_deny;
+      }
+
+      if (vector.sdk_error) {
+        const err = await client.authorize(input).then(
+          () => null,
+          (e: unknown) => e,
+        );
+        expect(err).toBeInstanceOf(PermissionDeniedError);
+        const denied = err as PermissionDeniedError;
+        if (vector.sdk_error.permit_id !== undefined) {
+          expect(denied.permitId).toBe(vector.sdk_error.permit_id);
+        }
+        if (vector.sdk_error.reason_contains !== undefined) {
+          expect(denied.reason).toContain(vector.sdk_error.reason_contains);
+        }
+      } else {
+        const result = await client.authorize(input);
+        const expected = vector.sdk_output!;
+        expect(result.permitted).toBe(expected.permitted);
+        expect(result.agent).toBe(expected.agent);
+        expect(result.action).toBe(expected.action);
+        expect(result.context).toEqual(expected.context);
+        expect(result.reason).toBe(expected.reason);
+        expect(result.permitId).toBe(expected.permit_id);
+        expect(result.auditHash).toBe(expected.audit_hash);
+        expect(result.permitHash).toBe(expected.permit_hash);
+        expect(result.verified).toBe(expected.verified);
+        expect(result.timestamp).toBe(expected.timestamp);
+      }
+
+      expect(sent).toHaveLength(vector.wire_calls.length);
     });
   }
 });

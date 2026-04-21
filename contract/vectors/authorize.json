@@ -1,0 +1,194 @@
+{
+  "description": "Round-trip vectors for client.authorize() — the result-based one-call API. Unlike gate(), authorize() returns an AuthorizationResult whose `permitted` field tells you whether to proceed, without throwing on deny UNLESS the caller passes raise_on_deny=true. Field names in `sdk_output` are the language-agnostic snake_case; each SDK maps them to idiomatic casing.",
+  "vectors": [
+    {
+      "name": "authorize_permit_verify_on",
+      "description": "Default path: verify=true, permit granted. SDK calls both endpoints and returns AuthorizationResult with permit_hash populated and verified=true.",
+      "sdk_input": {
+        "agent": "clinical-data-agent",
+        "action": "modify_patient_record",
+        "context": {
+          "user": "dr_smith",
+          "environment": "production"
+        },
+        "verify": true,
+        "raise_on_deny": false
+      },
+      "api_key": "ask_live_test_key",
+      "wire_calls": [
+        {
+          "path": "/v1-evaluate",
+          "request": {
+            "action": "modify_patient_record",
+            "agent": "clinical-data-agent",
+            "context": {
+              "user": "dr_smith",
+              "environment": "production"
+            },
+            "api_key": "ask_live_test_key"
+          },
+          "response": {
+            "permitted": true,
+            "decision_id": "dec_auth_allow_001",
+            "reason": "Operator authorized under GxP policy",
+            "audit_hash": "hash_auth_001",
+            "timestamp": "2026-04-17T10:00:00Z"
+          }
+        },
+        {
+          "path": "/v1-verify-permit",
+          "request": {
+            "decision_id": "dec_auth_allow_001",
+            "action": "modify_patient_record",
+            "agent": "clinical-data-agent",
+            "context": {
+              "user": "dr_smith",
+              "environment": "production"
+            },
+            "api_key": "ask_live_test_key"
+          },
+          "response": {
+            "verified": true,
+            "outcome": "verified",
+            "permit_hash": "permit_auth_001_hash",
+            "timestamp": "2026-04-17T10:00:01Z"
+          }
+        }
+      ],
+      "sdk_output": {
+        "permitted": true,
+        "agent": "clinical-data-agent",
+        "action": "modify_patient_record",
+        "context": {
+          "user": "dr_smith",
+          "environment": "production"
+        },
+        "reason": "Operator authorized under GxP policy",
+        "permit_id": "dec_auth_allow_001",
+        "audit_hash": "hash_auth_001",
+        "permit_hash": "permit_auth_001_hash",
+        "verified": true,
+        "timestamp": "2026-04-17T10:00:00Z"
+      }
+    },
+    {
+      "name": "authorize_permit_verify_off",
+      "description": "verify=false: SDK MUST skip the /v1-verify-permit round-trip. permit_hash is empty and verified=false in the result even though the action is permitted.",
+      "sdk_input": {
+        "agent": "clinical-data-agent",
+        "action": "read_patient_record",
+        "context": {"patient_id": "PT-001"},
+        "verify": false,
+        "raise_on_deny": false
+      },
+      "api_key": "ask_live_test_key",
+      "wire_calls": [
+        {
+          "path": "/v1-evaluate",
+          "request": {
+            "action": "read_patient_record",
+            "agent": "clinical-data-agent",
+            "context": {"patient_id": "PT-001"},
+            "api_key": "ask_live_test_key"
+          },
+          "response": {
+            "permitted": true,
+            "decision_id": "dec_auth_allow_002",
+            "reason": "",
+            "audit_hash": "hash_auth_002",
+            "timestamp": "2026-04-17T10:05:00Z"
+          }
+        }
+      ],
+      "sdk_output": {
+        "permitted": true,
+        "agent": "clinical-data-agent",
+        "action": "read_patient_record",
+        "context": {"patient_id": "PT-001"},
+        "reason": "",
+        "permit_id": "dec_auth_allow_002",
+        "audit_hash": "hash_auth_002",
+        "permit_hash": "",
+        "verified": false,
+        "timestamp": "2026-04-17T10:05:00Z"
+      }
+    },
+    {
+      "name": "authorize_deny_no_raise",
+      "description": "DENY with raise_on_deny=false (default): authorize() MUST NOT throw. Returns AuthorizationResult with permitted=false, reason populated, and no permit_hash / audit_hash.",
+      "sdk_input": {
+        "agent": "finance-agent",
+        "action": "wire_funds",
+        "context": {"amount_usd": 99999999},
+        "verify": true,
+        "raise_on_deny": false
+      },
+      "api_key": "ask_live_test_key",
+      "wire_calls": [
+        {
+          "path": "/v1-evaluate",
+          "request": {
+            "action": "wire_funds",
+            "agent": "finance-agent",
+            "context": {"amount_usd": 99999999},
+            "api_key": "ask_live_test_key"
+          },
+          "response": {
+            "permitted": false,
+            "decision_id": "dec_auth_deny_003",
+            "reason": "Amount exceeds daily limit for agent role",
+            "audit_hash": "",
+            "timestamp": "2026-04-17T12:00:00Z"
+          }
+        }
+      ],
+      "sdk_output": {
+        "permitted": false,
+        "agent": "finance-agent",
+        "action": "wire_funds",
+        "context": {"amount_usd": 99999999},
+        "reason": "Amount exceeds daily limit for agent role",
+        "permit_id": "dec_auth_deny_003",
+        "audit_hash": "",
+        "permit_hash": "",
+        "verified": false,
+        "timestamp": "2026-04-17T12:00:00Z"
+      }
+    },
+    {
+      "name": "authorize_deny_raises",
+      "description": "DENY with raise_on_deny=true: authorize() MUST raise/throw a permission-denied error with the server's decision_id and reason. verify MUST NOT be called.",
+      "sdk_input": {
+        "agent": "finance-agent",
+        "action": "wire_funds",
+        "context": {"amount_usd": 99999999},
+        "verify": true,
+        "raise_on_deny": true
+      },
+      "api_key": "ask_live_test_key",
+      "wire_calls": [
+        {
+          "path": "/v1-evaluate",
+          "request": {
+            "action": "wire_funds",
+            "agent": "finance-agent",
+            "context": {"amount_usd": 99999999},
+            "api_key": "ask_live_test_key"
+          },
+          "response": {
+            "permitted": false,
+            "decision_id": "dec_auth_deny_004",
+            "reason": "Amount exceeds daily limit for agent role",
+            "audit_hash": "",
+            "timestamp": "2026-04-17T12:05:00Z"
+          }
+        }
+      ],
+      "sdk_error": {
+        "kind": "permission_denied",
+        "permit_id": "dec_auth_deny_004",
+        "reason_contains": "daily limit"
+      }
+    }
+  ]
+}
