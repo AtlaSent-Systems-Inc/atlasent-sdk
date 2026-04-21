@@ -251,3 +251,130 @@ class TestAsyncLifecycle:
         mock_close = mocker.patch.object(async_client._client, "aclose")
         await async_client.close()
         mock_close.assert_called_once()
+
+
+class TestAsyncCache:
+    @pytest.mark.asyncio
+    async def test_cache_hit_short_circuits_request(self, mocker):
+        from atlasent.cache import TTLCache
+
+        cache = TTLCache(ttl=60.0)
+        client = AsyncAtlaSentClient(api_key="k", max_retries=0, cache=cache)
+        post = mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_PERMIT),
+        )
+        first = await client.evaluate("read_data", "agent-1")
+        second = await client.evaluate("read_data", "agent-1")
+        assert first == second
+        # Second call must come from the cache, not the network.
+        assert post.call_count == 1
+
+
+class TestAsyncRetryExhaustion:
+    @pytest.mark.asyncio
+    async def test_connect_error_retries_then_succeeds(
+        self, async_client_retry, mocker
+    ):
+        ok = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
+        mocker.patch.object(
+            async_client_retry._client,
+            "post",
+            side_effect=[httpx.ConnectError("refused"), ok],
+        )
+        result = await async_client_retry.evaluate("a", "b")
+        assert result.permit_token == "dec_100"
+
+    @pytest.mark.asyncio
+    async def test_5xx_exhausted_raises_server_error(self, async_client_retry, mocker):
+        err = _mock_resp(mocker, status_code=503)
+        err.text = "Service Unavailable"
+        mocker.patch.object(
+            async_client_retry._client,
+            "post",
+            return_value=err,
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client_retry.evaluate("a", "b")
+        assert exc_info.value.code == "server_error"
+        assert exc_info.value.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_generic_httpx_error_maps_to_network_code(self, async_client, mocker):
+        # httpx raises various HTTPError subclasses (ProtocolError,
+        # ReadError, etc.) that aren't Timeout/ConnectError. They should
+        # all surface as code="network".
+        mocker.patch.object(
+            async_client._client,
+            "post",
+            side_effect=httpx.ReadError("connection reset"),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.code == "network"
+
+
+class TestAsyncHttpStatusCodes:
+    @pytest.mark.asyncio
+    async def test_403_has_forbidden_code(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, status_code=403),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.code == "forbidden"
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_422_has_bad_request_code(self, async_client, mocker):
+        resp = _mock_resp(mocker, status_code=422)
+        resp.text = "validation failed"
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.code == "bad_request"
+        assert exc_info.value.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_403_surfaces_server_message_from_json(self, async_client, mocker):
+        resp = _mock_resp(mocker, status_code=403)
+        resp.json.return_value = {"message": "key lacks phi:read scope"}
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert "key lacks phi:read scope" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_200_with_invalid_json_is_bad_response(self, async_client, mocker):
+        resp = _mock_resp(mocker, status_code=200)
+        resp.json.side_effect = ValueError("not json")
+        resp.text = "plaintext, not JSON"
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.code == "bad_response"
+
+
+class TestAsyncRetryAfter:
+    @pytest.mark.asyncio
+    async def test_429_with_non_numeric_retry_after_falls_back_to_none(
+        self, async_client, mocker
+    ):
+        resp = _mock_resp(
+            mocker, status_code=429, headers={"retry-after": "not-a-number"}
+        )
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(RateLimitError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.retry_after is None
+
+    @pytest.mark.asyncio
+    async def test_429_without_retry_after_header(self, async_client, mocker):
+        resp = _mock_resp(mocker, status_code=429)
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(RateLimitError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.retry_after is None

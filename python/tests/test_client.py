@@ -464,3 +464,53 @@ class TestEdgeCases:
         assert payload["decision_id"] == "dec_100"
         assert payload["action"] == ""
         assert payload["agent"] == ""
+
+
+class TestSyncRetryPaths:
+    def test_connect_error_retries_then_succeeds(self, client_retry, mocker):
+        ok = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
+        mocker.patch.object(
+            client_retry._client,
+            "post",
+            side_effect=[httpx.ConnectError("refused"), ok],
+        )
+        result = client_retry.evaluate("a", "b")
+        assert result.permit_token == "dec_100"
+
+    def test_generic_httpx_error_maps_to_network_code(self, client, mocker):
+        mocker.patch.object(
+            client._client,
+            "post",
+            side_effect=httpx.ReadError("connection reset"),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.code == "network"
+
+    def test_403_surfaces_server_message_from_json(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=403)
+        resp.json.return_value = {"reason": "key is read-only"}
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert "key is read-only" in str(exc_info.value)
+        assert exc_info.value.code == "forbidden"
+
+    def test_401_with_non_json_body_uses_default_message(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=401)
+        resp.json.side_effect = ValueError("not json")
+        resp.text = "<html>unauthorized</html>"
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.code == "invalid_api_key"
+        assert "Invalid API key" in str(exc_info.value)
+
+    def test_429_with_non_numeric_retry_after_falls_back_to_none(self, client, mocker):
+        resp = _mock_resp(
+            mocker, status_code=429, headers={"retry-after": "not-a-number"}
+        )
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(RateLimitError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.retry_after is None

@@ -72,11 +72,10 @@ a pilot API key.
 - [x] Integration suite hits a dedicated staging `atlasent-api` org
       on each PR. (`.github/workflows/integration.yml`, gated on the
       `STAGING_ATLASENT_API_KEY` secret so fork PRs stay green.)
-- [ ] 95%+ line coverage on the TS SDK; matching coverage on Python.
-      *Current: TS 97.9% (target met — floor enforced at 95% in
-      `typescript/vitest.config.ts`), Python 89% (floor enforced at
-      88% in `python/pyproject.toml`). Python gate still open; the
-      error-path tests for `async_client.py` and `guard.py` land next.*
+- [x] 95%+ line coverage on the TS SDK; matching coverage on Python.
+      (TS 97.9%, floor enforced at 95% in `typescript/vitest.config.ts`;
+      Python 97.7% line+branch, floor enforced at 95% in
+      `python/pyproject.toml`.)
 
 ### Docs + DX
 
