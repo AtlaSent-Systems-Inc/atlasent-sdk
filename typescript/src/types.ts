@@ -57,6 +57,52 @@ export interface VerifyPermitResponse {
   timestamp: string;
 }
 
+/** Result bundle returned by {@link AtlaSentClient.gate}. */
+export interface GateResult {
+  /** The evaluate step of the gate call. */
+  evaluation: EvaluateResponse;
+  /** The verify step of the gate call. */
+  verification: VerifyPermitResponse;
+}
+
+/** Input to {@link AtlaSentClient.authorize}. */
+export interface AuthorizeRequest {
+  /** Identifier of the calling agent. */
+  agent: string;
+  /** The action being authorized. */
+  action: string;
+  /** Arbitrary policy context. */
+  context?: Record<string, unknown>;
+  /** If `true` (default), verify the permit end-to-end. */
+  verify?: boolean;
+  /** If `true`, throw {@link PermissionDeniedError} on deny instead of returning `permitted: false`. */
+  raiseOnDeny?: boolean;
+}
+
+/** Result of {@link AtlaSentClient.authorize}. */
+export interface AuthorizationResult {
+  /** `true` when the action was permitted. Fail-closed: inspect before acting. */
+  permitted: boolean;
+  /** Echoes the agent from the request. */
+  agent: string;
+  /** Echoes the action from the request. */
+  action: string;
+  /** Echoes the context from the request. */
+  context: Record<string, unknown>;
+  /** Human-readable reason from the policy engine. */
+  reason: string;
+  /** Permit ID (empty string if the decision was DENY and no permit was issued). */
+  permitId: string;
+  /** Audit-trail hash from evaluate. Empty on deny. */
+  auditHash: string;
+  /** Verification hash from verify. Empty when `verify: false` or on deny. */
+  permitHash: string;
+  /** `true` only when `verify: true` and the server confirmed the permit. */
+  verified: boolean;
+  /** ISO 8601 timestamp from the evaluate response. */
+  timestamp: string;
+}
+
 /** Constructor options for {@link AtlaSentClient}. */
 export interface AtlaSentClientOptions {
   /** Required. Your AtlaSent API key. */
@@ -65,9 +111,31 @@ export interface AtlaSentClientOptions {
   baseUrl?: string;
   /** Per-request timeout in milliseconds. Defaults to 10_000. */
   timeoutMs?: number;
+  /** Retries for transient failures (5xx, timeouts, network). Defaults to 2. */
+  maxRetries?: number;
+  /** Base backoff in milliseconds, doubled each retry. Defaults to 500. */
+  retryBackoffMs?: number;
+  /**
+   * Optional in-memory cache for `evaluate()` results. Pass a
+   * {@link TTLCache} instance (or any object matching its shape) to
+   * deduplicate repeated decisions within a short window.
+   */
+  cache?: EvaluateCache;
   /**
    * Inject a fetch implementation (primarily for testing).
    * Defaults to `globalThis.fetch`.
    */
   fetch?: typeof fetch;
+  /** Inject a sleep implementation (primarily for testing retry backoff). */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+/**
+ * Minimal interface that {@link AtlaSentClient} uses to cache
+ * `evaluate()` responses. Implemented by {@link TTLCache}, but any
+ * object with this shape works.
+ */
+export interface EvaluateCache {
+  get(key: string): EvaluateResponse | undefined;
+  put(key: string, value: EvaluateResponse): void;
 }

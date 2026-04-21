@@ -36,7 +36,7 @@ export interface AtlaSentErrorInit {
  * ES2022 `Error` constructor.
  */
 export class AtlaSentError extends Error {
-  override readonly name = "AtlaSentError";
+  override readonly name: string = "AtlaSentError";
 
   /** HTTP status code, when the error originated from an API response. */
   readonly status: number | undefined;
@@ -56,5 +56,40 @@ export class AtlaSentError extends Error {
     this.code = init.code;
     this.requestId = init.requestId;
     this.retryAfterMs = init.retryAfterMs;
+  }
+}
+
+/**
+ * Initialization options for {@link PermissionDeniedError}.
+ */
+export interface PermissionDeniedErrorInit {
+  /** The permit ID returned in the deny decision, if any. */
+  permitId?: string;
+  /** Human-readable reason from the policy engine. */
+  reason?: string;
+  /** Raw response body from the API, for audit / debugging. */
+  responseBody?: Record<string, unknown>;
+}
+
+/**
+ * Thrown by {@link AtlaSentClient.authorize} when called with
+ * `raiseOnDeny: true` and the policy engine denies the action.
+ *
+ * Inherits from {@link AtlaSentError} so a single `catch
+ * (err: AtlaSentError)` covers both transport failures and policy
+ * denials at call sites that prefer exceptions over result branching.
+ */
+export class PermissionDeniedError extends AtlaSentError {
+  override readonly name: string = "PermissionDeniedError";
+
+  readonly permitId: string;
+  readonly reason: string;
+  readonly responseBody: Record<string, unknown> | undefined;
+
+  constructor(init: PermissionDeniedErrorInit = {}) {
+    super(init.reason || "Action denied by policy", { code: "forbidden" });
+    this.permitId = init.permitId ?? "";
+    this.reason = init.reason ?? "";
+    this.responseBody = init.responseBody;
   }
 }
