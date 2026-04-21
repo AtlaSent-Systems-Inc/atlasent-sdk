@@ -69,6 +69,31 @@
   verify-revoked, transport-error propagation, payload shape, and
   the `AtlaSentDeniedError` class itself. 167 / 167 tests pass.
 
+## 1.0.0 — 2026-04-17
+
+First stable release. Public exports in `atlasent/__init__.py` are
+the supported v1 surface; pin to `>=1.0.0,<2.0.0`.
+
+### Added
+
+- Cross-language `RELEASE_NOTES.md` covering the v1.0.0 surface for
+  both `atlasent` and `@atlasent/sdk`.
+- Trusted-publishing PyPI release workflow (PEP 740 attestations,
+  no API token required).
+- Contract drift detector (`contract/tools/drift.py`) wired into CI
+  to enforce wire-shape parity with the TypeScript SDK on every PR.
+- Gated staging integration suite (skips cleanly when
+  `STAGING_ATLASENT_API_KEY` is absent so fork PRs stay green).
+- Coverage floor of 88% on the `atlasent` package, enforced in CI.
+
+### Notes
+
+- No public API changes from 0.4.0 — same `authorize()`, client
+  classes, decorators, error taxonomy, and wire format. The bump to
+  1.0.0 marks API stability, not new surface.
+- `AtlaSentErrorCode` Literal and the `bad_response` raise sites
+  added in 0.4.0 are now part of the stable contract.
+
 ## 0.4.0 — 2026-04-17
 
 ### Added
