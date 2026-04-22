@@ -6,16 +6,12 @@ on:
     paths:
       - "contract/**"
       - "python/atlasent/models.py"
-      - "typescript/src/client.ts"
-      - "typescript/src/types.ts"
       - ".github/workflows/contract-ci.yml"
   pull_request:
     branches: [main]
     paths:
       - "contract/**"
       - "python/atlasent/models.py"
-      - "typescript/src/client.ts"
-      - "typescript/src/types.ts"
       - ".github/workflows/contract-ci.yml"
 
 jobs:

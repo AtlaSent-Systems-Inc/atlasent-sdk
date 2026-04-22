@@ -62,32 +62,5 @@ jobs:
       - name: Run integration suite
         env:
           ATLASENT_API_KEY: ${{ secrets.STAGING_ATLASENT_API_KEY }}
-          ATLASENT_BASE_URL: ${{ vars.STAGING_ATLASENT_BASE_URL || 'https://staging.atlasent.io' }}
+          ATLASENT_BASE_URL: ${{ vars.STAGING_ATLASENT_BASE_URL || 'https://api.staging.atlasent.io' }}
         run: pytest tests/integration/ -v -m "integration"
-
-  typescript:
-    name: TypeScript integration (staging)
-    needs: gate
-    if: needs.gate.outputs.has_key == 'true'
-    runs-on: ubuntu-latest
-    environment: staging
-    defaults:
-      run:
-        working-directory: typescript
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "20.x"
-          cache: npm
-          cache-dependency-path: typescript/package-lock.json
-
-      - name: Install
-        run: npm ci
-
-      - name: Run integration suite
-        env:
-          ATLASENT_API_KEY: ${{ secrets.STAGING_ATLASENT_API_KEY }}
-          ATLASENT_BASE_URL: ${{ vars.STAGING_ATLASENT_BASE_URL || 'https://staging.atlasent.io' }}
-        run: npm run test:integration
