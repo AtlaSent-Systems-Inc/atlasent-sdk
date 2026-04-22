@@ -27,6 +27,23 @@ const VERIFY_OK_WIRE = {
   timestamp: "2026-04-17T10:00:01Z",
 };
 
+const EXPORT_BUNDLE_WIRE = {
+  version: 1,
+  org_id: "org_123",
+  generated_at: "2026-04-22T12:00:00Z",
+  range: { since: null, until: null, limit: 10000 },
+  evaluations: [
+    { id: "ev_1", entry_hash: "h1", canonical_payload: "..." },
+    { id: "ev_2", entry_hash: "h2", canonical_payload: "..." },
+  ],
+  execution_head: { id: "ev_2", entry_hash: "h2" },
+  admin_log: [{ id: "ad_1", entry_hash: "a1" }],
+  admin_head: { id: "ad_1", entry_hash: "a1" },
+  public_key_pem:
+    "-----BEGIN PUBLIC KEY-----\nMCow…\n-----END PUBLIC KEY-----",
+  signature: "c2lnbmF0dXJlLWJhc2U2NA==",
+};
+
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -177,6 +194,92 @@ describe("verifyPermit()", () => {
       agent: "agent-1",
       context: { patientId: "PT-001" },
       api_key: "ask_live_test",
+    });
+  });
+});
+
+describe("exportAudit()", () => {
+  it("maps snake_case wire to camelCase response and preserves raw", async () => {
+    const client = makeClient(mockFetch(() => jsonResponse(EXPORT_BUNDLE_WIRE)));
+    const bundle = await client.exportAudit({
+      since: "2026-01-01T00:00:00Z",
+      limit: 500,
+    });
+
+    expect(bundle.orgId).toBe("org_123");
+    expect(bundle.generatedAt).toBe("2026-04-22T12:00:00Z");
+    expect(bundle.evaluations).toHaveLength(2);
+    expect(bundle.executionHead).toEqual({ id: "ev_2", entryHash: "h2" });
+    expect(bundle.adminLog).toHaveLength(1);
+    expect(bundle.adminHead).toEqual({ id: "ad_1", entryHash: "a1" });
+    expect(bundle.publicKeyPem).toMatch(/BEGIN PUBLIC KEY/);
+    expect(bundle.signature).toBe("c2lnbmF0dXJlLWJhc2U2NA==");
+    // .raw is the verbatim wire envelope (snake_case preserved).
+    expect(bundle.raw).toEqual(EXPORT_BUNDLE_WIRE);
+  });
+
+  it("sends the wire-format body with includeAdminLog → include_admin_log", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(EXPORT_BUNDLE_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.exportAudit({
+      since: "2026-01-01T00:00:00Z",
+      until: "2026-04-22T00:00:00Z",
+      limit: 500,
+      includeAdminLog: false,
+    });
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("https://api.atlasent.io/v1-export-audit");
+    const body = JSON.parse(init!.body as string);
+    expect(body).toEqual({
+      since: "2026-01-01T00:00:00Z",
+      until: "2026-04-22T00:00:00Z",
+      limit: 500,
+      include_admin_log: false,
+    });
+  });
+
+  it("omits unset filter fields from the wire body", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(EXPORT_BUNDLE_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.exportAudit();
+    const [, init] = fetchImpl.mock.calls[0]!;
+    const body = JSON.parse(init!.body as string);
+    expect(body).toEqual({});
+  });
+
+  it("sends Authorization: Bearer header", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(EXPORT_BUNDLE_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.exportAudit();
+    const [, init] = fetchImpl.mock.calls[0]!;
+    const headers = init!.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ask_live_test");
+  });
+
+  it("throws bad_response when signature is missing", async () => {
+    const { signature: _, ...malformed } = EXPORT_BUNDLE_WIRE;
+    const client = makeClient(mockFetch(() => jsonResponse(malformed)));
+    await expect(client.exportAudit()).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+
+  it("throws forbidden on 403 (missing 'audit' scope)", async () => {
+    const client = makeClient(
+      mockFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              error_code: "INSUFFICIENT_SCOPE",
+              reason: "Key lacks 'audit' scope",
+            }),
+            { status: 403, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+    await expect(client.exportAudit()).rejects.toMatchObject({
+      code: "forbidden",
+      status: 403,
     });
   });
 });

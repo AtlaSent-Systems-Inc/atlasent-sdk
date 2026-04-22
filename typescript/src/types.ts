@@ -57,6 +57,67 @@ export interface VerifyPermitResponse {
   timestamp: string;
 }
 
+/** Input to {@link AtlaSentClient.exportAudit}. All fields optional. */
+export interface ExportAuditRequest {
+  /** Lower bound on `generated_at` (ISO 8601). */
+  since?: string;
+  /** Upper bound on `generated_at` (ISO 8601). */
+  until?: string;
+  /** Max rows to return. Server caps at 50000. Defaults to 10000. */
+  limit?: number;
+  /** Include admin-log rows alongside execution rows. Defaults to `true`. */
+  includeAdminLog?: boolean;
+}
+
+/** A chain tip returned inside {@link ExportAuditResponse}. */
+export interface ExportAuditHead {
+  id: string;
+  entryHash: string;
+}
+
+/**
+ * Signed, offline-verifiable envelope from
+ * {@link AtlaSentClient.exportAudit}.
+ *
+ * The bundle is tamper-evident: every row's `entryHash` is the
+ * SHA-256 of its `canonicalPayload`, rows are hash-chained, and
+ * `signature` is an Ed25519 signature over
+ * `canonicalize(envelope - signature)`.
+ *
+ * The raw wire envelope is preserved verbatim on `.raw` for callers
+ * that need to pass it to an external / offline verifier untouched.
+ */
+export interface ExportAuditResponse {
+  /** Envelope schema version. */
+  version: number;
+  /** Organization the export belongs to. */
+  orgId: string;
+  /** ISO 8601 timestamp the bundle was sealed. */
+  generatedAt: string;
+  /** The request's `{since, until, limit}` filter, echoed back. */
+  range: { since: string | null; until: string | null; limit: number };
+  /** Hash-chained execution-evaluation rows. */
+  evaluations: Array<Record<string, unknown>>;
+  /** Tip of the execution chain at export time. */
+  executionHead: ExportAuditHead | null;
+  /** Hash-chained admin-log rows, or `null` when `includeAdminLog=false`. */
+  adminLog: Array<Record<string, unknown>> | null;
+  /** Tip of the admin chain at export time. */
+  adminHead: ExportAuditHead | null;
+  /**
+   * Ed25519 public key (PEM) matching `signature`. Verify this
+   * against your trust anchor — do not trust it implicitly.
+   */
+  publicKeyPem: string;
+  /** Base64 Ed25519 signature over `canonicalize(envelope - signature)`. */
+  signature: string;
+  /**
+   * Raw wire envelope, as received from the API, snake_case keys
+   * preserved. Pass this unchanged to an offline verifier.
+   */
+  raw: Record<string, unknown>;
+}
+
 /** Constructor options for {@link AtlaSentClient}. */
 export interface AtlaSentClientOptions {
   /** Required. Your AtlaSent API key. */

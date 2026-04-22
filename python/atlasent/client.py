@@ -17,6 +17,8 @@ from .exceptions import (
     RateLimitError,
 )
 from .models import (
+    AuditExportBundle,
+    AuditExportRequest,
     AuthorizationResult,
     EvaluateRequest,
     EvaluateResult,
@@ -213,6 +215,67 @@ class AtlaSentClient:
         result = VerifyResult.model_validate(data)
         logger.info("verify token=%s valid=%s", permit_token, result.valid)
         return result
+
+    def export_audit(
+        self,
+        *,
+        since: str | None = None,
+        until: str | None = None,
+        limit: int | None = None,
+        include_admin_log: bool = True,
+    ) -> AuditExportBundle:
+        """Export a signed, offline-verifiable audit bundle.
+
+        Calls ``POST /v1-export-audit`` and returns the full envelope
+        (hash-chained rows + Ed25519 signature). The API key must
+        carry the ``audit`` scope.
+
+        Args:
+            since: Lower bound on ``generated_at`` (ISO 8601). Defaults to none.
+            until: Upper bound on ``generated_at`` (ISO 8601). Defaults to none.
+            limit: Max rows to include (server caps at 50000). Defaults to 10000.
+            include_admin_log: Include admin-log rows alongside execution rows.
+
+        Returns:
+            :class:`AuditExportBundle` — pass ``.model_dump()`` straight
+            to ``json.dump(...)`` to persist the envelope, or feed it to
+            your offline verifier.
+
+        Raises:
+            AtlaSentError: Network / server / malformed-response errors.
+            RateLimitError: HTTP 429.
+        """
+        req = AuditExportRequest(
+            since=since,
+            until=until,
+            limit=limit,
+            include_admin_log=include_admin_log,
+        )
+        logger.debug(
+            "export_audit since=%r until=%r limit=%r admin=%s",
+            since,
+            until,
+            limit,
+            include_admin_log,
+        )
+        data = self._post(
+            "/v1-export-audit",
+            req.model_dump(exclude_none=True),
+        )
+        if not isinstance(data.get("signature"), str) or not data["signature"]:
+            raise AtlaSentError(
+                "Malformed /v1-export-audit response: missing `signature`",
+                code="bad_response",
+                response_body=data,
+            )
+        bundle = AuditExportBundle.model_validate(data)
+        logger.info(
+            "export_audit org=%s rows=%d admin_rows=%d",
+            bundle.org_id,
+            len(bundle.evaluations),
+            0 if bundle.admin_log is None else len(bundle.admin_log),
+        )
+        return bundle
 
     def gate(
         self,

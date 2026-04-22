@@ -19,6 +19,9 @@ import type {
   AtlaSentClientOptions,
   EvaluateRequest,
   EvaluateResponse,
+  ExportAuditHead,
+  ExportAuditRequest,
+  ExportAuditResponse,
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "./types.js";
@@ -42,6 +45,20 @@ interface VerifyPermitWire {
   outcome?: string;
   permit_hash?: string;
   timestamp?: string;
+}
+
+/** Raw JSON shape received from `POST /v1-export-audit`. */
+interface ExportAuditWire {
+  version?: number;
+  org_id?: string;
+  generated_at?: string;
+  range?: { since: string | null; until: string | null; limit: number };
+  evaluations?: Array<Record<string, unknown>>;
+  execution_head?: { id: string; entry_hash: string } | null;
+  admin_log?: Array<Record<string, unknown>> | null;
+  admin_head?: { id: string; entry_hash: string } | null;
+  public_key_pem?: string;
+  signature?: string;
 }
 
 export class AtlaSentClient {
@@ -131,6 +148,54 @@ export class AtlaSentClient {
     };
   }
 
+  /**
+   * Export a signed, offline-verifiable audit bundle.
+   *
+   * Calls `POST /v1-export-audit`. The API key must carry the
+   * `audit` scope. The returned bundle is tamper-evident: rows are
+   * hash-chained and the envelope is Ed25519-signed.
+   *
+   * The raw wire envelope is preserved on `response.raw` so callers
+   * can persist it or pass it to an external offline verifier
+   * without any camelCase translation.
+   */
+  async exportAudit(
+    input: ExportAuditRequest = {},
+  ): Promise<ExportAuditResponse> {
+    const body: Record<string, unknown> = {};
+    if (input.since !== undefined) body.since = input.since;
+    if (input.until !== undefined) body.until = input.until;
+    if (input.limit !== undefined) body.limit = input.limit;
+    if (input.includeAdminLog !== undefined) {
+      body.include_admin_log = input.includeAdminLog;
+    }
+    const wire = await this.post<ExportAuditWire & Record<string, unknown>>(
+      "/v1-export-audit",
+      body,
+    );
+
+    if (typeof wire.signature !== "string" || wire.signature.length === 0) {
+      throw new AtlaSentError(
+        "Malformed response from /v1-export-audit: missing `signature`",
+        { code: "bad_response" },
+      );
+    }
+
+    return {
+      version: typeof wire.version === "number" ? wire.version : 1,
+      orgId: wire.org_id ?? "",
+      generatedAt: wire.generated_at ?? "",
+      range: wire.range ?? { since: null, until: null, limit: 0 },
+      evaluations: wire.evaluations ?? [],
+      executionHead: toHead(wire.execution_head),
+      adminLog: wire.admin_log ?? null,
+      adminHead: toHead(wire.admin_head),
+      publicKeyPem: wire.public_key_pem ?? "",
+      signature: wire.signature,
+      raw: wire as Record<string, unknown>,
+    };
+  }
+
   private async post<T>(path: string, body: unknown): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const requestId = globalThis.crypto.randomUUID();
@@ -181,6 +246,13 @@ export class AtlaSentClient {
 
     return parsed as T;
   }
+}
+
+function toHead(
+  raw: { id: string; entry_hash: string } | null | undefined,
+): ExportAuditHead | null {
+  if (!raw) return null;
+  return { id: raw.id, entryHash: raw.entry_hash };
 }
 
 function mapFetchError(err: unknown, requestId: string): AtlaSentError {

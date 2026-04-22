@@ -1,6 +1,6 @@
 # @atlasent/sdk
 
-Execution-time authorization for AI agents, in TypeScript. Two methods, zero runtime dependencies, one function call per decision.
+Execution-time authorization for AI agents, in TypeScript. Three methods, zero runtime dependencies, one function call per decision.
 
 ```bash
 npm i @atlasent/sdk
@@ -28,7 +28,7 @@ if (result.decision === "ALLOW") {
 
 That's it. `evaluate()` calls the AtlaSent policy engine, generates a hash-chained audit entry (21 CFR Part 11 / GxP-ready), and returns a result you branch on. A clean `DENY` is **not** thrown — network / server / auth failures are.
 
-## Two methods, that's the whole surface
+## Three methods, that's the whole surface
 
 ```ts
 client.evaluate({ agent, action, context? })
@@ -36,9 +36,15 @@ client.evaluate({ agent, action, context? })
 
 client.verifyPermit({ permitId, agent?, action?, context? })
   // → { verified, outcome, permitHash, timestamp }
+
+client.exportAudit({ since?, until?, limit?, includeAdminLog? })
+  // → { evaluations, executionHead, adminLog, adminHead,
+  //     publicKeyPem, signature, raw, ... }
 ```
 
 `verifyPermit()` confirms a previously-issued permit end-to-end — use it as a second-factor gate (e.g., in a CI deploy pipeline before side-effects run).
+
+`exportAudit()` pulls a tamper-evident, Ed25519-signed bundle of the evaluation + admin chains for 21 CFR Part 11 / GxP review. Requires an API key with the `audit` scope.
 
 ## CI deploy-gate pattern
 
@@ -71,6 +77,26 @@ if (!verification.verified) {
 ```
 
 See [`examples/deploy-gate.ts`](./examples/deploy-gate.ts) for a complete CI-shaped script.
+
+## Export a signed audit bundle
+
+```ts
+import { writeFile } from "node:fs/promises";
+import { AtlaSentClient } from "@atlasent/sdk";
+
+const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
+
+const bundle = await client.exportAudit({
+  since: "2026-01-01T00:00:00Z",
+  limit: 5000,
+});
+
+await writeFile("atlasent-audit-export.json", JSON.stringify(bundle.raw, null, 2));
+```
+
+`bundle.raw` is the verbatim wire envelope — hand that to any offline verifier. `bundle.signature` is base64 Ed25519 over `canonicalize(envelope - signature)`; verify against your trust anchor (do **not** trust `bundle.publicKeyPem` implicitly).
+
+See [`examples/export-audit.ts`](./examples/export-audit.ts).
 
 ## Constructor options
 

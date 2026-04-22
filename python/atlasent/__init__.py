@@ -19,7 +19,7 @@ Quick start::
 
 from ._version import __version__
 from .async_client import AsyncAtlaSentClient
-from .authorize import authorize, evaluate, gate, verify
+from .authorize import authorize, evaluate, export_audit, gate, verify
 from .cache import TTLCache
 from .client import AtlaSentClient
 from .config import configure
@@ -32,7 +32,15 @@ from .exceptions import (
     RateLimitError,
 )
 from .guard import async_atlasent_guard, atlasent_guard
-from .models import AuthorizationResult, EvaluateResult, GateResult, VerifyResult
+from .models import (
+    AuditExportBundle,
+    AuditExportHead,
+    AuditExportRequest,
+    AuthorizationResult,
+    EvaluateResult,
+    GateResult,
+    VerifyResult,
+)
 
 __all__ = [
     "__version__",
@@ -43,10 +51,14 @@ __all__ = [
     "evaluate",
     "verify",
     "gate",
+    "export_audit",
     "AuthorizationResult",
     "EvaluateResult",
     "VerifyResult",
     "GateResult",
+    "AuditExportBundle",
+    "AuditExportHead",
+    "AuditExportRequest",
     "AtlaSentError",
     "AtlaSentErrorCode",
     "AtlaSentDenied",

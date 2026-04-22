@@ -44,10 +44,11 @@ if (result.decision === "ALLOW") {
 
 ## API endpoints
 
-Both SDKs target the same two endpoints:
+Both SDKs target the same three endpoints:
 
 - `POST https://api.atlasent.io/v1-evaluate`
 - `POST https://api.atlasent.io/v1-verify-permit`
+- `POST https://api.atlasent.io/v1-export-audit` *(requires API key with `audit` scope)*
 
 Full wire-format parity: a Python permit token is verifiable from the TypeScript SDK and vice-versa.
 

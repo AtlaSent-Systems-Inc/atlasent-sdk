@@ -5,7 +5,25 @@ import pytest
 
 from atlasent.async_client import AsyncAtlaSentClient
 from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
-from atlasent.models import EvaluateResult, GateResult, VerifyResult
+from atlasent.models import (
+    AuditExportBundle,
+    EvaluateResult,
+    GateResult,
+    VerifyResult,
+)
+
+EXPORT_BUNDLE = {
+    "version": 1,
+    "org_id": "org_123",
+    "generated_at": "2026-04-22T12:00:00Z",
+    "range": {"since": None, "until": None, "limit": 10000},
+    "evaluations": [{"id": "ev_1", "entry_hash": "h1"}],
+    "execution_head": {"id": "ev_1", "entry_hash": "h1"},
+    "admin_log": None,
+    "admin_head": None,
+    "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCow…\n-----END PUBLIC KEY-----",
+    "signature": "c2lnbmF0dXJlLWJhc2U2NA==",
+}
 
 EVALUATE_PERMIT = {
     "permitted": True,
@@ -120,6 +138,51 @@ class TestAsyncVerify:
         result = await async_client.verify("dec_100")
         assert isinstance(result, VerifyResult)
         assert result.valid is True
+
+
+class TestAsyncExportAudit:
+    @pytest.mark.asyncio
+    async def test_ok(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EXPORT_BUNDLE),
+        )
+        bundle = await async_client.export_audit(
+            since="2026-01-01T00:00:00Z", include_admin_log=False
+        )
+        assert isinstance(bundle, AuditExportBundle)
+        assert bundle.org_id == "org_123"
+        assert bundle.signature.startswith("c2l")
+
+    @pytest.mark.asyncio
+    async def test_payload_shape(self, async_client, mocker):
+        mock_post = mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EXPORT_BUNDLE),
+        )
+        await async_client.export_audit(
+            since="2026-01-01T00:00:00Z", include_admin_log=False
+        )
+        payload = mock_post.call_args[1]["json"]
+        assert payload == {
+            "since": "2026-01-01T00:00:00Z",
+            "include_admin_log": False,
+        }
+
+    @pytest.mark.asyncio
+    async def test_missing_signature_raises(self, async_client, mocker):
+        malformed = {**EXPORT_BUNDLE}
+        malformed.pop("signature")
+        mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=malformed),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.export_audit()
+        assert exc_info.value.code == "bad_response"
 
 
 class TestAsyncGate:

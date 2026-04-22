@@ -26,14 +26,28 @@ a pilot API key.
 
 ### Surface parity
 
-- [ ] Every endpoint in `atlasent-api`'s V1 matrix is reachable from
-      both SDKs: `evaluate`, `verify-permit`, `session`, `audit/events`,
-      `audit/exports`, `audit/verify`, `approvals`, `overrides`,
-      `permits/consume`, `permits/revoke`.
+**Production-critical slice (shipped on `claude/finish-sdk-UqXnk`):**
+
+- [x] `evaluate` — Python + TypeScript.
+- [x] `verify-permit` — Python + TypeScript.
+- [x] `export-audit` — Python + TypeScript; returns the full signed
+      Ed25519 envelope as a typed response, raw wire bytes preserved
+      on `bundle.raw` (TS) / `bundle.model_dump()` (Python) for handoff
+      to an offline verifier.
+- [x] API key auth via `Authorization: Bearer <apiKey>` on every
+      request. No alternate auth paths.
+
+**Deferred — not in the current slice:**
+
+- [ ] Remaining endpoints: `session`, `audit/events`, `audit/verify`,
+      `approvals`, `overrides`, `permits/consume`, `permits/revoke`.
 - [ ] Streaming `evaluate` endpoint exposed as an async iterator
       (Python `async for`, TS `AsyncIterable`).
 - [ ] Offline audit verifier: both SDKs ship a `verify_bundle(path)`
       that validates an Ed25519-signed export without hitting the API.
+      Until then, customers can verify the bundle with
+      `scripts/verify-export.mjs` in `atlasent-api` — the SDKs already
+      return the raw envelope losslessly.
 
 ### Type source of truth
 
@@ -44,7 +58,9 @@ a pilot API key.
 - [ ] CI drift detector in `contract/` fails if the two SDKs diverge
       on wire shape.
 
-### Publish story
+### Publish story — release plumbing (deferred)
+
+Tracked as a single follow-up slice:
 
 - [ ] `@atlasent/sdk@0.x.0` tag cuts an npm publish via GitHub Actions.
       Provenance attestation, no `--no-verify`.
@@ -54,6 +70,8 @@ a pilot API key.
       major bump post-1.0.
 - [ ] CHANGELOG.md in each language directory, auto-generated on
       release.
+- [ ] Contract drift gate wired into the tag-release workflow so a
+      mismatch blocks publish (not just PR CI).
 
 ### Testing
 
@@ -88,6 +106,17 @@ a pilot API key.
 6. Write quickstarts + examples; verify they compile.
 
 ---
+
+## Remaining after the current slice
+
+Two follow-up slices, roughly independent:
+
+1. **Novel features** — streaming `evaluate` as an async iterator, and
+   offline `verify_bundle(path)` in both SDKs (validate a signed
+   export without hitting the API).
+2. **Release plumbing** — trusted publishing (npm provenance + PyPI
+   PEP 740), CHANGELOG automation driven by release tags, and the
+   contract drift gate wired into the publish workflow.
 
 ## Out of scope for V1
 

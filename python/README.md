@@ -191,12 +191,35 @@ def modify_record():
     return jsonify(permit_hash=result.permit_hash)
 ```
 
+## Export a signed audit bundle
+
+For 21 CFR Part 11 / GxP reviewers: pull a tamper-evident, Ed25519-signed export of the evaluation + admin chains. Requires an API key with the `audit` scope.
+
+```python
+import json
+from atlasent import AtlaSentClient
+
+with AtlaSentClient(api_key="ask_live_...") as client:
+    bundle = client.export_audit(
+        since="2026-01-01T00:00:00Z",
+        limit=5000,
+    )
+
+with open("atlasent-audit-export.json", "w") as f:
+    json.dump(bundle.model_dump(), f, indent=2)
+```
+
+The envelope includes hash-chained rows, chain heads, the Ed25519 public key, and a base64 signature over the canonical bytes. Hand it to your offline verifier — `bundle.model_dump()` round-trips losslessly.
+
+See `examples/export_audit.py` for a runnable script.
+
 ## Lower-level methods
 
 `authorize()` is the recommended surface, but the underlying primitives are exported too:
 
 - `client.evaluate(action, agent, context)` — policy decision only; raises `AtlaSentDenied` on denial.
 - `client.verify(permit_token, ...)` — verify a previously issued permit.
+- `client.export_audit(since=..., until=..., limit=..., include_admin_log=...)` — signed audit export.
 - `client.gate(action, agent, context)` — evaluate + verify; raises on denial; returns `GateResult` with both response objects.
 - `@atlasent_guard(...)` / `@async_atlasent_guard(...)` — decorators for Flask / FastAPI routes.
 - `TTLCache` — opt-in in-process cache for hot-path evaluations.
@@ -209,6 +232,7 @@ The SDK calls:
 
 - `POST https://api.atlasent.io/v1-evaluate`
 - `POST https://api.atlasent.io/v1-verify-permit`
+- `POST https://api.atlasent.io/v1-export-audit`
 
 Override the base URL with the `base_url` argument or `AtlaSentClient`.
 

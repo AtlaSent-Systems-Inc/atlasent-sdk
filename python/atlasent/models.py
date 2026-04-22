@@ -77,6 +77,68 @@ class VerifyResult(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+# ── Audit export ──────────────────────────────────────────────────────
+
+
+class AuditExportRequest(BaseModel):
+    """Payload sent to ``POST /v1-export-audit``.
+
+    All fields are optional. When omitted, the server returns the full
+    available chain for the org (capped by ``limit``).
+    """
+
+    since: str | None = None
+    until: str | None = None
+    limit: int | None = None
+    include_admin_log: bool = True
+
+    model_config = {"populate_by_name": True}
+
+
+class AuditExportHead(BaseModel):
+    """Tip of an audit chain (execution or admin)."""
+
+    id: str
+    entry_hash: str
+
+
+class AuditExportBundle(BaseModel):
+    """Signed, offline-verifiable envelope from ``POST /v1-export-audit``.
+
+    The bundle is tamper-evident: every row's ``entry_hash`` is the
+    SHA-256 of its ``canonical_payload``, rows are hash-chained, and
+    ``signature`` is an Ed25519 signature over
+    ``canonicalize(envelope - signature)``.
+
+    Attributes:
+        version: Envelope schema version.
+        org_id: Organization the export belongs to.
+        generated_at: ISO 8601 timestamp the bundle was sealed.
+        range: The request's ``{since, until, limit}`` filter, echoed back.
+        evaluations: Hash-chained execution-evaluation rows.
+        execution_head: Tip of the execution chain at export time.
+        admin_log: Hash-chained admin-log rows (omitted if
+            ``include_admin_log=False`` was requested).
+        admin_head: Tip of the admin chain at export time.
+        public_key_pem: The Ed25519 public key matching ``signature``.
+            Verify this against your trust anchor — do **not** trust it
+            implicitly.
+        signature: Base64-encoded Ed25519 signature over the canonical
+            bytes of the envelope with this field removed.
+    """
+
+    version: int = 1
+    org_id: str = ""
+    generated_at: str = ""
+    range: dict[str, Any] = Field(default_factory=dict)
+    evaluations: list[dict[str, Any]] = Field(default_factory=list)
+    execution_head: AuditExportHead | None = None
+    admin_log: list[dict[str, Any]] | None = None
+    admin_head: AuditExportHead | None = None
+    public_key_pem: str = ""
+    signature: str = ""
+
+
 # ── Gate (convenience) ────────────────────────────────────────────────
 
 

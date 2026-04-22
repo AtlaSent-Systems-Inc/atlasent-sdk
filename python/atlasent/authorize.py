@@ -7,7 +7,13 @@ from typing import Any
 
 from .client import AtlaSentClient
 from .config import get_anon_key, get_api_key, get_base_url
-from .models import AuthorizationResult, EvaluateResult, GateResult, VerifyResult
+from .models import (
+    AuditExportBundle,
+    AuthorizationResult,
+    EvaluateResult,
+    GateResult,
+    VerifyResult,
+)
 
 logger = logging.getLogger("atlasent")
 
@@ -65,6 +71,26 @@ def gate(
 ) -> GateResult:
     """Evaluate then verify using the globally configured client."""
     return _get_default_client().gate(action_type, actor_id, context)
+
+
+def export_audit(
+    *,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int | None = None,
+    include_admin_log: bool = True,
+) -> AuditExportBundle:
+    """Export a signed audit bundle using the globally configured client.
+
+    Shortcut for :meth:`AtlaSentClient.export_audit`. The API key must
+    carry the ``audit`` scope.
+    """
+    return _get_default_client().export_audit(
+        since=since,
+        until=until,
+        limit=limit,
+        include_admin_log=include_admin_log,
+    )
 
 
 def authorize(

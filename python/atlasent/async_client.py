@@ -17,6 +17,8 @@ from .exceptions import (
     RateLimitError,
 )
 from .models import (
+    AuditExportBundle,
+    AuditExportRequest,
     AuthorizationResult,
     EvaluateRequest,
     EvaluateResult,
@@ -177,6 +179,50 @@ class AsyncAtlaSentClient:
         result = VerifyResult.model_validate(data)
         logger.info("verify token=%s valid=%s", permit_token, result.valid)
         return result
+
+    async def export_audit(
+        self,
+        *,
+        since: str | None = None,
+        until: str | None = None,
+        limit: int | None = None,
+        include_admin_log: bool = True,
+    ) -> AuditExportBundle:
+        """Export a signed, offline-verifiable audit bundle.
+
+        Async twin of :meth:`AtlaSentClient.export_audit`.
+        """
+        req = AuditExportRequest(
+            since=since,
+            until=until,
+            limit=limit,
+            include_admin_log=include_admin_log,
+        )
+        logger.debug(
+            "export_audit since=%r until=%r limit=%r admin=%s (async)",
+            since,
+            until,
+            limit,
+            include_admin_log,
+        )
+        data = await self._post(
+            "/v1-export-audit",
+            req.model_dump(exclude_none=True),
+        )
+        if not isinstance(data.get("signature"), str) or not data["signature"]:
+            raise AtlaSentError(
+                "Malformed /v1-export-audit response: missing `signature`",
+                code="bad_response",
+                response_body=data,
+            )
+        bundle = AuditExportBundle.model_validate(data)
+        logger.info(
+            "export_audit org=%s rows=%d admin_rows=%d (async)",
+            bundle.org_id,
+            len(bundle.evaluations),
+            0 if bundle.admin_log is None else len(bundle.admin_log),
+        )
+        return bundle
 
     async def gate(
         self,

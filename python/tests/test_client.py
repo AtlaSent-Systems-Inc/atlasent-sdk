@@ -5,7 +5,12 @@ import pytest
 
 from atlasent.client import AtlaSentClient
 from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
-from atlasent.models import EvaluateResult, GateResult, VerifyResult
+from atlasent.models import (
+    AuditExportBundle,
+    EvaluateResult,
+    GateResult,
+    VerifyResult,
+)
 
 
 @pytest.fixture
@@ -38,6 +43,22 @@ VERIFY_OK = {
     "verified": True,
     "permit_hash": "permit_xyz",
     "timestamp": "2025-01-15T12:05:00Z",
+}
+
+EXPORT_BUNDLE = {
+    "version": 1,
+    "org_id": "org_123",
+    "generated_at": "2026-04-22T12:00:00Z",
+    "range": {"since": None, "until": None, "limit": 10000},
+    "evaluations": [
+        {"id": "ev_1", "entry_hash": "h1", "canonical_payload": "..."},
+        {"id": "ev_2", "entry_hash": "h2", "canonical_payload": "..."},
+    ],
+    "execution_head": {"id": "ev_2", "entry_hash": "h2"},
+    "admin_log": [{"id": "ad_1", "entry_hash": "a1"}],
+    "admin_head": {"id": "ad_1", "entry_hash": "a1"},
+    "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCow…\n-----END PUBLIC KEY-----",
+    "signature": "c2lnbmF0dXJlLWJhc2U2NA==",
 }
 
 
@@ -182,6 +203,79 @@ class TestVerify:
         assert payload["action"] == "read_data"
         assert payload["agent"] == "agent-1"
         assert payload["context"] == {"k": "v"}
+
+
+# ── ExportAudit ───────────────────────────────────────────────────────
+
+
+class TestExportAudit:
+    def test_ok(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EXPORT_BUNDLE)
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        bundle = client.export_audit(since="2026-01-01T00:00:00Z", limit=500)
+
+        assert isinstance(bundle, AuditExportBundle)
+        assert bundle.org_id == "org_123"
+        assert len(bundle.evaluations) == 2
+        assert bundle.execution_head is not None
+        assert bundle.execution_head.entry_hash == "h2"
+        assert bundle.admin_log is not None
+        assert len(bundle.admin_log) == 1
+        assert bundle.signature == "c2lnbmF0dXJlLWJhc2U2NA=="
+
+    def test_payload_shape(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EXPORT_BUNDLE)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+
+        client.export_audit(
+            since="2026-01-01T00:00:00Z",
+            until="2026-04-22T00:00:00Z",
+            limit=500,
+            include_admin_log=False,
+        )
+
+        args, kwargs = mock_post.call_args
+        assert args[0].endswith("/v1-export-audit")
+        payload = kwargs["json"]
+        assert payload == {
+            "since": "2026-01-01T00:00:00Z",
+            "until": "2026-04-22T00:00:00Z",
+            "limit": 500,
+            "include_admin_log": False,
+        }
+
+    def test_defaults_omit_none(self, client, mocker):
+        """Unset filters must not appear on the wire."""
+        resp = _mock_resp(mocker, json_data=EXPORT_BUNDLE)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+
+        client.export_audit()
+
+        payload = mock_post.call_args[1]["json"]
+        assert "since" not in payload
+        assert "until" not in payload
+        assert "limit" not in payload
+        assert payload["include_admin_log"] is True
+
+    def test_missing_signature_raises_bad_response(self, client, mocker):
+        malformed = {**EXPORT_BUNDLE}
+        malformed.pop("signature")
+        resp = _mock_resp(mocker, json_data=malformed)
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.export_audit()
+        assert exc_info.value.code == "bad_response"
+
+    def test_403_raises(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=403)
+        resp.text = "Key lacks 'audit' scope"
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.export_audit()
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.code == "forbidden"
 
 
 # ── Gate ──────────────────────────────────────────────────────────────
