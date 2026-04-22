@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.2.0 — 2026-04-23
+
+### Added
+
+- **`AtlaSentError.request_id`.** Every SDK-raised exception now
+  carries the `X-Request-ID` the client sent with the failing
+  request. Paste it into support tickets to correlate with
+  server-side log entries. The attribute is populated on every
+  raise site — transport errors, HTTP-status errors,
+  `RateLimitError`, `AtlaSentDenied`, and the post-response
+  malformed-body `bad_response` check — so call sites can rely on
+  it without defensive `getattr`:
+
+      try:
+          result = authorize(...)
+      except AtlaSentError as err:
+          log.error("atlasent call failed rid=%s code=%s",
+                    err.request_id, err.code)
+
+  The TypeScript SDK already exposed `requestId` on `AtlaSentError`;
+  this closes the Python parity gap.
+
+- **`Retry-After` now accepts the HTTP-date form** in addition to
+  numeric delta-seconds, per RFC 9110 §10.2.3. Previously,
+  `RateLimitError.retry_after` silently became `None` when the
+  server sent a date like `"Wed, 21 Oct 2026 07:28:00 GMT"`,
+  causing retry-pacing code to skip the back-off. Now both forms
+  are parsed; dates in the past are clamped to `0.0`.
+
+### Changed
+
+- `AtlaSentClient._post` / `AsyncAtlaSentClient._post` now return
+  `(body, request_id)` instead of `body`. This is an internal
+  signature; no public API change. It lets the `evaluate` /
+  `verify` shape-check raise sites thread `request_id` into the
+  exception they raise after `_post` returns, so those exceptions
+  now carry the same correlation id as the transport-level ones.
+
+### Notes
+
+- Additive only — no field renames, no removed exports, no wire
+  format change. Drop-in for 1.1.0 callers.
+
 ## 1.1.0 — 2026-04-23
 
 ### Added

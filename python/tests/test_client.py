@@ -514,3 +514,83 @@ class TestSyncRetryPaths:
         with pytest.raises(RateLimitError) as exc_info:
             client.evaluate("a", "b")
         assert exc_info.value.retry_after is None
+
+    def test_429_with_http_date_retry_after(self, client, mocker):
+        from datetime import datetime, timedelta, timezone
+
+        future = datetime.now(timezone.utc) + timedelta(seconds=45)
+        http_date = future.strftime("%a, %d %b %Y %H:%M:%S GMT")
+        resp = _mock_resp(mocker, status_code=429, headers={"retry-after": http_date})
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(RateLimitError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.retry_after is not None
+        assert 30.0 <= exc_info.value.retry_after <= 45.0
+
+    def test_429_with_http_date_in_the_past_clamps_to_zero(self, client, mocker):
+        from datetime import datetime, timedelta, timezone
+
+        past = datetime.now(timezone.utc) - timedelta(seconds=10)
+        http_date = past.strftime("%a, %d %b %Y %H:%M:%S GMT")
+        resp = _mock_resp(mocker, status_code=429, headers={"retry-after": http_date})
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(RateLimitError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.retry_after == 0.0
+
+
+class TestSyncRequestIdOnExceptions:
+    """Every SDK-raised exception must carry the X-Request-ID we sent."""
+
+    def test_401_surfaces_request_id(self, client, mocker):
+        mock_post = mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, status_code=401),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
+        assert exc_info.value.request_id == sent
+
+    def test_429_surfaces_request_id(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=429, headers={"retry-after": "1"})
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(RateLimitError) as exc_info:
+            client.evaluate("a", "b")
+        sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
+        assert exc_info.value.request_id == sent
+
+    def test_deny_surfaces_request_id(self, client, mocker):
+        mock_post = mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
+        )
+        with pytest.raises(AtlaSentDenied) as exc_info:
+            client.evaluate("a", "b")
+        sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
+        assert exc_info.value.request_id == sent
+
+    def test_malformed_body_surfaces_request_id(self, client, mocker):
+        mock_post = mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data={"foo": "bar"}),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
+        assert exc_info.value.code == "bad_response"
+        assert exc_info.value.request_id == sent
+
+    def test_timeout_surfaces_request_id(self, client, mocker):
+        mock_post = mocker.patch.object(
+            client._client,
+            "post",
+            side_effect=httpx.TimeoutException("t"),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
+        assert exc_info.value.request_id == sent

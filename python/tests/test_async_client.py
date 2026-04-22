@@ -378,3 +378,96 @@ class TestAsyncRetryAfter:
         with pytest.raises(RateLimitError) as exc_info:
             await async_client.evaluate("a", "b")
         assert exc_info.value.retry_after is None
+
+    @pytest.mark.asyncio
+    async def test_429_with_http_date_retry_after(self, async_client, mocker):
+        from datetime import datetime, timedelta, timezone
+
+        future = datetime.now(timezone.utc) + timedelta(seconds=45)
+        http_date = future.strftime("%a, %d %b %Y %H:%M:%S GMT")
+        resp = _mock_resp(mocker, status_code=429, headers={"retry-after": http_date})
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(RateLimitError) as exc_info:
+            await async_client.evaluate("a", "b")
+        # Allow scheduling slack around the 45s encoded in the header.
+        assert exc_info.value.retry_after is not None
+        assert 30.0 <= exc_info.value.retry_after <= 45.0
+
+    @pytest.mark.asyncio
+    async def test_429_with_http_date_in_the_past_clamps_to_zero(
+        self, async_client, mocker
+    ):
+        from datetime import datetime, timedelta, timezone
+
+        past = datetime.now(timezone.utc) - timedelta(seconds=10)
+        http_date = past.strftime("%a, %d %b %Y %H:%M:%S GMT")
+        resp = _mock_resp(mocker, status_code=429, headers={"retry-after": http_date})
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(RateLimitError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.retry_after == 0.0
+
+
+class TestAsyncRequestIdOnExceptions:
+    """Every SDK-raised exception must carry the X-Request-ID we sent."""
+
+    @pytest.mark.asyncio
+    async def test_401_surfaces_request_id(self, async_client, mocker):
+        mock_post = mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, status_code=401),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
+        assert exc_info.value.request_id == sent
+        assert exc_info.value.request_id  # non-empty
+
+    @pytest.mark.asyncio
+    async def test_429_surfaces_request_id(self, async_client, mocker):
+        resp = _mock_resp(mocker, status_code=429, headers={"retry-after": "1"})
+        mock_post = mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(RateLimitError) as exc_info:
+            await async_client.evaluate("a", "b")
+        sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
+        assert exc_info.value.request_id == sent
+
+    @pytest.mark.asyncio
+    async def test_timeout_surfaces_request_id(self, async_client, mocker):
+        mock_post = mocker.patch.object(
+            async_client._client,
+            "post",
+            side_effect=httpx.TimeoutException("t"),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
+        assert exc_info.value.request_id == sent
+
+    @pytest.mark.asyncio
+    async def test_deny_surfaces_request_id(self, async_client, mocker):
+        mock_post = mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
+        )
+        with pytest.raises(AtlaSentDenied) as exc_info:
+            await async_client.evaluate("a", "b")
+        sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
+        assert exc_info.value.request_id == sent
+
+    @pytest.mark.asyncio
+    async def test_malformed_body_surfaces_request_id(self, async_client, mocker):
+        # Raised AFTER _post returns — catches that request_id is
+        # threaded out of _post via its new (body, request_id) return.
+        mock_post = mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data={"foo": "bar"}),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
+        assert exc_info.value.code == "bad_response"
+        assert exc_info.value.request_id == sent

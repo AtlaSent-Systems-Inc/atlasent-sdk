@@ -52,6 +52,11 @@ class AtlaSentError(Exception):
         code: Coarse category from :data:`AtlaSentErrorCode`.
             ``None`` only on the deprecated legacy construction path;
             every raise site inside the SDK sets it.
+        request_id: Value of the ``X-Request-ID`` header the SDK sent
+            with the failing request. Paste this into support tickets
+            so the server-side log entry can be correlated. ``None``
+            if the error was raised before the request was dispatched
+            (e.g. a :class:`ConfigurationError`).
         response_body: Decoded JSON body when available.
     """
 
@@ -61,11 +66,13 @@ class AtlaSentError(Exception):
         *,
         status_code: int | None = None,
         code: AtlaSentErrorCode | None = None,
+        request_id: str | None = None,
         response_body: dict[str, Any] | None = None,
     ) -> None:
         self.message = message
         self.status_code = status_code
         self.code: AtlaSentErrorCode | None = code
+        self.request_id = request_id
         self.response_body = response_body
         super().__init__(self.message)
 
@@ -89,6 +96,7 @@ class AtlaSentDenied(AtlaSentError):
         *,
         permit_token: str = "",
         reason: str = "",
+        request_id: str | None = None,
         response_body: dict[str, Any] | None = None,
     ) -> None:
         self.decision = decision
@@ -97,7 +105,11 @@ class AtlaSentDenied(AtlaSentError):
         msg = f"Action denied: {decision}"
         if reason:
             msg += f" — {reason}"
-        super().__init__(msg, response_body=response_body)
+        super().__init__(
+            msg,
+            request_id=request_id,
+            response_body=response_body,
+        )
 
 
 class ConfigurationError(AtlaSentError):
@@ -172,12 +184,27 @@ class RateLimitError(AtlaSentError):
 
     Attributes:
         retry_after: Seconds to wait before retrying, parsed from the
-            ``Retry-After`` header.  ``None`` if the header was absent.
+            ``Retry-After`` header. ``None`` if the header was absent
+            or unparseable. Both numeric (``"30"``) and HTTP-date
+            (``"Wed, 21 Oct 2026 07:28:00 GMT"``) forms are supported
+            per RFC 9110 §10.2.3.
+        request_id: ``X-Request-ID`` the SDK sent with the throttled
+            request. See :class:`AtlaSentError.request_id`.
     """
 
-    def __init__(self, retry_after: float | None = None) -> None:
+    def __init__(
+        self,
+        retry_after: float | None = None,
+        *,
+        request_id: str | None = None,
+    ) -> None:
         self.retry_after = retry_after
         msg = "Rate limited by AtlaSent API"
         if retry_after is not None:
             msg += f" — retry after {retry_after}s"
-        super().__init__(msg, status_code=429, code="rate_limited")
+        super().__init__(
+            msg,
+            status_code=429,
+            code="rate_limited",
+            request_id=request_id,
+        )
