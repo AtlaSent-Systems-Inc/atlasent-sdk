@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.0.0 — canonical server alignment (breaking)
+
+Clean break from 0.x. There is no migration path; callers must rewrite their
+request shapes. Every 0.x request was already being rejected or silently
+degraded on the server -- the 0.x surface sent `{action, agent, api_key}` with
+`permitted: bool`, which did not match the real v1-evaluate / v1-verify-permit
+handlers.
+
+### Wire contract
+
+- `POST /v1-evaluate` request: `EvaluateRequest(action_type, actor_id, context?, request_id?, shadow?, explain?, traceparent?)`. No `api_key` in body; auth via `Authorization: Bearer` header only.
+- `POST /v1-evaluate` response: `EvaluateResponse(decision, request_id, mode, cache_hit, evaluation_ms, permit_token?, expires_at?, deny_code?, deny_reason?, fingerprint?, risk_score?, rollout?, shadow?, trace?, audit_entry_hash?, idempotent_replay?)`. `decision` is the string enum `allow | deny | hold | escalate` (not a bool).
+- `POST /v1-verify-permit` request: `VerifyPermitRequest(permit_token, actor_id?, action_type?, traceparent?)`.
+- `POST /v1-verify-permit` response: `VerifyPermitResponse(valid, outcome, decision?, verify_error_code?, reason)`. Value-based fail-closed -- HTTP status is not authoritative.
+
+### Client surface
+
+- `evaluate(request)` returns `EvaluateResponse` for every decision. Does not raise on non-allow.
+- `authorize(request)` raises `AuthorizationDeniedError` on non-allow.
+- `verify_permit(request)` never raises on `valid: false`. Inspect `.valid` and `.outcome`.
+- `with_permit(request, fn)` evaluates, requires `allow`, verifies+consumes the permit, and runs `fn(evaluation, verification)`. Binds verification to the evaluation's `actor_id` and `action_type` so a permit lifted from one flow can't be replayed in another.
+
+### Removed
+
+- `AuthorizationResult`, `GateResult`, `EvaluateResult`, `VerifyResult` -- replaced by the canonical `EvaluateResponse` / `VerifyPermitResponse`.
+- `AtlaSentDenied`, `PermissionDeniedError` -- replaced by `AuthorizationDeniedError` (carries full `response: EvaluateResponse`).
+- `client.gate()` -- replaced by `client.with_permit()`.
+- `anon_key` config -- unused with header auth.
+- `api_key` body field (server ignores; header is canonical).
+
+### Added
+
+- `AuthorizationUnavailableError` -- thrown on network / timeout / malformed body / 4xx / 5xx for `evaluate` and `authorize`. Fail-closed callers must not proceed.
+- `PermitVerificationError.response` carries the full `VerifyPermitResponse` with `.verify_error_code` accessor.
+- `AuthorizationDeniedError.response` carries the full `EvaluateResponse` with `.decision` / `.deny_code` / `.deny_reason` / `.request_id` accessors.
+
 ## 0.4.0 — 2026-04-17
 
 ### Added

@@ -1,13 +1,14 @@
 """AtlaSent SDK exceptions.
 
-The SDK follows a **fail-closed** design: any failure to confirm
-authorization raises an exception, ensuring no action proceeds
-without an explicit permit.
+The SDK follows a **fail-closed** design: any failure to confirm authorization
+raises, ensuring no action proceeds without an explicit permit.
 """
 
 from __future__ import annotations
 
 from typing import Any, Literal
+
+from .models import EvaluateResponse, VerifyPermitResponse
 
 AtlaSentErrorCode = Literal[
     "invalid_api_key",
@@ -18,32 +19,13 @@ AtlaSentErrorCode = Literal[
     "bad_response",
     "bad_request",
     "server_error",
+    "unavailable",
 ]
-"""Coarse error category — shared across AtlaSent SDKs.
-
-Call sites MAY ``switch`` / ``match`` on this field. The set is
-defined by ``contract/vectors/errors.json`` in the SDK repo; any new
-code MUST be added there first.
-"""
+"""Coarse error category -- shared across AtlaSent SDKs."""
 
 
 class AtlaSentError(Exception):
-    """Base exception for all AtlaSent SDK errors.
-
-    Raised on network failures, timeouts, malformed responses,
-    configuration errors, and any other unexpected condition.
-    Because the SDK is fail-closed, an ``AtlaSentError`` means
-    the action must NOT proceed.
-
-    Attributes:
-        message: Human-readable error message.
-        status_code: HTTP status code when the error originated from
-            an API response. ``None`` for transport errors.
-        code: Coarse category from :data:`AtlaSentErrorCode`.
-            ``None`` only on the deprecated legacy construction path;
-            every raise site inside the SDK sets it.
-        response_body: Decoded JSON body when available.
-    """
+    """Base exception for all AtlaSent SDK errors."""
 
     def __init__(
         self,
@@ -60,34 +42,80 @@ class AtlaSentError(Exception):
         super().__init__(self.message)
 
 
-class AtlaSentDenied(AtlaSentError):
-    """Raised when the AtlaSent API explicitly denies an action.
+class AuthorizationUnavailableError(AtlaSentError):
+    """The SDK could not reach AtlaSent, got a malformed response, or timed out.
 
-    This is the normal "not permitted" path.  Callers should catch
-    this to handle denied actions gracefully (e.g., log an audit
-    event, return a 403 to the user).
-
-    Attributes:
-        decision: The decision string returned by the API (e.g. ``"deny"``).
-        permit_token: The token associated with this evaluation, if any.
-        reason: Human-readable explanation, when provided by the API.
+    Fail-closed callers MUST NOT proceed with the action on this error.
     """
 
     def __init__(
         self,
-        decision: str,
+        message: str,
         *,
-        permit_token: str = "",
-        reason: str = "",
+        status_code: int | None = None,
         response_body: dict[str, Any] | None = None,
     ) -> None:
-        self.decision = decision
-        self.permit_token = permit_token
-        self.reason = reason
-        msg = f"Action denied: {decision}"
-        if reason:
-            msg += f" — {reason}"
-        super().__init__(msg, response_body=response_body)
+        super().__init__(
+            message,
+            status_code=status_code,
+            code="unavailable",
+            response_body=response_body,
+        )
+
+
+class AuthorizationDeniedError(AtlaSentError):
+    """The server said no. Decision is one of ``deny | hold | escalate``.
+
+    Raised by :meth:`AtlaSentClient.authorize` and :meth:`AtlaSentClient.with_permit`
+    to block execution. Carries the full :class:`EvaluateResponse` so callers can
+    log ``deny_code`` / ``deny_reason`` / ``request_id``.
+    """
+
+    def __init__(self, response: EvaluateResponse) -> None:
+        self.response = response
+        parts = [f"atlasent {response.decision}"]
+        if response.deny_code:
+            parts.append(response.deny_code)
+        if response.deny_reason:
+            parts.append(response.deny_reason)
+        super().__init__(": ".join(parts), code="forbidden")
+
+    @property
+    def decision(self) -> str:
+        return self.response.decision
+
+    @property
+    def deny_code(self) -> str | None:
+        return self.response.deny_code
+
+    @property
+    def deny_reason(self) -> str | None:
+        return self.response.deny_reason
+
+    @property
+    def request_id(self) -> str:
+        return self.response.request_id
+
+
+class PermitVerificationError(AtlaSentError):
+    """Permit verification denied execution.
+
+    Carries the full :class:`VerifyPermitResponse` so callers can log
+    ``verify_error_code``. Raised by :meth:`AtlaSentClient.with_permit`.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        response: VerifyPermitResponse | None = None,
+    ) -> None:
+        self.response = response
+        super().__init__(message, code="forbidden")
+
+    @property
+    def verify_error_code(self) -> str | None:
+        return self.response.verify_error_code if self.response else None
 
 
 class ConfigurationError(AtlaSentError):
@@ -97,25 +125,12 @@ class ConfigurationError(AtlaSentError):
         super().__init__(message)
 
 
-class PermissionDeniedError(AtlaSentDenied):
-    """Raised when ``authorize(..., raise_on_deny=True)`` is denied.
-
-    Alias-style subclass of :class:`AtlaSentDenied` that reads more
-    naturally in authorization-centric code paths.
-    """
-
-
 class RateLimitError(AtlaSentError):
-    """Raised when the API returns HTTP 429 (Too Many Requests).
-
-    Attributes:
-        retry_after: Seconds to wait before retrying, parsed from the
-            ``Retry-After`` header.  ``None`` if the header was absent.
-    """
+    """Raised when the API returns HTTP 429 (Too Many Requests)."""
 
     def __init__(self, retry_after: float | None = None) -> None:
         self.retry_after = retry_after
         msg = "Rate limited by AtlaSent API"
         if retry_after is not None:
-            msg += f" — retry after {retry_after}s"
+            msg += f" -- retry after {retry_after}s"
         super().__init__(msg, status_code=429, code="rate_limited")

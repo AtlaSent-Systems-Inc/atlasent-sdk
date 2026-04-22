@@ -1,32 +1,36 @@
-"""Decorators and middleware for framework integration.
-
-Provides ``atlasent_guard`` for wrapping sync functions (Flask routes,
-Django views) and ``async_atlasent_guard`` for async functions (FastAPI
-endpoints, Starlette routes).
+"""Decorators that gate a function behind AtlaSent with_permit enforcement.
 
 Usage with Flask::
 
-    from atlasent import AtlaSentClient
+    from atlasent import AtlaSentClient, EvaluateRequest
     from atlasent.guard import atlasent_guard
 
-    client = AtlaSentClient(api_key="ask_live_...")
+    client = AtlaSentClient(api_key="ak_...")
 
-    @app.route("/modify-record", methods=["POST"])
-    @atlasent_guard(client, "modify_patient_record", actor_id="flask-agent")
-    def modify_record(gate_result=None):
-        return {"permit_hash": gate_result.verification.permit_hash}
+    def build_request(**kwargs):
+        return EvaluateRequest(
+            action_type="modify_patient_record",
+            actor_id=kwargs["agent_id"],
+            context={"patient_id": kwargs.get("patient_id")},
+        )
 
-Usage with FastAPI::
+    @app.route("/modify", methods=["POST"])
+    @atlasent_guard(client, build_request)
+    def modify(agent_id, patient_id, atlasent=None):
+        # `atlasent` is a tuple (EvaluateResponse, VerifyPermitResponse).
+        return {"request_id": atlasent[0].request_id}
+
+Usage with FastAPI (async)::
 
     from atlasent import AsyncAtlaSentClient
     from atlasent.guard import async_atlasent_guard
 
-    client = AsyncAtlaSentClient(api_key="ask_live_...")
+    client = AsyncAtlaSentClient(api_key="ak_...")
 
-    @app.post("/modify-record")
-    @async_atlasent_guard(client, "modify_patient_record", actor_id="api-agent")
-    async def modify_record(gate_result=None):
-        return {"permit_hash": gate_result.verification.permit_hash}
+    @app.post("/modify")
+    @async_atlasent_guard(client, build_request)
+    async def modify(agent_id: str, atlasent=None):
+        return {"request_id": atlasent[0].request_id}
 """
 
 from __future__ import annotations
@@ -38,54 +42,41 @@ from typing import Any
 
 from .async_client import AsyncAtlaSentClient
 from .client import AtlaSentClient
+from .models import EvaluateRequest
 
 logger = logging.getLogger("atlasent")
+
+RequestBuilder = Callable[..., EvaluateRequest]
 
 
 def atlasent_guard(
     client: AtlaSentClient,
-    action_type: str,
-    *,
-    actor_id: str = "",
-    context: dict[str, Any] | None = None,
-    actor_id_kwarg: str = "",
-    context_kwarg: str = "",
+    build_request: RequestBuilder,
 ) -> Callable:
-    """Decorator that gates a sync function behind AtlaSent authorization.
+    """Gate a sync function behind ``client.with_permit``.
 
-    Calls ``client.gate()`` before the wrapped function executes.
-    On permit, the ``GateResult`` is passed as the ``gate_result``
-    keyword argument. On deny, ``AtlaSentDenied`` propagates to the
-    caller (or framework error handler).
-
-    Args:
-        client: A sync ``AtlaSentClient`` instance.
-        action_type: The action type to authorize.
-        actor_id: Static actor ID. If empty, uses ``actor_id_kwarg``.
-        context: Static context dict merged with any dynamic context.
-        actor_id_kwarg: Name of a kwarg on the wrapped function to
-            use as the actor ID (e.g. ``"agent_id"``).
-        context_kwarg: Name of a kwarg on the wrapped function to
-            use as additional context.
+    ``build_request`` receives the decorated function's ``*args, **kwargs`` and
+    returns an :class:`EvaluateRequest`. On success, the ``(evaluation,
+    verification)`` tuple is passed as the ``atlasent`` kwarg. On deny or
+    verification failure, the underlying exception (:class:`AuthorizationDeniedError`
+    or :class:`PermitVerificationError`) propagates to the caller.
     """
 
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            resolved_actor = actor_id
-            if actor_id_kwarg and actor_id_kwarg in kwargs:
-                resolved_actor = str(kwargs[actor_id_kwarg])
-
-            resolved_ctx = dict(context or {})
-            if context_kwarg and context_kwarg in kwargs:
-                extra = kwargs[context_kwarg]
-                if isinstance(extra, dict):
-                    resolved_ctx.update(extra)
-
-            logger.debug("guard: gating %s for actor=%r", action_type, resolved_actor)
-            result = client.gate(action_type, resolved_actor, resolved_ctx)
-            kwargs["gate_result"] = result
-            return fn(*args, **kwargs)
+            request = build_request(*args, **kwargs)
+            logger.debug(
+                "guard: gating action_type=%r actor_id=%r",
+                request.action_type,
+                request.actor_id,
+            )
+            return client.with_permit(
+                request,
+                lambda evaluation, verification: fn(
+                    *args, **kwargs, atlasent=(evaluation, verification)
+                ),
+            )
 
         return wrapper
 
@@ -94,40 +85,25 @@ def atlasent_guard(
 
 def async_atlasent_guard(
     client: AsyncAtlaSentClient,
-    action_type: str,
-    *,
-    actor_id: str = "",
-    context: dict[str, Any] | None = None,
-    actor_id_kwarg: str = "",
-    context_kwarg: str = "",
+    build_request: RequestBuilder,
 ) -> Callable:
-    """Async decorator that gates a function behind AtlaSent authorization.
-
-    Same as :func:`atlasent_guard` but for async functions and
-    ``AsyncAtlaSentClient``.
-    """
+    """Async counterpart to :func:`atlasent_guard`."""
 
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            resolved_actor = actor_id
-            if actor_id_kwarg and actor_id_kwarg in kwargs:
-                resolved_actor = str(kwargs[actor_id_kwarg])
-
-            resolved_ctx = dict(context or {})
-            if context_kwarg and context_kwarg in kwargs:
-                extra = kwargs[context_kwarg]
-                if isinstance(extra, dict):
-                    resolved_ctx.update(extra)
-
+            request = build_request(*args, **kwargs)
             logger.debug(
-                "guard: gating %s for actor=%r (async)",
-                action_type,
-                resolved_actor,
+                "guard: gating action_type=%r actor_id=%r (async)",
+                request.action_type,
+                request.actor_id,
             )
-            result = await client.gate(action_type, resolved_actor, resolved_ctx)
-            kwargs["gate_result"] = result
-            return await fn(*args, **kwargs)
+            return await client.with_permit(
+                request,
+                lambda evaluation, verification: fn(
+                    *args, **kwargs, atlasent=(evaluation, verification)
+                ),
+            )
 
         return wrapper
 

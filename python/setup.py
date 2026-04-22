@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="atlasent",
-    version="1.1.0",
+    version="1.0.0",
     description="AtlaSent Python SDK — policy evaluation and governance",
     packages=find_packages(),
     python_requires=">=3.10",
