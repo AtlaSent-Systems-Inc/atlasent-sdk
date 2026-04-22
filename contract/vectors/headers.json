@@ -1,5 +1,5 @@
 {
-  "description": "Required HTTP request headers. Every SDK MUST send these on both /v1-evaluate and /v1-verify-permit.",
+  "description": "Required HTTP request headers. Every SDK MUST send these on both /v1-evaluate and /v1-verify-permit. The api_key is NEVER placed in the request body.",
   "required_headers": [
     {
       "name": "Content-Type",
@@ -12,21 +12,17 @@
     {
       "name": "Authorization",
       "value_template": "Bearer <api_key>",
-      "description": "The same api_key MUST also appear in the JSON body for wire parity."
+      "description": "The ONLY path for the API key. Body MUST NOT contain an `api_key` field."
     },
     {
       "name": "User-Agent",
-      "value_pattern": "^atlasent-(python|sdk|[a-z]+)/\\d+\\.\\d+\\.\\d+( .+)?$",
-      "description": "SDK name and semver. Suffixes (node version, runtime, etc.) are allowed."
+      "value_pattern": "^(atlasent-(python|sdk|[a-z]+)|@atlasent/sdk)/\\d+\\.\\d+\\.\\d+( .+)?$",
+      "description": "SDK name and semver. `atlasent-python/1.0.0` or `@atlasent/sdk/1.0.0` both accepted."
     },
     {
       "name": "X-Request-ID",
       "value_pattern": "^[0-9a-f-]{8,}$",
       "description": "Per-request correlation ID. Hex, UUID v4 recommended. MUST be unique per request."
     }
-  ],
-  "notes": [
-    "TypeScript SDK emits UA of the form `@atlasent/sdk/<semver> node/<node-version>`. This intentionally does NOT match `atlasent-<lang>/<semver>` above; both are accepted by the contract (see policy_lint allowance).",
-    "Servers MUST accept either `Authorization: Bearer <key>` OR `api_key` in the body; new SDKs SHOULD send both."
   ]
 }

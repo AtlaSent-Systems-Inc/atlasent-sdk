@@ -2,25 +2,18 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://atlasent.io/contract/v1/error-response.schema.json",
   "title": "ErrorResponse",
-  "description": "Shape of the body returned on non-2xx HTTP responses. SDKs surface `message` (preferred) or `reason` to callers.",
+  "description": "Body returned on non-2xx responses from /v1-evaluate (and auth/rate-limit failures on /v1-verify-permit when the server has not constructed a VerifyPermitResponse). Note that verify-permit's value-based envelope (valid/outcome) is returned on most 4xx paths too; this ErrorResponse shape is the fallback envelope.",
   "type": "object",
   "additionalProperties": true,
+  "required": ["error_code", "reason"],
   "properties": {
-    "message": {
+    "error_code": {
       "type": "string",
-      "description": "Preferred human-readable error string."
+      "description": "Machine-readable error code (e.g. 'UNAUTHORIZED', 'INVALID_API_KEY', 'INSUFFICIENT_SCOPE', 'RATE_LIMITED', 'BAD_REQUEST', 'AUDIT_APPEND_FAILED', 'INTERNAL_ERROR')."
     },
     "reason": {
       "type": "string",
-      "description": "Fallback human-readable error string when message is not present."
-    },
-    "code": {
-      "type": "string",
-      "description": "Optional machine-readable code (e.g. 'invalid_api_key', 'rate_limited')."
-    },
-    "request_id": {
-      "type": "string",
-      "description": "Optional echo of the X-Request-ID header."
+      "description": "Human-readable error explanation."
     }
   }
 }

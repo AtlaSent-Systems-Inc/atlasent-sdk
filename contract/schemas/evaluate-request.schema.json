@@ -2,31 +2,44 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://atlasent.io/contract/v1/evaluate-request.schema.json",
   "title": "EvaluateRequest",
-  "description": "Wire payload sent to POST /v1-evaluate. SDKs translate their camelCase surface into this snake_case body.",
+  "description": "Wire payload sent to POST /v1-evaluate. Authorization is carried in the `Authorization: Bearer <api_key>` header and is NEVER placed in the body.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["action", "agent", "context", "api_key"],
+  "required": ["action_type", "actor_id"],
   "properties": {
-    "action": {
+    "action_type": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "description": "Action being authorized (e.g. 'modify_patient_record'). Stable identifier, snake_case recommended."
+      "description": "Action class being authorized (e.g. 'payment.transfer'). Stable identifier."
     },
-    "agent": {
+    "actor_id": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "description": "Identifier of the calling agent or actor (e.g. 'clinical-data-agent')."
+      "description": "Identifier of the actor/agent making the request (e.g. 'user:42', 'agent:support-bot')."
     },
     "context": {
       "type": "object",
-      "description": "Arbitrary policy context (user, environment, resource IDs). Values MUST be JSON-serializable.",
+      "description": "Arbitrary policy context. Values MUST be JSON-serializable. Defaults to {} when omitted.",
       "additionalProperties": true
     },
-    "api_key": {
+    "request_id": {
       "type": "string",
-      "description": "API key echoed in the body. Also sent as Authorization: Bearer <key>; both MUST be present for wire parity."
+      "minLength": 1,
+      "description": "Idempotency key. Retries with the same value replay the recorded decision."
+    },
+    "shadow": {
+      "type": "boolean",
+      "description": "If true, evaluate in shadow mode: no permit is issued, the request is not recorded as a live decision."
+    },
+    "explain": {
+      "type": "boolean",
+      "description": "If true, response includes a per-rule `trace` array."
+    },
+    "traceparent": {
+      "type": "string",
+      "description": "W3C traceparent for body-level trace propagation when the transport cannot forward HTTP headers."
     }
   }
 }

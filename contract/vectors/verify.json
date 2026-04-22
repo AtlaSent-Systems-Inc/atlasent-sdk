@@ -1,112 +1,122 @@
 {
-  "description": "Round-trip vectors for POST /v1-verify-permit.",
+  "description": "Round-trip vectors for POST /v1-verify-permit. Response is value-based fail-closed: the SDK MUST treat `valid` and `outcome` in the body as authoritative, regardless of HTTP status.",
   "vectors": [
     {
       "name": "verify_permit_happy",
-      "description": "Happy-path verification of a previously issued permit.",
+      "description": "Happy-path verification with actor_id + action_type binding.",
       "sdk_input": {
-        "permit_id": "dec_ctx_allow_002",
-        "action": "modify_patient_record",
-        "agent": "clinical-data-agent",
-        "context": {
-          "user": "dr_smith",
-          "environment": "production",
-          "patient_id": "PT-001",
-          "change_reason": "Correct date-of-birth"
-        }
+        "permit_token": "pt_ctx_allow_002",
+        "actor_id": "clinical-data-agent",
+        "action_type": "modify_patient_record"
       },
-      "api_key": "ask_live_test_key",
       "wire_request": {
-        "decision_id": "dec_ctx_allow_002",
-        "action": "modify_patient_record",
-        "agent": "clinical-data-agent",
-        "context": {
-          "user": "dr_smith",
-          "environment": "production",
-          "patient_id": "PT-001",
-          "change_reason": "Correct date-of-birth"
-        },
-        "api_key": "ask_live_test_key"
+        "permit_token": "pt_ctx_allow_002",
+        "actor_id": "clinical-data-agent",
+        "action_type": "modify_patient_record"
       },
       "wire_response": {
-        "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_002_hash",
-        "timestamp": "2026-04-17T10:01:05Z"
+        "valid": true,
+        "outcome": "allow",
+        "decision": "allow",
+        "reason": "permit verified and consumed"
       },
       "sdk_output": {
-        "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_002_hash",
-        "timestamp": "2026-04-17T10:01:05Z"
+        "valid": true,
+        "outcome": "allow",
+        "decision": "allow",
+        "reason": "permit verified and consumed"
       }
     },
     {
       "name": "verify_permit_minimum_payload",
-      "description": "Verification when the caller only supplies permit_id. SDK MUST default action/agent to '' and context to {}.",
-      "sdk_input": { "permit_id": "dec_minimal_allow_001" },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "decision_id": "dec_minimal_allow_001",
-        "action": "",
-        "agent": "",
-        "context": {},
-        "api_key": "ask_live_test_key"
-      },
+      "description": "Verification with only the permit_token. actor_id / action_type / traceparent MUST be omitted from the wire, not serialized as empty strings.",
+      "sdk_input": { "permit_token": "pt_minimal_allow_001" },
+      "wire_request": { "permit_token": "pt_minimal_allow_001" },
       "wire_response": {
-        "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_001_hash",
-        "timestamp": "2026-04-17T10:00:05Z"
+        "valid": true,
+        "outcome": "allow",
+        "decision": "allow",
+        "reason": "permit verified and consumed"
       },
       "sdk_output": {
-        "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_001_hash",
-        "timestamp": "2026-04-17T10:00:05Z"
+        "valid": true,
+        "outcome": "allow",
+        "decision": "allow",
+        "reason": "permit verified and consumed"
       }
     },
     {
-      "name": "verify_permit_not_verified",
-      "description": "verified=false is NOT a transport error; SDKs MUST return the body, not throw.",
-      "sdk_input": { "permit_id": "dec_expired" },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "decision_id": "dec_expired",
-        "action": "",
-        "agent": "",
-        "context": {},
-        "api_key": "ask_live_test_key"
-      },
+      "name": "verify_permit_already_used",
+      "description": "Single-use replay. HTTP 200, but valid=false. SDK MUST NOT raise from the transport layer; it MUST return the envelope for the caller to inspect.",
+      "sdk_input": { "permit_token": "pt_already_used" },
+      "wire_request": { "permit_token": "pt_already_used" },
       "wire_response": {
-        "verified": false,
-        "outcome": "expired",
-        "permit_hash": "",
-        "timestamp": "2026-04-17T10:03:00Z"
+        "valid": false,
+        "outcome": "deny",
+        "verify_error_code": "PERMIT_ALREADY_USED",
+        "reason": "This permit token has already been consumed"
       },
       "sdk_output": {
-        "verified": false,
-        "outcome": "expired",
-        "permit_hash": "",
-        "timestamp": "2026-04-17T10:03:00Z"
+        "valid": false,
+        "outcome": "deny",
+        "verify_error_code": "PERMIT_ALREADY_USED",
+        "reason": "This permit token has already been consumed"
       }
     },
     {
-      "name": "verify_response_missing_verified",
-      "description": "Malformed response: missing `verified`. SDKs MUST raise a bad-response error.",
-      "sdk_input": { "permit_id": "dec_x" },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "decision_id": "dec_x",
-        "action": "",
-        "agent": "",
-        "context": {},
-        "api_key": "ask_live_test_key"
+      "name": "verify_permit_actor_mismatch",
+      "description": "Binding check failure. The SDK MUST forward actor_id / action_type cross-check fields so the server can detect replays across actors.",
+      "sdk_input": {
+        "permit_token": "pt_allow_user_1",
+        "actor_id": "user:attacker",
+        "action_type": "payment.transfer"
       },
+      "wire_request": {
+        "permit_token": "pt_allow_user_1",
+        "actor_id": "user:attacker",
+        "action_type": "payment.transfer"
+      },
+      "wire_response": {
+        "valid": false,
+        "outcome": "deny",
+        "verify_error_code": "ACTOR_MISMATCH",
+        "reason": "actor_id does not match the original evaluation"
+      },
+      "sdk_output": {
+        "valid": false,
+        "outcome": "deny",
+        "verify_error_code": "ACTOR_MISMATCH",
+        "reason": "actor_id does not match the original evaluation"
+      }
+    },
+    {
+      "name": "verify_permit_4xx_still_value_based",
+      "description": "Server may return 403 with the same value-based envelope (e.g. INSUFFICIENT_SCOPE). SDK MUST parse the body, not raise based on HTTP status.",
+      "sdk_input": { "permit_token": "pt_scope_denied" },
+      "wire_request": { "permit_token": "pt_scope_denied" },
+      "http_status": 403,
+      "wire_response": {
+        "valid": false,
+        "outcome": "deny",
+        "verify_error_code": "INSUFFICIENT_SCOPE",
+        "reason": "Key lacks 'verify' scope"
+      },
+      "sdk_output": {
+        "valid": false,
+        "outcome": "deny",
+        "verify_error_code": "INSUFFICIENT_SCOPE",
+        "reason": "Key lacks 'verify' scope"
+      }
+    },
+    {
+      "name": "verify_response_missing_valid",
+      "description": "Malformed response: missing `valid`. SDKs MUST raise a transport-unavailable error.",
+      "sdk_input": { "permit_token": "pt_x" },
+      "wire_request": { "permit_token": "pt_x" },
       "wire_response": { "outcome": "ok" },
       "sdk_error": {
-        "kind": "bad_response",
-        "message_contains": "verified"
+        "kind": "unavailable",
+        "message_contains": "valid"
       }
     }
   ]

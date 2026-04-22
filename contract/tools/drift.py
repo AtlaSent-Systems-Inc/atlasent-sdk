@@ -1,37 +1,43 @@
 """Contract drift detector.
 
-Compares each SDK's wire-format shape to the shared contract schemas
-in ``contract/schemas/``. Fails (exit 1) on mismatch.
+Compares each SDK's wire-format shape to the shared contract schemas in
+``contract/schemas/``. Fails (exit 1) on mismatch.
 
 What it checks, per endpoint (/v1-evaluate, /v1-verify-permit):
-  1. Required request fields match the schema.
-  2. Allowed request fields match the schema (no extras).
-  3. Required response fields match the schema.
+  1. Required request fields declared in the SDK match the schema.
+  2. SDK request fields are allowed by the schema (no extras when
+     `additionalProperties: false`).
+  3. Required response fields declared in the SDK match the schema.
 
-Languages covered:
-  * Python SDK: imported directly, pydantic ``model_fields`` + aliases
-    are introspected.
-  * TypeScript SDK: the body literal and the wire interfaces in
-    ``typescript/src/client.ts`` are parsed with a deliberately narrow
-    regex. Any stylistic drift in that file will be caught here.
+Canonical SDK locations:
+  * Python SDK -- ``atlasent-sdk/python/atlasent/models.py`` (this repo).
+    Pydantic ``model_fields`` are introspected directly.
+  * TypeScript SDK -- ``@atlasent/types/src/index.ts`` in the ``atlasent``
+    monorepo (sibling checkout). Override the path via
+    ``ATLASENT_TS_TYPES`` if the monorepo lives elsewhere. Fields are
+    extracted from the ``interface EvaluateRequest``, ``EvaluateResponse``,
+    ``VerifyPermitRequest``, ``VerifyPermitResponse`` declarations.
 
 Run:  ``python contract/tools/drift.py``
 """
 
 from __future__ import annotations
 
-import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import json
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_DIR = REPO_ROOT / "contract"
 SCHEMAS = CONTRACT_DIR / "schemas"
 PYTHON_SRC = REPO_ROOT / "python"
-TS_CLIENT = REPO_ROOT / "typescript" / "src" / "client.ts"
+
+DEFAULT_TS_TYPES = REPO_ROOT.parent / "atlasent" / "packages" / "types" / "src" / "index.ts"
 
 
 # ── schema helpers ────────────────────────────────────────────────────
@@ -52,39 +58,36 @@ def _schema_field_sets(schema: dict[str, Any]) -> tuple[set[str], set[str], bool
 # ── Python SDK introspection ──────────────────────────────────────────
 
 
-def _python_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
-    """Return {endpoint: {'request_keys': {...}, 'response_keys': {...}}}.
-
-    We import the SDK in-process; the Python SDK is the source of truth
-    for what gets serialized (pydantic uses aliases when
-    model_dump(by_alias=True)).
-    """
+def _python_sdk_wire_fields() -> dict[str, dict[str, tuple[set[str], set[str]]]]:
+    """Return {endpoint: {'request': (required, all), 'response': (required, all)}}."""
     sys.path.insert(0, str(PYTHON_SRC))
     try:
         from atlasent.models import (  # type: ignore[import-not-found]
             EvaluateRequest,
-            EvaluateResult,
-            VerifyRequest,
-            VerifyResult,
+            EvaluateResponse,
+            VerifyPermitRequest,
+            VerifyPermitResponse,
         )
     finally:
         sys.path.pop(0)
 
-    def _aliases(model: type) -> set[str]:
-        out: set[str] = set()
-        for name, field_info in model.model_fields.items():
-            alias = field_info.alias or name
-            out.add(alias)
-        return out
+    def _fields(model: type) -> tuple[set[str], set[str]]:
+        required: set[str] = set()
+        allowed: set[str] = set()
+        for name, info in model.model_fields.items():
+            allowed.add(name)
+            if info.is_required():
+                required.add(name)
+        return required, allowed
 
     return {
         "/v1-evaluate": {
-            "request_keys": _aliases(EvaluateRequest),
-            "response_keys": _aliases(EvaluateResult),
+            "request": _fields(EvaluateRequest),
+            "response": _fields(EvaluateResponse),
         },
         "/v1-verify-permit": {
-            "request_keys": _aliases(VerifyRequest),
-            "response_keys": _aliases(VerifyResult),
+            "request": _fields(VerifyPermitRequest),
+            "response": _fields(VerifyPermitResponse),
         },
     }
 
@@ -92,86 +95,52 @@ def _python_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
 # ── TypeScript SDK introspection ──────────────────────────────────────
 
 
-_BODY_KEY_RE = re.compile(r"(?m)^\s*([a-z_][a-z0-9_]*)\s*:")
-
 _INTERFACE_RE = re.compile(
-    r"interface\s+(?P<name>\w+)\s*\{(?P<body>[^}]*)\}",
+    r"export\s+interface\s+(?P<name>\w+)\s*\{(?P<body>[^}]*)\}",
     re.DOTALL,
 )
-_INTERFACE_FIELD_RE = re.compile(
-    r"(?m)^\s*([a-z_][a-z0-9_]*)(\?)?:",
+# Match lines like `  foo: Type;`, `  foo?: Type;`, with optional leading
+# comment/doc prefix. Skip `//` comments.
+_FIELD_RE = re.compile(
+    r"(?m)^\s*(?P<name>[a-z_][a-z0-9_]*)\s*(?P<optional>\??)\s*:",
 )
 
 
-def _extract_object_literal(src: str, start: int) -> str:
-    """Return the content between the opening `{` at/after `start` and
-    its matching `}`. Brace-aware; ignores braces inside strings."""
-    i = src.index("{", start)
-    depth = 0
-    in_str: str | None = None
-    out = []
-    while i < len(src):
-        ch = src[i]
-        if in_str:
-            out.append(ch)
-            if ch == "\\" and i + 1 < len(src):
-                out.append(src[i + 1])
-                i += 2
-                continue
-            if ch == in_str:
-                in_str = None
-        else:
-            if ch in ("'", '"', "`"):
-                in_str = ch
-                out.append(ch)
-            elif ch == "{":
-                depth += 1
-                if depth > 1:
-                    out.append(ch)
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    return "".join(out)
-                out.append(ch)
-            else:
-                out.append(ch)
-        i += 1
-    raise RuntimeError("Unterminated object literal")
+def _ts_interface_fields(src: str, name: str) -> tuple[set[str], set[str]]:
+    for m in _INTERFACE_RE.finditer(src):
+        if m.group("name") != name:
+            continue
+        body = m.group("body")
+        # Strip line comments.
+        body = re.sub(r"(?m)^\s*//.*$", "", body)
+        required: set[str] = set()
+        allowed: set[str] = set()
+        for fm in _FIELD_RE.finditer(body):
+            fname = fm.group("name")
+            allowed.add(fname)
+            if fm.group("optional") != "?":
+                required.add(fname)
+        return required, allowed
+    raise RuntimeError(f"Could not find `export interface {name}` in TS types source")
 
 
-def _typescript_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
-    if not TS_CLIENT.exists():
-        raise FileNotFoundError(f"TypeScript client not found at {TS_CLIENT}")
-    src = TS_CLIENT.read_text()
-
-    def _body_keys_in_method(method_name: str) -> set[str]:
-        # Find `async <method>(` — case-sensitive — then the FIRST
-        # `const body = {` after it.
-        m = re.search(rf"async\s+{re.escape(method_name)}\s*\(", src)
-        if not m:
-            raise RuntimeError(f"Could not locate method '{method_name}' in client.ts")
-        body_marker = src.find("const body", m.end())
-        if body_marker == -1:
-            raise RuntimeError(f"No `const body = {{...}}` in method '{method_name}'")
-        literal = _extract_object_literal(src, body_marker)
-        return set(_BODY_KEY_RE.findall(literal))
-
-    def _wire_interface_keys(name: str) -> set[str]:
-        for m in _INTERFACE_RE.finditer(src):
-            if m.group("name") == name:
-                return {
-                    match[0] for match in _INTERFACE_FIELD_RE.findall(m.group("body"))
-                }
-        raise RuntimeError(f"Could not locate interface '{name}' in client.ts")
-
+def _typescript_sdk_wire_fields(
+    path: Path,
+) -> dict[str, dict[str, tuple[set[str], set[str]]]]:
+    if not path.exists():
+        raise FileNotFoundError(
+            f"@atlasent/types source not found at {path}. "
+            "Check out the `atlasent` monorepo next to `atlasent-sdk`, or set ATLASENT_TS_TYPES."
+        )
+    src = path.read_text()
     return {
         "/v1-evaluate": {
-            "request_keys": _body_keys_in_method("evaluate"),
-            "response_keys": _wire_interface_keys("EvaluateWire"),
+            "request": _ts_interface_fields(src, "EvaluateRequest"),
+            "response": _ts_interface_fields(src, "EvaluateResponse"),
         },
         "/v1-verify-permit": {
-            "request_keys": _body_keys_in_method("verifyPermit"),
-            "response_keys": _wire_interface_keys("VerifyPermitWire"),
+            "request": _ts_interface_fields(src, "VerifyPermitRequest"),
+            "response": _ts_interface_fields(src, "VerifyPermitResponse"),
         },
     }
 
@@ -199,28 +168,35 @@ def _compare(
     sdk: str,
     endpoint: str,
     direction: str,
-    sdk_keys: set[str],
+    sdk_required: set[str],
+    sdk_allowed: set[str],
     schema: dict[str, Any],
     report: DriftReport,
 ) -> None:
-    required, allowed, extras_allowed = _schema_field_sets(schema)
-    missing = required - sdk_keys
-    unknown = sdk_keys - allowed
+    schema_required, schema_allowed, extras_allowed = _schema_field_sets(schema)
+    missing_required = schema_required - sdk_required
+    extra_required = sdk_required - schema_required
+    unknown = sdk_allowed - schema_allowed
 
-    if missing:
+    if missing_required:
         report.fail(
-            f"[{sdk}] {endpoint} {direction}: missing required fields "
-            f"{sorted(missing)}"
+            f"[{sdk}] {endpoint} {direction}: SDK does not require schema-required "
+            f"fields {sorted(missing_required)}"
+        )
+    if extra_required:
+        report.fail(
+            f"[{sdk}] {endpoint} {direction}: SDK requires fields not marked required "
+            f"in schema: {sorted(extra_required)}"
         )
     if unknown and not extras_allowed:
         report.fail(
-            f"[{sdk}] {endpoint} {direction}: unknown fields "
-            f"{sorted(unknown)} (schema forbids additionalProperties)"
+            f"[{sdk}] {endpoint} {direction}: SDK declares fields {sorted(unknown)} "
+            f"not allowed by schema (additionalProperties: false)"
         )
     elif unknown:
         report.warn(
             f"[{sdk}] {endpoint} {direction}: extra fields {sorted(unknown)} "
-            f"(schema allows additionalProperties, but consider adding them)"
+            f"(schema allows additionalProperties)"
         )
 
 
@@ -238,32 +214,35 @@ def run() -> DriftReport:
         },
     }
 
-    for sdk_name, getter in (
+    ts_path = Path(os.environ.get("ATLASENT_TS_TYPES") or DEFAULT_TS_TYPES)
+
+    sdks: list[tuple[str, Any]] = [
         ("python", _python_sdk_wire_fields),
-        ("typescript", _typescript_sdk_wire_fields),
-    ):
+        ("typescript", lambda: _typescript_sdk_wire_fields(ts_path)),
+    ]
+
+    for sdk_name, getter in sdks:
         try:
             sdk_wire = getter()
+        except FileNotFoundError as exc:
+            # TS types checkout is optional for Python-only CI.
+            report.warn(f"[{sdk_name}] introspection skipped: {exc}")
+            continue
         except Exception as exc:
             report.fail(f"[{sdk_name}] introspection failed: {exc}")
             continue
-        for endpoint, pair in sdk_wire.items():
-            _compare(
-                sdk_name,
-                endpoint,
-                "request",
-                pair["request_keys"],
-                schemas[endpoint]["request"],
-                report,
-            )
-            _compare(
-                sdk_name,
-                endpoint,
-                "response",
-                pair["response_keys"],
-                schemas[endpoint]["response"],
-                report,
-            )
+        for endpoint, per_direction in sdk_wire.items():
+            for direction in ("request", "response"):
+                sdk_required, sdk_allowed = per_direction[direction]
+                _compare(
+                    sdk_name,
+                    endpoint,
+                    direction,
+                    sdk_required,
+                    sdk_allowed,
+                    schemas[endpoint][direction],
+                    report,
+                )
 
     return report
 

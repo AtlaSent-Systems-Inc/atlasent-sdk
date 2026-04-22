@@ -1,124 +1,196 @@
 {
   "$schema": "../schemas/evaluate-request.schema.json",
-  "description": "Round-trip vectors for POST /v1-evaluate. Every SDK MUST: (a) serialize `sdk_input` into exactly `wire_request` on the wire; (b) when the server returns `wire_response`, produce `sdk_output` (keys in the idiomatic casing of that language).",
+  "description": "Round-trip vectors for POST /v1-evaluate. Every SDK MUST: (a) serialize `sdk_input` into exactly `wire_request` on the wire; (b) when the server returns `wire_response`, surface it through the client API in the shape described by `sdk_output`. The `api_key` is carried in the `Authorization: Bearer <api_key>` header only; it NEVER appears in the body.",
   "vectors": [
     {
       "name": "evaluate_allow_minimal",
-      "description": "Minimal ALLOW. No context supplied by the caller; SDK MUST default context to {}.",
+      "description": "Minimal allow. Caller supplies only action_type and actor_id; SDK MUST default context to {} and omit all optional fields from the wire.",
       "sdk_input": {
-        "agent": "clinical-data-agent",
-        "action": "read_patient_record"
+        "action_type": "read_patient_record",
+        "actor_id": "clinical-data-agent"
       },
-      "api_key": "ask_live_test_key",
       "wire_request": {
-        "action": "read_patient_record",
-        "agent": "clinical-data-agent",
-        "context": {},
-        "api_key": "ask_live_test_key"
+        "action_type": "read_patient_record",
+        "actor_id": "clinical-data-agent"
       },
       "wire_response": {
-        "permitted": true,
-        "decision_id": "dec_minimal_allow_001",
-        "reason": "",
-        "audit_hash": "hash_a1b2c3",
-        "timestamp": "2026-04-17T10:00:00Z"
+        "decision": "allow",
+        "request_id": "req_minimal_allow_001",
+        "mode": "live",
+        "cache_hit": false,
+        "evaluation_ms": 7,
+        "permit_token": "pt_minimal_allow_001",
+        "expires_at": "2026-04-17T11:00:00Z",
+        "audit_entry_hash": "hash_a1b2c3"
       },
       "sdk_output": {
-        "decision": "ALLOW",
-        "permitted": true,
-        "permit_id": "dec_minimal_allow_001",
-        "reason": "",
-        "audit_hash": "hash_a1b2c3",
-        "timestamp": "2026-04-17T10:00:00Z"
+        "decision": "allow",
+        "request_id": "req_minimal_allow_001",
+        "mode": "live",
+        "cache_hit": false,
+        "evaluation_ms": 7,
+        "permit_token": "pt_minimal_allow_001",
+        "expires_at": "2026-04-17T11:00:00Z",
+        "audit_entry_hash": "hash_a1b2c3"
       }
     },
     {
       "name": "evaluate_allow_with_context",
-      "description": "ALLOW with a rich context object. Context MUST be forwarded verbatim; no key remapping.",
+      "description": "Allow with a rich context object. Context MUST be forwarded verbatim; no key remapping.",
       "sdk_input": {
-        "agent": "clinical-data-agent",
-        "action": "modify_patient_record",
-        "context": {
-          "user": "dr_smith",
-          "environment": "production",
-          "patient_id": "PT-001",
-          "change_reason": "Correct date-of-birth"
-        }
-      },
-      "api_key": "ask_live_test_key",
-      "wire_request": {
-        "action": "modify_patient_record",
-        "agent": "clinical-data-agent",
+        "action_type": "modify_patient_record",
+        "actor_id": "clinical-data-agent",
         "context": {
           "user": "dr_smith",
           "environment": "production",
           "patient_id": "PT-001",
           "change_reason": "Correct date-of-birth"
         },
-        "api_key": "ask_live_test_key"
+        "request_id": "caller-idempotency-42"
+      },
+      "wire_request": {
+        "action_type": "modify_patient_record",
+        "actor_id": "clinical-data-agent",
+        "context": {
+          "user": "dr_smith",
+          "environment": "production",
+          "patient_id": "PT-001",
+          "change_reason": "Correct date-of-birth"
+        },
+        "request_id": "caller-idempotency-42"
       },
       "wire_response": {
-        "permitted": true,
-        "decision_id": "dec_ctx_allow_002",
-        "reason": "Operator authorized under GxP policy",
-        "audit_hash": "hash_ctx_002",
-        "timestamp": "2026-04-17T10:01:00Z"
+        "decision": "allow",
+        "request_id": "caller-idempotency-42",
+        "mode": "live",
+        "cache_hit": false,
+        "evaluation_ms": 12,
+        "permit_token": "pt_ctx_allow_002",
+        "expires_at": "2026-04-17T11:01:00Z",
+        "fingerprint": "fp_ctx_002",
+        "audit_entry_hash": "hash_ctx_002"
       },
       "sdk_output": {
-        "decision": "ALLOW",
-        "permitted": true,
-        "permit_id": "dec_ctx_allow_002",
-        "reason": "Operator authorized under GxP policy",
-        "audit_hash": "hash_ctx_002",
-        "timestamp": "2026-04-17T10:01:00Z"
+        "decision": "allow",
+        "request_id": "caller-idempotency-42",
+        "mode": "live",
+        "cache_hit": false,
+        "evaluation_ms": 12,
+        "permit_token": "pt_ctx_allow_002",
+        "expires_at": "2026-04-17T11:01:00Z",
+        "fingerprint": "fp_ctx_002",
+        "audit_entry_hash": "hash_ctx_002"
       }
     },
     {
-      "name": "evaluate_deny_no_throw",
-      "description": "DENY MUST be returned as data, NOT thrown as a transport error. Public authorize() / evaluate() surfaces MAY raise — but the HTTP layer MUST treat this as a normal 200.",
+      "name": "evaluate_deny_not_an_error",
+      "description": "Deny MUST be returned as a 200 body with decision='deny', deny_code and deny_reason. The HTTP layer MUST NOT treat this as an error. The higher-level authorize() surface MAY raise AuthorizationDeniedError.",
       "sdk_input": {
-        "agent": "finance-agent",
-        "action": "wire_transfer",
+        "action_type": "wire_transfer",
+        "actor_id": "finance-agent",
         "context": { "amount_usd": 50000 }
       },
-      "api_key": "ask_live_test_key",
       "wire_request": {
-        "action": "wire_transfer",
-        "agent": "finance-agent",
-        "context": { "amount_usd": 50000 },
-        "api_key": "ask_live_test_key"
+        "action_type": "wire_transfer",
+        "actor_id": "finance-agent",
+        "context": { "amount_usd": 50000 }
       },
       "wire_response": {
-        "permitted": false,
-        "decision_id": "dec_deny_003",
-        "reason": "Amount exceeds agent limit",
-        "audit_hash": "hash_deny_003",
-        "timestamp": "2026-04-17T10:02:00Z"
+        "decision": "deny",
+        "request_id": "req_deny_003",
+        "mode": "live",
+        "cache_hit": false,
+        "evaluation_ms": 4,
+        "deny_code": "OVER_LIMIT",
+        "deny_reason": "Amount exceeds agent limit",
+        "audit_entry_hash": "hash_deny_003"
       },
       "sdk_output": {
-        "decision": "DENY",
-        "permitted": false,
-        "permit_id": "dec_deny_003",
-        "reason": "Amount exceeds agent limit",
-        "audit_hash": "hash_deny_003",
-        "timestamp": "2026-04-17T10:02:00Z"
+        "decision": "deny",
+        "request_id": "req_deny_003",
+        "mode": "live",
+        "cache_hit": false,
+        "evaluation_ms": 4,
+        "deny_code": "OVER_LIMIT",
+        "deny_reason": "Amount exceeds agent limit",
+        "audit_entry_hash": "hash_deny_003"
+      }
+    },
+    {
+      "name": "evaluate_hold_is_non_allow",
+      "description": "hold and escalate block execution like deny. No permit_token is issued.",
+      "sdk_input": {
+        "action_type": "publish_policy",
+        "actor_id": "user:42",
+        "context": { "policy_id": "pol_x" }
+      },
+      "wire_request": {
+        "action_type": "publish_policy",
+        "actor_id": "user:42",
+        "context": { "policy_id": "pol_x" }
+      },
+      "wire_response": {
+        "decision": "hold",
+        "request_id": "req_hold_004",
+        "mode": "live",
+        "cache_hit": false,
+        "evaluation_ms": 3,
+        "deny_code": "APPROVAL_REQUIRED",
+        "deny_reason": "Two approvers required for policy publish"
+      },
+      "sdk_output": {
+        "decision": "hold",
+        "request_id": "req_hold_004",
+        "mode": "live",
+        "cache_hit": false,
+        "evaluation_ms": 3,
+        "deny_code": "APPROVAL_REQUIRED",
+        "deny_reason": "Two approvers required for policy publish"
+      }
+    },
+    {
+      "name": "evaluate_shadow_no_permit",
+      "description": "Shadow mode never issues a permit_token, even on allow.",
+      "sdk_input": {
+        "action_type": "read_patient_record",
+        "actor_id": "clinical-data-agent",
+        "shadow": true
+      },
+      "wire_request": {
+        "action_type": "read_patient_record",
+        "actor_id": "clinical-data-agent",
+        "shadow": true
+      },
+      "wire_response": {
+        "decision": "allow",
+        "request_id": "req_shadow_005",
+        "mode": "shadow",
+        "cache_hit": false,
+        "evaluation_ms": 2
+      },
+      "sdk_output": {
+        "decision": "allow",
+        "request_id": "req_shadow_005",
+        "mode": "shadow",
+        "cache_hit": false,
+        "evaluation_ms": 2
       }
     },
     {
       "name": "evaluate_response_missing_required_fields",
-      "description": "Malformed response: missing `permitted` or `decision_id`. SDKs MUST raise a bad-response error (do NOT silently default to DENY or ALLOW).",
-      "sdk_input": { "agent": "a", "action": "b" },
-      "api_key": "ask_live_test_key",
+      "description": "Malformed response: missing `decision` / `request_id` / `mode` / `cache_hit` / `evaluation_ms`. SDKs MUST NOT silently default; they MUST raise a transport-unavailable error.",
+      "sdk_input": {
+        "action_type": "a",
+        "actor_id": "u"
+      },
       "wire_request": {
-        "action": "b",
-        "agent": "a",
-        "context": {},
-        "api_key": "ask_live_test_key"
+        "action_type": "a",
+        "actor_id": "u"
       },
       "wire_response": { "foo": "bar" },
       "sdk_error": {
-        "kind": "bad_response",
-        "message_contains": "permitted"
+        "kind": "unavailable",
+        "message_contains": "decision"
       }
     }
   ]

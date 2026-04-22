@@ -2,32 +2,27 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://atlasent.io/contract/v1/verify-permit-request.schema.json",
   "title": "VerifyPermitRequest",
-  "description": "Wire payload sent to POST /v1-verify-permit.",
+  "description": "Wire payload sent to POST /v1-verify-permit. Authorization is carried in the `Authorization: Bearer <api_key>` header.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["decision_id", "action", "agent", "context", "api_key"],
+  "required": ["permit_token"],
   "properties": {
-    "decision_id": {
+    "permit_token": {
       "type": "string",
       "minLength": 1,
-      "description": "The decision_id returned by a prior /v1-evaluate call."
+      "description": "The permit_token returned by a prior /v1-evaluate call."
     },
-    "action": {
+    "actor_id": {
       "type": "string",
-      "description": "Optional cross-check — re-state the action. May be empty."
+      "description": "Optional binding check. Server denies with ACTOR_MISMATCH if this does not match the actor_id on the original evaluation."
     },
-    "agent": {
+    "action_type": {
       "type": "string",
-      "description": "Optional cross-check — re-state the agent. May be empty."
+      "description": "Optional binding check. Server denies with ACTION_TYPE_MISMATCH if this does not match the action_type on the original evaluation."
     },
-    "context": {
-      "type": "object",
-      "description": "Optional cross-check — re-state the context. May be empty.",
-      "additionalProperties": true
-    },
-    "api_key": {
+    "traceparent": {
       "type": "string",
-      "description": "API key echoed in the body. Also sent as Authorization: Bearer <key>."
+      "description": "W3C traceparent for body-level trace propagation."
     }
   }
 }

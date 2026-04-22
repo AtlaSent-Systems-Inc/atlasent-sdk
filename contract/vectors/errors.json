@@ -1,33 +1,44 @@
 {
-  "description": "HTTP error mapping vectors. Every SDK MUST surface these as a single error type (Python: AtlaSentError / RateLimitError; TypeScript: AtlaSentError) carrying status + a coarse code.",
+  "description": "HTTP error mapping vectors for /v1-evaluate. SDKs MUST surface these as AuthorizationUnavailableError (transport-layer failure) or RateLimitError (HTTP 429). The body envelope is {error_code, reason}. Note: /v1-verify-permit returns a VALUE-BASED envelope on most 4xx paths (see verify.json); only the catastrophic transport paths use this error envelope for verify-permit.",
   "vectors": [
     {
-      "name": "http_401_invalid_api_key",
+      "name": "http_401_unauthorized",
       "http_status": 401,
       "response_headers": {},
-      "response_body": { "message": "Invalid API key" },
+      "response_body": { "error_code": "UNAUTHORIZED", "reason": "Missing Authorization header" },
       "sdk_error": {
-        "kind": "invalid_api_key",
+        "kind": "unavailable",
         "status": 401,
-        "message_contains": "Invalid API key"
+        "message_contains": "UNAUTHORIZED"
       }
     },
     {
-      "name": "http_403_forbidden",
+      "name": "http_403_invalid_api_key",
       "http_status": 403,
       "response_headers": {},
-      "response_body": { "message": "scope mismatch" },
+      "response_body": { "error_code": "INVALID_API_KEY", "reason": "API key not found or inactive" },
       "sdk_error": {
-        "kind": "forbidden",
+        "kind": "unavailable",
         "status": 403,
-        "message_contains": "scope mismatch"
+        "message_contains": "INVALID_API_KEY"
+      }
+    },
+    {
+      "name": "http_403_insufficient_scope",
+      "http_status": 403,
+      "response_headers": {},
+      "response_body": { "error_code": "INSUFFICIENT_SCOPE", "reason": "Key lacks 'evaluate' scope" },
+      "sdk_error": {
+        "kind": "unavailable",
+        "status": 403,
+        "message_contains": "INSUFFICIENT_SCOPE"
       }
     },
     {
       "name": "http_429_rate_limited_with_retry_after_seconds",
       "http_status": 429,
       "response_headers": { "Retry-After": "30" },
-      "response_body": { "message": "slow down" },
+      "response_body": { "error_code": "RATE_LIMITED", "reason": "Too many requests" },
       "sdk_error": {
         "kind": "rate_limited",
         "status": 429,
@@ -35,35 +46,36 @@
       }
     },
     {
-      "name": "http_500_server_error",
-      "http_status": 500,
+      "name": "http_400_bad_request",
+      "http_status": 400,
       "response_headers": {},
-      "response_body": "oops",
+      "response_body": { "error_code": "BAD_REQUEST", "reason": "action_type and actor_id are required" },
       "sdk_error": {
-        "kind": "server_error",
-        "status": 500
+        "kind": "unavailable",
+        "status": 400,
+        "message_contains": "BAD_REQUEST"
       }
     },
     {
-      "name": "http_422_bad_request_surfaces_message",
-      "http_status": 422,
-      "response_headers": { "Content-Type": "application/json" },
-      "response_body": { "message": "bad field: agent" },
+      "name": "http_500_server_error",
+      "http_status": 500,
+      "response_headers": {},
+      "response_body": { "error_code": "INTERNAL_ERROR", "reason": "unhandled exception" },
       "sdk_error": {
-        "kind": "bad_request",
-        "status": 422,
-        "message_contains": "bad field: agent"
+        "kind": "unavailable",
+        "status": 500,
+        "message_contains": "INTERNAL_ERROR"
       }
     },
     {
       "name": "transport_timeout",
       "transport": "timeout",
-      "sdk_error": { "kind": "timeout" }
+      "sdk_error": { "kind": "unavailable", "message_contains": "timed out" }
     },
     {
       "name": "transport_network_error",
       "transport": "connection_refused",
-      "sdk_error": { "kind": "network" }
+      "sdk_error": { "kind": "unavailable", "message_contains": "reach" }
     }
   ]
 }
