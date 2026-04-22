@@ -135,6 +135,21 @@ class TestEvaluate:
         assert err.reason == "Missing required context"
         assert err.response_body == EVALUATE_DENY
 
+    def test_allow_without_permit_token_is_deny(self, client, mocker):
+        """Fail-closed: permitted=true with empty decision_id → deny."""
+        malformed_allow = {
+            "permitted": True,
+            "decision_id": "",
+            "reason": "",
+        }
+        resp = _mock_resp(mocker, json_data=malformed_allow)
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentDenied) as exc_info:
+            client.evaluate("write_data", "agent-1")
+        err = exc_info.value
+        assert err.permit_token == ""
+        assert "decision_id" in err.reason
+
     def test_payload_shape(self, client, mocker):
         resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
         mock_post = mocker.patch.object(client._client, "post", return_value=resp)

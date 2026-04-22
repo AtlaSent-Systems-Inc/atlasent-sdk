@@ -213,6 +213,33 @@ The envelope includes hash-chained rows, chain heads, the Ed25519 public key, an
 
 See `examples/export_audit.py` for a runnable script.
 
+### Offline verification
+
+A tamper-evident envelope is only useful if you can verify it without the API. The SDK ships an offline verifier behind the `verify` extra:
+
+```bash
+pip install 'atlasent[verify]'   # pulls in `cryptography`
+```
+
+```python
+from atlasent import verify_bundle
+
+# From a file on disk:
+result = verify_bundle(
+    "atlasent-audit-export.json",
+    trusted_public_key_pem=open("trusted-key.pem").read(),
+)
+
+# Or directly from a bundle you just fetched:
+result = verify_bundle(bundle.model_dump(), trusted_public_key_pem=trusted)
+
+if not result.ok:
+    for err in result.errors:
+        log.error(err)
+```
+
+`verify_bundle` checks (1) every row's SHA-256 matches its `entry_hash`, (2) the hash chain links to each prior row, (3) the Ed25519 signature verifies against the embedded public key, and (4) — when you supply a trust anchor — that the embedded key matches the one **you** provisioned. Dropping the trust anchor gives you self-verify only, which proves the bundle hasn't been tampered with but not that the signer is who you think.
+
 ## Lower-level methods
 
 `authorize()` is the recommended surface, but the underlying primitives are exported too:
@@ -220,6 +247,7 @@ See `examples/export_audit.py` for a runnable script.
 - `client.evaluate(action, agent, context)` — policy decision only; raises `AtlaSentDenied` on denial.
 - `client.verify(permit_token, ...)` — verify a previously issued permit.
 - `client.export_audit(since=..., until=..., limit=..., include_admin_log=...)` — signed audit export.
+- `verify_bundle(envelope_or_path, trusted_public_key_pem=...)` — offline Ed25519 verifier (optional `atlasent[verify]` extra).
 - `client.gate(action, agent, context)` — evaluate + verify; raises on denial; returns `GateResult` with both response objects.
 - `@atlasent_guard(...)` / `@async_atlasent_guard(...)` — decorators for Flask / FastAPI routes.
 - `TTLCache` — opt-in in-process cache for hot-path evaluations.

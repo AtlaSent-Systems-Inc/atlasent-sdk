@@ -103,10 +103,20 @@ export class AtlaSentClient {
       );
     }
 
+    // Fail-closed: `permitted: true` with an empty `decision_id` is
+    // unverifiable downstream, so we downgrade it to DENY. Matches the
+    // contract invariant "allow without permit_token is a deny".
+    const decision: "ALLOW" | "DENY" =
+      wire.permitted && wire.decision_id.length > 0 ? "ALLOW" : "DENY";
+    let reason = wire.reason ?? "";
+    if (wire.permitted && wire.decision_id.length === 0 && reason === "") {
+      reason = "Server returned permitted=true with no decision_id";
+    }
+
     return {
-      decision: wire.permitted ? "ALLOW" : "DENY",
+      decision,
       permitId: wire.decision_id,
-      reason: wire.reason ?? "",
+      reason,
       auditHash: wire.audit_hash ?? "",
       timestamp: wire.timestamp ?? "",
     };

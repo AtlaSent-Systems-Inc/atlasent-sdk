@@ -41,6 +41,11 @@ from .models import (
     GateResult,
     VerifyResult,
 )
+from .verify_export import (
+    ExportVerifyResult,
+    verify_audit_export,
+    verify_bundle,
+)
 
 __all__ = [
     "__version__",
@@ -59,6 +64,9 @@ __all__ = [
     "AuditExportBundle",
     "AuditExportHead",
     "AuditExportRequest",
+    "verify_bundle",
+    "verify_audit_export",
+    "ExportVerifyResult",
     "AtlaSentError",
     "AtlaSentErrorCode",
     "AtlaSentDenied",

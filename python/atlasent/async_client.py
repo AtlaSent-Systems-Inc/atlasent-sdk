@@ -131,10 +131,21 @@ class AsyncAtlaSentClient:
             )
 
         permitted = data["permitted"]
+        permit_token = data["decision_id"]
+        # Fail-closed: allow without permit_token is unverifiable
+        # downstream — treat as deny.
+        if permitted and not permit_token:
+            raise AtlaSentDenied(
+                decision="True",
+                permit_token="",
+                reason=data.get("reason")
+                or "Server returned permitted=true with no decision_id",
+                response_body=data,
+            )
         if not permitted:
             raise AtlaSentDenied(
                 decision=str(permitted),
-                permit_token=data.get("decision_id", ""),
+                permit_token=permit_token,
                 reason=data.get("reason", ""),
                 response_body=data,
             )

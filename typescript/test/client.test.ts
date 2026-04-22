@@ -159,6 +159,47 @@ describe("evaluate()", () => {
   });
 });
 
+describe("evaluate() fail-closed invariants", () => {
+  it("downgrades permitted=true with empty decision_id to DENY", async () => {
+    const client = makeClient(
+      mockFetch(() =>
+        jsonResponse({
+          permitted: true,
+          decision_id: "",
+          reason: "",
+        }),
+      ),
+    );
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.decision).toBe("DENY");
+    expect(result.permitId).toBe("");
+    expect(result.reason).toMatch(/decision_id/);
+  });
+
+  it("throws bad_response when `permitted` is not a boolean", async () => {
+    const client = makeClient(
+      mockFetch(() =>
+        jsonResponse({
+          permitted: "yes",
+          decision_id: "dec_1",
+        }),
+      ),
+    );
+    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+
+  it("throws bad_response when `decision_id` is missing", async () => {
+    const client = makeClient(
+      mockFetch(() => jsonResponse({ permitted: true })),
+    );
+    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+});
+
 describe("verifyPermit()", () => {
   it("returns the verified payload, no throw when verified: false", async () => {
     const client = makeClient(

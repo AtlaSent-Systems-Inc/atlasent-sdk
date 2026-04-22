@@ -98,6 +98,33 @@ await writeFile("atlasent-audit-export.json", JSON.stringify(bundle.raw, null, 2
 
 See [`examples/export-audit.ts`](./examples/export-audit.ts).
 
+## Offline-verify a bundle
+
+The SDK ships an offline Ed25519 verifier — zero new dependencies, uses Node's built-in `crypto`. Feed it either an in-memory envelope or a path to a JSON file:
+
+```ts
+import { readFile } from "node:fs/promises";
+import { verifyBundle } from "@atlasent/sdk";
+
+const trustedPublicKeyPem = await readFile("trusted-key.pem", "utf8");
+
+// From a file on disk:
+const r1 = await verifyBundle("atlasent-audit-export.json", {
+  trustedPublicKeyPem,
+});
+
+// Or directly from a bundle you just fetched:
+const r2 = await verifyBundle(bundle.raw, { trustedPublicKeyPem });
+
+if (!r2.ok) {
+  for (const err of r2.errors) console.error(err);
+}
+```
+
+`verifyBundle` checks (1) every row's SHA-256 matches its `entry_hash`, (2) the hash chain links to each prior row, (3) the Ed25519 signature verifies against the embedded public key, and (4) — when you supply `trustedPublicKeyPem` — that the embedded key matches the one **you** provisioned. Dropping the trust anchor gives you self-verify only.
+
+See [`examples/verify-bundle.ts`](./examples/verify-bundle.ts).
+
 ## Constructor options
 
 ```ts

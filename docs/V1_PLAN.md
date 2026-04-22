@@ -37,17 +37,29 @@ a pilot API key.
 - [x] API key auth via `Authorization: Bearer <apiKey>` on every
       request. No alternate auth paths.
 
-**Deferred — not in the current slice:**
+**Shipped in a follow-up slice on the same branch:**
 
+- [x] Offline audit verifier: both SDKs expose `verify_bundle` /
+      `verifyBundle` that accept either an in-memory envelope or a
+      filesystem path. Python uses the optional `atlasent[verify]`
+      extra (`cryptography`); TypeScript uses Node's built-in
+      `crypto` — zero new runtime deps.
+- [x] Fail-closed hardening on `evaluate`: `permitted=true` with an
+      empty `decision_id` is downgraded to DENY (Python raises
+      `AtlaSentDenied`, TS returns `{ decision: "DENY" }`). An
+      unverifiable "allow" is the classic way a silent permit sneaks
+      into production; the SDK refuses to issue one.
+
+**Deferred — blocked or out of scope for this PR:**
+
+- [ ] Streaming `evaluate` — **blocked on backend.** `atlasent-api`
+      has `v1-evaluate`, `v1-export-audit`, and `v1-export-audit-stream`
+      but no streaming-evaluate edge function; only a line in
+      `atlasent-api/docs/V1_PLAN.md` references
+      `POST /v1/evaluate/stream`. Re-open once the server ships the
+      endpoint; the SDK side is a thin wrapper over SSE or NDJSON.
 - [ ] Remaining endpoints: `session`, `audit/events`, `audit/verify`,
       `approvals`, `overrides`, `permits/consume`, `permits/revoke`.
-- [ ] Streaming `evaluate` endpoint exposed as an async iterator
-      (Python `async for`, TS `AsyncIterable`).
-- [ ] Offline audit verifier: both SDKs ship a `verify_bundle(path)`
-      that validates an Ed25519-signed export without hitting the API.
-      Until then, customers can verify the bundle with
-      `scripts/verify-export.mjs` in `atlasent-api` — the SDKs already
-      return the raw envelope losslessly.
 
 ### Type source of truth
 
@@ -109,11 +121,10 @@ Tracked as a single follow-up slice:
 
 ## Remaining after the current slice
 
-Two follow-up slices, roughly independent:
-
-1. **Novel features** — streaming `evaluate` as an async iterator, and
-   offline `verify_bundle(path)` in both SDKs (validate a signed
-   export without hitting the API).
+1. **Streaming `evaluate`** — blocked on `atlasent-api`. Un-park when
+   the backend ships a streaming edge function (SSE or NDJSON
+   over chunked HTTP). Until then the SDK would be vaporware, so it
+   is intentionally not stubbed.
 2. **Release plumbing** — trusted publishing (npm provenance + PyPI
    PEP 740), CHANGELOG automation driven by release tags, and the
    contract drift gate wired into the publish workflow.

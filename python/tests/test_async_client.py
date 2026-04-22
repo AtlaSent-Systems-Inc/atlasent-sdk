@@ -107,6 +107,21 @@ class TestAsyncEvaluate:
         assert exc_info.value.reason == "Denied"
 
     @pytest.mark.asyncio
+    async def test_allow_without_permit_token_is_deny(self, async_client, mocker):
+        """Fail-closed: permitted=true with empty decision_id → deny."""
+        mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(
+                mocker,
+                json_data={"permitted": True, "decision_id": "", "reason": ""},
+            ),
+        )
+        with pytest.raises(AtlaSentDenied) as exc_info:
+            await async_client.evaluate("write_data", "agent-1")
+        assert exc_info.value.permit_token == ""
+
+    @pytest.mark.asyncio
     async def test_timeout(self, async_client, mocker):
         mocker.patch.object(
             async_client._client,
