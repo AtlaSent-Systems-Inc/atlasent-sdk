@@ -124,7 +124,7 @@ Host: api.atlasent.io
 Content-Type: application/json
 Accept: application/json
 Authorization: Bearer ask_live_abc123
-User-Agent: atlasent-python/0.4.0
+User-Agent: atlasent-python/1.0.0
 X-Request-ID: 6f8ab3c1-4e2b-4c0e-9a5d-7e8f1c2d3a4b
 
 {
