@@ -1,9 +1,9 @@
-"""Staging smoke test — hits the real AtlaSent API.
+"""Staging smoke test -- hits the real AtlaSent API.
 
-Skipped unless ATLASENT_API_KEY is in the environment. Run via::
+Skipped unless ``ATLASENT_API_KEY`` is in the environment. Run via::
 
-    ATLASENT_API_KEY=ask_staging_... \
-    ATLASENT_BASE_URL=https://staging.atlasent.io \
+    ATLASENT_API_KEY=ak_staging_... \\
+    ATLASENT_BASE_URL=https://api.staging.atlasent.io \\
     pytest tests/integration/ -m integration
 """
 
@@ -13,8 +13,8 @@ import os
 
 import pytest
 
-from atlasent import AtlaSentClient
-from atlasent.exceptions import AtlaSentError
+from atlasent import AtlaSentClient, EvaluateRequest
+from atlasent.exceptions import AuthorizationUnavailableError
 
 pytestmark = [
     pytest.mark.integration,
@@ -29,27 +29,32 @@ pytestmark = [
 def client() -> AtlaSentClient:
     return AtlaSentClient(
         api_key=os.environ["ATLASENT_API_KEY"],
-        base_url=os.environ.get("ATLASENT_BASE_URL", "https://staging.atlasent.io"),
+        base_url=os.environ.get("ATLASENT_BASE_URL", "https://api.staging.atlasent.io"),
     )
 
 
 def test_evaluate_roundtrip(client: AtlaSentClient) -> None:
-    """Evaluate against staging; either it permits or it denies — both are fine.
+    """Evaluate against staging; either allow or deny is fine.
 
-    What we're checking is that the wire contract holds (no
-    AtlaSentError, no bad_response) and the response has the fields
-    the SDK expects.
+    What we're checking is that the wire contract holds -- no
+    :class:`AuthorizationUnavailableError` from a malformed body, and the
+    response carries the fields the SDK expects.
     """
     try:
-        result = client.evaluate(
-            "integration_test",
-            "sdk-ci-runner",
-            {"ci": True, "repo": "atlasent-sdk"},
+        response = client.evaluate(
+            EvaluateRequest(
+                action_type="integration_test",
+                actor_id="sdk-ci-runner",
+                context={"ci": True, "repo": "atlasent-sdk"},
+            )
         )
-    except AtlaSentError as exc:
-        # A staging deny is fine. A transport/schema failure is not.
+    except AuthorizationUnavailableError as exc:
+        pytest.fail(f"transport-level failure against staging: {exc}")
+
+    assert response.decision in {"allow", "deny", "hold", "escalate"}
+    assert isinstance(response.request_id, str) and response.request_id
+    assert response.mode in {"live", "shadow"}
+    if response.decision == "allow":
         assert (
-            exc.code != "bad_response"
-        ), f"bad_response from staging: {exc.response_body}"
-        return
-    assert isinstance(result.permit_token, str) and result.permit_token
+            isinstance(response.permit_token, str) and response.permit_token
+        ), "allow must carry a permit_token"

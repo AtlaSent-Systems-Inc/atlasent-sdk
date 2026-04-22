@@ -1,94 +1,139 @@
-"""Tests for Pydantic models."""
+"""Unit tests for canonical wire-type models."""
 
-from atlasent.models import (
+from __future__ import annotations
+
+import pytest
+from pydantic import ValidationError
+
+from atlasent import (
     EvaluateRequest,
-    EvaluateResult,
-    GateResult,
-    VerifyRequest,
-    VerifyResult,
+    EvaluateResponse,
+    VerifyPermitRequest,
+    VerifyPermitResponse,
+    is_allowed,
 )
 
 
 class TestEvaluateRequest:
-    def test_serializes_with_aliases(self):
-        req = EvaluateRequest(
-            action_type="read_data",
-            actor_id="agent-1",
-            context={"study": "S001"},
-            api_key="key",
-        )
-        data = req.model_dump(by_alias=True)
-        assert data["action"] == "read_data"
-        assert data["agent"] == "agent-1"
-        assert data["context"] == {"study": "S001"}
-        assert data["api_key"] == "key"
-
-    def test_default_context(self):
-        req = EvaluateRequest(action_type="x", actor_id="y", api_key="k")
+    def test_required_fields(self) -> None:
+        req = EvaluateRequest(action_type="payment.transfer", actor_id="user:1")
+        assert req.action_type == "payment.transfer"
+        assert req.actor_id == "user:1"
         assert req.context == {}
+        assert req.request_id is None
+
+    def test_exclude_none_omits_optional_fields(self) -> None:
+        req = EvaluateRequest(action_type="a", actor_id="u")
+        dumped = req.model_dump(exclude_none=True)
+        assert "action_type" in dumped
+        assert "actor_id" in dumped
+        # Optional fields with value None should be omitted from the wire.
+        assert "request_id" not in dumped
+        assert "shadow" not in dumped
+        assert "explain" not in dumped
+        assert "traceparent" not in dumped
+
+    def test_rejects_unknown_fields(self) -> None:
+        # The 0.x fields `action` / `agent` / `api_key` are gone. Forbid them.
+        with pytest.raises(ValidationError):
+            EvaluateRequest(action_type="a", actor_id="u", api_key="k")  # type: ignore[call-arg]
+        with pytest.raises(ValidationError):
+            EvaluateRequest(action="a", actor_id="u")  # type: ignore[call-arg]
 
 
-class TestEvaluateResult:
-    def test_from_api_response(self):
-        result = EvaluateResult.model_validate(
+class TestEvaluateResponse:
+    def test_minimal_allow(self) -> None:
+        res = EvaluateResponse.model_validate(
             {
-                "permitted": True,
-                "decision_id": "dec_100",
-                "reason": "OK",
-                "audit_hash": "hash_abc",
-                "timestamp": "2025-01-15T12:00:00Z",
+                "decision": "allow",
+                "request_id": "r-1",
+                "mode": "live",
+                "cache_hit": False,
+                "evaluation_ms": 7,
+                "permit_token": "pt_abc",
+                "expires_at": "2026-01-01T00:00:00Z",
             }
         )
-        assert result.decision is True
-        assert result.permit_token == "dec_100"
-        assert result.reason == "OK"
-        assert result.audit_hash == "hash_abc"
-        assert result.timestamp == "2025-01-15T12:00:00Z"
+        assert res.decision == "allow"
+        assert res.permit_token == "pt_abc"
+        assert is_allowed(res.decision)
 
-
-class TestVerifyRequest:
-    def test_serializes_with_aliases(self):
-        req = VerifyRequest(
-            permit_token="dec_100",
-            action_type="read_data",
-            actor_id="agent-1",
-            api_key="key",
-        )
-        data = req.model_dump(by_alias=True)
-        assert data["decision_id"] == "dec_100"
-        assert data["action"] == "read_data"
-        assert data["agent"] == "agent-1"
-
-
-class TestVerifyResult:
-    def test_from_api_response(self):
-        result = VerifyResult.model_validate(
+    def test_deny_shape(self) -> None:
+        res = EvaluateResponse.model_validate(
             {
-                "verified": True,
-                "permit_hash": "permit_xyz",
-                "timestamp": "2025-01-15T12:05:00Z",
+                "decision": "deny",
+                "request_id": "r-2",
+                "mode": "live",
+                "cache_hit": False,
+                "evaluation_ms": 3,
+                "deny_code": "OVER_LIMIT",
+                "deny_reason": "amount over limit",
             }
         )
-        assert result.valid is True
-        assert result.permit_hash == "permit_xyz"
-        assert result.timestamp == "2025-01-15T12:05:00Z"
+        assert res.decision == "deny"
+        assert res.deny_code == "OVER_LIMIT"
+        assert res.permit_token is None
+        assert not is_allowed(res.decision)
 
-    def test_outcome_default(self):
-        result = VerifyResult.model_validate({"verified": False})
-        assert result.valid is False
-        assert result.outcome == ""
+    def test_rejects_invalid_decision(self) -> None:
+        with pytest.raises(ValidationError):
+            EvaluateResponse.model_validate(
+                {
+                    "decision": "permit",  # not in enum
+                    "request_id": "r",
+                    "mode": "live",
+                    "cache_hit": False,
+                    "evaluation_ms": 0,
+                }
+            )
 
-
-class TestGateResult:
-    def test_combines_eval_and_verify(self):
-        ev = EvaluateResult(
-            decision=True,
-            permit_token="dec_1",
-            reason="OK",
-            audit_hash="h1",
-            timestamp="t1",
+    def test_ignores_unknown_fields(self) -> None:
+        # Forwards-compat: new server fields must not break old SDKs.
+        res = EvaluateResponse.model_validate(
+            {
+                "decision": "allow",
+                "request_id": "r",
+                "mode": "live",
+                "cache_hit": True,
+                "evaluation_ms": 1,
+                "permit_token": "pt",
+                "some_future_field": {"a": 1},
+            }
         )
-        vr = VerifyResult(valid=True, permit_hash="ph1", timestamp="t2")
-        gate = GateResult(evaluation=ev, verification=vr)
-        assert gate.evaluation.permit_token == "dec_1"
-        assert gate.verification.valid is True
+        assert res.decision == "allow"
+
+
+class TestVerifyPermit:
+    def test_request_minimal(self) -> None:
+        req = VerifyPermitRequest(permit_token="pt_x")
+        assert req.permit_token == "pt_x"
+        assert req.actor_id is None
+        assert req.action_type is None
+
+    def test_response_valid(self) -> None:
+        res = VerifyPermitResponse.model_validate(
+            {"valid": True, "outcome": "allow", "decision": "allow", "reason": "ok"}
+        )
+        assert res.valid is True
+        assert res.outcome == "allow"
+        assert res.decision == "allow"
+
+    def test_response_invalid_with_error_code(self) -> None:
+        res = VerifyPermitResponse.model_validate(
+            {
+                "valid": False,
+                "outcome": "deny",
+                "verify_error_code": "PERMIT_EXPIRED",
+                "reason": "permit expired",
+            }
+        )
+        assert res.valid is False
+        assert res.outcome == "deny"
+        assert res.verify_error_code == "PERMIT_EXPIRED"
+        assert res.decision is None
+
+    def test_rejects_invalid_outcome(self) -> None:
+        with pytest.raises(ValidationError):
+            VerifyPermitResponse.model_validate(
+                {"valid": False, "outcome": "maybe", "reason": "?"}
+            )

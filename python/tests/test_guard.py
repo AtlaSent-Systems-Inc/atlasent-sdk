@@ -1,135 +1,145 @@
-"""Tests for atlasent_guard and async_atlasent_guard decorators."""
+"""Unit tests for atlasent_guard / async_atlasent_guard decorators."""
+
+from __future__ import annotations
 
 import httpx
 import pytest
+import respx
 
-from atlasent.async_client import AsyncAtlaSentClient
-from atlasent.client import AtlaSentClient
-from atlasent.exceptions import AtlaSentDenied
+from atlasent import (
+    AsyncAtlaSentClient,
+    AtlaSentClient,
+    EvaluateRequest,
+)
+from atlasent.exceptions import AuthorizationDeniedError, PermitVerificationError
 from atlasent.guard import async_atlasent_guard, atlasent_guard
-from atlasent.models import GateResult
 
-EVALUATE_PERMIT = {
-    "permitted": True,
-    "decision_id": "dec_100",
-    "reason": "OK",
-    "audit_hash": "hash_abc",
-    "timestamp": "2025-01-15T12:00:00Z",
-}
-
-EVALUATE_DENY = {
-    "permitted": False,
-    "decision_id": "dec_101",
-    "reason": "Denied",
-    "audit_hash": "hash_def",
-    "timestamp": "2025-01-15T12:01:00Z",
-}
-
-VERIFY_OK = {
-    "verified": True,
-    "permit_hash": "permit_xyz",
-    "timestamp": "2025-01-15T12:05:00Z",
-}
+BASE_URL = "https://api.atlasent.test"
 
 
-def _mock_resp(mocker, status_code=200, json_data=None):
-    resp = mocker.Mock(spec=httpx.Response)
-    resp.status_code = status_code
-    resp.headers = {}
-    resp.text = ""
-    if json_data is not None:
-        resp.json.return_value = json_data
-    return resp
+def _evaluate_body(**overrides):
+    body = {
+        "decision": "allow",
+        "request_id": "r-1",
+        "mode": "live",
+        "cache_hit": False,
+        "evaluation_ms": 5,
+        "permit_token": "pt_abc",
+        "expires_at": "2026-01-01T00:00:00Z",
+    }
+    body.update(overrides)
+    return body
 
 
-class TestAtlaSentGuard:
-    def test_permit_passes_gate_result(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
-        mocker.patch.object(
-            client._client,
-            "post",
-            side_effect=[
-                _mock_resp(mocker, json_data=EVALUATE_PERMIT),
-                _mock_resp(mocker, json_data=VERIFY_OK),
-            ],
+def _verify_body(**overrides):
+    body = {"valid": True, "outcome": "allow", "decision": "allow", "reason": "ok"}
+    body.update(overrides)
+    return body
+
+
+@respx.mock
+def test_sync_guard_allow_passes_atlasent_kwarg() -> None:
+    respx.post(f"{BASE_URL}/v1-evaluate").mock(
+        return_value=httpx.Response(200, json=_evaluate_body())
+    )
+    respx.post(f"{BASE_URL}/v1-verify-permit").mock(
+        return_value=httpx.Response(200, json=_verify_body())
+    )
+    client = AtlaSentClient(api_key="ak", base_url=BASE_URL, max_retries=0)
+
+    def build(agent_id, **_):
+        return EvaluateRequest(action_type="modify", actor_id=agent_id)
+
+    @atlasent_guard(client, build)
+    def handler(agent_id, atlasent=None):
+        assert atlasent is not None
+        evaluation, verification = atlasent
+        assert evaluation.decision == "allow"
+        assert verification.valid is True
+        return f"ok:{agent_id}"
+
+    assert handler("user:7") == "ok:user:7"
+
+
+@respx.mock
+def test_sync_guard_deny_propagates_and_skips_handler() -> None:
+    respx.post(f"{BASE_URL}/v1-evaluate").mock(
+        return_value=httpx.Response(
+            200,
+            json=_evaluate_body(
+                decision="deny",
+                permit_token=None,
+                deny_code="POLICY",
+                deny_reason="no",
+            ),
         )
+    )
+    client = AtlaSentClient(api_key="ak", base_url=BASE_URL, max_retries=0)
 
-        @atlasent_guard(client, "read_data", actor_id="agent-1")
-        def my_func(gate_result=None):
-            return gate_result
+    def build(**_):
+        return EvaluateRequest(action_type="a", actor_id="u")
 
-        result = my_func()
-        assert isinstance(result, GateResult)
-        assert result.evaluation.permit_token == "dec_100"
+    ran = {"ok": False}
 
-    def test_deny_raises(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
-        mocker.patch.object(
-            client._client,
-            "post",
-            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
+    @atlasent_guard(client, build)
+    def handler(atlasent=None):
+        ran["ok"] = True
+
+    with pytest.raises(AuthorizationDeniedError):
+        handler()
+    assert ran["ok"] is False
+
+
+@respx.mock
+def test_sync_guard_verify_denial_propagates() -> None:
+    respx.post(f"{BASE_URL}/v1-evaluate").mock(
+        return_value=httpx.Response(200, json=_evaluate_body())
+    )
+    respx.post(f"{BASE_URL}/v1-verify-permit").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "valid": False,
+                "outcome": "deny",
+                "verify_error_code": "PERMIT_EXPIRED",
+                "reason": "expired",
+            },
         )
+    )
+    client = AtlaSentClient(api_key="ak", base_url=BASE_URL, max_retries=0)
 
-        @atlasent_guard(client, "write_data", actor_id="agent-1")
-        def my_func(gate_result=None):
-            return gate_result
+    def build(**_):
+        return EvaluateRequest(action_type="a", actor_id="u")
 
-        with pytest.raises(AtlaSentDenied):
-            my_func()
+    @atlasent_guard(client, build)
+    def handler(atlasent=None):
+        return "unreachable"
 
-    def test_dynamic_actor_id(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
-        mock_post = mocker.patch.object(
-            client._client,
-            "post",
-            side_effect=[
-                _mock_resp(mocker, json_data=EVALUATE_PERMIT),
-                _mock_resp(mocker, json_data=VERIFY_OK),
-            ],
-        )
-
-        @atlasent_guard(client, "read_data", actor_id_kwarg="agent_id")
-        def my_func(agent_id="default", gate_result=None):
-            return gate_result
-
-        my_func(agent_id="dynamic-agent")
-        payload = mock_post.call_args_list[0][1]["json"]
-        assert payload["agent"] == "dynamic-agent"
+    with pytest.raises(PermitVerificationError) as info:
+        handler()
+    assert info.value.verify_error_code == "PERMIT_EXPIRED"
 
 
-class TestAsyncAtlaSentGuard:
-    @pytest.mark.asyncio
-    async def test_permit_passes_gate_result(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
-        mocker.patch.object(
-            client._client,
-            "post",
-            side_effect=[
-                _mock_resp(mocker, json_data=EVALUATE_PERMIT),
-                _mock_resp(mocker, json_data=VERIFY_OK),
-            ],
-        )
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_guard_allow_passes_atlasent_kwarg() -> None:
+    respx.post(f"{BASE_URL}/v1-evaluate").mock(
+        return_value=httpx.Response(200, json=_evaluate_body())
+    )
+    respx.post(f"{BASE_URL}/v1-verify-permit").mock(
+        return_value=httpx.Response(200, json=_verify_body())
+    )
+    async with AsyncAtlaSentClient(
+        api_key="ak", base_url=BASE_URL, max_retries=0
+    ) as client:
 
-        @async_atlasent_guard(client, "read_data", actor_id="agent-1")
-        async def my_func(gate_result=None):
-            return gate_result
+        def build(agent_id, **_):
+            return EvaluateRequest(action_type="modify", actor_id=agent_id)
 
-        result = await my_func()
-        assert isinstance(result, GateResult)
-        assert result.verification.valid is True
+        @async_atlasent_guard(client, build)
+        async def handler(agent_id, atlasent=None):
+            evaluation, verification = atlasent
+            assert evaluation.decision == "allow"
+            return f"ok:{agent_id}"
 
-    @pytest.mark.asyncio
-    async def test_deny_raises(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
-        mocker.patch.object(
-            client._client,
-            "post",
-            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
-        )
-
-        @async_atlasent_guard(client, "write_data", actor_id="agent-1")
-        async def my_func(gate_result=None):
-            return gate_result
-
-        with pytest.raises(AtlaSentDenied):
-            await my_func()
+        assert await handler("user:9") == "ok:user:9"

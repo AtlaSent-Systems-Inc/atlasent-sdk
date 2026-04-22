@@ -1,466 +1,304 @@
-"""Tests for the synchronous AtlaSentClient."""
+"""Unit tests for the sync AtlaSentClient using respx for HTTP mocking."""
+
+from __future__ import annotations
 
 import httpx
 import pytest
+import respx
 
-from atlasent.client import AtlaSentClient
-from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
-from atlasent.models import EvaluateResult, GateResult, VerifyResult
+from atlasent import (
+    AtlaSentClient,
+    EvaluateRequest,
+    VerifyPermitRequest,
+)
+from atlasent.exceptions import (
+    AuthorizationDeniedError,
+    AuthorizationUnavailableError,
+    PermitVerificationError,
+    RateLimitError,
+)
+
+BASE_URL = "https://api.atlasent.test"
+
+
+def _evaluate_body(**overrides):
+    body = {
+        "decision": "allow",
+        "request_id": "r-1",
+        "mode": "live",
+        "cache_hit": False,
+        "evaluation_ms": 5,
+        "permit_token": "pt_abc",
+        "expires_at": "2026-01-01T00:00:00Z",
+    }
+    body.update(overrides)
+    return body
+
+
+def _verify_body(**overrides):
+    body = {"valid": True, "outcome": "allow", "decision": "allow", "reason": "ok"}
+    body.update(overrides)
+    return body
 
 
 @pytest.fixture
-def client():
-    return AtlaSentClient(api_key="test_key", max_retries=0)
-
-
-@pytest.fixture
-def client_retry():
-    return AtlaSentClient(api_key="test_key", max_retries=2, retry_backoff=0.01)
-
-
-EVALUATE_PERMIT = {
-    "permitted": True,
-    "decision_id": "dec_100",
-    "reason": "Action complies with policy",
-    "audit_hash": "hash_abc",
-    "timestamp": "2025-01-15T12:00:00Z",
-}
-
-EVALUATE_DENY = {
-    "permitted": False,
-    "decision_id": "dec_101",
-    "reason": "Missing required context",
-    "audit_hash": "hash_def",
-    "timestamp": "2025-01-15T12:01:00Z",
-}
-
-VERIFY_OK = {
-    "verified": True,
-    "permit_hash": "permit_xyz",
-    "timestamp": "2025-01-15T12:05:00Z",
-}
-
-
-def _mock_resp(mocker, status_code=200, json_data=None, headers=None):
-    resp = mocker.Mock(spec=httpx.Response)
-    resp.status_code = status_code
-    resp.headers = headers or {}
-    resp.text = ""
-    if json_data is not None:
-        resp.json.return_value = json_data
-    return resp
-
-
-# ── Init ──────────────────────────────────────────────────────────────
-
-
-class TestInit:
-    def test_defaults(self):
-        c = AtlaSentClient(api_key="k")
-        assert c._api_key == "k"
-        assert c._anon_key == ""
-        assert c._base_url == "https://api.atlasent.io"
-        assert c._timeout == 10
-        assert c._max_retries == 2
-
-    def test_custom(self):
-        c = AtlaSentClient(
-            api_key="k",
-            anon_key="anon",
-            base_url="https://staging.atlasent.io/",
-            timeout=30,
-            max_retries=5,
-        )
-        assert c._anon_key == "anon"
-        assert c._base_url == "https://staging.atlasent.io"
-        assert c._timeout == 30
-
-    def test_user_agent(self):
-        c = AtlaSentClient(api_key="k")
-        assert "atlasent-python/" in c._client.headers["user-agent"]
-
-    def test_authorization_header(self):
-        c = AtlaSentClient(api_key="ask_live_xyz")
-        assert c._client.headers["authorization"] == "Bearer ask_live_xyz"
-
-    def test_accept_header(self):
-        c = AtlaSentClient(api_key="k")
-        assert c._client.headers["accept"] == "application/json"
-
-
-# ── Evaluate ──────────────────────────────────────────────────────────
+def client() -> AtlaSentClient:
+    return AtlaSentClient(api_key="ak_test", base_url=BASE_URL, max_retries=0)
 
 
 class TestEvaluate:
-    def test_permit(self, client, mocker):
-        resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
-        mocker.patch.object(client._client, "post", return_value=resp)
-        result = client.evaluate("read_data", "agent-1", {"study": "S001"})
-
-        assert isinstance(result, EvaluateResult)
-        assert result.decision is True
-        assert result.permit_token == "dec_100"
-        assert result.reason == "Action complies with policy"
-
-    def test_deny_raises(self, client, mocker):
-        resp = _mock_resp(mocker, json_data=EVALUATE_DENY)
-        mocker.patch.object(client._client, "post", return_value=resp)
-        with pytest.raises(AtlaSentDenied) as exc_info:
-            client.evaluate("write_data", "agent-1")
-
-        err = exc_info.value
-        assert err.decision == "False"
-        assert err.permit_token == "dec_101"
-        assert err.reason == "Missing required context"
-        assert err.response_body == EVALUATE_DENY
-
-    def test_payload_shape(self, client, mocker):
-        resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
-        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
-
-        client.evaluate("action", "actor", {"k": "v"})
-
-        call_kwargs = mock_post.call_args
-        payload = call_kwargs[1]["json"]
-        assert payload["action"] == "action"
-        assert payload["agent"] == "actor"
-        assert payload["context"] == {"k": "v"}
-        assert payload["api_key"] == "test_key"
-
-    def test_timeout_raises(self, client, mocker):
-        mocker.patch.object(
-            client._client, "post", side_effect=httpx.TimeoutException("timeout")
+    @respx.mock
+    def test_allow_returns_full_response(self, client: AtlaSentClient) -> None:
+        route = respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(200, json=_evaluate_body())
         )
-        with pytest.raises(AtlaSentError, match="timed out"):
-            client.evaluate("a", "b")
-
-    def test_connection_error(self, client, mocker):
-        mocker.patch.object(
-            client._client, "post", side_effect=httpx.ConnectError("refused")
+        res = client.evaluate(
+            EvaluateRequest(action_type="payment.transfer", actor_id="user:1")
         )
-        with pytest.raises(AtlaSentError, match="Failed to connect"):
-            client.evaluate("a", "b")
+        assert route.called
+        assert res.decision == "allow"
+        assert res.permit_token == "pt_abc"
+        assert res.mode == "live"
 
-    def test_401(self, client, mocker):
-        mocker.patch.object(
-            client._client, "post", return_value=_mock_resp(mocker, status_code=401)
+    @respx.mock
+    def test_deny_returns_response_without_raising(self, client: AtlaSentClient) -> None:
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(
+                200,
+                json=_evaluate_body(
+                    decision="deny",
+                    permit_token=None,
+                    deny_code="OVER_LIMIT",
+                    deny_reason="no",
+                ),
+            )
         )
-        with pytest.raises(AtlaSentError, match="Invalid API key") as exc_info:
-            client.evaluate("a", "b")
-        assert exc_info.value.status_code == 401
-
-    def test_500(self, client, mocker):
-        resp = _mock_resp(mocker, status_code=500)
-        resp.text = "Internal Server Error"
-        mocker.patch.object(client._client, "post", return_value=resp)
-        with pytest.raises(AtlaSentError, match="API error 500"):
-            client.evaluate("a", "b")
-
-
-# ── Verify ────────────────────────────────────────────────────────────
-
-
-class TestVerify:
-    def test_valid(self, client, mocker):
-        mocker.patch.object(
-            client._client, "post", return_value=_mock_resp(mocker, json_data=VERIFY_OK)
+        res = client.evaluate(
+            EvaluateRequest(action_type="payment.transfer", actor_id="user:1")
         )
-        result = client.verify("dec_100", "read_data", "agent-1")
+        assert res.decision == "deny"
+        assert res.permit_token is None
+        assert res.deny_code == "OVER_LIMIT"
 
-        assert isinstance(result, VerifyResult)
-        assert result.valid is True
-        assert result.permit_hash == "permit_xyz"
+    @respx.mock
+    def test_api_key_goes_in_header_not_body(self, client: AtlaSentClient) -> None:
+        captured: dict = {}
 
-    def test_payload_shape(self, client, mocker):
-        resp = _mock_resp(mocker, json_data=VERIFY_OK)
-        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["auth"] = request.headers.get("authorization")
+            captured["body"] = request.read().decode()
+            return httpx.Response(200, json=_evaluate_body())
 
-        client.verify("dec_100", "read_data", "agent-1", {"k": "v"})
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(side_effect=handler)
+        client.evaluate(EvaluateRequest(action_type="a", actor_id="u"))
+        assert captured["auth"] == "Bearer ak_test"
+        assert "api_key" not in captured["body"]
 
-        payload = mock_post.call_args[1]["json"]
-        assert payload["decision_id"] == "dec_100"
-        assert payload["action"] == "read_data"
-        assert payload["agent"] == "agent-1"
-        assert payload["context"] == {"k": "v"}
-
-
-# ── Gate ──────────────────────────────────────────────────────────────
-
-
-class TestGate:
-    def test_permit_and_verify(self, client, mocker):
-        mocker.patch.object(
-            client._client,
-            "post",
-            side_effect=[
-                _mock_resp(mocker, json_data=EVALUATE_PERMIT),
-                _mock_resp(mocker, json_data=VERIFY_OK),
-            ],
+    @respx.mock
+    def test_rate_limited_raises(self, client: AtlaSentClient) -> None:
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(429, json={"error_code": "RATE_LIMITED", "reason": "slow down"})
         )
-        result = client.gate("read_data", "agent-1", {"study": "S001"})
+        with pytest.raises(RateLimitError):
+            client.evaluate(EvaluateRequest(action_type="a", actor_id="u"))
 
-        assert isinstance(result, GateResult)
-        assert result.evaluation.permit_token == "dec_100"
-        assert result.verification.valid is True
-        assert client._client.post.call_count == 2
-
-    def test_deny_at_evaluate(self, client, mocker):
-        mocker.patch.object(
-            client._client,
-            "post",
-            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
+    @respx.mock
+    def test_auth_error_raises_unavailable(self, client: AtlaSentClient) -> None:
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(
+                401, json={"error_code": "UNAUTHORIZED", "reason": "bad key"}
+            )
         )
-        with pytest.raises(AtlaSentDenied):
-            client.gate("write_data", "agent-1")
+        with pytest.raises(AuthorizationUnavailableError) as info:
+            client.evaluate(EvaluateRequest(action_type="a", actor_id="u"))
+        assert info.value.status_code == 401
 
-        # verify should NOT have been called
-        assert client._client.post.call_count == 1
-
-
-# ── Retry ─────────────────────────────────────────────────────────────
-
-
-class TestRetry:
-    def test_retries_on_timeout(self, client_retry, mocker):
-        ok = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
-        mocker.patch.object(
-            client_retry._client,
-            "post",
-            side_effect=[httpx.TimeoutException("t"), ok],
+    @respx.mock
+    def test_malformed_response_raises_unavailable(
+        self, client: AtlaSentClient
+    ) -> None:
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(200, json={"decision": "allow"})  # missing required fields
         )
-        result = client_retry.evaluate("a", "b")
-        assert result.permit_token == "dec_100"
-        assert client_retry._client.post.call_count == 2
+        with pytest.raises(AuthorizationUnavailableError):
+            client.evaluate(EvaluateRequest(action_type="a", actor_id="u"))
 
-    def test_retries_on_5xx(self, client_retry, mocker):
-        err = _mock_resp(mocker, status_code=502)
-        err.text = "Bad Gateway"
-        ok = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
-        mocker.patch.object(client_retry._client, "post", side_effect=[err, ok])
-        result = client_retry.evaluate("a", "b")
-        assert result.permit_token == "dec_100"
 
-    def test_exhausted(self, client_retry, mocker):
-        mocker.patch.object(
-            client_retry._client,
-            "post",
-            side_effect=httpx.TimeoutException("t"),
+class TestAuthorize:
+    @respx.mock
+    def test_allow_returns_response(self, client: AtlaSentClient) -> None:
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(200, json=_evaluate_body())
         )
-        with pytest.raises(AtlaSentError, match="3 attempts"):
-            client_retry.evaluate("a", "b")
-        assert client_retry._client.post.call_count == 3
+        res = client.authorize(EvaluateRequest(action_type="a", actor_id="u"))
+        assert res.decision == "allow"
 
-    def test_no_retry_on_4xx(self, client_retry, mocker):
-        resp = _mock_resp(mocker, status_code=422)
-        resp.text = "Unprocessable"
-        mocker.patch.object(client_retry._client, "post", return_value=resp)
-        with pytest.raises(AtlaSentError, match="422"):
-            client_retry.evaluate("a", "b")
-        assert client_retry._client.post.call_count == 1
-
-
-# ── Rate Limiting ─────────────────────────────────────────────────────
-
-
-class TestRateLimit:
-    def test_429(self, client, mocker):
-        resp = _mock_resp(mocker, status_code=429, headers={"retry-after": "30"})
-        mocker.patch.object(client._client, "post", return_value=resp)
-        with pytest.raises(RateLimitError) as exc_info:
-            client.evaluate("a", "b")
-        assert exc_info.value.retry_after == 30.0
-
-    def test_429_no_header(self, client, mocker):
-        resp = _mock_resp(mocker, status_code=429)
-        mocker.patch.object(client._client, "post", return_value=resp)
-        with pytest.raises(RateLimitError) as exc_info:
-            client.evaluate("a", "b")
-        assert exc_info.value.retry_after is None
-
-
-# ── Error codes (SDK-PY-002 / SDK-PY-003) ────────────────────────────
-
-
-class TestErrorCodes:
-    def test_401_has_invalid_api_key_code(self, client, mocker):
-        mocker.patch.object(
-            client._client, "post", return_value=_mock_resp(mocker, status_code=401)
+    @respx.mock
+    def test_deny_raises_with_response_accessors(self, client: AtlaSentClient) -> None:
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(
+                200,
+                json=_evaluate_body(
+                    decision="deny",
+                    permit_token=None,
+                    deny_code="OVER_LIMIT",
+                    deny_reason="over",
+                ),
+            )
         )
-        with pytest.raises(AtlaSentError) as exc_info:
-            client.evaluate("a", "b")
-        assert exc_info.value.code == "invalid_api_key"
-        assert exc_info.value.status_code == 401
+        with pytest.raises(AuthorizationDeniedError) as info:
+            client.authorize(EvaluateRequest(action_type="a", actor_id="u"))
+        err = info.value
+        assert err.decision == "deny"
+        assert err.deny_code == "OVER_LIMIT"
+        assert err.deny_reason == "over"
+        assert err.request_id == "r-1"
 
-    def test_403_has_forbidden_code(self, client, mocker):
-        mocker.patch.object(
-            client._client, "post", return_value=_mock_resp(mocker, status_code=403)
+    @respx.mock
+    @pytest.mark.parametrize("decision", ["hold", "escalate"])
+    def test_non_allow_raises(self, client: AtlaSentClient, decision: str) -> None:
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(
+                200, json=_evaluate_body(decision=decision, permit_token=None)
+            )
         )
-        with pytest.raises(AtlaSentError) as exc_info:
-            client.evaluate("a", "b")
-        assert exc_info.value.code == "forbidden"
+        with pytest.raises(AuthorizationDeniedError):
+            client.authorize(EvaluateRequest(action_type="a", actor_id="u"))
 
-    def test_500_has_server_error_code(self, client, mocker):
-        resp = _mock_resp(mocker, status_code=500)
-        resp.text = "boom"
-        mocker.patch.object(client._client, "post", return_value=resp)
-        with pytest.raises(AtlaSentError) as exc_info:
-            client.evaluate("a", "b")
-        assert exc_info.value.code == "server_error"
 
-    def test_422_has_bad_request_code(self, client, mocker):
-        resp = _mock_resp(mocker, status_code=422)
-        resp.text = "bad field"
-        mocker.patch.object(client._client, "post", return_value=resp)
-        with pytest.raises(AtlaSentError) as exc_info:
-            client.evaluate("a", "b")
-        assert exc_info.value.code == "bad_request"
-
-    def test_timeout_has_timeout_code(self, client, mocker):
-        mocker.patch.object(
-            client._client, "post", side_effect=httpx.TimeoutException("t")
+class TestVerifyPermit:
+    @respx.mock
+    def test_valid_returns_envelope(self, client: AtlaSentClient) -> None:
+        respx.post(f"{BASE_URL}/v1-verify-permit").mock(
+            return_value=httpx.Response(200, json=_verify_body())
         )
-        with pytest.raises(AtlaSentError) as exc_info:
-            client.evaluate("a", "b")
-        assert exc_info.value.code == "timeout"
+        res = client.verify_permit(VerifyPermitRequest(permit_token="pt_x"))
+        assert res.valid is True
+        assert res.outcome == "allow"
 
-    def test_connection_error_has_network_code(self, client, mocker):
-        mocker.patch.object(
-            client._client, "post", side_effect=httpx.ConnectError("refused")
+    @respx.mock
+    def test_invalid_200_is_value_based(self, client: AtlaSentClient) -> None:
+        """Server returns 200 with valid:false -- do not raise, just surface the body."""
+        respx.post(f"{BASE_URL}/v1-verify-permit").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "valid": False,
+                    "outcome": "deny",
+                    "verify_error_code": "PERMIT_ALREADY_USED",
+                    "reason": "used",
+                },
+            )
         )
-        with pytest.raises(AtlaSentError) as exc_info:
-            client.evaluate("a", "b")
-        assert exc_info.value.code == "network"
+        res = client.verify_permit(VerifyPermitRequest(permit_token="pt_x"))
+        assert res.valid is False
+        assert res.verify_error_code == "PERMIT_ALREADY_USED"
 
-    def test_malformed_evaluate_body_is_bad_response(self, client, mocker):
-        # Valid JSON, but missing `permitted` and `decision_id`.
-        resp = _mock_resp(mocker, json_data={"foo": "bar"})
-        mocker.patch.object(client._client, "post", return_value=resp)
-        with pytest.raises(AtlaSentError) as exc_info:
-            client.evaluate("a", "b")
-        assert exc_info.value.code == "bad_response"
-        assert exc_info.value.response_body == {"foo": "bar"}
-        assert "permitted" in exc_info.value.message
-
-    def test_malformed_verify_body_is_bad_response(self, client, mocker):
-        resp = _mock_resp(mocker, json_data={"outcome": "ok"})
-        mocker.patch.object(client._client, "post", return_value=resp)
-        with pytest.raises(AtlaSentError) as exc_info:
-            client.verify("dec_100")
-        assert exc_info.value.code == "bad_response"
-        assert "verified" in exc_info.value.message
-
-    def test_invalid_json_is_bad_response(self, client, mocker):
-        resp = _mock_resp(mocker, status_code=200)
-        resp.json.side_effect = ValueError("not json")
-        mocker.patch.object(client._client, "post", return_value=resp)
-        with pytest.raises(AtlaSentError) as exc_info:
-            client.evaluate("a", "b")
-        assert exc_info.value.code == "bad_response"
+    @respx.mock
+    def test_invalid_4xx_is_still_value_based(self, client: AtlaSentClient) -> None:
+        """Server may return 401/403/429 with the same value-based envelope."""
+        respx.post(f"{BASE_URL}/v1-verify-permit").mock(
+            return_value=httpx.Response(
+                403,
+                json={
+                    "valid": False,
+                    "outcome": "deny",
+                    "verify_error_code": "INSUFFICIENT_SCOPE",
+                    "reason": "no verify scope",
+                },
+            )
+        )
+        res = client.verify_permit(VerifyPermitRequest(permit_token="pt_x"))
+        assert res.valid is False
+        assert res.verify_error_code == "INSUFFICIENT_SCOPE"
 
 
-# ── Resource Management ───────────────────────────────────────────────
+class TestWithPermit:
+    @respx.mock
+    def test_allow_runs_fn_and_verifies(self, client: AtlaSentClient) -> None:
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(200, json=_evaluate_body())
+        )
+        respx.post(f"{BASE_URL}/v1-verify-permit").mock(
+            return_value=httpx.Response(200, json=_verify_body())
+        )
+        runs = {"n": 0}
 
+        def fn(evaluation, verification):
+            runs["n"] += 1
+            assert verification.valid is True
+            return "ran"
 
-class TestLifecycle:
-    def test_close(self, client, mocker):
-        mock_close = mocker.patch.object(client._client, "close")
-        client.close()
-        mock_close.assert_called_once()
+        out = client.with_permit(
+            EvaluateRequest(action_type="a", actor_id="u"), fn
+        )
+        assert out == "ran"
+        assert runs["n"] == 1
 
-    def test_context_manager(self, mocker):
-        with AtlaSentClient(api_key="k", max_retries=0) as c:
-            mock_close = mocker.patch.object(c._client, "close")
-        mock_close.assert_called_once()
+    @respx.mock
+    def test_deny_prevents_fn(self, client: AtlaSentClient) -> None:
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(
+                200, json=_evaluate_body(decision="deny", permit_token=None)
+            )
+        )
+        ran = {"ok": False}
+        with pytest.raises(AuthorizationDeniedError):
+            client.with_permit(
+                EvaluateRequest(action_type="a", actor_id="u"),
+                lambda e, v: ran.update(ok=True),
+            )
+        assert ran["ok"] is False
 
+    @respx.mock
+    def test_verify_denial_raises_permit_verification_error(
+        self, client: AtlaSentClient
+    ) -> None:
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(200, json=_evaluate_body())
+        )
+        respx.post(f"{BASE_URL}/v1-verify-permit").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "valid": False,
+                    "outcome": "deny",
+                    "verify_error_code": "PERMIT_REVOKED",
+                    "reason": "revoked",
+                },
+            )
+        )
+        ran = {"ok": False}
+        with pytest.raises(PermitVerificationError) as info:
+            client.with_permit(
+                EvaluateRequest(action_type="a", actor_id="u"),
+                lambda e, v: ran.update(ok=True),
+            )
+        assert info.value.verify_error_code == "PERMIT_REVOKED"
+        assert ran["ok"] is False
 
-# ── Edge Cases ────────────────────────────────────────────────────────
+    @respx.mock
+    def test_binds_actor_and_action_type_on_verify(
+        self, client: AtlaSentClient
+    ) -> None:
+        captured: dict = {}
 
+        respx.post(f"{BASE_URL}/v1-evaluate").mock(
+            return_value=httpx.Response(200, json=_evaluate_body())
+        )
 
-class TestEdgeCases:
-    def test_malformed_json_response(self, client, mocker):
-        """Server returns 200 but invalid JSON."""
-        resp = mocker.Mock(spec=httpx.Response)
-        resp.status_code = 200
-        resp.json.side_effect = ValueError("No JSON")
-        mocker.patch.object(client._client, "post", return_value=resp)
+        def verify_handler(request: httpx.Request) -> httpx.Response:
+            import json as _json
 
-        with pytest.raises(AtlaSentError, match="Invalid JSON"):
-            client.evaluate("a", "b")
+            captured["body"] = _json.loads(request.read().decode())
+            return httpx.Response(200, json=_verify_body())
 
-    def test_partial_evaluate_response(self, client, mocker):
-        """Server returns 200 but missing required fields."""
-        resp = _mock_resp(mocker, json_data={"permitted": True})
-        mocker.patch.object(client._client, "post", return_value=resp)
+        respx.post(f"{BASE_URL}/v1-verify-permit").mock(side_effect=verify_handler)
 
-        with pytest.raises(Exception):
-            # Pydantic validation fails on missing decision_id
-            client.evaluate("a", "b")
-
-    def test_none_context_treated_as_empty(self, client, mocker):
-        resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
-        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
-
-        client.evaluate("action", "actor", None)
-
-        payload = mock_post.call_args[1]["json"]
-        assert payload["context"] == {}
-
-    def test_empty_context_dict(self, client, mocker):
-        resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
-        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
-
-        client.evaluate("action", "actor", {})
-
-        payload = mock_post.call_args[1]["json"]
-        assert payload["context"] == {}
-
-    def test_gate_does_not_call_verify_on_deny(self, client, mocker):
-        """gate() should stop after evaluate if denied."""
-        resp = _mock_resp(mocker, json_data=EVALUATE_DENY)
-        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
-
-        with pytest.raises(AtlaSentDenied):
-            client.gate("a", "b")
-
-        assert mock_post.call_count == 1
-
-    def test_denied_response_body_preserved(self, client, mocker):
-        """AtlaSentDenied should carry the full response body."""
-        deny_data = {
-            "permitted": False,
-            "decision_id": "dec_999",
-            "reason": "policy violation",
-            "audit_hash": "h",
-            "timestamp": "t",
-            "extra_field": "preserved",
-        }
-        resp = _mock_resp(mocker, json_data=deny_data)
-        mocker.patch.object(client._client, "post", return_value=resp)
-
-        with pytest.raises(AtlaSentDenied) as exc_info:
-            client.evaluate("a", "b")
-
-        assert exc_info.value.response_body["extra_field"] == "preserved"
-
-    def test_large_error_body_truncated(self, client, mocker):
-        resp = _mock_resp(mocker, status_code=400)
-        resp.text = "x" * 1000
-        mocker.patch.object(client._client, "post", return_value=resp)
-
-        with pytest.raises(AtlaSentError) as exc_info:
-            client.evaluate("a", "b")
-
-        assert len(exc_info.value.message) < 600
-
-    def test_verify_with_minimal_params(self, client, mocker):
-        """verify() works with just permit_token."""
-        resp = _mock_resp(mocker, json_data=VERIFY_OK)
-        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
-
-        result = client.verify("dec_100")
-
-        assert result.valid is True
-        payload = mock_post.call_args[1]["json"]
-        assert payload["decision_id"] == "dec_100"
-        assert payload["action"] == ""
-        assert payload["agent"] == ""
+        client.with_permit(
+            EvaluateRequest(action_type="payment.transfer", actor_id="user:42"),
+            lambda e, v: None,
+        )
+        assert captured["body"]["permit_token"] == "pt_abc"
+        assert captured["body"]["actor_id"] == "user:42"
+        assert captured["body"]["action_type"] == "payment.transfer"

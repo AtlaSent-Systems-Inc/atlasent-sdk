@@ -1,89 +1,74 @@
-"""Tests for AtlaSent exceptions."""
+"""Unit tests for exception types."""
 
+from __future__ import annotations
+
+from atlasent import EvaluateResponse, VerifyPermitResponse
 from atlasent.exceptions import (
-    AtlaSentDenied,
     AtlaSentError,
-    ConfigurationError,
+    AuthorizationDeniedError,
+    AuthorizationUnavailableError,
+    PermitVerificationError,
     RateLimitError,
 )
 
 
-class TestAtlaSentError:
-    def test_message_and_status_code(self):
-        err = AtlaSentError("something broke", status_code=500)
-        assert err.message == "something broke"
-        assert err.status_code == 500
-        assert str(err) == "something broke"
-
-    def test_default_status_code_is_none(self):
-        err = AtlaSentError("oops")
-        assert err.status_code is None
-        assert err.response_body is None
-
-    def test_response_body(self):
-        err = AtlaSentError("err", response_body={"error": "bad"})
-        assert err.response_body == {"error": "bad"}
-
-    def test_is_exception(self):
-        assert issubclass(AtlaSentError, Exception)
+def _deny_response() -> EvaluateResponse:
+    return EvaluateResponse.model_validate(
+        {
+            "decision": "deny",
+            "request_id": "r-1",
+            "mode": "live",
+            "cache_hit": False,
+            "evaluation_ms": 4,
+            "deny_code": "OVER_LIMIT",
+            "deny_reason": "too much",
+        }
+    )
 
 
-class TestAtlaSentDenied:
-    def test_attributes(self):
-        err = AtlaSentDenied(
-            "deny",
-            permit_token="dec_123",
-            reason="Missing patient_id",
-            response_body={"permitted": False},
-        )
-        assert err.decision == "deny"
-        assert err.permit_token == "dec_123"
-        assert err.reason == "Missing patient_id"
-        assert "Action denied" in str(err)
-        assert "Missing patient_id" in str(err)
-        assert err.response_body == {"permitted": False}
-
-    def test_inherits_from_atlasent_error(self):
-        assert issubclass(AtlaSentDenied, AtlaSentError)
-
-    def test_defaults(self):
-        err = AtlaSentDenied("deny")
-        assert err.permit_token == ""
-        assert err.reason == ""
+def _verify_denied() -> VerifyPermitResponse:
+    return VerifyPermitResponse.model_validate(
+        {
+            "valid": False,
+            "outcome": "deny",
+            "verify_error_code": "PERMIT_EXPIRED",
+            "reason": "expired",
+        }
+    )
 
 
-class TestConfigurationError:
-    def test_message(self):
-        err = ConfigurationError("No API key")
-        assert err.message == "No API key"
-
-    def test_inherits_from_atlasent_error(self):
-        assert issubclass(ConfigurationError, AtlaSentError)
-
-
-class TestRateLimitError:
-    def test_with_retry_after(self):
-        err = RateLimitError(retry_after=30.0)
-        assert err.retry_after == 30.0
-        assert err.status_code == 429
-        assert err.code == "rate_limited"
-        assert "retry after 30.0s" in str(err)
-
-    def test_without_retry_after(self):
-        err = RateLimitError()
-        assert err.retry_after is None
-        assert err.code == "rate_limited"
-
-    def test_inherits_from_atlasent_error(self):
-        assert issubclass(RateLimitError, AtlaSentError)
+def test_authorization_denied_accessors() -> None:
+    err = AuthorizationDeniedError(_deny_response())
+    assert isinstance(err, AtlaSentError)
+    assert err.decision == "deny"
+    assert err.deny_code == "OVER_LIMIT"
+    assert err.deny_reason == "too much"
+    assert err.request_id == "r-1"
+    assert "OVER_LIMIT" in str(err)
+    assert "too much" in str(err)
 
 
-class TestAtlaSentErrorCode:
-    def test_default_code_is_none(self):
-        err = AtlaSentError("oops")
-        assert err.code is None
+def test_permit_verification_error_accessors() -> None:
+    err = PermitVerificationError("verify denied", response=_verify_denied())
+    assert err.verify_error_code == "PERMIT_EXPIRED"
+    assert err.response is not None
+    assert err.response.reason == "expired"
 
-    def test_code_passthrough(self):
-        err = AtlaSentError("bad", code="invalid_api_key", status_code=401)
-        assert err.code == "invalid_api_key"
-        assert err.status_code == 401
+
+def test_permit_verification_error_without_response() -> None:
+    err = PermitVerificationError("no permit_token issued")
+    assert err.response is None
+    assert err.verify_error_code is None
+
+
+def test_authorization_unavailable_sets_code() -> None:
+    err = AuthorizationUnavailableError("timeout", status_code=504)
+    assert err.code == "unavailable"
+    assert err.status_code == 504
+
+
+def test_rate_limit_error_has_retry_after() -> None:
+    err = RateLimitError(retry_after=30)
+    assert err.retry_after == 30
+    assert err.status_code == 429
+    assert err.code == "rate_limited"
