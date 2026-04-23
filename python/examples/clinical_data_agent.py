@@ -1,12 +1,13 @@
 """Clinical Data Agent — GxP authorization example.
 
-Demonstrates the one-call ``authorize()`` API for an AI agent that
-modifies clinical-trial patient records under 21 CFR Part 11 / GxP.
+Demonstrates `atlasent.protect()` — the one-call, fail-closed
+category primitive — for an AI agent that modifies clinical-trial
+patient records under 21 CFR Part 11 / GxP.
 
 Three scenarios:
-    1. Missing context  →  result.permitted is False (denied)
-    2. Full context     →  result.permitted is True  (permitted + verified)
-    3. raise_on_deny    →  PermissionDeniedError raised on denial
+    1. Missing context  →  AtlaSentDeniedError (policy denial)
+    2. Full context     →  Permit returned (permitted + verified)
+    3. Prohibited action →  AtlaSentDeniedError (policy engine never allows)
 
 Run::
 
@@ -18,11 +19,7 @@ from __future__ import annotations
 
 import os
 
-from atlasent import (
-    PermissionDeniedError,
-    authorize,
-    configure,
-)
+from atlasent import AtlaSentDeniedError, configure, protect
 
 configure(api_key=os.environ.get("ATLASENT_API_KEY", "ask_live_your_key_here"))
 
@@ -34,67 +31,64 @@ def banner(title: str) -> None:
     print(f"\n── {title} " + "─" * (60 - len(title)))
 
 
-# ── Scenario 1: missing context → permitted is False ─────────────────
+# ── Scenario 1: missing context → AtlaSentDeniedError ────────────────
 
 banner("Scenario 1: missing context")
 
-result = authorize(
-    agent=AGENT,
-    action=ACTION,
-    context={"user": "dr_smith"},  # missing change_reason, study_id
-)
-
-if result.permitted:
+try:
+    permit = protect(
+        agent=AGENT,
+        action=ACTION,
+        context={"user": "dr_smith"},  # missing change_reason, study_id
+    )
     print("Permitted — proceeding (unexpected)")
-else:
-    print(f"Denied: {result.reason}")
-    print(f"  decision_id: {result.permit_token}")
+except AtlaSentDeniedError as exc:
+    print(f"Denied: {exc.reason}")
+    print(f"  decision:      {exc.decision}")
+    print(f"  evaluation_id: {exc.evaluation_id}")
 
 
-# ── Scenario 2: full GxP context → permitted + verified ──────────────
+# ── Scenario 2: full GxP context → verified Permit ───────────────────
 
 banner("Scenario 2: full GxP context")
 
-result = authorize(
-    agent=AGENT,
-    action=ACTION,
-    context={
-        "user": "dr_smith",
-        "environment": "production",
-        "patient_id": "PT-2024-001",
-        "study_id": "TRIAL-GXP-042",
-        "site_id": "SITE-US-003",
-        "change_reason": "Correcting lab value transcription error",
-        "gxp_classification": "critical",
-    },
-)
-
-if result.permitted:
+try:
+    permit = protect(
+        agent=AGENT,
+        action=ACTION,
+        context={
+            "user": "dr_smith",
+            "environment": "production",
+            "patient_id": "PT-2024-001",
+            "study_id": "TRIAL-GXP-042",
+            "site_id": "SITE-US-003",
+            "change_reason": "Correcting lab value transcription error",
+            "gxp_classification": "critical",
+        },
+    )
     # ── execute the action — authorization is on file ────────────────
-    print(f"Permitted: {result.reason}")
-    print(f"  permit_token: {result.permit_token}")
-    print(f"  permit_hash:  {result.permit_hash}")
-    print(f"  audit_hash:   {result.audit_hash}")
-    print(f"  verified:     {result.verified}")
-    print(f"  timestamp:    {result.timestamp}")
+    print(f"Permitted: {permit.reason}")
+    print(f"  permit_id:   {permit.permit_id}")
+    print(f"  permit_hash: {permit.permit_hash}")
+    print(f"  audit_hash:  {permit.audit_hash}")
+    print(f"  timestamp:   {permit.timestamp}")
     print("  → 21 CFR Part 11 audit trail recorded")
-else:
-    print(f"Denied: {result.reason}")
+except AtlaSentDeniedError as exc:
+    print(f"Denied: {exc.reason}")
 
 
-# ── Scenario 3: raise_on_deny for fail-closed call sites ─────────────
+# ── Scenario 3: prohibited action — always denied ────────────────────
 
-banner("Scenario 3: raise_on_deny")
+banner("Scenario 3: prohibited action (delete_audit_log)")
 
 try:
-    authorize(
+    protect(
         agent=AGENT,
         action="delete_audit_log",  # never permitted under GxP
         context={"user": "dr_smith", "environment": "production"},
-        raise_on_deny=True,
     )
     print("Permitted (unexpected)")
-except PermissionDeniedError as exc:
+except AtlaSentDeniedError as exc:
     print(f"Blocked at the SDK boundary: {exc.reason}")
-    print(f"  decision: {exc.decision}")
-    print(f"  token:    {exc.permit_token}")
+    print(f"  decision:      {exc.decision}")
+    print(f"  evaluation_id: {exc.evaluation_id}")
