@@ -39,6 +39,7 @@ export {
   type ProtectRequest,
 } from "./protect.js";
 export type {
+  ApiKeySelfResponse,
   AtlaSentClientOptions,
   Decision,
   EvaluateRequest,
