@@ -44,7 +44,16 @@ a pilot API key.
       *Blocked on publishing `@atlasent/types`; types currently live
       in `typescript/src/types.ts`.*
 - [ ] Python SDK's `pydantic` models are generated from the OpenAPI
-      spec (`atlasent-api/openapi.yaml`), not hand-maintained.
+      spec, not hand-maintained.
+      *Spec now shipped in-repo as `contract/openapi.yaml` (OpenAPI
+      3.1, wraps `contract/schemas/*.json`; `validate_openapi.py` + a
+      pytest assertion keep them in sync). Codegen deferred pending a
+      decision on the field-alias story — the hand-written models
+      rename `permitted` → `decision`, `decision_id` →
+      `permit_token`, etc., so vanilla `datamodel-code-generator`
+      output would break the Python API. Two paths forward:
+      (a) keep the aliases and customize codegen to preserve them;
+      (b) adopt wire-named internal models + a thin adapter layer.*
 - [x] CI drift detector in `contract/` fails if the two SDKs diverge
       on wire shape. (`contract/tools/drift.py`, wired into
       `.github/workflows/contract-ci.yml`.)

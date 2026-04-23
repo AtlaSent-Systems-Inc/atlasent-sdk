@@ -1,0 +1,415 @@
+# OpenAPI 3.1 specification for the AtlaSent authorization API (v1).
+#
+# Status: **draft, derived from the existing JSON Schemas in
+# `contract/schemas/`**. Everything here MUST stay in sync with those
+# schemas — the drift detector and vector validator in
+# `contract/tools/` keep the SDKs honest against the schemas; this file
+# lifts those same schemas into a full OpenAPI document so downstream
+# consumers (pydantic codegen, `@atlasent/types`, Postman / Insomnia /
+# Redoc / Stoplight collections, non-SDK adopters) can consume a single
+# canonical artifact.
+#
+# If this file and `schemas/*.json` ever disagree, **the JSON Schemas
+# win**. The SDK drift detector introspects from the schemas, not from
+# this OpenAPI document.
+#
+# Scope (v1.0):
+# - POST /v1-evaluate
+# - POST /v1-verify-permit
+#
+# Out of scope in v1 (tracked in docs/V1_PLAN.md, require separate
+# server-side specs before they can be added here):
+# - Streaming evaluate
+# - session, audit/events, audit/exports, audit/verify, approvals,
+#   overrides, permits/consume, permits/revoke
+# - Offline audit-bundle format
+
+openapi: 3.1.0
+
+info:
+  title: AtlaSent Authorization API
+  version: "1.0.0"
+  summary: Execution-time authorization for AI agents.
+  description: |
+    Every call goes through two endpoints:
+
+    - `POST /v1-evaluate` — policy decision. A clean DENY is HTTP 200
+      with `permitted: false`, **not** a 4xx.
+    - `POST /v1-verify-permit` — confirm a previously-issued permit
+      end-to-end. `verified: false` is similarly an HTTP 200.
+
+    SDKs are **fail-closed**: any failure to *confirm* authorization
+    (network, server error, malformed body, rate limit, invalid key)
+    throws / raises; a clean policy DENY is returned as data.
+
+    See `contract/README.md` for the five invariants every SDK must
+    honour, and `contract/adopt/EXPECTED_ENVELOPES.md` for a
+    plain-English reference.
+  contact:
+    name: AtlaSent Systems Inc.
+    url: https://atlasent.io
+    email: sdk@atlasent.io
+  license:
+    name: MIT (Python SDK) / Apache-2.0 (TypeScript SDK)
+    url: https://github.com/AtlaSent-Systems-Inc/atlasent-sdk
+
+servers:
+  - url: https://api.atlasent.io
+    description: Production.
+
+tags:
+  - name: authorization
+    description: Policy evaluation and permit verification.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v1-evaluate:
+    post:
+      tags: [authorization]
+      operationId: evaluate
+      summary: Evaluate whether an action is authorized.
+      description: |
+        A clean DENY is **not** an HTTP error — it is an HTTP 200
+        response with `permitted: false`. Fail-closed semantics in
+        SDKs apply only to failures to *confirm* authorization
+        (network, timeout, malformed body, 4xx, 5xx).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvaluateRequest"
+            examples:
+              clinical_modify_allow:
+                summary: "Clinical-data agent modifying a record under GxP"
+                value:
+                  action: "modify_patient_record"
+                  agent: "clinical-data-agent"
+                  context:
+                    user: "dr_smith"
+                    environment: "production"
+                    patient_id: "PT-2024-001"
+                  api_key: "ask_live_abc123"
+              minimal:
+                summary: "Minimal valid request"
+                value:
+                  action: "read_data"
+                  agent: "agent-1"
+                  context: {}
+                  api_key: "ask_live_abc123"
+      responses:
+        "200":
+          description: |
+            Policy decision. ALLOW or DENY — branch on `permitted`.
+            This is the only successful status; all non-2xx responses
+            are error conditions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluateResponse"
+              examples:
+                allow:
+                  summary: "ALLOW"
+                  value:
+                    permitted: true
+                    decision_id: "dec_01J8XKQ2"
+                    reason: "Operator authorized under GxP policy"
+                    audit_hash: "sha256:..."
+                    timestamp: "2026-04-17T10:00:00Z"
+                deny:
+                  summary: "DENY (HTTP 200, permitted=false)"
+                  value:
+                    permitted: false
+                    decision_id: "dec_01J8XKQ3"
+                    reason: "Missing change_reason for critical field"
+                    audit_hash: "sha256:..."
+                    timestamp: "2026-04-17T10:01:00Z"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "5XX":
+          $ref: "#/components/responses/ServerError"
+
+  /v1-verify-permit:
+    post:
+      tags: [authorization]
+      operationId: verifyPermit
+      summary: Verify a previously-issued permit end-to-end.
+      description: |
+        Used as a second-factor gate (e.g. in a CI deploy pipeline
+        just before side-effects run). `verified: false` is NOT an
+        HTTP error — it is an HTTP 200 with `verified: false`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyPermitRequest"
+            examples:
+              minimal:
+                summary: "Verify by decision_id alone"
+                value:
+                  decision_id: "dec_01J8XKQ2"
+                  action: ""
+                  agent: ""
+                  context: {}
+                  api_key: "ask_live_abc123"
+              cross_checked:
+                summary: "Verify with agent / action / context re-stated for cross-check"
+                value:
+                  decision_id: "dec_01J8XKQ2"
+                  action: "modify_patient_record"
+                  agent: "clinical-data-agent"
+                  context:
+                    user: "dr_smith"
+                  api_key: "ask_live_abc123"
+      responses:
+        "200":
+          description: |
+            Verification outcome. `verified` is the only required
+            field; `outcome` carries the reason ("verified",
+            "revoked", "expired", etc.).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyPermitResponse"
+              examples:
+                verified:
+                  value:
+                    verified: true
+                    outcome: "verified"
+                    permit_hash: "ph_abc"
+                    timestamp: "2026-04-17T10:00:01Z"
+                revoked:
+                  summary: "HTTP 200 even though the permit is no longer valid"
+                  value:
+                    verified: false
+                    outcome: "revoked"
+                    permit_hash: "ph_abc"
+                    timestamp: "2026-04-17T10:05:00Z"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "5XX":
+          $ref: "#/components/responses/ServerError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        `Authorization: Bearer <api_key>`. The same key MUST also be
+        echoed in the request body's `api_key` field for wire parity
+        (see `contract/adopt/EXPECTED_ENVELOPES.md`).
+
+  # Schemas are mirrored from contract/schemas/*.json. Keep in sync —
+  # the JSON Schemas are the source of truth for the SDK drift detector.
+  schemas:
+    EvaluateRequest:
+      title: EvaluateRequest
+      description: "Wire payload sent to POST /v1-evaluate. SDKs translate their camelCase surface into this snake_case body."
+      type: object
+      additionalProperties: false
+      required: [action, agent, context, api_key]
+      properties:
+        action:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: "Action being authorized (e.g. 'modify_patient_record'). Stable identifier, snake_case recommended."
+        agent:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: "Identifier of the calling agent or actor (e.g. 'clinical-data-agent')."
+        context:
+          type: object
+          description: "Arbitrary policy context (user, environment, resource IDs). Values MUST be JSON-serializable."
+          additionalProperties: true
+        api_key:
+          type: string
+          description: "API key echoed in the body. Also sent as Authorization: Bearer <key>; both MUST be present for wire parity."
+
+    EvaluateResponse:
+      title: EvaluateResponse
+      description: "Wire response returned by POST /v1-evaluate. A DENY is NOT an HTTP error; it is a permitted=false body."
+      type: object
+      additionalProperties: true
+      required: [permitted, decision_id]
+      properties:
+        permitted:
+          type: boolean
+          description: "true iff the policy engine allowed the action. SDKs map this to decision = ALLOW | DENY."
+        decision_id:
+          type: string
+          minLength: 1
+          description: "Opaque permit identifier. Passed back in POST /v1-verify-permit as decision_id."
+        reason:
+          type: string
+          description: "Human-readable explanation from the policy engine. May be empty on ALLOW."
+        audit_hash:
+          type: string
+          description: "Hash-chained audit-trail entry (21 CFR Part 11 / GxP)."
+        timestamp:
+          type: string
+          description: "ISO 8601 timestamp of the decision. Format: YYYY-MM-DDTHH:MM:SSZ."
+          pattern: "^$|^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+
+    VerifyPermitRequest:
+      title: VerifyPermitRequest
+      description: "Wire payload sent to POST /v1-verify-permit."
+      type: object
+      additionalProperties: false
+      required: [decision_id, action, agent, context, api_key]
+      properties:
+        decision_id:
+          type: string
+          minLength: 1
+          description: "The decision_id returned by a prior /v1-evaluate call."
+        action:
+          type: string
+          description: "Optional cross-check — re-state the action. May be empty."
+        agent:
+          type: string
+          description: "Optional cross-check — re-state the agent. May be empty."
+        context:
+          type: object
+          description: "Optional cross-check — re-state the context. May be empty."
+          additionalProperties: true
+        api_key:
+          type: string
+          description: "API key echoed in the body. Also sent as Authorization: Bearer <key>."
+
+    VerifyPermitResponse:
+      title: VerifyPermitResponse
+      description: "Wire response returned by POST /v1-verify-permit. verified=false is NOT an HTTP error."
+      type: object
+      additionalProperties: true
+      required: [verified]
+      properties:
+        verified:
+          type: boolean
+          description: "true iff the permit is still valid and un-revoked."
+        outcome:
+          type: string
+          description: "Verification outcome string (e.g. 'verified', 'revoked', 'expired')."
+        permit_hash:
+          type: string
+          description: "Verification hash bound to the permit."
+        timestamp:
+          type: string
+          description: "ISO 8601 timestamp of the verification."
+          pattern: "^$|^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+
+    ErrorResponse:
+      title: ErrorResponse
+      description: "Shape of the body returned on non-2xx HTTP responses. SDKs surface `message` (preferred) or `reason` to callers."
+      type: object
+      additionalProperties: true
+      properties:
+        message:
+          type: string
+          description: "Preferred human-readable error string."
+        reason:
+          type: string
+          description: "Fallback human-readable error string when message is not present."
+        code:
+          type: string
+          description: "Optional machine-readable code (e.g. 'invalid_api_key', 'rate_limited')."
+        request_id:
+          type: string
+          description: "Optional echo of the X-Request-ID header."
+
+  headers:
+    # Servers SHOULD echo the caller's X-Request-ID on every response
+    # for log correlation; SDKs don't rely on it but humans reading
+    # logs do.
+    X-Request-ID:
+      description: "Echo of the client-supplied correlation id."
+      schema:
+        type: string
+    Retry-After:
+      description: |
+        Present on 429 responses. SDKs parse both numeric delta-seconds
+        AND HTTP-date form (RFC 9110 §10.2.3).
+      schema:
+        type: string
+
+  responses:
+    InvalidApiKey:
+      description: "HTTP 401 — SDKs surface as `code: invalid_api_key`."
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/X-Request-ID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            message: "Invalid API key"
+    Forbidden:
+      description: "HTTP 403 — SDKs surface as `code: forbidden`."
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/X-Request-ID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            message: "scope mismatch"
+    BadRequest:
+      description: |
+        HTTP 4xx other than 401 / 403 / 429 (typically 422 for schema
+        violations). SDKs surface as `code: bad_request`, passing the
+        server's `message` or `reason` through.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/X-Request-ID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            message: "bad field: agent"
+    RateLimited:
+      description: |
+        HTTP 429 — SDKs surface as `code: rate_limited` and parse
+        `Retry-After` into `retryAfterMs` (TS) / `retry_after`
+        (Python). Both delta-seconds (`"30"`) and HTTP-date forms
+        (`"Wed, 21 Oct 2026 07:28:00 GMT"`) are accepted.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/Retry-After"
+        X-Request-ID:
+          $ref: "#/components/headers/X-Request-ID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            message: "slow down"
+    ServerError:
+      description: "HTTP 5xx — SDKs surface as `code: server_error`. Retried with exponential backoff up to `max_retries` times."
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/X-Request-ID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            message: "internal server error"
