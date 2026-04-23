@@ -489,3 +489,103 @@ describe("X-RateLimit-* header parsing", () => {
     expect(result.rateLimit).toBeNull();
   });
 });
+
+describe("keySelf()", () => {
+  const KEY_SELF_WIRE = {
+    key_id: "550e8400-e29b-41d4-a716-446655440000",
+    organization_id: "123e4567-e89b-12d3-a456-426614174000",
+    environment: "live",
+    scopes: ["evaluate", "audit.read"],
+    allowed_cidrs: ["10.0.0.0/8"],
+    rate_limit_per_minute: 1000,
+    client_ip: "10.2.3.4",
+    expires_at: "2026-12-31T23:59:59Z",
+  };
+
+  it("issues a GET to /v1-api-key-self and maps snake_case → camelCase", async () => {
+    const fetchImpl = mockFetch((url, init) => {
+      expect(url).toMatch(/\/v1-api-key-self$/);
+      expect(init.method).toBe("GET");
+      expect(init.body).toBeUndefined();
+      expect((init.headers as Record<string, string>).Authorization).toBe(
+        "Bearer ask_live_test",
+      );
+      return jsonResponse(KEY_SELF_WIRE);
+    });
+    const client = makeClient(fetchImpl);
+    const result = await client.keySelf();
+
+    expect(result).toEqual({
+      keyId: "550e8400-e29b-41d4-a716-446655440000",
+      organizationId: "123e4567-e89b-12d3-a456-426614174000",
+      environment: "live",
+      scopes: ["evaluate", "audit.read"],
+      allowedCidrs: ["10.0.0.0/8"],
+      rateLimitPerMinute: 1000,
+      clientIp: "10.2.3.4",
+      expiresAt: "2026-12-31T23:59:59Z",
+      // Headerless response → no rate-limit state surfaced.
+      rateLimit: null,
+    });
+  });
+
+  it("surfaces rateLimit when X-RateLimit-* headers are present", async () => {
+    const fetchImpl = mockFetch(() =>
+      new Response(JSON.stringify(KEY_SELF_WIRE), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "X-RateLimit-Limit": "1000",
+          "X-RateLimit-Remaining": "987",
+          "X-RateLimit-Reset": "1714068060",
+        },
+      }),
+    );
+    const client = makeClient(fetchImpl);
+    const result = await client.keySelf();
+    expect(result.rateLimit).toEqual({
+      limit: 1000,
+      remaining: 987,
+      resetAt: new Date(1_714_068_060 * 1000),
+    });
+  });
+
+  it("defaults allowed_cidrs to null and expires_at to null when absent", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({
+        key_id: "k",
+        organization_id: "o",
+        environment: "test",
+        rate_limit_per_minute: 60,
+        // allowed_cidrs, client_ip, expires_at, scopes all omitted
+      }),
+    );
+    const client = makeClient(fetchImpl);
+    const result = await client.keySelf();
+    expect(result.allowedCidrs).toBeNull();
+    expect(result.clientIp).toBeNull();
+    expect(result.expiresAt).toBeNull();
+    expect(result.scopes).toEqual([]);
+  });
+
+  it("throws bad_response when required fields are missing", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({ environment: "live", rate_limit_per_minute: 60 }),
+    );
+    const client = makeClient(fetchImpl);
+    await expect(client.keySelf()).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+
+  it("propagates 401 as a typed AtlaSentError", async () => {
+    const fetchImpl = mockFetch(() =>
+      new Response(JSON.stringify({ error: "invalid_api_key" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const client = makeClient(fetchImpl);
+    await expect(client.keySelf()).rejects.toBeInstanceOf(AtlaSentError);
+  });
+});

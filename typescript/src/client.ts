@@ -16,6 +16,7 @@ import {
   type AtlaSentErrorInit,
 } from "./errors.js";
 import type {
+  ApiKeySelfResponse,
   AtlaSentClientOptions,
   EvaluateRequest,
   EvaluateResponse,
@@ -35,6 +36,18 @@ interface EvaluateWire {
   reason?: string;
   audit_hash?: string;
   timestamp?: string;
+}
+
+/** Raw JSON shape received from `GET /v1-api-key-self`. */
+interface ApiKeySelfWire {
+  key_id: string;
+  organization_id: string;
+  environment: string;
+  scopes?: string[];
+  allowed_cidrs?: string[] | null;
+  rate_limit_per_minute: number;
+  client_ip?: string | null;
+  expires_at?: string | null;
 }
 
 /** Raw JSON shape received from `POST /v1-verify-permit`. */
@@ -134,29 +147,83 @@ export class AtlaSentClient {
     };
   }
 
+  /**
+   * Self-introspection: ask the server to describe the API key this
+   * client was constructed with. Returns the key's ID, organization,
+   * environment, scopes, IP allowlist, per-minute rate limit, the
+   * client IP the server observed, and the expiry (if any).
+   *
+   * Never includes the raw key or its hash. Safe to surface in operator
+   * dashboards. Useful for `IP_NOT_ALLOWED` debugging (the server tells
+   * you exactly which IP it saw) and for proactive expiry warnings.
+   *
+   * Throws {@link AtlaSentError} on transport / auth failures — same
+   * taxonomy as {@link AtlaSentClient.evaluate}.
+   */
+  async keySelf(): Promise<ApiKeySelfResponse> {
+    const { body: wire, rateLimit } = await this.get<ApiKeySelfWire>(
+      "/v1-api-key-self",
+    );
+
+    if (typeof wire.key_id !== "string" || typeof wire.organization_id !== "string") {
+      throw new AtlaSentError(
+        "Malformed response from /v1-api-key-self: missing `key_id` or `organization_id`",
+        { code: "bad_response" },
+      );
+    }
+
+    return {
+      keyId: wire.key_id,
+      organizationId: wire.organization_id,
+      environment: wire.environment,
+      scopes: wire.scopes ?? [],
+      allowedCidrs: wire.allowed_cidrs ?? null,
+      rateLimitPerMinute: wire.rate_limit_per_minute,
+      clientIp: wire.client_ip ?? null,
+      expiresAt: wire.expires_at ?? null,
+      rateLimit,
+    };
+  }
+
   private async post<T>(
     path: string,
+    body: unknown,
+  ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
+    return this.request<T>(path, "POST", body);
+  }
+
+  private async get<T>(
+    path: string,
+  ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
+    return this.request<T>(path, "GET", undefined);
+  }
+
+  private async request<T>(
+    path: string,
+    method: "GET" | "POST",
     body: unknown,
   ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
     const url = `${this.baseUrl}${path}`;
     const requestId = globalThis.crypto.randomUUID();
 
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
       Accept: "application/json",
       Authorization: `Bearer ${this.apiKey}`,
       "User-Agent": `@atlasent/sdk/${SDK_VERSION} node/${process.version}`,
       "X-Request-ID": requestId,
     };
+    if (method === "POST") headers["Content-Type"] = "application/json";
+
+    const init: RequestInit = {
+      method,
+      headers,
+      signal: AbortSignal.timeout(this.timeoutMs),
+    };
+    if (method === "POST") init.body = JSON.stringify(body);
 
     let response: Response;
     try {
-      response = await this.fetchImpl(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
+      response = await this.fetchImpl(url, init);
     } catch (err) {
       throw mapFetchError(err, requestId);
     }

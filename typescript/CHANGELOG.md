@@ -4,6 +4,41 @@ All notable changes to `@atlasent/sdk` are documented here. The SDK
 follows [semver](https://semver.org/): breaking changes bump the major
 (or minor while on 0.x).
 
+## 1.4.0 — 2026-04-23
+
+### Added
+
+- **`AtlaSentClient.keySelf()` — API-key self-introspection.** Calls
+  `GET /v1/api-key-self` and returns the server's description of the
+  key this client was constructed with:
+
+      const info = await client.keySelf();
+      // → { keyId, organizationId, environment, scopes, allowedCidrs,
+      //     rateLimitPerMinute, clientIp, expiresAt, rateLimit }
+
+  Never includes the raw key or its hash — introspection is
+  intentionally read-only and safe to surface in operator dashboards.
+  Useful for:
+    - `IP_NOT_ALLOWED` debugging — `clientIp` is the IP the server
+      observed (X-Forwarded-For first hop), so you can see exactly
+      what the allowlist is being checked against.
+    - Proactive expiry warnings — `expiresAt` is the server-stored
+      expiry (`null` means the key does not auto-expire).
+    - Verifying scopes before attempting a scope-gated action.
+    - "Which key am I?" in multi-tenant dashboards that juggle more
+      than one key.
+
+  Response also includes `rateLimit` (the same `RateLimitState`
+  surfaced on `evaluate`/`verifyPermit`), so key-introspection
+  doubles as a cheap rate-limit probe without burning a permit.
+
+- `ApiKeySelfResponse` type exported from the public entry point.
+
+### Non-breaking
+
+Adding `keySelf()` is purely additive — existing `evaluate` /
+`verifyPermit` / `protect` APIs are unchanged.
+
 ## Unreleased
 
 ### Added
