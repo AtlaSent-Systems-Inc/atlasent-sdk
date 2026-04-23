@@ -4,6 +4,72 @@ All notable changes to `@atlasent/sdk` are documented here. The SDK
 follows [semver](https://semver.org/): breaking changes bump the major
 (or minor while on 0.x).
 
+## 1.2.0 — 2026-04-23
+
+### Added
+
+- **`@atlasent/sdk/hono` subpath export — Hono middleware.** Drop-in
+  execution-time authorization for any Hono route:
+
+      import { Hono } from "hono";
+      import { atlaSentGuard, atlaSentErrorHandler } from "@atlasent/sdk/hono";
+
+      const app = new Hono();
+      app.onError(atlaSentErrorHandler());
+
+      app.post(
+        "/deploy/:service",
+        atlaSentGuard({
+          action: (c) => `deploy_${c.req.param("service")}`,
+          agent: (c) => c.req.header("x-agent-id") ?? "anonymous",
+          context: async (c) => ({ commit: (await c.req.json()).commit }),
+        }),
+        (c) => c.json({ ok: true, permit: c.get("atlasent") }),
+      );
+
+  The guard calls `atlasent.protect()` under the hood — same fail-closed
+  semantics. On allow, it stashes the verified `Permit` on the Hono
+  context (default key `"atlasent"`, override via `options.key`). On
+  deny or transport error it **throws** so you can handle all
+  AtlaSent failures in one place via `app.onError`.
+
+- **`atlaSentErrorHandler(options?)` — one-call error mapping.** Maps
+  `AtlaSentDeniedError` → 403 and `AtlaSentError` → 503 by default,
+  with JSON bodies carrying `decision`, `evaluationId`, `reason`,
+  `code`, and `requestId` as appropriate. Customise via `denyStatus`,
+  `errorStatus`, `renderDeny`, `renderError`. Non-AtlaSent errors
+  re-throw so other `onError` chains still see them.
+
+- **Example**: `examples/hono-guard.ts` — end-to-end `POST /deploy/:service`
+  route with the guard and error handler wired up.
+
+### Changed
+
+- `hono` added as an **optional** peer dependency (`^4.0.0`). Users
+  who only import the default entry point (`@atlasent/sdk`) don't
+  pull it in; users who import `@atlasent/sdk/hono` need `hono`
+  installed alongside. Marked optional via `peerDependenciesMeta` so
+  package managers don't warn when it's absent.
+
+- `tsup` now builds two entry points (`index`, `hono`) into
+  `dist/index.{js,cjs}` + `dist/hono.{js,cjs}` with matching
+  `.d.ts` / `.d.cts`. `package.json` `exports` map updated.
+
+### Notes
+
+- Additive. No change to the default-export surface (`atlasent.protect`,
+  `atlasent.configure`, `AtlaSentClient`, `AtlaSentError`,
+  `AtlaSentDeniedError`). The Hono module re-exports `Permit`,
+  `ProtectRequest`, `AtlaSentError`, and `AtlaSentDeniedError` so
+  `@atlasent/sdk/hono` is self-contained for callers who only want
+  the middleware.
+- 9 new tests in `test/hono.test.ts` exercising a real Hono app
+  against a mock `fetch`: allow path, function resolvers for
+  agent/action/context, deny-throws, custom `key`, skipped
+  downstream handler on deny, 403/503 default status mapping,
+  custom status + render overrides, and non-AtlaSent error
+  re-throw. 63/63 TS tests pass; tsup build + typecheck clean.
+
 ## 1.1.0 — 2026-04-22
 
 ### Added
