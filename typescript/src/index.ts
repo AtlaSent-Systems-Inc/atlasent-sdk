@@ -42,6 +42,7 @@ export type {
   Decision,
   EvaluateRequest,
   EvaluateResponse,
+  RateLimitState,
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "./types.js";

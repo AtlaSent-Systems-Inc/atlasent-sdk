@@ -4,6 +4,41 @@ All notable changes to `@atlasent/sdk` are documented here. The SDK
 follows [semver](https://semver.org/): breaking changes bump the major
 (or minor while on 0.x).
 
+## 1.3.0 — 2026-04-23
+
+### Added
+
+- **`rateLimit` field on every authed response.** The AtlaSent edge
+  functions now emit `X-RateLimit-Limit`, `X-RateLimit-Remaining`,
+  and `X-RateLimit-Reset` headers on success responses (the 429 path
+  with `Retry-After` was already handled). The client parses the
+  header triple and surfaces it as a typed `RateLimitState`
+  (`{ limit, remaining, resetAt: Date }`) on both
+  `EvaluateResponse.rateLimit` and `VerifyPermitResponse.rateLimit`.
+  Consumers can preemptively back off instead of waiting for a 429:
+
+      const result = await client.evaluate({ ... });
+      if (result.rateLimit && result.rateLimit.remaining < 10) {
+        await sleepUntil(result.rateLimit.resetAt);
+      }
+
+  `X-RateLimit-Reset` is accepted as either unix-seconds (the
+  current server convention) or ISO 8601. `rateLimit` is `null`
+  when any of the three headers is missing or unparseable — covers
+  older server deployments and internal endpoints that skip
+  per-key limits.
+
+- `RateLimitState` type exported from the public entry point for
+  consumers building their own back-off logic.
+
+### Non-breaking
+
+Adding `rateLimit: RateLimitState | null` to the response interfaces
+is additive. Existing consumers that destructure `{ decision,
+permitId, ... }` keep working unchanged. No wire-format change — the
+headers have been emitted by the server but previously ignored by
+the SDK.
+
 ## 1.2.0 — 2026-04-23
 
 ### Added
