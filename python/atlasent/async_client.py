@@ -19,12 +19,14 @@ from .exceptions import (
     PermissionDeniedError,
     RateLimitError,
 )
+from .client import _parse_rate_limit_headers
 from .models import (
     AuthorizationResult,
     EvaluateRequest,
     EvaluateResult,
     GateResult,
     Permit,
+    RateLimitState,
     VerifyRequest,
     VerifyResult,
 )
@@ -120,7 +122,7 @@ class AsyncAtlaSentClient:
             api_key=self._api_key,
         )
         logger.debug("evaluate action=%r actor=%r (async)", action_type, actor_id)
-        data, request_id = await self._post(
+        data, rate_limit, request_id = await self._post(
             "/v1-evaluate", req.model_dump(by_alias=True)
         )
 
@@ -146,6 +148,7 @@ class AsyncAtlaSentClient:
             )
 
         result = EvaluateResult.model_validate(data)
+        result.rate_limit = rate_limit
         logger.info(
             "evaluate permitted action=%r actor=%r token=%s",
             action_type,
@@ -175,7 +178,7 @@ class AsyncAtlaSentClient:
             api_key=self._api_key,
         )
         logger.debug("verify token=%s (async)", permit_token)
-        data, request_id = await self._post(
+        data, rate_limit, request_id = await self._post(
             "/v1-verify-permit", req.model_dump(by_alias=True)
         )
         if not isinstance(data.get("verified"), bool):
@@ -186,6 +189,7 @@ class AsyncAtlaSentClient:
                 response_body=data,
             )
         result = VerifyResult.model_validate(data)
+        result.rate_limit = rate_limit
         logger.info("verify token=%s valid=%s", permit_token, result.valid)
         return result
 
@@ -335,15 +339,18 @@ class AsyncAtlaSentClient:
 
     async def _post(
         self, path: str, payload: dict[str, Any]
-    ) -> tuple[dict[str, Any], str]:
+    ) -> tuple[dict[str, Any], RateLimitState | None, str]:
         """POST with retry on transient failures.
 
-        Returns ``(body, request_id)``. Callers use ``request_id`` to
-        attach the ``X-Request-ID`` we sent to any exception they raise
-        while interpreting the body, so call sites see the same
-        correlation id whether the request failed at transport / HTTP
-        status time (raised inside ``_post``) or at body-shape time
-        (raised by the caller after ``_post`` returns).
+        Returns ``(body, rate_limit, request_id)``. ``rate_limit`` is
+        parsed from ``X-RateLimit-*`` headers on the response or
+        ``None`` when the server doesn't emit them. Callers use
+        ``request_id`` to attach the ``X-Request-ID`` we sent to any
+        exception they raise while interpreting the body, so call
+        sites see the same correlation id whether the request failed
+        at transport / HTTP status time (raised inside ``_post``) or
+        at body-shape time (raised by the caller after ``_post``
+        returns).
         """
         url = f"{self._base_url}{path}"
         request_id = uuid.uuid4().hex[:12]
@@ -438,7 +445,11 @@ class AsyncAtlaSentClient:
                 )
 
             try:
-                return response.json(), request_id
+                return (
+                    response.json(),
+                    _parse_rate_limit_headers(response),
+                    request_id,
+                )
             except ValueError as exc:
                 raise AtlaSentError(
                     "Invalid JSON response from AtlaSent API",

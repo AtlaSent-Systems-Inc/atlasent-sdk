@@ -1,5 +1,49 @@
 # Changelog
 
+## 1.3.0 — 2026-04-23
+
+### Added
+
+- **`rate_limit` field on every authed response.** The AtlaSent edge
+  functions now emit `X-RateLimit-Limit`, `X-RateLimit-Remaining`,
+  and `X-RateLimit-Reset` headers on success responses (the 429 path
+  with `Retry-After` was already handled). The client parses the
+  header triple and surfaces it as a typed `RateLimitState` dataclass
+  (`limit: int`, `remaining: int`, `reset_at: datetime`) on both
+  `EvaluateResult.rate_limit` and `VerifyResult.rate_limit`. Clients
+  can preemptively back off instead of waiting for a 429:
+
+      from datetime import datetime, timezone
+      import time
+
+      result = client.evaluate("deploy", "ci-bot")
+      if result.rate_limit and result.rate_limit.remaining < 10:
+          delay = (
+              result.rate_limit.reset_at - datetime.now(timezone.utc)
+          ).total_seconds()
+          if delay > 0:
+              time.sleep(delay)
+
+  `X-RateLimit-Reset` is accepted as either unix-seconds (the
+  current server convention) or ISO 8601. `rate_limit` is `None`
+  when any of the three headers is missing or unparseable — covers
+  older server deployments and internal endpoints that skip
+  per-key limits.
+
+- `RateLimitState` exported from the top-level `atlasent` namespace
+  for consumers building their own back-off logic.
+
+- Works identically on both `AtlaSentClient` and
+  `AsyncAtlaSentClient`; the header parser is shared.
+
+### Non-breaking
+
+Adding `rate_limit: RateLimitState | None` to `EvaluateResult` and
+`VerifyResult` is additive. Existing attribute access
+(`result.decision`, `result.permit_token`, etc.) is unchanged. No
+wire-format change — the headers have been emitted by the server
+but previously ignored by the SDK.
+
 ## 1.2.0 — 2026-04-23
 
 ### Added
