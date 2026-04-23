@@ -8,6 +8,8 @@
  * {@link AtlaSentError}.
  */
 
+import type { RateLimitState } from "./types.js";
+
 /** Discriminator for {@link AtlaSentError.code}. */
 export type AtlaSentErrorCode =
   | "invalid_api_key"
@@ -25,6 +27,7 @@ export interface AtlaSentErrorInit {
   code?: AtlaSentErrorCode;
   requestId?: string;
   retryAfterMs?: number;
+  rateLimit?: RateLimitState | null;
   cause?: unknown;
 }
 
@@ -48,6 +51,15 @@ export class AtlaSentError extends Error {
   readonly requestId: string | undefined;
   /** Parsed `Retry-After` header value, in milliseconds. Only set for 429. */
   readonly retryAfterMs: number | undefined;
+  /**
+   * Per-key rate-limit state from the response's `X-RateLimit-*`
+   * headers, when they were emitted. Populated on 429 responses so
+   * consumers can inspect which budget was blown (`limit`) and when
+   * it resets (`resetAt`) without having to also catch `retryAfterMs`
+   * separately. `null` on other status codes or when the server
+   * didn't emit the headers.
+   */
+  readonly rateLimit: RateLimitState | null | undefined;
 
   constructor(message: string, init: AtlaSentErrorInit = {}) {
     super(
@@ -58,6 +70,7 @@ export class AtlaSentError extends Error {
     this.code = init.code;
     this.requestId = init.requestId;
     this.retryAfterMs = init.retryAfterMs;
+    this.rateLimit = init.rateLimit;
   }
 }
 

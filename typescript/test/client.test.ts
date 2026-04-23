@@ -488,4 +488,31 @@ describe("X-RateLimit-* header parsing", () => {
     const result = await client.evaluate({ agent: "a", action: "b" });
     expect(result.rateLimit).toBeNull();
   });
+
+  it("attaches rateLimit to AtlaSentError on 429", async () => {
+    const client = makeClient(
+      mockFetch(() =>
+        new Response(JSON.stringify({ reason: "Rate limit exceeded" }), {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": "42",
+            "X-RateLimit-Limit": "1000",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(RESET_SECONDS),
+          },
+        }),
+      ),
+    );
+    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+      code: "rate_limited",
+      status: 429,
+      retryAfterMs: 42_000,
+      rateLimit: {
+        limit: 1000,
+        remaining: 0,
+        resetAt: new Date(RESET_DATE_MS),
+      },
+    });
+  });
 });

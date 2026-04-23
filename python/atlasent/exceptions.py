@@ -7,7 +7,10 @@ without an explicit permit.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from .models import RateLimitState
 
 AtlaSentDecision = Literal["deny", "hold", "escalate"]
 """Policy decision outcomes on a denial.
@@ -68,12 +71,21 @@ class AtlaSentError(Exception):
         code: AtlaSentErrorCode | None = None,
         request_id: str | None = None,
         response_body: dict[str, Any] | None = None,
+        rate_limit: "RateLimitState | None" = None,
     ) -> None:
         self.message = message
         self.status_code = status_code
         self.code: AtlaSentErrorCode | None = code
         self.request_id = request_id
         self.response_body = response_body
+        self.rate_limit = rate_limit
+        """Per-key rate-limit state parsed from the response's
+        ``X-RateLimit-*`` headers, when they were emitted. Populated
+        on 429 responses so consumers can inspect which budget was
+        blown (``limit``) and when it resets (``reset_at``) alongside
+        the simpler :attr:`RateLimitError.retry_after`. ``None`` on
+        transport errors, on older server deployments, or on endpoints
+        that don't emit the headers."""
         super().__init__(self.message)
 
 
@@ -197,6 +209,7 @@ class RateLimitError(AtlaSentError):
         retry_after: float | None = None,
         *,
         request_id: str | None = None,
+        rate_limit: "RateLimitState | None" = None,
     ) -> None:
         self.retry_after = retry_after
         msg = "Rate limited by AtlaSent API"
@@ -207,4 +220,5 @@ class RateLimitError(AtlaSentError):
             status_code=429,
             code="rate_limited",
             request_id=request_id,
+            rate_limit=rate_limit,
         )
