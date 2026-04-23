@@ -39,6 +39,7 @@ from .exceptions import (
 )
 from .guard import async_atlasent_guard, atlasent_guard
 from .models import (
+    ApiKeySelfResult,
     AuthorizationResult,
     EvaluateResult,
     GateResult,
@@ -62,6 +63,7 @@ __all__ = [
     "EvaluateResult",
     "VerifyResult",
     "RateLimitState",
+    "ApiKeySelfResult",
     "GateResult",
     "AtlaSentError",
     "AtlaSentErrorCode",
