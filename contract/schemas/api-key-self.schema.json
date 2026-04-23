@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/api-key-self.schema.json",
+  "title": "ApiKeySelfResponse",
+  "description": "Wire response returned by GET /v1-api-key-self. Self-introspection of the API key on the request. Never includes the raw key or its hash — safe to surface in operator dashboards.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "key_id",
+    "organization_id",
+    "environment",
+    "rate_limit_per_minute"
+  ],
+  "properties": {
+    "key_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Server-side UUID of the api_keys row for this key."
+    },
+    "organization_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Organization the key belongs to."
+    },
+    "environment": {
+      "type": "string",
+      "description": "'live' or 'test' (or any future environment label the server introduces)."
+    },
+    "scopes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Granted scopes (e.g. ['evaluate', 'audit.read']). Empty array when the key has no explicit scopes."
+    },
+    "allowed_cidrs": {
+      "type": ["array", "null"],
+      "items": { "type": "string" },
+      "description": "Per-key IP allowlist as CIDR strings (e.g. ['10.0.0.0/8']). null when the key is unrestricted."
+    },
+    "rate_limit_per_minute": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Server-enforced per-minute rate limit for this key."
+    },
+    "client_ip": {
+      "type": ["string", "null"],
+      "description": "Client IP as the server observed it (first hop of X-Forwarded-For). null when unresolvable."
+    },
+    "expires_at": {
+      "type": ["string", "null"],
+      "description": "Server-stored expiry. null means the key does not auto-expire.",
+      "pattern": "^$|^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Short-lived correlation id from the server for log correlation (observability-layer, not a key field)."
+    }
+  }
+}

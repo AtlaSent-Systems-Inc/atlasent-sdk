@@ -90,6 +90,45 @@ export interface VerifyPermitResponse {
   rateLimit: RateLimitState | null;
 }
 
+/**
+ * Result of {@link AtlaSentClient.keySelf} — self-introspection of the API
+ * key the client was constructed with. Returned by `GET /v1/api-key-self`.
+ *
+ * Never includes the raw key or its hash — introspection is intentionally
+ * read-only and safe to surface in operator dashboards. Useful for:
+ *   - "which key am I?" debugging
+ *   - IP_NOT_ALLOWED failures — `clientIp` is the IP the server observed
+ *   - proactive expiry warnings — `expiresAt` is the server-stored expiry
+ *     (`null` means the key does not auto-expire)
+ *   - verifying scopes before attempting a scope-gated action
+ */
+export interface ApiKeySelfResponse {
+  /** Server-side UUID of the api_keys row for this key. */
+  keyId: string;
+  /** Organization the key belongs to. */
+  organizationId: string;
+  /** "live" or "test" (or any future environment label the server introduces). */
+  environment: string;
+  /** Granted scopes — e.g. ["evaluate", "audit.read"]. */
+  scopes: string[];
+  /**
+   * Per-key IP allowlist as CIDR strings (e.g. ["10.0.0.0/8"]). `null`
+   * when the key is unrestricted.
+   */
+  allowedCidrs: string[] | null;
+  /** Server-enforced per-minute rate limit for this key. */
+  rateLimitPerMinute: number;
+  /** Client IP as the server observed it (first hop of X-Forwarded-For). */
+  clientIp: string | null;
+  /** Server-stored expiry; `null` means the key does not auto-expire. */
+  expiresAt: string | null;
+  /**
+   * Per-key rate-limit state for this request's response, parsed from
+   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
+   */
+  rateLimit: RateLimitState | null;
+}
+
 /** Constructor options for {@link AtlaSentClient}. */
 export interface AtlaSentClientOptions {
   /** Required. Your AtlaSent API key. */

@@ -122,6 +122,54 @@ class VerifyResult(BaseModel):
     model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
 
 
+# ── Key self-introspection ────────────────────────────────────────────
+
+
+class ApiKeySelfResult(BaseModel):
+    """Successful response from ``GET /v1-api-key-self``.
+
+    Self-introspection of the API key this client was constructed with.
+    Never includes the raw key or its hash — introspection is
+    intentionally read-only and safe to surface in operator dashboards.
+
+    Useful for:
+        * ``IP_NOT_ALLOWED`` debugging — :attr:`client_ip` is the IP the
+          server observed (first hop of X-Forwarded-For).
+        * Proactive expiry warnings — :attr:`expires_at` is the
+          server-stored expiry (``None`` means the key does not
+          auto-expire).
+        * Verifying scopes before attempting a scope-gated action.
+        * "Which key am I?" in multi-tenant dashboards.
+
+    Attributes:
+        key_id: Server-side UUID of the ``api_keys`` row for this key.
+        organization_id: Organization the key belongs to.
+        environment: ``"live"`` / ``"test"`` (or any future environment
+            label the server introduces).
+        scopes: Granted scopes (e.g. ``["evaluate", "audit.read"]``).
+        allowed_cidrs: Per-key IP allowlist as CIDR strings, or
+            ``None`` when the key is unrestricted.
+        rate_limit_per_minute: Server-enforced per-minute rate limit.
+        client_ip: Client IP as the server observed it.
+        expires_at: Server-stored expiry; ``None`` means no auto-expire.
+        rate_limit: Per-key rate-limit state from ``X-RateLimit-*``
+            headers on this response. ``None`` when the server didn't
+            emit them.
+    """
+
+    key_id: str
+    organization_id: str
+    environment: str
+    scopes: list[str] = Field(default_factory=list)
+    allowed_cidrs: list[str] | None = None
+    rate_limit_per_minute: int
+    client_ip: str | None = None
+    expires_at: str | None = None
+    rate_limit: RateLimitState | None = None
+
+    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
+
+
 # ── Gate (convenience) ────────────────────────────────────────────────
 
 

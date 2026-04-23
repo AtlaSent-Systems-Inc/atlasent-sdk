@@ -3,8 +3,10 @@
 Compares each SDK's wire-format shape to the shared contract schemas
 in ``contract/schemas/``. Fails (exit 1) on mismatch.
 
-What it checks, per endpoint (/v1-evaluate, /v1-verify-permit):
-  1. Required request fields match the schema.
+What it checks, per endpoint (/v1-evaluate, /v1-verify-permit,
+/v1-api-key-self):
+  1. Required request fields match the schema. (Skipped for GET
+     endpoints like /v1-api-key-self that have no request body.)
   2. Allowed request fields match the schema (no extras).
   3. Required response fields match the schema.
 
@@ -62,6 +64,7 @@ def _python_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
     sys.path.insert(0, str(PYTHON_SRC))
     try:
         from atlasent.models import (  # type: ignore[import-not-found]
+            ApiKeySelfResult,
             EvaluateRequest,
             EvaluateResult,
             VerifyRequest,
@@ -77,14 +80,28 @@ def _python_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
             out.add(alias)
         return out
 
+    # Fields the SDK attaches after parsing the wire (e.g. `rate_limit`
+    # is populated from X-RateLimit-* headers, not the body). Drop them
+    # before comparing to the JSON-Schema, otherwise they'd show up as
+    # "extras that aren't on the wire."
+    non_wire = {"rate_limit"}
+
+    def _wire_aliases(model: type) -> set[str]:
+        return _aliases(model) - non_wire
+
     return {
         "/v1-evaluate": {
             "request_keys": _aliases(EvaluateRequest),
-            "response_keys": _aliases(EvaluateResult),
+            "response_keys": _wire_aliases(EvaluateResult),
         },
         "/v1-verify-permit": {
             "request_keys": _aliases(VerifyRequest),
-            "response_keys": _aliases(VerifyResult),
+            "response_keys": _wire_aliases(VerifyResult),
+        },
+        # GET endpoint — no request body, only a response.
+        "/v1-api-key-self": {
+            "request_keys": None,
+            "response_keys": _wire_aliases(ApiKeySelfResult),
         },
     }
 
@@ -173,6 +190,12 @@ def _typescript_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
             "request_keys": _body_keys_in_method("verifyPermit"),
             "response_keys": _wire_interface_keys("VerifyPermitWire"),
         },
+        # GET endpoint — no request body, only a response. The wire
+        # shape lives on the `ApiKeySelfWire` interface in client.ts.
+        "/v1-api-key-self": {
+            "request_keys": None,
+            "response_keys": _wire_interface_keys("ApiKeySelfWire"),
+        },
     }
 
 
@@ -227,7 +250,7 @@ def _compare(
 def run() -> DriftReport:
     report = DriftReport()
 
-    schemas = {
+    schemas: dict[str, dict[str, dict[str, Any]]] = {
         "/v1-evaluate": {
             "request": _load_schema("evaluate-request.schema.json"),
             "response": _load_schema("evaluate-response.schema.json"),
@@ -235,6 +258,10 @@ def run() -> DriftReport:
         "/v1-verify-permit": {
             "request": _load_schema("verify-permit-request.schema.json"),
             "response": _load_schema("verify-permit-response.schema.json"),
+        },
+        # GET endpoint — response-only, no request schema.
+        "/v1-api-key-self": {
+            "response": _load_schema("api-key-self.schema.json"),
         },
     }
 
@@ -248,14 +275,17 @@ def run() -> DriftReport:
             report.fail(f"[{sdk_name}] introspection failed: {exc}")
             continue
         for endpoint, pair in sdk_wire.items():
-            _compare(
-                sdk_name,
-                endpoint,
-                "request",
-                pair["request_keys"],
-                schemas[endpoint]["request"],
-                report,
-            )
+            # Request: only compare when both an SDK body shape and a
+            # request schema are defined. GET endpoints have neither.
+            if pair["request_keys"] is not None and "request" in schemas[endpoint]:
+                _compare(
+                    sdk_name,
+                    endpoint,
+                    "request",
+                    pair["request_keys"],
+                    schemas[endpoint]["request"],
+                    report,
+                )
             _compare(
                 sdk_name,
                 endpoint,
