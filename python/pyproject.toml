@@ -81,7 +81,8 @@ exclude_lines = [
     "\\.\\.\\.",
 ]
 # Floor set to current-minus-small-margin so CI catches regressions.
-# V1 target per docs/V1_PLAN.md is 95 — ratchet up as tests are added
-# for async_client error paths and the guard decorators.
-fail_under = 88
+# V1 target per docs/V1_PLAN.md is 95 — now met (97%+). Ratchet up as
+# additional error paths are covered; kept at 95 for regression-catch
+# headroom rather than pinning to the current exact number.
+fail_under = 95
 show_missing = true

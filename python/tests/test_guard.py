@@ -96,6 +96,59 @@ class TestAtlaSentGuard:
         payload = mock_post.call_args_list[0][1]["json"]
         assert payload["agent"] == "dynamic-agent"
 
+    def test_dynamic_context_merges_with_static(self, mocker):
+        client = AtlaSentClient(api_key="k", max_retries=0)
+        mock_post = mocker.patch.object(
+            client._client,
+            "post",
+            side_effect=[
+                _mock_resp(mocker, json_data=EVALUATE_PERMIT),
+                _mock_resp(mocker, json_data=VERIFY_OK),
+            ],
+        )
+
+        @atlasent_guard(
+            client,
+            "read_data",
+            actor_id="agent-1",
+            context={"environment": "prod"},
+            context_kwarg="ctx",
+        )
+        def my_func(ctx=None, gate_result=None):
+            return gate_result
+
+        my_func(ctx={"user": "dr_smith"})
+        payload = mock_post.call_args_list[0][1]["json"]
+        assert payload["context"] == {"environment": "prod", "user": "dr_smith"}
+
+    def test_non_dict_context_kwarg_is_ignored(self, mocker):
+        # If the caller passed a non-dict value for the context kwarg
+        # (bad usage), silently fall back to the static context rather
+        # than crashing the request.
+        client = AtlaSentClient(api_key="k", max_retries=0)
+        mock_post = mocker.patch.object(
+            client._client,
+            "post",
+            side_effect=[
+                _mock_resp(mocker, json_data=EVALUATE_PERMIT),
+                _mock_resp(mocker, json_data=VERIFY_OK),
+            ],
+        )
+
+        @atlasent_guard(
+            client,
+            "read_data",
+            actor_id="agent-1",
+            context={"environment": "prod"},
+            context_kwarg="ctx",
+        )
+        def my_func(ctx=None, gate_result=None):
+            return gate_result
+
+        my_func(ctx="not-a-dict")
+        payload = mock_post.call_args_list[0][1]["json"]
+        assert payload["context"] == {"environment": "prod"}
+
 
 class TestAsyncAtlaSentGuard:
     @pytest.mark.asyncio
@@ -133,3 +186,49 @@ class TestAsyncAtlaSentGuard:
 
         with pytest.raises(AtlaSentDenied):
             await my_func()
+
+    @pytest.mark.asyncio
+    async def test_dynamic_actor_id(self, mocker):
+        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        mock_post = mocker.patch.object(
+            client._client,
+            "post",
+            side_effect=[
+                _mock_resp(mocker, json_data=EVALUATE_PERMIT),
+                _mock_resp(mocker, json_data=VERIFY_OK),
+            ],
+        )
+
+        @async_atlasent_guard(client, "read_data", actor_id_kwarg="agent_id")
+        async def my_func(agent_id="default", gate_result=None):
+            return gate_result
+
+        await my_func(agent_id="dynamic-agent")
+        payload = mock_post.call_args_list[0][1]["json"]
+        assert payload["agent"] == "dynamic-agent"
+
+    @pytest.mark.asyncio
+    async def test_dynamic_context_merges_with_static(self, mocker):
+        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        mock_post = mocker.patch.object(
+            client._client,
+            "post",
+            side_effect=[
+                _mock_resp(mocker, json_data=EVALUATE_PERMIT),
+                _mock_resp(mocker, json_data=VERIFY_OK),
+            ],
+        )
+
+        @async_atlasent_guard(
+            client,
+            "read_data",
+            actor_id="agent-1",
+            context={"environment": "prod"},
+            context_kwarg="ctx",
+        )
+        async def my_func(ctx=None, gate_result=None):
+            return gate_result
+
+        await my_func(ctx={"user": "dr_smith"})
+        payload = mock_post.call_args_list[0][1]["json"]
+        assert payload["context"] == {"environment": "prod", "user": "dr_smith"}

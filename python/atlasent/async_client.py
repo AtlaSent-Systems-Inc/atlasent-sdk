@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -118,7 +120,9 @@ class AsyncAtlaSentClient:
             api_key=self._api_key,
         )
         logger.debug("evaluate action=%r actor=%r (async)", action_type, actor_id)
-        data = await self._post("/v1-evaluate", req.model_dump(by_alias=True))
+        data, request_id = await self._post(
+            "/v1-evaluate", req.model_dump(by_alias=True)
+        )
 
         if not isinstance(data.get("permitted"), bool) or not isinstance(
             data.get("decision_id"), str
@@ -127,6 +131,7 @@ class AsyncAtlaSentClient:
                 "Malformed /v1-evaluate response: missing or non-scalar "
                 "`permitted` or `decision_id`",
                 code="bad_response",
+                request_id=request_id,
                 response_body=data,
             )
 
@@ -136,6 +141,7 @@ class AsyncAtlaSentClient:
                 decision=str(permitted),
                 permit_token=data.get("decision_id", ""),
                 reason=data.get("reason", ""),
+                request_id=request_id,
                 response_body=data,
             )
 
@@ -169,11 +175,14 @@ class AsyncAtlaSentClient:
             api_key=self._api_key,
         )
         logger.debug("verify token=%s (async)", permit_token)
-        data = await self._post("/v1-verify-permit", req.model_dump(by_alias=True))
+        data, request_id = await self._post(
+            "/v1-verify-permit", req.model_dump(by_alias=True)
+        )
         if not isinstance(data.get("verified"), bool):
             raise AtlaSentError(
                 "Malformed /v1-verify-permit response: missing `verified`",
                 code="bad_response",
+                request_id=request_id,
                 response_body=data,
             )
         result = VerifyResult.model_validate(data)
@@ -324,8 +333,18 @@ class AsyncAtlaSentClient:
 
     # ── internals ─────────────────────────────────────────────────
 
-    async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-        """POST with retry on transient failures."""
+    async def _post(
+        self, path: str, payload: dict[str, Any]
+    ) -> tuple[dict[str, Any], str]:
+        """POST with retry on transient failures.
+
+        Returns ``(body, request_id)``. Callers use ``request_id`` to
+        attach the ``X-Request-ID`` we sent to any exception they raise
+        while interpreting the body, so call sites see the same
+        correlation id whether the request failed at transport / HTTP
+        status time (raised inside ``_post``) or at body-shape time
+        (raised by the caller after ``_post`` returns).
+        """
         url = f"{self._base_url}{path}"
         request_id = uuid.uuid4().hex[:12]
         headers = {"X-Request-ID": request_id}
@@ -347,6 +366,7 @@ class AsyncAtlaSentClient:
                     f"Request to {path} timed out after "
                     f"{1 + self._max_retries} attempts",
                     code="timeout",
+                    request_id=request_id,
                 ) from exc
             except httpx.ConnectError as exc:
                 logger.warning(
@@ -362,18 +382,27 @@ class AsyncAtlaSentClient:
                     f"Failed to connect to AtlaSent API at "
                     f"{self._base_url} after {1 + self._max_retries} attempts",
                     code="network",
+                    request_id=request_id,
                 ) from exc
             except httpx.HTTPError as exc:
-                raise AtlaSentError(f"Request failed: {exc}", code="network") from exc
+                raise AtlaSentError(
+                    f"Request failed: {exc}",
+                    code="network",
+                    request_id=request_id,
+                ) from exc
 
             if response.status_code == 429:
                 retry_after = _parse_retry_after(response)
-                raise RateLimitError(retry_after=retry_after)
+                raise RateLimitError(
+                    retry_after=retry_after,
+                    request_id=request_id,
+                )
             if response.status_code == 401:
                 raise AtlaSentError(
                     _server_message(response) or "Invalid API key",
                     status_code=401,
                     code="invalid_api_key",
+                    request_id=request_id,
                 )
             if response.status_code == 403:
                 raise AtlaSentError(
@@ -381,6 +410,7 @@ class AsyncAtlaSentClient:
                     or "Access forbidden — check your API key permissions",
                     status_code=403,
                     code="forbidden",
+                    request_id=request_id,
                 )
             if response.status_code >= 500:
                 logger.warning(
@@ -397,25 +427,29 @@ class AsyncAtlaSentClient:
                     f"API error {response.status_code}: {response.text[:500]}",
                     status_code=response.status_code,
                     code="server_error",
+                    request_id=request_id,
                 )
             if response.status_code >= 400:
                 raise AtlaSentError(
                     f"API error {response.status_code}: {response.text[:500]}",
                     status_code=response.status_code,
                     code="bad_request",
+                    request_id=request_id,
                 )
 
             try:
-                return response.json()
+                return response.json(), request_id
             except ValueError as exc:
                 raise AtlaSentError(
                     "Invalid JSON response from AtlaSent API",
                     code="bad_response",
+                    request_id=request_id,
                 ) from exc
 
         raise AtlaSentError(
             f"Request to {path} failed after {1 + self._max_retries} attempts",
             code="network",
+            request_id=request_id,
         )
 
     async def _backoff(self, attempt: int) -> None:
@@ -439,10 +473,30 @@ def _server_message(response: httpx.Response) -> str | None:
 
 
 def _parse_retry_after(response: httpx.Response) -> float | None:
+    """Parse a ``Retry-After`` header per RFC 9110 §10.2.3.
+
+    Accepts both forms:
+    - ``delta-seconds`` — ``"30"`` → ``30.0``
+    - ``HTTP-date``      — ``"Wed, 21 Oct 2026 07:28:00 GMT"`` →
+      non-negative seconds remaining until that instant.
+
+    Returns ``None`` if the header is absent or unparseable. An
+    HTTP-date in the past is clamped to ``0.0`` so retry-pacing code
+    still backs off consistently rather than silently skipping the
+    header.
+    """
     value = response.headers.get("retry-after")
     if value is None:
         return None
     try:
         return float(value)
     except (ValueError, TypeError):
+        pass
+    try:
+        parsed = parsedate_to_datetime(value)
+    except (ValueError, TypeError):
         return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    delta = (parsed - datetime.now(timezone.utc)).total_seconds()
+    return max(0.0, delta)

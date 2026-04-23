@@ -11,14 +11,14 @@ export default defineConfig({
       reporter: ["text", "html", "lcov"],
       include: ["src/**/*.ts"],
       // Floors, set to current-minus-small-margin so CI catches
-      // regressions. V1 target per docs/V1_PLAN.md is lines 95 /
-      // branches 85 — ratchet up as tests are added for timeout,
-      // 5xx retry, and edge-case JSON paths in client.ts.
+      // regressions. V1 line target per docs/V1_PLAN.md is 95; branch
+      // target is 85. Ratchet branches up once the remaining
+      // bad_response non-object path in client.ts is covered.
       thresholds: {
-        lines: 94,
-        branches: 68,
+        lines: 95,
+        branches: 75,
         functions: 95,
-        statements: 94,
+        statements: 95,
       },
     },
   },

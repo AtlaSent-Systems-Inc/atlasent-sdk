@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.2.0 — 2026-04-23
+
+### Added
+
+- **`AtlaSentError.request_id`.** Every SDK-raised exception now
+  carries the `X-Request-ID` the client sent with the failing
+  request. Paste it into support tickets to correlate with
+  server-side log entries. The attribute is populated on every
+  raise site — transport errors, HTTP-status errors,
+  `RateLimitError`, `AtlaSentDenied`, and the post-response
+  malformed-body `bad_response` check — so call sites can rely on
+  it without defensive `getattr`:
+
+      try:
+          result = authorize(...)
+      except AtlaSentError as err:
+          log.error("atlasent call failed rid=%s code=%s",
+                    err.request_id, err.code)
+
+  The TypeScript SDK already exposed `requestId` on `AtlaSentError`;
+  this closes the Python parity gap.
+
+- **`Retry-After` now accepts the HTTP-date form** in addition to
+  numeric delta-seconds, per RFC 9110 §10.2.3. Previously,
+  `RateLimitError.retry_after` silently became `None` when the
+  server sent a date like `"Wed, 21 Oct 2026 07:28:00 GMT"`,
+  causing retry-pacing code to skip the back-off. Now both forms
+  are parsed; dates in the past are clamped to `0.0`.
+
+### Changed
+
+- `AtlaSentClient._post` / `AsyncAtlaSentClient._post` now return
+  `(body, request_id)` instead of `body`. This is an internal
+  signature; no public API change. It lets the `evaluate` /
+  `verify` shape-check raise sites thread `request_id` into the
+  exception they raise after `_post` returns, so those exceptions
+  now carry the same correlation id as the transport-level ones.
+
+### Notes
+
+- Additive only — no field renames, no removed exports, no wire
+  format change. Drop-in for 1.1.0 callers.
+
 ## 1.1.0 — 2026-04-23
 
 ### Added
@@ -68,6 +111,31 @@
   clients, module-level shortcut, allow path, policy-deny,
   verify-revoked, transport-error propagation, payload shape, and
   the `AtlaSentDeniedError` class itself. 167 / 167 tests pass.
+
+## 1.0.0 — 2026-04-17
+
+First stable release. Public exports in `atlasent/__init__.py` are
+the supported v1 surface; pin to `>=1.0.0,<2.0.0`.
+
+### Added
+
+- Cross-language `RELEASE_NOTES.md` covering the v1.0.0 surface for
+  both `atlasent` and `@atlasent/sdk`.
+- Trusted-publishing PyPI release workflow (PEP 740 attestations,
+  no API token required).
+- Contract drift detector (`contract/tools/drift.py`) wired into CI
+  to enforce wire-shape parity with the TypeScript SDK on every PR.
+- Gated staging integration suite (skips cleanly when
+  `STAGING_ATLASENT_API_KEY` is absent so fork PRs stay green).
+- Coverage floor of 88% on the `atlasent` package, enforced in CI.
+
+### Notes
+
+- No public API changes from 0.4.0 — same `authorize()`, client
+  classes, decorators, error taxonomy, and wire format. The bump to
+  1.0.0 marks API stability, not new surface.
+- `AtlaSentErrorCode` Literal and the `bad_response` raise sites
+  added in 0.4.0 are now part of the stable contract.
 
 ## 0.4.0 — 2026-04-17
 

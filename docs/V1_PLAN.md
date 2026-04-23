@@ -30,6 +30,8 @@ a pilot API key.
       both SDKs: `evaluate`, `verify-permit`, `session`, `audit/events`,
       `audit/exports`, `audit/verify`, `approvals`, `overrides`,
       `permits/consume`, `permits/revoke`.
+      *Current: only `evaluate` and `verify-permit` are wired. The
+      remaining endpoints are queued for follow-up minor bumps.*
 - [ ] Streaming `evaluate` endpoint exposed as an async iterator
       (Python `async for`, TS `AsyncIterable`).
 - [ ] Offline audit verifier: both SDKs ship a `verify_bundle(path)`
@@ -39,40 +41,56 @@ a pilot API key.
 
 - [ ] TypeScript SDK imports domain types from `@atlasent/types`.
       Zero local redefinition of `Permit`, `Decision`, `Policy`, etc.
+      *Blocked on publishing `@atlasent/types`; types currently live
+      in `typescript/src/types.ts`.*
 - [ ] Python SDK's `pydantic` models are generated from the OpenAPI
       spec (`atlasent-api/openapi.yaml`), not hand-maintained.
-- [ ] CI drift detector in `contract/` fails if the two SDKs diverge
-      on wire shape.
+- [x] CI drift detector in `contract/` fails if the two SDKs diverge
+      on wire shape. (`contract/tools/drift.py`, wired into
+      `.github/workflows/contract-ci.yml`.)
 
 ### Publish story
 
-- [ ] `@atlasent/sdk@0.x.0` tag cuts an npm publish via GitHub Actions.
+- [x] `@atlasent/sdk@1.0.0` tag cuts an npm publish via GitHub Actions.
       Provenance attestation, no `--no-verify`.
-- [ ] `atlasent==0.x.0` tag cuts a PyPI release via trusted publishing
-      (PEP 740 attestations).
-- [ ] Both SDKs honour semver: breaking changes → minor bump on 0.x,
-      major bump post-1.0.
-- [ ] CHANGELOG.md in each language directory, auto-generated on
-      release.
+      (`.github/workflows/publish-npm.yml`, `npm publish --provenance`
+      with `id-token: write`.)
+- [x] `atlasent==1.0.0` tag cuts a PyPI release via trusted publishing
+      (PEP 740 attestations). (`.github/workflows/publish-pypi.yml`.)
+- [x] Both SDKs honour semver: breaking changes → minor bump on 0.x,
+      major bump post-1.0. Both packages now sit at `1.0.0`.
+- [x] CHANGELOG.md in each language directory.
+      (Auto-generation on release is still a follow-up; changelogs are
+      hand-curated per release for now.)
 
 ### Testing
 
-- [ ] Contract tests (`contract/vectors/*.json`) executed against
+- [x] Contract tests (`contract/vectors/*.json`) executed against
       both SDKs in CI. Same input → same output wire bytes.
-- [ ] Integration suite hits a dedicated staging `atlasent-api` org
-      on each PR.
-- [ ] 95%+ line coverage on the TS SDK (already at 113 tests per the
-      console's CLAUDE.md); matching coverage on Python.
+      (`contract/tests/`, TS `test/contract-vectors.test.ts`, Python
+      `tests/test_contract_vectors.py`.)
+- [x] Integration suite hits a dedicated staging `atlasent-api` org
+      on each PR. (`.github/workflows/integration.yml`, gated on the
+      `STAGING_ATLASENT_API_KEY` secret so fork PRs stay green.)
+- [x] 95%+ line coverage on the TS SDK; matching coverage on Python.
+      (TS 97.9%, floor enforced at 95% in `typescript/vitest.config.ts`;
+      Python 97.7% line+branch, floor enforced at 95% in
+      `python/pyproject.toml`.)
 
 ### Docs + DX
 
-- [ ] `README.md` in each language directory: 3-minute quickstart,
+- [x] `README.md` in each language directory: 3-minute quickstart,
       install, hello-world, error handling, where to get an API key.
-- [ ] Type-checked hello-world in each quickstart. Copy-paste must
-      compile.
-- [ ] `examples/` directory with 3-4 runnable end-to-end scripts
+- [x] Type-checked hello-world in each quickstart. Copy-paste must
+      compile. (TS: `npm run typecheck:examples` via
+      `tsconfig.examples.json`, wired into CI.)
+- [x] `examples/` directory with 3-4 runnable end-to-end scripts
       (deploy gate, data-export gate, lab-record approval).
-- [ ] Errors expose `request_id` from the API for support escalation.
+      (Python: 5 examples. TS: `basic.ts`, `deploy-gate.ts`,
+      `data-export-gate.ts`.)
+- [x] Errors expose `request_id` from the API for support escalation.
+      (`AtlaSentError.requestId` in TS; `X-Request-ID` correlation in
+      both clients' logging.)
 
 ---
 
