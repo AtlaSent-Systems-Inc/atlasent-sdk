@@ -24,9 +24,11 @@ contract/
 │   ├── validate-against-atlasent-contract.yml  # GH Actions workflow
 │   ├── EXPECTED_ENVELOPES.md    # Plain-English request/response ref
 │   └── README.md                # Vendoring + integration guide
+├── openapi.yaml                 # OpenAPI 3.1 doc wrapping the schemas above
 ├── tools/
 │   ├── drift.py                 # SDK ↔ contract drift detector
 │   ├── policy_lint.py           # Validates policies against schema
+│   ├── validate_openapi.py      # Validates openapi.yaml + syncs with schemas
 │   └── validate_vectors.py      # Validates vectors against schemas
 ├── tests/
 │   └── test_contract.py         # One-command pytest entry point
@@ -70,16 +72,46 @@ pip install -r contract/requirements.txt
 pip install -e python/
 
 python contract/tools/validate_vectors.py   # vectors vs schemas
+python contract/tools/validate_openapi.py   # openapi.yaml vs schemas
 python contract/tools/policy_lint.py        # policies vs policy schema
 python contract/tools/drift.py              # Python + TS SDK vs schemas
 
 pytest contract/tests/ -v                   # all of the above
 ```
 
-CI runs the same four commands in `.github/workflows/contract-ci.yml`.
+CI runs the same five commands in `.github/workflows/contract-ci.yml`.
 The workflow is path-filtered to the contract dir plus the two SDK
 files it introspects (`python/atlasent/models.py`,
 `typescript/src/client.ts`, `typescript/src/types.ts`).
+
+## The OpenAPI document
+
+[`openapi.yaml`](./openapi.yaml) is an OpenAPI 3.1 document that wraps
+the JSON Schemas above into a single machine-readable artifact. It
+exists so downstream consumers have one file to point at:
+
+- pydantic model codegen (`datamodel-code-generator`) for the Python
+  SDK and any server-side Python client,
+- `@atlasent/types` package (when published),
+- Redoc / Stoplight / Postman / Insomnia collections,
+- non-SDK adopters who want a full API spec rather than individual
+  `$ref`s to the schemas.
+
+**The JSON Schemas under `schemas/` remain the source of truth.** If
+`openapi.yaml` and a JSON Schema disagree, the JSON Schema wins — the
+SDK drift detector introspects from the schemas, not from the OpenAPI
+doc. `tools/validate_openapi.py` asserts that the component schemas
+in `openapi.yaml` stay in sync with their JSON Schema counterparts
+(required properties, property names, top-level `type` and
+`additionalProperties` all match exactly) and runs in CI on every
+contract change.
+
+Scope today: `/v1-evaluate` and `/v1-verify-permit` — the two
+endpoints the SDKs currently target. Streaming evaluate, the offline
+audit-bundle format, and the remaining endpoints (sessions, audit/*,
+approvals, overrides, permits/*) each need a server-side spec before
+they can be added; see [`../docs/V1_PLAN.md`](../docs/V1_PLAN.md) for
+the roadmap.
 
 ## How drift detection works
 

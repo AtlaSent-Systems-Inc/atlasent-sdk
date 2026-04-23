@@ -8,11 +8,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from contract.tools import drift, policy_lint, validate_vectors
+from contract.tools import drift, policy_lint, validate_openapi, validate_vectors
 
 
 def test_vectors_match_schemas() -> None:
     assert validate_vectors.main() == 0
+
+
+def test_openapi_spec_valid_and_in_sync_with_schemas() -> None:
+    assert validate_openapi.main() == 0
 
 
 def test_no_sdk_drift() -> None:

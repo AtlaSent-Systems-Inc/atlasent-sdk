@@ -38,6 +38,9 @@ jobs:
       - name: Validate vectors against schemas
         run: python contract/tools/validate_vectors.py
 
+      - name: Validate OpenAPI spec (+ schema sync check)
+        run: python contract/tools/validate_openapi.py
+
       - name: Policy lint
         run: python contract/tools/policy_lint.py
 
