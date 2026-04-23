@@ -5,7 +5,7 @@ import pytest
 
 from atlasent.client import AtlaSentClient
 from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
-from atlasent.models import EvaluateResult, GateResult, VerifyResult
+from atlasent.models import ApiKeySelfResult, EvaluateResult, GateResult, VerifyResult
 
 
 @pytest.fixture
@@ -740,3 +740,106 @@ class TestRateLimitHeaders:
         )
         result = client.evaluate("a", "b")
         assert result.rate_limit is None
+
+
+# ── key_self ──────────────────────────────────────────────────────────
+
+
+KEY_SELF_PAYLOAD = {
+    "key_id": "550e8400-e29b-41d4-a716-446655440000",
+    "organization_id": "123e4567-e89b-12d3-a456-426614174000",
+    "environment": "live",
+    "scopes": ["evaluate", "audit.read"],
+    "allowed_cidrs": ["10.0.0.0/8"],
+    "rate_limit_per_minute": 1000,
+    "client_ip": "10.2.3.4",
+    "expires_at": "2026-12-31T23:59:59Z",
+}
+
+
+class TestKeySelf:
+    def test_returns_typed_result(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=KEY_SELF_PAYLOAD)
+        mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.key_self()
+        assert isinstance(result, ApiKeySelfResult)
+        assert result.key_id == KEY_SELF_PAYLOAD["key_id"]
+        assert result.organization_id == KEY_SELF_PAYLOAD["organization_id"]
+        assert result.environment == "live"
+        assert result.scopes == ["evaluate", "audit.read"]
+        assert result.allowed_cidrs == ["10.0.0.0/8"]
+        assert result.rate_limit_per_minute == 1000
+        assert result.client_ip == "10.2.3.4"
+        assert result.expires_at == "2026-12-31T23:59:59Z"
+        assert result.rate_limit is None  # no X-RateLimit-* headers in mock
+
+    def test_issues_get_not_post(self, client, mocker):
+        """Pins the method — regression guard against future `request`
+        refactors accidentally switching to POST."""
+        resp = _mock_resp(mocker, json_data=KEY_SELF_PAYLOAD)
+        get_mock = mocker.patch.object(client._client, "get", return_value=resp)
+        post_mock = mocker.patch.object(client._client, "post")
+        client.key_self()
+        assert get_mock.call_count == 1
+        assert post_mock.call_count == 0
+        url, _ = get_mock.call_args[0], get_mock.call_args[1]
+        assert "/v1-api-key-self" in get_mock.call_args[0][0]
+
+    def test_surfaces_rate_limit_headers(self, client, mocker):
+        resp = _mock_resp(
+            mocker,
+            json_data=KEY_SELF_PAYLOAD,
+            headers={
+                "x-ratelimit-limit": "1000",
+                "x-ratelimit-remaining": "987",
+                "x-ratelimit-reset": "1714068060",
+            },
+        )
+        mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.key_self()
+        assert result.rate_limit is not None
+        assert result.rate_limit.limit == 1000
+        assert result.rate_limit.remaining == 987
+
+    def test_defaults_optional_fields(self, client, mocker):
+        minimal = {
+            "key_id": "k",
+            "organization_id": "o",
+            "environment": "test",
+            "rate_limit_per_minute": 60,
+        }
+        resp = _mock_resp(mocker, json_data=minimal)
+        mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.key_self()
+        assert result.scopes == []
+        assert result.allowed_cidrs is None
+        assert result.client_ip is None
+        assert result.expires_at is None
+
+    def test_bad_response_on_missing_key_id(self, client, mocker):
+        resp = _mock_resp(
+            mocker,
+            json_data={"organization_id": "o", "environment": "live", "rate_limit_per_minute": 60},
+        )
+        mocker.patch.object(client._client, "get", return_value=resp)
+        with pytest.raises(AtlaSentError) as excinfo:
+            client.key_self()
+        assert excinfo.value.code == "bad_response"
+
+    def test_401_propagates_as_atlasent_error(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=401, json_data={"message": "bad key"})
+        mocker.patch.object(client._client, "get", return_value=resp)
+        with pytest.raises(AtlaSentError) as excinfo:
+            client.key_self()
+        assert excinfo.value.code == "invalid_api_key"
+
+    def test_429_raises_rate_limit_error(self, client, mocker):
+        resp = _mock_resp(
+            mocker,
+            status_code=429,
+            json_data={},
+            headers={"retry-after": "30"},
+        )
+        mocker.patch.object(client._client, "get", return_value=resp)
+        with pytest.raises(RateLimitError):
+            client.key_self()

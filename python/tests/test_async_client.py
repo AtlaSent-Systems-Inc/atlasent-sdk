@@ -5,7 +5,7 @@ import pytest
 
 from atlasent.async_client import AsyncAtlaSentClient
 from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
-from atlasent.models import EvaluateResult, GateResult, VerifyResult
+from atlasent.models import ApiKeySelfResult, EvaluateResult, GateResult, VerifyResult
 
 EVALUATE_PERMIT = {
     "permitted": True,
@@ -471,3 +471,84 @@ class TestAsyncRequestIdOnExceptions:
         sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
         assert exc_info.value.code == "bad_response"
         assert exc_info.value.request_id == sent
+
+
+# ── key_self (async) ──────────────────────────────────────────────────
+
+
+KEY_SELF_PAYLOAD = {
+    "key_id": "550e8400-e29b-41d4-a716-446655440000",
+    "organization_id": "123e4567-e89b-12d3-a456-426614174000",
+    "environment": "live",
+    "scopes": ["evaluate", "audit.read"],
+    "allowed_cidrs": ["10.0.0.0/8"],
+    "rate_limit_per_minute": 1000,
+    "client_ip": "10.2.3.4",
+    "expires_at": "2026-12-31T23:59:59Z",
+}
+
+
+class TestAsyncKeySelf:
+    @pytest.mark.asyncio
+    async def test_returns_typed_result(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(mocker, json_data=KEY_SELF_PAYLOAD),
+        )
+        result = await async_client.key_self()
+        assert isinstance(result, ApiKeySelfResult)
+        assert result.key_id == KEY_SELF_PAYLOAD["key_id"]
+        assert result.environment == "live"
+        assert result.scopes == ["evaluate", "audit.read"]
+        assert result.expires_at == "2026-12-31T23:59:59Z"
+        assert result.rate_limit is None
+
+    @pytest.mark.asyncio
+    async def test_issues_get_not_post(self, async_client, mocker):
+        get_mock = mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(mocker, json_data=KEY_SELF_PAYLOAD),
+        )
+        post_mock = mocker.patch.object(async_client._client, "post")
+        await async_client.key_self()
+        assert get_mock.call_count == 1
+        assert post_mock.call_count == 0
+        assert "/v1-api-key-self" in get_mock.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_bad_response_on_missing_organization_id(
+        self, async_client, mocker
+    ):
+        mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(
+                mocker,
+                json_data={"key_id": "k", "environment": "live", "rate_limit_per_minute": 60},
+            ),
+        )
+        with pytest.raises(AtlaSentError) as excinfo:
+            await async_client.key_self()
+        assert excinfo.value.code == "bad_response"
+
+    @pytest.mark.asyncio
+    async def test_surfaces_rate_limit_headers(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(
+                mocker,
+                json_data=KEY_SELF_PAYLOAD,
+                headers={
+                    "x-ratelimit-limit": "600",
+                    "x-ratelimit-remaining": "0",
+                    "x-ratelimit-reset": "1714068060",
+                },
+            ),
+        )
+        result = await async_client.key_self()
+        assert result.rate_limit is not None
+        assert result.rate_limit.limit == 600
+        assert result.rate_limit.remaining == 0
