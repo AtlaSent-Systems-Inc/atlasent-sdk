@@ -18,6 +18,7 @@
  */
 
 import { AtlaSentClient } from "./client.js";
+import { verifyBundle } from "./auditBundle.js";
 import { AtlaSentDeniedError, AtlaSentError } from "./errors.js";
 import { configure, protect } from "./protect.js";
 
@@ -45,6 +46,16 @@ export type {
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "./types.js";
+export {
+  canonicalJSON,
+  signedBytesFor,
+  verifyAuditBundle,
+  verifyBundle,
+  type AuditBundle,
+  type BundleVerificationResult,
+  type VerifyBundleOptions,
+  type VerifyKey,
+} from "./auditBundle.js";
 
 /**
  * Default export. The opinionated, category-defining entry point:
@@ -57,6 +68,7 @@ export type {
 const atlasent = {
   protect,
   configure,
+  verifyBundle,
   AtlaSentClient,
   AtlaSentError,
   AtlaSentDeniedError,

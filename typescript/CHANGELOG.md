@@ -4,6 +4,22 @@ All notable changes to `@atlasent/sdk` are documented here. The SDK
 follows [semver](https://semver.org/): breaking changes bump the major
 (or minor while on 0.x).
 
+## Unreleased
+
+### Added
+
+- **Offline audit-bundle verifier.** `verifyBundle(path, { publicKeysPem })`
+  and the lower-level `verifyAuditBundle(bundle, keys)` produce a
+  byte-faithful port of `atlasent-api/supabase/functions/v1-audit/verify.ts`.
+  Verifies a signed export from `POST /v1/audit/exports` end-to-end:
+  per-event SHA-256 hash chain, adjacency, `chain_head_hash` match,
+  and Ed25519 signature. Rotation-aware via `signing_key_id`. Runs on
+  Node 20+ using `crypto.webcrypto.subtle`; no extra deps. Canonical
+  JSON (`canonicalJSON`) and `signedBytesFor` are exported for
+  regulator-side custom verifiers.
+- Shared test fixtures at `contract/vectors/audit-bundles/` and
+  reproducible generator at `contract/tools/gen_audit_bundles.py`.
+
 ## 1.2.0 — 2026-04-23
 
 ### Added
