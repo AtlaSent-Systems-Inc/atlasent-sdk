@@ -1,9 +1,12 @@
 name: Publish to PyPI
 
+# Triggers only on Python-prefixed tags so the matching TypeScript
+# workflow doesn't also fire on the same push. Release procedure: see
+# /RELEASING.md.
 on:
   push:
     tags:
-      - "v*"
+      - "python-v*"
 
 permissions:
   contents: read
@@ -61,11 +64,41 @@ jobs:
           python -m pip install --upgrade pip
           pip install --upgrade build twine "packaging>=24.2"
 
+      - name: Verify tag matches package version
+        # GITHUB_REF is refs/tags/python-v<semver>. Strip the prefix and
+        # compare against atlasent._version.__version__. Refuses to
+        # publish if they disagree — protects against tagging a commit
+        # that forgot the version bump.
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/python-v}"
+          PKG_VERSION="$(python -c 'from atlasent._version import __version__; print(__version__)')"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match atlasent._version.__version__ ($PKG_VERSION)."
+            exit 1
+          fi
+          echo "Tag and package version agree: $PKG_VERSION"
+
       - name: Build distribution packages
         run: python -m build
 
       - name: Check distribution packages
         run: twine check dist/*
+
+      - name: Smoke-test built wheel
+        # Install the freshly-built wheel in a clean venv and verify
+        # the package imports cleanly and reports the expected version.
+        # Catches MANIFEST.in / packaging regressions before we ship.
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --upgrade pip
+          /tmp/smoke/bin/pip install dist/*.whl
+          SMOKE_VERSION="$(/tmp/smoke/bin/python -c 'import atlasent; print(atlasent.__version__)')"
+          EXPECTED="${GITHUB_REF#refs/tags/python-v}"
+          if [ "$SMOKE_VERSION" != "$EXPECTED" ]; then
+            echo "::error::Installed wheel reports $SMOKE_VERSION, expected $EXPECTED."
+            exit 1
+          fi
+          /tmp/smoke/bin/python -c 'from atlasent import protect, authorize, AtlaSentClient, AsyncAtlaSentClient, AtlaSentError, AtlaSentDeniedError'
 
       - name: Publish to PyPI (trusted publisher, OIDC)
         uses: pypa/gh-action-pypi-publish@release/v1
