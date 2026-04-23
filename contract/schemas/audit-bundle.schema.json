@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/audit-bundle.schema.json",
+  "title": "AuditExportBundle",
+  "description": "Offline-verifiable audit export bundle produced by POST /v1/audit/exports. The signed byte sequence is JSON.stringify({ export_id, org_id, chain_head_hash, event_count, signed_at, events }) in that exact key order; the signature is a detached Ed25519 signature over those bytes, base64url-encoded without padding. Per-event integrity: hash = SHA-256(previous_hash || canonicalJSON(payload)) where canonicalJSON sorts object keys at every depth and maps null/undefined/non-finite numbers to the JSON literal null. See atlasent-api/supabase/functions/v1-audit/verify.ts for the reference verifier.",
+  "type": "object",
+  "required": [
+    "export_id",
+    "org_id",
+    "chain_head_hash",
+    "event_count",
+    "signed_at",
+    "events",
+    "signature"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "export_id": {
+      "type": "string",
+      "description": "UUID generated at export time; appears first in the signed envelope."
+    },
+    "org_id": {
+      "type": "string",
+      "description": "Organization the export belongs to."
+    },
+    "chain_head_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 hex of the last event's stored hash. '0'*64 for an empty export."
+    },
+    "event_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Length of the events array. MUST match events.length for chain_integrity_ok to hold."
+    },
+    "signed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of signing, frozen into the signed bytes."
+    },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/AuditEvent" },
+      "description": "Events in ascending sequence order. First event's previous_hash MUST be '0'*64."
+    },
+    "signature": {
+      "type": "string",
+      "description": "base64url(Ed25519(signing_key, envelope_bytes)), no padding. Empty string means the export was emitted unsigned (status='unsigned' or 'signing_failed' at export time) and will not verify."
+    },
+    "signing_key_id": {
+      "type": "string",
+      "description": "Optional hint: which key in /v1-signing-keys' registry signed this bundle. Verifiers try this key first, then fall through to the rest of the active set (rotation support)."
+    }
+  },
+  "$defs": {
+    "AuditEvent": {
+      "type": "object",
+      "required": ["id", "hash", "previous_hash", "payload"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "org_id": { "type": "string" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "type": { "type": "string" },
+        "decision": { "type": ["string", "null"] },
+        "actor_id": { "type": ["string", "null"] },
+        "resource_type": { "type": ["string", "null"] },
+        "resource_id": { "type": ["string", "null"] },
+        "payload": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Event-specific payload. Canonicalized with sorted keys before hashing."
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256(previous_hash || canonicalJSON(payload))."
+        },
+        "previous_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Prior event's hash. '0'*64 for the first event (GENESIS)."
+        },
+        "occurred_at": { "type": "string", "format": "date-time" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

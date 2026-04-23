@@ -23,6 +23,12 @@ older data-not-exception idiom if you prefer to branch on
 
 from ._version import __version__
 from .async_client import AsyncAtlaSentClient
+from .audit_bundle import (
+    BundleVerificationResult,
+    VerifyKey,
+    verify_audit_bundle,
+    verify_bundle,
+)
 from .authorize import authorize, evaluate, gate, protect, verify
 from .cache import TTLCache
 from .client import AtlaSentClient
@@ -76,4 +82,8 @@ __all__ = [
     "atlasent_guard",
     "async_atlasent_guard",
     "TTLCache",
+    "verify_bundle",
+    "verify_audit_bundle",
+    "BundleVerificationResult",
+    "VerifyKey",
 ]
