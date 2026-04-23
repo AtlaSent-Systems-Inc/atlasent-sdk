@@ -25,6 +25,11 @@ contract/
 │   ├── EXPECTED_ENVELOPES.md    # Plain-English request/response ref
 │   └── README.md                # Vendoring + integration guide
 ├── openapi.yaml                 # OpenAPI 3.1 doc wrapping the schemas above
+├── PROPOSALS/                   # DRAFT RFCs for not-yet-specified surface
+│   ├── README.md                # Proposal lifecycle + how to add one
+│   ├── 001-streaming-evaluate.md
+│   ├── 002-audit-bundle.md
+│   └── 003-atlasent-types.md
 ├── tools/
 │   ├── drift.py                 # SDK ↔ contract drift detector
 │   ├── policy_lint.py           # Validates policies against schema
@@ -147,6 +152,23 @@ schema honest — if the schema is accidentally relaxed so that an
 4. Open a PR. `Contract CI` runs automatically.
 5. Bump the `$id` version (`/contract/v1/` → `/contract/v2/`) ONLY
    for a breaking wire change; otherwise the contract stays on v1.
+
+## Proposals for not-yet-specified surface
+
+New features that need cross-team decisions (wire format, crypto
+scheme, external artifact ownership) start their life in
+[`PROPOSALS/`](./PROPOSALS/README.md) as DRAFT RFCs. Each proposal
+flags the open questions and names who owns each decision. No SDK
+code lands against a DRAFT — the SDK must not unilaterally invent a
+wire format. Current drafts:
+
+- [001 — Streaming `/v1-evaluate`](./PROPOSALS/001-streaming-evaluate.md)
+- [002 — Offline audit-bundle format](./PROPOSALS/002-audit-bundle.md)
+- [003 — `@atlasent/types` npm package](./PROPOSALS/003-atlasent-types.md)
+
+Once a proposal is accepted, its wire format moves into
+`schemas/` + `openapi.yaml` and the proposal doc is archived with a
+pointer to the landing PR.
 
 ## For non-SDK consumers (engine, downstream repos)
 

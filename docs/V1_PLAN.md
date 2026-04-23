@@ -34,15 +34,20 @@ a pilot API key.
       remaining endpoints are queued for follow-up minor bumps.*
 - [ ] Streaming `evaluate` endpoint exposed as an async iterator
       (Python `async for`, TS `AsyncIterable`).
+      *Draft proposal: [`contract/PROPOSALS/001-streaming-evaluate.md`](../contract/PROPOSALS/001-streaming-evaluate.md) — SSE transport, `event: decision | progress | done | error`, open questions flagged for API team.*
 - [ ] Offline audit verifier: both SDKs ship a `verify_bundle(path)`
       that validates an Ed25519-signed export without hitting the API.
+      *Draft proposal: [`contract/PROPOSALS/002-audit-bundle.md`](../contract/PROPOSALS/002-audit-bundle.md) — NDJSON container, Ed25519 sign-what-you-send, hash-chained events, open questions on key distribution + rotation.*
 
 ### Type source of truth
 
 - [ ] TypeScript SDK imports domain types from `@atlasent/types`.
       Zero local redefinition of `Permit`, `Decision`, `Policy`, etc.
       *Blocked on publishing `@atlasent/types`; types currently live
-      in `typescript/src/types.ts`.*
+      in `typescript/src/types.ts`. Draft proposal:
+      [`contract/PROPOSALS/003-atlasent-types.md`](../contract/PROPOSALS/003-atlasent-types.md)
+      — new `atlasent-types` repo, 4-step migration plan, open question
+      on npm scope ownership.*
 - [ ] Python SDK's `pydantic` models are generated from the OpenAPI
       spec, not hand-maintained.
       *Spec now shipped in-repo as `contract/openapi.yaml` (OpenAPI
