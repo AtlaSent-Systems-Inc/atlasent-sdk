@@ -20,6 +20,7 @@ from .exceptions import (
     RateLimitError,
 )
 from .models import (
+    ApiKeySelfResult,
     AuthorizationResult,
     EvaluateRequest,
     EvaluateResult,
@@ -415,6 +416,41 @@ class AtlaSentClient:
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
         self.close()
 
+    def key_self(self) -> ApiKeySelfResult:
+        """Self-introspection of the API key this client was constructed with.
+
+        Calls ``GET /v1-api-key-self``. Never returns the raw key or its
+        hash — safe to surface in operator dashboards. Useful for
+        ``IP_NOT_ALLOWED`` debugging (the server tells you exactly which
+        client IP it saw), proactive expiry warnings, and scope
+        introspection before attempting a scope-gated action.
+
+        Response also includes ``rate_limit`` so key-introspection
+        doubles as a cheap rate-limit probe without consuming a permit.
+
+        Raises:
+            AtlaSentError: Network error, timeout, unexpected response,
+                or malformed payload.
+            RateLimitError: HTTP 429.
+        """
+        logger.debug("key_self")
+        data, rate_limit, request_id = self._get("/v1-api-key-self")
+
+        if not isinstance(data.get("key_id"), str) or not isinstance(
+            data.get("organization_id"), str
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-api-key-self response: missing "
+                "`key_id` or `organization_id`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        return ApiKeySelfResult.model_validate(
+            {**data, "rate_limit": rate_limit}
+        )
+
     # ── internals ─────────────────────────────────────────────────
 
     def _post(
@@ -426,13 +462,38 @@ class AtlaSentClient:
         from ``X-RateLimit-*`` headers on the response, or ``None`` when
         the server doesn't emit them.
         """
+        return self._request("POST", path, payload)
+
+    def _get(
+        self, path: str
+    ) -> tuple[dict[str, Any], RateLimitState | None, str]:
+        """GET with retry on transient failures (5xx, timeouts).
+
+        Returns ``(body, rate_limit, request_id)`` — same shape as
+        :meth:`_post` so response-parsing code is shared.
+        """
+        return self._request("GET", path, None)
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any], RateLimitState | None, str]:
+        """Shared retry + error-mapping core for POST / GET.
+
+        ``payload`` is serialized as JSON for POST; GET sends no body.
+        """
         url = f"{self._base_url}{path}"
         request_id = uuid.uuid4().hex[:12]
         headers = {"X-Request-ID": request_id}
 
         for attempt in range(1 + self._max_retries):
             try:
-                response = self._client.post(url, json=payload, headers=headers)
+                if method == "POST":
+                    response = self._client.post(url, json=payload, headers=headers)
+                else:
+                    response = self._client.get(url, headers=headers)
             except httpx.TimeoutException as exc:
                 logger.warning(
                     "%s timeout (attempt %d/%d)",

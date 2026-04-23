@@ -18,6 +18,58 @@
 - Shared test fixtures at `contract/vectors/audit-bundles/` and
   reproducible generator at `contract/tools/gen_audit_bundles.py`.
 
+## 1.4.0 — 2026-04-23
+
+### Added
+
+- **`key_self()` — API-key self-introspection.** Both `AtlaSentClient`
+  and `AsyncAtlaSentClient` gain a `key_self()` method that calls
+  `GET /v1-api-key-self` and returns the server's description of the
+  key this client was constructed with:
+
+        info = client.key_self()
+        # ApiKeySelfResult(key_id=..., organization_id=...,
+        #                  environment='live', scopes=['evaluate', ...],
+        #                  allowed_cidrs=['10.0.0.0/8'],
+        #                  rate_limit_per_minute=1000,
+        #                  client_ip='10.2.3.4',
+        #                  expires_at='2026-12-31T23:59:59Z',
+        #                  rate_limit=RateLimitState(...))
+
+  Never includes the raw key or its hash — introspection is
+  intentionally read-only and safe to surface in operator dashboards.
+  Useful for:
+
+    - `IP_NOT_ALLOWED` debugging — `client_ip` is the IP the server
+      observed (first hop of X-Forwarded-For).
+    - Proactive expiry warnings — `expires_at` is the server-stored
+      expiry (`None` means the key does not auto-expire).
+    - Verifying scopes before attempting a scope-gated action.
+    - "Which key am I?" in multi-tenant dashboards juggling more than
+      one key.
+
+  Response also includes `rate_limit` (the same `RateLimitState`
+  surfaced on `evaluate`/`verify`), so key-introspection doubles as a
+  cheap rate-limit probe without consuming a permit.
+
+- `ApiKeySelfResult` exported from the package entry point (`from
+  atlasent import ApiKeySelfResult`).
+
+### Changed
+
+- Internal refactor: the `_post` retry / error-mapping loop now
+  delegates to a shared `_request(method, path, payload)` helper, and
+  a parallel `_get` method exists for GET calls. Both `AtlaSentClient`
+  and `AsyncAtlaSentClient` pick up the GET path so the rate-limit
+  header parsing from 1.3.0 Just Works for key_self as well. No public
+  API change.
+
+### Non-breaking
+
+Purely additive. Existing `evaluate` / `verify` / `gate` / `authorize`
+/ `protect` APIs are unchanged — same signatures, same return types,
+same exception taxonomy.
+
 ## 1.3.0 — 2026-04-23
 
 ### Added
