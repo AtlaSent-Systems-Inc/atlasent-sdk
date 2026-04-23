@@ -1,5 +1,74 @@
 # Changelog
 
+## 1.1.0 — 2026-04-23
+
+### Added
+
+- **`atlasent.protect(...)` — the one-call authorization primitive.**
+  Fail-closed by construction: on allow, returns a verified `Permit`;
+  on deny (or verification failure, transport error, auth error,
+  rate limit), raises. There is no `permitted=False` return path to
+  forget.
+
+      from atlasent import protect
+
+      permit = protect(
+          agent="deploy-bot",
+          action="deploy_to_production",
+          context={"commit": commit, "approver": approver},
+      )
+      # …execute the action. If we got here, AtlaSent authorized it.
+
+  Internally does `evaluate` → `verify_permit` in a single call and
+  returns a `Permit` carrying `permit_id`, `permit_hash`, `audit_hash`,
+  `reason`, and `timestamp`. Matches the TypeScript SDK's
+  `atlasent.protect()` for cross-language parity.
+
+  Available as:
+  - Module-level: `atlasent.protect(...)` using the globally
+    configured client (same env-var / `configure()` story as
+    `authorize()`).
+  - Method: `AtlaSentClient.protect(...)` and
+    `AsyncAtlaSentClient.protect(...)`.
+
+- **`Permit` dataclass** — the return type of `protect()`. Frozen
+  dataclass with `permit_id`, `permit_hash`, `audit_hash`, `reason`,
+  `timestamp`. Mirrors the TypeScript SDK's `Permit` interface.
+
+- **`AtlaSentDeniedError`** — new exception raised exclusively by
+  `protect()` on policy denial or permit-verification failure.
+  Subclass of the existing `AtlaSentDenied`, so
+  `except AtlaSentDenied:` still catches `protect()` denials;
+  use `except AtlaSentDeniedError:` to distinguish a `protect()`
+  denial from the older `authorize()` / `evaluate()` denial surface.
+
+  Attributes:
+  - `decision: "deny" | "hold" | "escalate"` — forward-compatible
+    union; only `"deny"` is emitted against today's API
+  - `evaluation_id: str` — opaque decision id (also available as
+    the inherited `permit_token` for backward compat)
+  - `reason: str` — policy engine's explanation
+  - `audit_hash: str` — hash-chained audit-trail entry
+  - `request_id: str | None` — correlation id, when available
+
+- **`AtlaSentDecision` type alias** — `Literal["deny", "hold",
+  "escalate"]`, exported for type-checked `match` statements.
+
+- **`examples/protect.py`** — canonical quickstart showing error
+  handling for both `AtlaSentDeniedError` and `AtlaSentError`.
+
+### Notes
+
+- Additive. No existing export renamed or removed. `authorize()`,
+  `evaluate()`, `verify()`, `gate()`, `AtlaSentClient`, and all
+  existing error types keep working unchanged. `protect()` is the
+  new recommended entry point; `authorize()` remains supported for
+  callers who prefer the data-not-exception branching idiom.
+- 17 new tests in `tests/test_protect.py` covering sync + async
+  clients, module-level shortcut, allow path, policy-deny,
+  verify-revoked, transport-error propagation, payload shape, and
+  the `AtlaSentDeniedError` class itself. 167 / 167 tests pass.
+
 ## 0.4.0 — 2026-04-17
 
 ### Added

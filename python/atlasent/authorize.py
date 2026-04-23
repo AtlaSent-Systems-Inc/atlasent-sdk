@@ -7,7 +7,13 @@ from typing import Any
 
 from .client import AtlaSentClient
 from .config import get_anon_key, get_api_key, get_base_url
-from .models import AuthorizationResult, EvaluateResult, GateResult, VerifyResult
+from .models import (
+    AuthorizationResult,
+    EvaluateResult,
+    GateResult,
+    Permit,
+    VerifyResult,
+)
 
 logger = logging.getLogger("atlasent")
 
@@ -65,6 +71,52 @@ def gate(
 ) -> GateResult:
     """Evaluate then verify using the globally configured client."""
     return _get_default_client().gate(action_type, actor_id, context)
+
+
+def protect(
+    *,
+    agent: str,
+    action: str,
+    context: dict[str, Any] | None = None,
+) -> Permit:
+    """Authorize an action end-to-end — the category primitive.
+
+    Top-level shortcut for :meth:`AtlaSentClient.protect`, using the
+    globally configured client. On allow, returns a verified
+    :class:`~atlasent.models.Permit`. On policy denial or permit
+    verification failure, raises
+    :class:`~atlasent.exceptions.AtlaSentDeniedError`. On transport /
+    auth / rate-limit / server error, raises
+    :class:`~atlasent.exceptions.AtlaSentError`.
+
+    This is the **fail-closed boundary**: there is no
+    ``permitted=False`` return path. If ``protect()`` returns, the
+    action is authorized; if it raises, the action must not proceed.
+
+    Matches the TypeScript SDK's ``atlasent.protect()``.
+
+    Example::
+
+        from atlasent import protect, AtlaSentDeniedError, AtlaSentError
+
+        try:
+            permit = protect(
+                agent="deploy-bot",
+                action="deploy_to_production",
+                context={"commit": commit, "approver": approver},
+            )
+        except AtlaSentDeniedError as exc:
+            # Policy said no (or the permit failed verification).
+            log.warning("Denied: %s (evaluation_id=%s)",
+                        exc.reason, exc.evaluation_id)
+            return
+        except AtlaSentError:
+            # Transport / auth / server failure. Fail-closed.
+            raise
+
+        run_deploy(commit)
+    """
+    return _get_default_client().protect(agent=agent, action=action, context=context)
 
 
 def authorize(

@@ -12,6 +12,7 @@ import httpx
 from ._version import __version__
 from .exceptions import (
     AtlaSentDenied,
+    AtlaSentDeniedError,
     AtlaSentError,
     PermissionDeniedError,
     RateLimitError,
@@ -21,6 +22,7 @@ from .models import (
     EvaluateRequest,
     EvaluateResult,
     GateResult,
+    Permit,
     VerifyRequest,
     VerifyResult,
 )
@@ -177,6 +179,65 @@ class AsyncAtlaSentClient:
         result = VerifyResult.model_validate(data)
         logger.info("verify token=%s valid=%s", permit_token, result.valid)
         return result
+
+    async def protect(
+        self,
+        *,
+        agent: str,
+        action: str,
+        context: dict[str, Any] | None = None,
+    ) -> Permit:
+        """Authorize an action end-to-end (async). The category primitive.
+
+        Async mirror of :meth:`AtlaSentClient.protect`. On allow,
+        returns a verified :class:`Permit`; on deny or verification
+        failure raises :class:`AtlaSentDeniedError`; on transport /
+        auth / rate-limit / server error raises :class:`AtlaSentError`.
+
+        Example::
+
+            from atlasent import AsyncAtlaSentClient
+
+            async with AsyncAtlaSentClient(api_key="ask_live_...") as client:
+                permit = await client.protect(
+                    agent="deploy-bot",
+                    action="deploy_to_production",
+                    context={"commit": commit},
+                )
+        """
+        ctx = context or {}
+        try:
+            eval_result = await self.evaluate(action, agent, ctx)
+        except AtlaSentDenied as exc:
+            audit_hash = ""
+            if exc.response_body is not None:
+                candidate = exc.response_body.get("audit_hash")
+                if isinstance(candidate, str):
+                    audit_hash = candidate
+            raise AtlaSentDeniedError(
+                decision="deny",
+                evaluation_id=exc.permit_token,
+                reason=exc.reason,
+                audit_hash=audit_hash,
+            ) from None
+
+        verify_result = await self.verify(eval_result.permit_token, action, agent, ctx)
+
+        if not verify_result.valid:
+            raise AtlaSentDeniedError(
+                decision="deny",
+                evaluation_id=eval_result.permit_token,
+                reason=f"Permit failed verification ({verify_result.outcome})",
+                audit_hash=eval_result.audit_hash,
+            )
+
+        return Permit(
+            permit_id=eval_result.permit_token,
+            permit_hash=verify_result.permit_hash,
+            audit_hash=eval_result.audit_hash,
+            reason=eval_result.reason,
+            timestamp=verify_result.timestamp,
+        )
 
     async def gate(
         self,

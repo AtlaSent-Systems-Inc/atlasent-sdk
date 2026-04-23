@@ -9,6 +9,16 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+AtlaSentDecision = Literal["deny", "hold", "escalate"]
+"""Policy decision outcomes on a denial.
+
+``"deny"`` is what the current ``/v1-evaluate`` API returns. ``"hold"``
+and ``"escalate"`` are reserved for forthcoming API decisions that
+put a permit into a pending state requiring human review; the union
+is declared now so call sites can ``match`` exhaustively from the
+start and adopt new decisions without a breaking change.
+"""
+
 AtlaSentErrorCode = Literal[
     "invalid_api_key",
     "forbidden",
@@ -103,6 +113,58 @@ class PermissionDeniedError(AtlaSentDenied):
     Alias-style subclass of :class:`AtlaSentDenied` that reads more
     naturally in authorization-centric code paths.
     """
+
+
+class AtlaSentDeniedError(AtlaSentDenied):
+    """Raised by :func:`atlasent.protect` when the policy engine
+    refuses the action, or when the resulting permit fails
+    end-to-end verification.
+
+    This is the **fail-closed boundary** of ``protect()``: every
+    code path that short-circuits an action because authorization
+    was not confirmed raises ``AtlaSentDeniedError``. Callers cannot
+    silently proceed on a denial by forgetting to branch on a
+    return value.
+
+    Shape mirrors the TypeScript SDK's ``AtlaSentDeniedError`` for
+    cross-language parity. Subclasses :class:`AtlaSentDenied` so
+    existing ``except AtlaSentDenied:`` catches ``protect()``
+    denials too; use ``except AtlaSentDeniedError:`` to distinguish
+    a policy denial from the older ``authorize()`` /
+    ``evaluate()`` denial surface.
+
+    Attributes:
+        decision: Policy outcome — ``"deny"`` today; ``"hold"`` /
+            ``"escalate"`` reserved for forthcoming API responses.
+        evaluation_id: Opaque permit / decision identifier (echo of
+            the inherited ``permit_token`` field, named for parity
+            with the TypeScript SDK).
+        reason: Human-readable explanation from the policy engine.
+        audit_hash: Hash-chained audit-trail entry associated with
+            the decision, if present on the server response.
+    """
+
+    def __init__(
+        self,
+        *,
+        decision: AtlaSentDecision = "deny",
+        evaluation_id: str,
+        reason: str = "",
+        audit_hash: str = "",
+        request_id: str | None = None,
+    ) -> None:
+        super().__init__(
+            decision=decision,
+            permit_token=evaluation_id,
+            reason=reason,
+        )
+        self.evaluation_id = evaluation_id
+        self.audit_hash = audit_hash
+        # `request_id` lives on `AtlaSentError` in the TS SDK; Python's
+        # AtlaSentError doesn't have a first-class request_id attribute
+        # yet (that's a separate parity change — see finish-work), so
+        # store it on this subclass for now.
+        self.request_id = request_id
 
 
 class RateLimitError(AtlaSentError):
