@@ -1,0 +1,69 @@
+{
+  "description": "Second event's payload rewritten after signing. Signature still matches the envelope text that was signed (because we reuse `signature`), so signature_valid=false (envelope bytes differ) and tampered_event_ids=['evt-2'].",
+  "bundle": {
+    "export_id": "export-1",
+    "org_id": "org-1",
+    "chain_head_hash": "953eb5a6f287ae6043f2173a65f58df1cbdcb107fd6ae62d806df841382a50d3",
+    "event_count": 3,
+    "signed_at": "2026-04-21T00:00:00.000Z",
+    "events": [
+      {
+        "id": "evt-1",
+        "org_id": "org-1",
+        "sequence": 1,
+        "type": "policy.event",
+        "decision": null,
+        "actor_id": "actor-1",
+        "resource_type": "policy",
+        "resource_id": "policy-1",
+        "payload": {
+          "action": "create",
+          "target": "policy-1"
+        },
+        "hash": "60d39249c49c75be933f4a0c998e7900945ca956ecae407fa50aa26098be9068",
+        "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "occurred_at": "2026-04-21T00:00:00.000Z",
+        "created_at": "2026-04-21T00:00:00.000Z"
+      },
+      {
+        "id": "evt-2",
+        "org_id": "org-1",
+        "sequence": 2,
+        "type": "policy.event",
+        "decision": null,
+        "actor_id": "actor-1",
+        "resource_type": "policy",
+        "resource_id": "policy-1",
+        "payload": {
+          "action": "publish",
+          "target": "policy-1",
+          "version": 9999
+        },
+        "hash": "083a4a8121dc53e6df09671e4d7d32a99af73b6d4506c09106421c5e91130b6d",
+        "previous_hash": "60d39249c49c75be933f4a0c998e7900945ca956ecae407fa50aa26098be9068",
+        "occurred_at": "2026-04-21T00:00:01.000Z",
+        "created_at": "2026-04-21T00:00:01.000Z"
+      },
+      {
+        "id": "evt-3",
+        "org_id": "org-1",
+        "sequence": 3,
+        "type": "policy.event",
+        "decision": null,
+        "actor_id": "actor-1",
+        "resource_type": "policy",
+        "resource_id": "policy-1",
+        "payload": {
+          "action": "revoke",
+          "target": "permit-abc"
+        },
+        "hash": "953eb5a6f287ae6043f2173a65f58df1cbdcb107fd6ae62d806df841382a50d3",
+        "previous_hash": "083a4a8121dc53e6df09671e4d7d32a99af73b6d4506c09106421c5e91130b6d",
+        "occurred_at": "2026-04-21T00:00:02.000Z",
+        "created_at": "2026-04-21T00:00:02.000Z"
+      }
+    ],
+    "signature": "jT1oTAtf4RxDiAdj6VLlkvdm0v7sMaEE1yGTkCagX_EeBcvgiqUsmXTJYXqLyJupDzvOkcIXNilvzEIpbP0RAw",
+    "signing_key_id": "test-key"
+  }
+}

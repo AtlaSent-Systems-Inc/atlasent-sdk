@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Offline audit-bundle verifier.** `atlasent.verify_bundle(path,
+  public_keys_pem=[...])` and the lower-level
+  `atlasent.audit_bundle.verify_audit_bundle(bundle, keys)` produce a
+  byte-faithful port of the reference verifier in
+  `atlasent-api/supabase/functions/v1-audit/verify.ts`. End-to-end
+  verification of a signed export from `POST /v1/audit/exports`:
+  per-event SHA-256 hash chain, adjacency, `chain_head_hash` match,
+  and detached Ed25519 signature. Rotation-aware via `signing_key_id`.
+  Uses `cryptography` (now a hard dep). `canonical_json` and
+  `signed_bytes_for` are exported for regulator-side tooling that
+  wants to recompute envelope bytes out-of-band.
+- Shared test fixtures at `contract/vectors/audit-bundles/` and
+  reproducible generator at `contract/tools/gen_audit_bundles.py`.
+
 ## 1.2.0 — 2026-04-23
 
 ### Added
