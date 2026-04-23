@@ -403,6 +403,7 @@ class AsyncAtlaSentClient:
                 raise RateLimitError(
                     retry_after=retry_after,
                     request_id=request_id,
+                    rate_limit=_parse_rate_limit_headers(response),
                 )
             if response.status_code == 401:
                 raise AtlaSentError(

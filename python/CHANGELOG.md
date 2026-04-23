@@ -22,6 +22,14 @@
 
 ### Added
 
+- **`rate_limit` on exceptions for HTTP errors (including 429).**
+  `AtlaSentError.rate_limit` (and therefore `RateLimitError.rate_limit`)
+  is now populated from the `X-RateLimit-*` headers on any HTTP error
+  response. The 429 path already carried `retry_after` parsed from
+  `Retry-After`; callers now also get the full `RateLimitState` so
+  they can inspect *which* budget was blown (`limit`) and *when* it
+  resets (`reset_at`) without special-casing.
+
 - **`rate_limit` field on every authed response.** The AtlaSent edge
   functions now emit `X-RateLimit-Limit`, `X-RateLimit-Remaining`,
   and `X-RateLimit-Reset` headers on success responses (the 429 path

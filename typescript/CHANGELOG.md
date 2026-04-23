@@ -24,6 +24,14 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ### Added
 
+- **`rateLimit` on `AtlaSentError` for HTTP errors (including 429).**
+  The 429 path already carried `retryAfterMs` parsed from
+  `Retry-After`. `rateLimit: RateLimitState | null` is now also
+  populated from the `X-RateLimit-*` headers so consumers can
+  inspect *which* budget was blown (`limit`) and *when* it resets
+  (`resetAt`) without special-casing. Non-429 HTTP errors (403, 5xx)
+  also carry the field when the server emits the headers.
+
 - **`rateLimit` field on every authed response.** The AtlaSent edge
   functions now emit `X-RateLimit-Limit`, `X-RateLimit-Remaining`,
   and `X-RateLimit-Reset` headers on success responses (the 429 path

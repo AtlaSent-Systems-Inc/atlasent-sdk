@@ -740,3 +740,31 @@ class TestRateLimitHeaders:
         )
         result = client.evaluate("a", "b")
         assert result.rate_limit is None
+
+    def test_429_attaches_rate_limit_to_error(self, client, mocker):
+        """On 429, callers want the full rate-limit state (which budget
+        was blown, when it resets) alongside the simpler retry_after.
+        """
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(
+                mocker,
+                status_code=429,
+                headers=self._headers(
+                    **{
+                        "retry_after": "42",
+                        "x_ratelimit_limit": "1000",
+                        "x_ratelimit_remaining": "0",
+                        "x_ratelimit_reset": str(self.RESET_SECONDS),
+                    }
+                ),
+            ),
+        )
+        with pytest.raises(RateLimitError) as exc_info:
+            client.evaluate("a", "b")
+        err = exc_info.value
+        assert err.retry_after == 42.0
+        assert err.rate_limit is not None
+        assert err.rate_limit.limit == 1000
+        assert err.rate_limit.remaining == 0

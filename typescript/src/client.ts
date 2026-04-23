@@ -273,6 +273,15 @@ async function buildHttpError(
   if (classified.retryAfterMs !== undefined) {
     init.retryAfterMs = classified.retryAfterMs;
   }
+  // Attach full rate-limit state to 429s so consumers can inspect
+  // which budget was blown (`limit`) and when it resets (`resetAt`)
+  // alongside the simpler `retryAfterMs` delay. Passing through on
+  // other 4xx / 5xx too — the server emits the headers uniformly
+  // on every authed response.
+  const rateLimit = parseRateLimitHeaders(response.headers);
+  if (rateLimit !== null) {
+    init.rateLimit = rateLimit;
+  }
   return new AtlaSentError(classified.message, init);
 }
 
