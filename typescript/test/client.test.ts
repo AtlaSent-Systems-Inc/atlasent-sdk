@@ -89,6 +89,8 @@ describe("evaluate()", () => {
       reason: "Operator authorized under GxP policy",
       auditHash: "hash_alpha",
       timestamp: "2026-04-17T10:00:00Z",
+      // Headerless response → no rate-limit state surfaced.
+      rateLimit: null,
     });
   });
 
@@ -371,5 +373,119 @@ describe("Network / transport errors", () => {
     await expect(client.verifyPermit({ permitId: "x" })).rejects.toMatchObject({
       code: "bad_response",
     });
+  });
+});
+
+describe("X-RateLimit-* header parsing", () => {
+  const RESET_SECONDS = 1_714_068_060; // 2026-05-12 arbitrary instant
+  const RESET_DATE_MS = RESET_SECONDS * 1000;
+
+  function rateLimitResponse(
+    body: unknown,
+    headers: Record<string, string>,
+  ): Response {
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json", ...headers },
+    });
+  }
+
+  it("exposes rateLimit on evaluate when all three headers are present", async () => {
+    const client = makeClient(
+      mockFetch(() =>
+        rateLimitResponse(EVALUATE_PERMIT_WIRE, {
+          "X-RateLimit-Limit": "1000",
+          "X-RateLimit-Remaining": "762",
+          "X-RateLimit-Reset": String(RESET_SECONDS),
+        }),
+      ),
+    );
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.rateLimit).toEqual({
+      limit: 1000,
+      remaining: 762,
+      resetAt: new Date(RESET_DATE_MS),
+    });
+  });
+
+  it("exposes rateLimit on verifyPermit when all three headers are present", async () => {
+    const client = makeClient(
+      mockFetch(() =>
+        rateLimitResponse(VERIFY_OK_WIRE, {
+          "X-RateLimit-Limit": "600",
+          "X-RateLimit-Remaining": "0",
+          "X-RateLimit-Reset": String(RESET_SECONDS),
+        }),
+      ),
+    );
+    const result = await client.verifyPermit({ permitId: "dec_alpha" });
+    expect(result.rateLimit).toEqual({
+      limit: 600,
+      remaining: 0,
+      resetAt: new Date(RESET_DATE_MS),
+    });
+  });
+
+  it("accepts ISO 8601 string for X-RateLimit-Reset", async () => {
+    const iso = new Date(RESET_DATE_MS).toISOString();
+    const client = makeClient(
+      mockFetch(() =>
+        rateLimitResponse(EVALUATE_PERMIT_WIRE, {
+          "X-RateLimit-Limit": "100",
+          "X-RateLimit-Remaining": "50",
+          "X-RateLimit-Reset": iso,
+        }),
+      ),
+    );
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.rateLimit?.resetAt.getTime()).toBe(RESET_DATE_MS);
+  });
+
+  it("rateLimit === null when headers absent (older deployments)", async () => {
+    const client = makeClient(mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE)));
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.rateLimit).toBeNull();
+  });
+
+  it("rateLimit === null when one header is missing", async () => {
+    const client = makeClient(
+      mockFetch(() =>
+        rateLimitResponse(EVALUATE_PERMIT_WIRE, {
+          "X-RateLimit-Limit": "100",
+          "X-RateLimit-Remaining": "50",
+          // Reset intentionally missing
+        }),
+      ),
+    );
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.rateLimit).toBeNull();
+  });
+
+  it("rateLimit === null when numeric header is NaN", async () => {
+    const client = makeClient(
+      mockFetch(() =>
+        rateLimitResponse(EVALUATE_PERMIT_WIRE, {
+          "X-RateLimit-Limit": "not-a-number",
+          "X-RateLimit-Remaining": "50",
+          "X-RateLimit-Reset": String(RESET_SECONDS),
+        }),
+      ),
+    );
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.rateLimit).toBeNull();
+  });
+
+  it("rateLimit === null when reset header is unparseable", async () => {
+    const client = makeClient(
+      mockFetch(() =>
+        rateLimitResponse(EVALUATE_PERMIT_WIRE, {
+          "X-RateLimit-Limit": "100",
+          "X-RateLimit-Remaining": "50",
+          "X-RateLimit-Reset": "whenever",
+        }),
+      ),
+    );
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.rateLimit).toBeNull();
   });
 });

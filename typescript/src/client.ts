@@ -19,6 +19,7 @@ import type {
   AtlaSentClientOptions,
   EvaluateRequest,
   EvaluateResponse,
+  RateLimitState,
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "./types.js";
@@ -77,7 +78,7 @@ export class AtlaSentClient {
       context: input.context ?? {},
       api_key: this.apiKey,
     };
-    const wire = await this.post<EvaluateWire>("/v1-evaluate", body);
+    const { body: wire, rateLimit } = await this.post<EvaluateWire>("/v1-evaluate", body);
 
     if (typeof wire.permitted !== "boolean" || typeof wire.decision_id !== "string") {
       throw new AtlaSentError(
@@ -92,6 +93,7 @@ export class AtlaSentClient {
       reason: wire.reason ?? "",
       auditHash: wire.audit_hash ?? "",
       timestamp: wire.timestamp ?? "",
+      rateLimit,
     };
   }
 
@@ -111,7 +113,7 @@ export class AtlaSentClient {
       context: input.context ?? {},
       api_key: this.apiKey,
     };
-    const wire = await this.post<VerifyPermitWire>(
+    const { body: wire, rateLimit } = await this.post<VerifyPermitWire>(
       "/v1-verify-permit",
       body,
     );
@@ -128,10 +130,14 @@ export class AtlaSentClient {
       outcome: wire.outcome ?? "",
       permitHash: wire.permit_hash ?? "",
       timestamp: wire.timestamp ?? "",
+      rateLimit,
     };
   }
 
-  private async post<T>(path: string, body: unknown): Promise<T> {
+  private async post<T>(
+    path: string,
+    body: unknown,
+  ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
     const url = `${this.baseUrl}${path}`;
     const requestId = globalThis.crypto.randomUUID();
 
@@ -179,8 +185,54 @@ export class AtlaSentClient {
       });
     }
 
-    return parsed as T;
+    return {
+      body: parsed as T,
+      rateLimit: parseRateLimitHeaders(response.headers),
+    };
   }
+}
+
+/**
+ * Parse the server's `X-RateLimit-*` header triple into a typed
+ * {@link RateLimitState}. Returns `null` when any of the three headers
+ * is missing or unparseable — callers treat that as "the server didn't
+ * emit rate-limit state" rather than "the window is empty".
+ *
+ * `X-RateLimit-Reset` is accepted as either unix-seconds (what the
+ * AtlaSent edge functions emit today) or an ISO 8601 timestamp.
+ */
+function parseRateLimitHeaders(headers: Headers): RateLimitState | null {
+  const rawLimit = headers.get("x-ratelimit-limit");
+  const rawRemaining = headers.get("x-ratelimit-remaining");
+  const rawReset = headers.get("x-ratelimit-reset");
+  if (rawLimit === null || rawRemaining === null || rawReset === null) {
+    return null;
+  }
+  const limit = Number(rawLimit);
+  const remaining = Number(rawRemaining);
+  if (!Number.isFinite(limit) || !Number.isFinite(remaining)) {
+    return null;
+  }
+  const resetAt = parseResetHeader(rawReset);
+  if (resetAt === null) {
+    return null;
+  }
+  return { limit, remaining, resetAt };
+}
+
+function parseResetHeader(raw: string): Date | null {
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds)) {
+    // Standard shape: unix seconds. 10-digit values are in the valid
+    // range ~2001–2286 so this heuristic won't confuse a tiny
+    // `remaining`-like number for an epoch.
+    return new Date(seconds * 1000);
+  }
+  const ms = Date.parse(raw);
+  if (Number.isFinite(ms)) {
+    return new Date(ms);
+  }
+  return null;
 }
 
 function mapFetchError(err: unknown, requestId: string): AtlaSentError {

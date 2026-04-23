@@ -9,6 +9,29 @@
 /** The two possible policy decisions. */
 export type Decision = "ALLOW" | "DENY";
 
+/**
+ * Rate-limit state parsed from the server's `X-RateLimit-*` headers.
+ *
+ * Present on every authenticated response (success and 429) when the
+ * server emits the headers. `null` when the server doesn't — older
+ * deployments, or internal endpoints that skip per-key rate limiting.
+ *
+ * Clients should check `remaining` and sleep until `resetAt` to
+ * preemptively back off before hitting a 429.
+ */
+export interface RateLimitState {
+  /** Value of `X-RateLimit-Limit` — the per-minute budget. */
+  limit: number;
+  /** Value of `X-RateLimit-Remaining` — unused budget in the current window. */
+  remaining: number;
+  /**
+   * Parsed `X-RateLimit-Reset` — the UTC instant when the current
+   * window's counter zeroes. Accepts either a unix-seconds integer or
+   * an ISO 8601 string on the wire.
+   */
+  resetAt: Date;
+}
+
 /** Input to {@link AtlaSentClient.evaluate}. */
 export interface EvaluateRequest {
   /** Identifier of the calling agent (e.g. "clinical-data-agent"). */
@@ -31,6 +54,11 @@ export interface EvaluateResponse {
   auditHash: string;
   /** ISO 8601 timestamp of the decision. */
   timestamp: string;
+  /**
+   * Per-key rate-limit state for this request's response, parsed from
+   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
+   */
+  rateLimit: RateLimitState | null;
 }
 
 /** Input to {@link AtlaSentClient.verifyPermit}. */
@@ -55,6 +83,11 @@ export interface VerifyPermitResponse {
   permitHash: string;
   /** ISO 8601 timestamp of the verification. */
   timestamp: string;
+  /**
+   * Per-key rate-limit state for this request's response, parsed from
+   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
+   */
+  rateLimit: RateLimitState | null;
 }
 
 /** Constructor options for {@link AtlaSentClient}. */
