@@ -19,6 +19,7 @@ Quick start::
 
 from ._version import __version__
 from .async_client import AsyncAtlaSentClient
+from .audit import verify_bundle
 from .authorize import authorize, evaluate, gate, verify
 from .cache import TTLCache
 from .client import AtlaSentClient
@@ -32,7 +33,15 @@ from .exceptions import (
     RateLimitError,
 )
 from .guard import async_atlasent_guard, atlasent_guard
-from .models import AuthorizationResult, EvaluateResult, GateResult, VerifyResult
+from .models import (
+    AuditEvent,
+    AuthorizationResult,
+    BundleVerifyResult,
+    EvaluateResult,
+    EvaluateStreamEvent,
+    GateResult,
+    VerifyResult,
+)
 
 __all__ = [
     "__version__",
@@ -43,8 +52,12 @@ __all__ = [
     "evaluate",
     "verify",
     "gate",
+    "verify_bundle",
     "AuthorizationResult",
+    "AuditEvent",
+    "BundleVerifyResult",
     "EvaluateResult",
+    "EvaluateStreamEvent",
     "VerifyResult",
     "GateResult",
     "AtlaSentError",

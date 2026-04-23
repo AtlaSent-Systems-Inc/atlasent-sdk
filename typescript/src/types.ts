@@ -71,3 +71,68 @@ export interface AtlaSentClientOptions {
    */
   fetch?: typeof fetch;
 }
+
+// ── Streaming evaluate ────────────────────────────────────────────────────
+
+/** Discriminant for {@link EvaluateStreamEvent}. */
+export type StreamEventType = "reasoning" | "policy_check" | "decision" | "error";
+
+/**
+ * A single event yielded by {@link AtlaSentClient.evaluateStream}.
+ *
+ * Events arrive in order:
+ *   - Zero or more `"reasoning"` events (policy engine thinking).
+ *   - Zero or more `"policy_check"` events (per-policy verdicts).
+ *   - Exactly one `"decision"` event — always the last in the stream.
+ *   - `"error"` if the server aborts abnormally.
+ *
+ * Branch on `type` to read the relevant fields.
+ */
+export interface EvaluateStreamEvent {
+  type: StreamEventType;
+  /** Populated on `"reasoning"` and `"error"` events. */
+  content?: string;
+  /** Populated on `"policy_check"` events. */
+  policyId?: string;
+  /** Populated on `"policy_check"` events. */
+  outcome?: string;
+  /** `true` / `false` on the final `"decision"` event. */
+  permitted?: boolean;
+  /** Opaque permit ID on the final `"decision"` event. */
+  permitId?: string;
+  /** Human-readable reason on `"decision"` and `"policy_check"` events. */
+  reason?: string;
+  /** Audit-trail hash on the final `"decision"` event. */
+  auditHash?: string;
+  /** ISO 8601 timestamp on the final `"decision"` event. */
+  timestamp?: string;
+}
+
+// ── Offline audit verifier ────────────────────────────────────────────────
+
+/** A single event record inside an audit export bundle. */
+export interface AuditEvent {
+  eventId: string;
+  action: string;
+  actorId: string;
+  timestamp: string;
+  decisionId: string;
+  permitted: boolean;
+  auditHash: string;
+}
+
+/**
+ * Result of {@link verifyBundle}.
+ *
+ * Check `valid` to determine whether the bundle is intact.
+ */
+export interface BundleVerifyResult {
+  /** `true` if the Ed25519 signature over the events is valid. */
+  valid: boolean;
+  /** Number of audit events in the bundle. */
+  eventCount: number;
+  /** Hex-encoded 32-byte Ed25519 public key from the bundle header. */
+  publicKey: string;
+  /** Non-empty when `valid` is `false` and a diagnostic is available. */
+  error: string;
+}

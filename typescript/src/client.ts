@@ -19,6 +19,7 @@ import type {
   AtlaSentClientOptions,
   EvaluateRequest,
   EvaluateResponse,
+  EvaluateStreamEvent,
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "./types.js";
@@ -26,6 +27,19 @@ import type {
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const SDK_VERSION = "0.1.0";
+
+/** Raw JSON shape of a single SSE event from `POST /v1-evaluate-stream`. */
+interface EvaluateStreamEventWire {
+  type: "reasoning" | "policy_check" | "decision" | "error";
+  content?: string;
+  policy_id?: string;
+  outcome?: string;
+  permitted?: boolean;
+  decision_id?: string;
+  reason?: string;
+  audit_hash?: string;
+  timestamp?: string;
+}
 
 /** Raw JSON shape received from `POST /v1-evaluate`. */
 interface EvaluateWire {
@@ -129,6 +143,110 @@ export class AtlaSentClient {
       permitHash: wire.permit_hash ?? "",
       timestamp: wire.timestamp ?? "",
     };
+  }
+
+  /**
+   * Stream evaluation events for an action via Server-Sent Events.
+   *
+   * Yields {@link EvaluateStreamEvent} objects in order: zero or more
+   * `"reasoning"` / `"policy_check"` events followed by exactly one
+   * `"decision"` event (or `"error"` if the server aborts).
+   *
+   * Unlike {@link evaluate}, a DENY decision is **not** thrown — inspect
+   * the final event's `permitted` field instead.
+   *
+   * @example
+   * ```ts
+   * for await (const event of client.evaluateStream({ agent, action })) {
+   *   if (event.type === "decision") {
+   *     console.log("permitted:", event.permitted);
+   *   }
+   * }
+   * ```
+   */
+  async *evaluateStream(
+    input: EvaluateRequest,
+  ): AsyncGenerator<EvaluateStreamEvent> {
+    const url = `${this.baseUrl}/v1-evaluate-stream`;
+    const requestId = globalThis.crypto.randomUUID();
+    const body = {
+      action: input.action,
+      agent: input.agent,
+      context: input.context ?? {},
+      api_key: this.apiKey,
+    };
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      Authorization: `Bearer ${this.apiKey}`,
+      "User-Agent": `@atlasent/sdk/${SDK_VERSION} node/${process.version}`,
+      "X-Request-ID": requestId,
+    };
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (err) {
+      throw mapFetchError(err, requestId);
+    }
+
+    if (!response.ok) {
+      throw await buildHttpError(response, requestId);
+    }
+
+    if (!response.body) {
+      throw new AtlaSentError("Empty response body from streaming endpoint", {
+        code: "bad_response",
+        requestId,
+      });
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trimEnd();
+          if (!trimmed.startsWith("data: ")) continue;
+          const data = trimmed.slice(6);
+          if (data === "[DONE]") return;
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(data);
+          } catch {
+            continue;
+          }
+          if (parsed === null || typeof parsed !== "object") continue;
+          const wire = parsed as EvaluateStreamEventWire;
+          yield {
+            type: wire.type,
+            content: wire.content,
+            policyId: wire.policy_id,
+            outcome: wire.outcome,
+            permitted: wire.permitted,
+            permitId: wire.decision_id,
+            reason: wire.reason,
+            auditHash: wire.audit_hash,
+            timestamp: wire.timestamp,
+          };
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   private async post<T>(path: string, body: unknown): Promise<T> {

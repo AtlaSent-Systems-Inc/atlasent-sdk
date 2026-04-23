@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -20,6 +22,7 @@ from .models import (
     AuthorizationResult,
     EvaluateRequest,
     EvaluateResult,
+    EvaluateStreamEvent,
     GateResult,
     VerifyRequest,
     VerifyResult,
@@ -247,6 +250,109 @@ class AsyncAtlaSentClient:
             timestamp=eval_result.timestamp,
             raw=eval_result.model_dump(by_alias=True),
         )
+
+    async def evaluate_stream(
+        self,
+        action_type: str,
+        actor_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> AsyncIterator[EvaluateStreamEvent]:
+        """Stream evaluation events for an action via SSE.
+
+        Yields :class:`EvaluateStreamEvent` objects in order:
+        zero or more ``"reasoning"`` / ``"policy_check"`` events
+        followed by exactly one ``"decision"`` event (or ``"error"``
+        if the server aborts).
+
+        Unlike :meth:`evaluate`, this method does **not** raise
+        :class:`AtlaSentDenied` on denial — inspect the final event's
+        :attr:`~EvaluateStreamEvent.permitted` field instead.
+
+        Args:
+            action_type: The action to authorize.
+            actor_id: Identifier of the actor.
+            context: Arbitrary context dict for policy evaluation.
+
+        Raises:
+            AtlaSentError: Network error, timeout, or HTTP error.
+            RateLimitError: HTTP 429.
+
+        Example::
+
+            async for event in await client.evaluate_stream("read_phi", "agent-1"):
+                if event.type == "decision":
+                    print("permitted:", event.permitted)
+        """
+        req = EvaluateRequest(
+            action_type=action_type,
+            actor_id=actor_id,
+            context=context or {},
+            api_key=self._api_key,
+        )
+        url = f"{self._base_url}/v1-evaluate-stream"
+        request_id = uuid.uuid4().hex[:12]
+        headers = {
+            "X-Request-ID": request_id,
+            "Accept": "text/event-stream",
+        }
+        logger.debug(
+            "evaluate_stream action=%r actor=%r", action_type, actor_id
+        )
+
+        async with self._client.stream(
+            "POST",
+            url,
+            json=req.model_dump(by_alias=True),
+            headers=headers,
+        ) as response:
+            if response.status_code == 429:
+                raise RateLimitError(
+                    retry_after=_parse_retry_after(response)
+                )
+            if response.status_code == 401:
+                raise AtlaSentError(
+                    "Invalid API key",
+                    status_code=401,
+                    code="invalid_api_key",
+                )
+            if response.status_code == 403:
+                raise AtlaSentError(
+                    "Access forbidden — check your API key permissions",
+                    status_code=403,
+                    code="forbidden",
+                )
+            if response.status_code >= 500:
+                raise AtlaSentError(
+                    f"API error {response.status_code}",
+                    status_code=response.status_code,
+                    code="server_error",
+                )
+            if response.status_code >= 400:
+                raise AtlaSentError(
+                    f"API error {response.status_code}",
+                    status_code=response.status_code,
+                    code="bad_request",
+                )
+
+            async for line in response.aiter_lines():
+                line = line.strip()
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str == "[DONE]":
+                    return
+                try:
+                    data = json.loads(data_str)
+                except json.JSONDecodeError:
+                    logger.warning("evaluate_stream: skipping malformed SSE line")
+                    continue
+                event = EvaluateStreamEvent.model_validate(data)
+                logger.debug(
+                    "evaluate_stream event type=%r action=%r",
+                    event.type,
+                    action_type,
+                )
+                yield event
 
     # ── lifecycle ─────────────────────────────────────────────────
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -141,3 +141,68 @@ class AuthorizationResult:
         Allows the idiomatic ``if authorize(...):`` check.
         """
         return self.permitted
+
+
+# ── Streaming evaluate ────────────────────────────────────────────────
+
+
+class EvaluateStreamEvent(BaseModel):
+    """A single event yielded from :meth:`AsyncAtlaSentClient.evaluate_stream`.
+
+    Events are delivered in order:
+
+    * ``"reasoning"`` — policy engine thinking (zero or more).
+    * ``"policy_check"`` — per-policy verdict (zero or more).
+    * ``"decision"`` — the final authorization decision (exactly one,
+      always the last event).
+    * ``"error"`` — stream aborted with an error message.
+
+    Inspect :attr:`type` to determine which fields are populated.
+    """
+
+    type: Literal["reasoning", "policy_check", "decision", "error"]
+    content: str = ""
+    policy_id: str = ""
+    outcome: str = ""
+    permitted: bool | None = None
+    permit_token: str = Field("", alias="decision_id")
+    reason: str = ""
+    audit_hash: str = ""
+    timestamp: str = ""
+
+    model_config = {"populate_by_name": True}
+
+
+# ── Offline audit verifier ────────────────────────────────────────────
+
+
+class AuditEvent(BaseModel):
+    """A single event record inside an audit export bundle."""
+
+    event_id: str = ""
+    action: str = ""
+    actor_id: str = ""
+    timestamp: str = ""
+    decision_id: str = ""
+    permitted: bool | None = None
+    audit_hash: str = ""
+
+
+class BundleVerifyResult(BaseModel):
+    """Result of :func:`atlasent.audit.verify_bundle`.
+
+    Attributes:
+        valid: ``True`` if the Ed25519 signature over the events is
+            intact.  ``False`` means the bundle was tampered with or the
+            key doesn't match.
+        event_count: Number of audit events in the bundle.
+        public_key: Hex-encoded 32-byte Ed25519 public key from the
+            bundle header.
+        error: Non-empty when ``valid`` is ``False`` and a diagnostic
+            message is available.
+    """
+
+    valid: bool
+    event_count: int = 0
+    public_key: str = ""
+    error: str = ""
