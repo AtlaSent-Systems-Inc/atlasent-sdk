@@ -25,6 +25,7 @@ from .models import (
     EvaluateResult,
     GateResult,
     Permit,
+    RateLimitState,
     VerifyRequest,
     VerifyResult,
 )
@@ -142,7 +143,9 @@ class AtlaSentClient:
             api_key=self._api_key,
         )
         logger.debug("evaluate action=%r actor=%r", action_type, actor_id)
-        data, request_id = self._post("/v1-evaluate", req.model_dump(by_alias=True))
+        data, rate_limit, request_id = self._post(
+            "/v1-evaluate", req.model_dump(by_alias=True)
+        )
 
         if not isinstance(data.get("permitted"), bool) or not isinstance(
             data.get("decision_id"), str
@@ -166,6 +169,7 @@ class AtlaSentClient:
             )
 
         result = EvaluateResult.model_validate(data)
+        result.rate_limit = rate_limit
         logger.info(
             "evaluate permitted action=%r actor=%r token=%s",
             action_type,
@@ -209,7 +213,7 @@ class AtlaSentClient:
             api_key=self._api_key,
         )
         logger.debug("verify token=%s", permit_token)
-        data, request_id = self._post(
+        data, rate_limit, request_id = self._post(
             "/v1-verify-permit", req.model_dump(by_alias=True)
         )
         if not isinstance(data.get("verified"), bool):
@@ -220,6 +224,7 @@ class AtlaSentClient:
                 response_body=data,
             )
         result = VerifyResult.model_validate(data)
+        result.rate_limit = rate_limit
         logger.info("verify token=%s valid=%s", permit_token, result.valid)
         return result
 
@@ -412,10 +417,14 @@ class AtlaSentClient:
 
     # ── internals ─────────────────────────────────────────────────
 
-    def _post(self, path: str, payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    def _post(
+        self, path: str, payload: dict[str, Any]
+    ) -> tuple[dict[str, Any], RateLimitState | None, str]:
         """POST with retry on transient failures (5xx, timeouts).
 
-        Returns ``(body, request_id)`` — see :meth:`AsyncAtlaSentClient._post`.
+        Returns ``(body, rate_limit, request_id)`` — rate_limit is parsed
+        from ``X-RateLimit-*`` headers on the response, or ``None`` when
+        the server doesn't emit them.
         """
         url = f"{self._base_url}{path}"
         request_id = uuid.uuid4().hex[:12]
@@ -510,7 +519,11 @@ class AtlaSentClient:
                 )
 
             try:
-                return response.json(), request_id
+                return (
+                    response.json(),
+                    _parse_rate_limit_headers(response),
+                    request_id,
+                )
             except ValueError as exc:
                 raise AtlaSentError(
                     "Invalid JSON response from AtlaSent API",
@@ -564,3 +577,47 @@ def _parse_retry_after(response: httpx.Response) -> float | None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     delta = (parsed - datetime.now(timezone.utc)).total_seconds()
     return max(0.0, delta)
+
+
+def _parse_rate_limit_headers(response: httpx.Response) -> RateLimitState | None:
+    """Parse the server's ``X-RateLimit-*`` header triple into a typed
+    :class:`RateLimitState`.
+
+    Returns ``None`` when any of the three headers is missing or
+    unparseable — callers treat that as "the server didn't emit
+    rate-limit state" rather than "the window is empty".
+
+    ``X-RateLimit-Reset`` is accepted as either unix-seconds (what the
+    AtlaSent edge functions emit today) or an ISO 8601 timestamp.
+    """
+    raw_limit = response.headers.get("x-ratelimit-limit")
+    raw_remaining = response.headers.get("x-ratelimit-remaining")
+    raw_reset = response.headers.get("x-ratelimit-reset")
+    if raw_limit is None or raw_remaining is None or raw_reset is None:
+        return None
+    try:
+        limit = int(raw_limit)
+        remaining = int(raw_remaining)
+    except (ValueError, TypeError):
+        return None
+    reset_at = _parse_reset_header(raw_reset)
+    if reset_at is None:
+        return None
+    return RateLimitState(limit=limit, remaining=remaining, reset_at=reset_at)
+
+
+def _parse_reset_header(raw: str) -> datetime | None:
+    """Accept either unix-seconds (the server's current convention) or
+    an ISO 8601 timestamp; return a timezone-aware UTC datetime."""
+    try:
+        seconds = float(raw)
+        return datetime.fromtimestamp(seconds, tz=timezone.utc)
+    except (ValueError, TypeError):
+        pass
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed

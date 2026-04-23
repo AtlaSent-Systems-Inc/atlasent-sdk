@@ -594,3 +594,149 @@ class TestSyncRequestIdOnExceptions:
             client.evaluate("a", "b")
         sent = mock_post.call_args[1]["headers"]["X-Request-ID"]
         assert exc_info.value.request_id == sent
+
+
+# ── Rate-limit header parsing ────────────────────────────────────────
+
+
+class TestRateLimitHeaders:
+    """Parse ``X-RateLimit-*`` on every authed response and expose as
+    ``result.rate_limit``. None on older deployments / partial headers.
+    """
+
+    RESET_SECONDS = 1_714_068_060
+    RESET_ISO = "2024-04-25T17:21:00+00:00"
+
+    def _headers(self, **kwargs: str) -> dict[str, str]:
+        return {k.replace("_", "-"): v for k, v in kwargs.items()}
+
+    def test_evaluate_exposes_rate_limit_when_all_three_headers_present(
+        self, client, mocker
+    ):
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(
+                mocker,
+                json_data=EVALUATE_PERMIT,
+                headers=self._headers(
+                    **{
+                        "x_ratelimit_limit": "1000",
+                        "x_ratelimit_remaining": "762",
+                        "x_ratelimit_reset": str(self.RESET_SECONDS),
+                    }
+                ),
+            ),
+        )
+        result = client.evaluate("a", "b")
+        assert result.rate_limit is not None
+        assert result.rate_limit.limit == 1000
+        assert result.rate_limit.remaining == 762
+        assert result.rate_limit.reset_at.timestamp() == float(self.RESET_SECONDS)
+
+    def test_verify_exposes_rate_limit(self, client, mocker):
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(
+                mocker,
+                json_data=VERIFY_OK,
+                headers=self._headers(
+                    **{
+                        "x_ratelimit_limit": "600",
+                        "x_ratelimit_remaining": "0",
+                        "x_ratelimit_reset": str(self.RESET_SECONDS),
+                    }
+                ),
+            ),
+        )
+        result = client.verify("tok_xyz")
+        assert result.rate_limit is not None
+        assert result.rate_limit.limit == 600
+        assert result.rate_limit.remaining == 0
+
+    def test_iso8601_reset_accepted(self, client, mocker):
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(
+                mocker,
+                json_data=EVALUATE_PERMIT,
+                headers=self._headers(
+                    **{
+                        "x_ratelimit_limit": "100",
+                        "x_ratelimit_remaining": "50",
+                        "x_ratelimit_reset": self.RESET_ISO,
+                    }
+                ),
+            ),
+        )
+        result = client.evaluate("a", "b")
+        assert result.rate_limit is not None
+        assert result.rate_limit.reset_at.isoformat() == self.RESET_ISO
+
+    def test_no_headers_yields_none(self, client, mocker):
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_PERMIT),
+        )
+        result = client.evaluate("a", "b")
+        assert result.rate_limit is None
+
+    def test_missing_one_header_yields_none(self, client, mocker):
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(
+                mocker,
+                json_data=EVALUATE_PERMIT,
+                headers=self._headers(
+                    **{
+                        "x_ratelimit_limit": "100",
+                        "x_ratelimit_remaining": "50",
+                        # reset intentionally missing
+                    }
+                ),
+            ),
+        )
+        result = client.evaluate("a", "b")
+        assert result.rate_limit is None
+
+    def test_non_numeric_count_yields_none(self, client, mocker):
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(
+                mocker,
+                json_data=EVALUATE_PERMIT,
+                headers=self._headers(
+                    **{
+                        "x_ratelimit_limit": "not-a-number",
+                        "x_ratelimit_remaining": "50",
+                        "x_ratelimit_reset": str(self.RESET_SECONDS),
+                    }
+                ),
+            ),
+        )
+        result = client.evaluate("a", "b")
+        assert result.rate_limit is None
+
+    def test_unparseable_reset_yields_none(self, client, mocker):
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(
+                mocker,
+                json_data=EVALUATE_PERMIT,
+                headers=self._headers(
+                    **{
+                        "x_ratelimit_limit": "100",
+                        "x_ratelimit_remaining": "50",
+                        "x_ratelimit_reset": "whenever",
+                    }
+                ),
+            ),
+        )
+        result = client.evaluate("a", "b")
+        assert result.rate_limit is None

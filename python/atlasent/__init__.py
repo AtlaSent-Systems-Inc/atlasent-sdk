@@ -49,6 +49,7 @@ from .models import (
     EvaluateResult,
     GateResult,
     Permit,
+    RateLimitState,
     VerifyResult,
 )
 
@@ -66,6 +67,7 @@ __all__ = [
     "AuthorizationResult",
     "EvaluateResult",
     "VerifyResult",
+    "RateLimitState",
     "GateResult",
     "AtlaSentError",
     "AtlaSentErrorCode",
