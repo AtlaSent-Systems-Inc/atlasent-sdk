@@ -3,9 +3,46 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+# ── Rate-limit state (shared by evaluate + verify) ───────────────────
+
+
+@dataclass(frozen=True)
+class RateLimitState:
+    """Per-key rate-limit state parsed from the server's
+    ``X-RateLimit-*`` response headers.
+
+    Present on every authenticated response (success and 429) when the
+    server emits the headers. ``None`` on older deployments or on
+    internal endpoints that skip per-key rate limiting.
+
+    Consumers should check :attr:`remaining` and sleep until
+    :attr:`reset_at` to preemptively back off before hitting a 429::
+
+        result = client.evaluate(...)
+        if result.rate_limit and result.rate_limit.remaining < 10:
+            time.sleep(
+                (result.rate_limit.reset_at - datetime.now(timezone.utc))
+                .total_seconds()
+            )
+
+    Attributes:
+        limit: Value of ``X-RateLimit-Limit`` — the per-minute budget.
+        remaining: Value of ``X-RateLimit-Remaining`` — unused budget
+            in the current window.
+        reset_at: Parsed ``X-RateLimit-Reset`` — the UTC instant when
+            the current window's counter zeroes. Accepts either a
+            unix-seconds integer or an ISO 8601 string on the wire.
+    """
+
+    limit: int
+    remaining: int
+    reset_at: datetime
+
 
 # ── Evaluate ──────────────────────────────────────────────────────────
 
@@ -33,6 +70,9 @@ class EvaluateResult(BaseModel):
         reason: Human-readable explanation of the decision.
         audit_hash: Hash-chained audit trail entry.
         timestamp: ISO 8601 timestamp of the decision.
+        rate_limit: Per-key rate-limit state parsed from ``X-RateLimit-*``
+            headers on this response. ``None`` when the server didn't
+            emit the headers.
     """
 
     decision: bool = Field(..., alias="permitted")
@@ -40,8 +80,9 @@ class EvaluateResult(BaseModel):
     reason: str = ""
     audit_hash: str = ""
     timestamp: str = ""
+    rate_limit: RateLimitState | None = None
 
-    model_config = {"populate_by_name": True}
+    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
 
 
 # ── Verify ────────────────────────────────────────────────────────────
@@ -67,14 +108,18 @@ class VerifyResult(BaseModel):
         valid: Whether the permit is still valid.
         permit_hash: The permit hash returned by the API.
         timestamp: ISO 8601 timestamp of the verification.
+        rate_limit: Per-key rate-limit state parsed from ``X-RateLimit-*``
+            headers on this response. ``None`` when the server didn't
+            emit the headers.
     """
 
     outcome: str = ""
     valid: bool = Field(..., alias="verified")
     permit_hash: str = ""
     timestamp: str = ""
+    rate_limit: RateLimitState | None = None
 
-    model_config = {"populate_by_name": True}
+    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
 
 
 # ── Gate (convenience) ────────────────────────────────────────────────
