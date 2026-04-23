@@ -94,6 +94,31 @@ class GateResult(BaseModel):
 # ── Authorize (public top-level API) ─────────────────────────────────
 
 
+@dataclass(frozen=True)
+class Permit:
+    """Successful return value from :func:`atlasent.protect` — the
+    action is authorized end-to-end (evaluate passed AND the resulting
+    permit verified).
+
+    Shape mirrors the TypeScript SDK's ``Permit`` interface for
+    cross-language parity; every attribute is also a field on the
+    underlying API responses.
+
+    Attributes:
+        permit_id: Opaque permit / decision identifier.
+        permit_hash: Verification hash bound to the permit.
+        audit_hash: Hash-chained audit-trail entry (21 CFR Part 11).
+        reason: Human-readable explanation from the policy engine.
+        timestamp: ISO 8601 timestamp of the verification.
+    """
+
+    permit_id: str
+    permit_hash: str
+    audit_hash: str
+    reason: str = ""
+    timestamp: str = ""
+
+
 @dataclass
 class AuthorizationResult:
     """Result of an :func:`atlasent.authorize` call.

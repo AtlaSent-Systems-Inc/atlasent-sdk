@@ -12,6 +12,7 @@ import httpx
 from ._version import __version__
 from .exceptions import (
     AtlaSentDenied,
+    AtlaSentDeniedError,
     AtlaSentError,
     PermissionDeniedError,
     RateLimitError,
@@ -21,6 +22,7 @@ from .models import (
     EvaluateRequest,
     EvaluateResult,
     GateResult,
+    Permit,
     VerifyRequest,
     VerifyResult,
 )
@@ -213,6 +215,76 @@ class AtlaSentClient:
         result = VerifyResult.model_validate(data)
         logger.info("verify token=%s valid=%s", permit_token, result.valid)
         return result
+
+    def protect(
+        self,
+        *,
+        agent: str,
+        action: str,
+        context: dict[str, Any] | None = None,
+    ) -> Permit:
+        """Authorize an action end-to-end. The category primitive.
+
+        On allow, returns a verified :class:`Permit` (both
+        ``/v1-evaluate`` and ``/v1-verify-permit`` have cleared). On
+        anything else, raises — never returns a "denied" value:
+
+        - :class:`AtlaSentDeniedError` — policy denied the action, or
+          the resulting permit failed verification. Fail-closed:
+          if this raises, the action MUST NOT proceed.
+        - :class:`AtlaSentError` — transport, timeout, auth, rate
+          limit, or server error. Same fail-closed contract.
+
+        Matches the TypeScript SDK's ``atlasent.protect()`` for
+        cross-language parity.
+
+        Example::
+
+            from atlasent import AtlaSentClient
+
+            client = AtlaSentClient(api_key="ask_live_...")
+
+            permit = client.protect(
+                agent="deploy-bot",
+                action="deploy_to_production",
+                context={"commit": commit, "approver": approver},
+            )
+            # If we got here, AtlaSent authorized it end-to-end.
+            # Log permit.permit_id + permit.audit_hash for audit.
+        """
+        ctx = context or {}
+        try:
+            eval_result = self.evaluate(action, agent, ctx)
+        except AtlaSentDenied as exc:
+            audit_hash = ""
+            if exc.response_body is not None:
+                candidate = exc.response_body.get("audit_hash")
+                if isinstance(candidate, str):
+                    audit_hash = candidate
+            raise AtlaSentDeniedError(
+                decision="deny",
+                evaluation_id=exc.permit_token,
+                reason=exc.reason,
+                audit_hash=audit_hash,
+            ) from None
+
+        verify_result = self.verify(eval_result.permit_token, action, agent, ctx)
+
+        if not verify_result.valid:
+            raise AtlaSentDeniedError(
+                decision="deny",
+                evaluation_id=eval_result.permit_token,
+                reason=f"Permit failed verification ({verify_result.outcome})",
+                audit_hash=eval_result.audit_hash,
+            )
+
+        return Permit(
+            permit_id=eval_result.permit_token,
+            permit_hash=verify_result.permit_hash,
+            audit_hash=eval_result.audit_hash,
+            reason=eval_result.reason,
+            timestamp=verify_result.timestamp,
+        )
 
     def gate(
         self,
