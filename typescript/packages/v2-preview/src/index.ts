@@ -20,3 +20,12 @@ export type {
   ProofVerificationResult,
   ProofVerificationStatus,
 } from "./types.js";
+export {
+  replayProofBundle,
+  signedBytesForProof,
+  verifyProof,
+  type ProofBundleVerificationResult,
+  type ProofVerificationEntry,
+  type ReplayProofBundleOptions,
+  type VerifyKey,
+} from "./verifyProof.js";
