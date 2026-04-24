@@ -4,6 +4,33 @@ All notable changes to `@atlasent/sdk` are documented here. The SDK
 follows [semver](https://semver.org/): breaking changes bump the major
 (or minor while on 0.x).
 
+## Unreleased
+
+### Added
+
+- **Shared audit wire types.** `AuditEvent`, `AuditEventsPage`,
+  `AuditEventsQuery`, and `AuditExport` are now exported from
+  `@atlasent/sdk`, sourced from the `/v1/audit/*` wire contract served
+  by the `v1-audit` edge function. Consumers that previously
+  hand-rolled these shapes (or imported from an internal package) can
+  now import them directly:
+
+      import type {
+        AuditEvent,
+        AuditEventsPage,
+        AuditEventsQuery,
+        AuditExport,
+      } from "@atlasent/sdk";
+
+  Companion `AuditDecision` and `AuditExportSignatureStatus` unions
+  are exported for completeness. Type-level sync assertions
+  (`test/audit-types.test.ts`) lock the field set against the server
+  docstring so wire drift fails CI.
+
+### Non-breaking
+
+This is purely additive — existing exports are unchanged.
+
 ## 1.4.0 — 2026-04-23
 
 ### Added

@@ -58,6 +58,14 @@ export {
   type VerifyBundleOptions,
   type VerifyKey,
 } from "./auditBundle.js";
+export type {
+  AuditDecision,
+  AuditEvent,
+  AuditEventsPage,
+  AuditEventsQuery,
+  AuditExport,
+  AuditExportSignatureStatus,
+} from "./audit.js";
 
 /**
  * Default export. The opinionated, category-defining entry point:
