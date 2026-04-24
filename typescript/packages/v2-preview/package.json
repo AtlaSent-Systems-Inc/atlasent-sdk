@@ -1,0 +1,28 @@
+{
+  "name": "@atlasent/sdk-v2-preview",
+  "version": "2.0.0-preview.0",
+  "description": "Preview package for the v2 AtlaSent SDK. DO NOT USE IN PRODUCTION — surfaces here are under active design and will change without semver discipline until v2 GA.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vitest": "^1.5.0"
+  },
+  "keywords": [
+    "atlasent",
+    "v2-preview",
+    "proof",
+    "verifiable"
+  ]
+}
