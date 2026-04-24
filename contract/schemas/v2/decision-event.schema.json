@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v2/decision-event.schema.json",
+  "title": "DecisionEvent",
+  "description": "Server-sent event emitted on GET /v2/decisions:subscribe (Pillar 3). Each event is one JSON object on the SSE data line. Seven event types cover the full permit lifecycle; the 'type' field discriminates the union, and 'id' doubles as the SSE Last-Event-ID so clients resume cleanly after reconnect. Open question (see PROPOSALS/001-streaming-evaluate.md): should we reuse this envelope for the interim-decision case of streaming evaluate, or keep streaming evaluate on its own path? Recommendation: reuse — one DecisionEvent union across both streaming surfaces.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "org_id", "emitted_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Monotonic per-org event id. SDKs echo this back in the Last-Event-ID header on reconnect so the server replays from the right position."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "permit_issued",
+        "verified",
+        "consumed",
+        "revoked",
+        "escalated",
+        "hold_resolved",
+        "rate_limit_state"
+      ],
+      "description": "Event type discriminator. 'rate_limit_state' is an observability channel — the server emits it when a client's remaining budget crosses a threshold (default: 10% remaining) so dashboards can show back-pressure without polling."
+    },
+    "org_id": {
+      "type": "string",
+      "description": "Organization the event belongs to. Always present so subscribers multiplexing multiple keys can route locally."
+    },
+    "emitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp the event was emitted by the server (not when the underlying action occurred — that's carried on the nested payload)."
+    },
+    "permit_id": {
+      "type": "string",
+      "description": "Decision id this event relates to. Present on every type except 'rate_limit_state'."
+    },
+    "actor_id": {
+      "type": ["string", "null"],
+      "description": "The actor that triggered the event — evaluator, verifier, revoker, escalator. Null when the system itself triggered (e.g. TTL-driven revocation)."
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Per-type payload. Unknown types — or unknown fields within a known type — MUST be forwarded by SDKs as opaque data so old clients against new servers continue to receive events. See $defs for the canonical shape of each type."
+    }
+  },
+  "$defs": {
+    "PermitIssuedPayload": {
+      "type": "object",
+      "required": ["decision", "audit_hash", "agent", "action"],
+      "properties": {
+        "decision": { "type": "string", "enum": ["allow", "deny", "hold", "escalate"] },
+        "agent": { "type": "string" },
+        "action": { "type": "string" },
+        "audit_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "reason": { "type": "string" }
+      }
+    },
+    "VerifiedPayload": {
+      "type": "object",
+      "required": ["permit_hash", "outcome"],
+      "properties": {
+        "permit_hash": { "type": "string" },
+        "outcome": { "type": "string" }
+      }
+    },
+    "ConsumedPayload": {
+      "type": "object",
+      "required": ["proof_id", "execution_status", "audit_hash"],
+      "properties": {
+        "proof_id": { "type": "string", "format": "uuid" },
+        "execution_status": { "type": "string", "enum": ["executed", "failed"] },
+        "audit_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "RevokedPayload": {
+      "type": "object",
+      "required": ["reason", "revoker_id"],
+      "properties": {
+        "reason": { "type": "string" },
+        "revoker_id": { "type": ["string", "null"], "description": "Null when the system auto-revoked on TTL." }
+      }
+    },
+    "EscalatedPayload": {
+      "type": "object",
+      "required": ["to", "reason"],
+      "properties": {
+        "to": { "type": "string", "description": "Escalation queue / approver group identifier." },
+        "reason": { "type": "string" }
+      }
+    },
+    "HoldResolvedPayload": {
+      "type": "object",
+      "required": ["resolution", "resolved_by"],
+      "properties": {
+        "resolution": { "type": "string", "enum": ["approved", "denied", "expired"] },
+        "resolved_by": { "type": ["string", "null"] }
+      }
+    },
+    "RateLimitStatePayload": {
+      "type": "object",
+      "required": ["limit", "remaining", "reset_at"],
+      "properties": {
+        "limit": { "type": "integer", "minimum": 0 },
+        "remaining": { "type": "integer", "minimum": 0 },
+        "reset_at": {
+          "oneOf": [
+            { "type": "integer", "minimum": 0, "description": "Unix seconds." },
+            { "type": "string", "format": "date-time" }
+          ],
+          "description": "Same dual-format accepted by /v1's X-RateLimit-Reset."
+        }
+      }
+    }
+  }
+}

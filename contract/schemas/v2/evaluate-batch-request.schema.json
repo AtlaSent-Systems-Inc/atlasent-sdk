@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v2/evaluate-batch-request.schema.json",
+  "title": "EvaluateBatchRequest",
+  "description": "Wire payload sent to POST /v2/evaluate:batch. Pillar 2 of V2: one HTTP call for N decisions, one rate-limit decrement for the whole batch, one hash-chain entry listing every decision id. Ordering is preserved — responses[i] is the decision for requests[i].",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["requests", "api_key"],
+  "properties": {
+    "requests": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/BatchEvaluateItem" },
+      "description": "Per-item evaluate requests. Upper bound (1000) matches the v1 rate-limit bucket size; raising it means revisiting per-key budgets. Open question: should items share a single api_key (implied: they do, from the envelope) or allow per-item overrides? Recommendation: no — one key per batch keeps auth simple and avoids fan-out across orgs."
+    },
+    "api_key": {
+      "type": "string",
+      "description": "API key echoed in the body, same semantics as /v1-evaluate's api_key field."
+    }
+  },
+  "$defs": {
+    "BatchEvaluateItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "agent", "context"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Same semantics as /v1-evaluate-request.action."
+        },
+        "agent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Same semantics as /v1-evaluate-request.agent."
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Same semantics as /v1-evaluate-request.context."
+        },
+        "payload_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Optional SHA-256 hex of canonicalJSON(payload), for batches that also opt into the Pillar 9 proof flow. When present on a batch item, the corresponding response item carries proof_id and proof_status for later consume."
+        },
+        "target": {
+          "type": "string",
+          "description": "Optional target resource identifier. Mirrors Proof.target when the item opts into the Pillar 9 proof flow."
+        }
+      }
+    }
+  }
+}

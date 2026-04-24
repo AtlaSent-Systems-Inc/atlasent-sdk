@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v2/evaluate-batch-response.schema.json",
+  "title": "EvaluateBatchResponse",
+  "description": "Response from POST /v2/evaluate:batch. items[i] corresponds to the request at requests[i] in the inbound payload — order preservation is a wire guarantee. Each item is a tagged union: permitted=true carries the same fields as v1 EvaluateResponse, permitted=false carries a denial with reason + audit_hash so callers can log denied attempts without a second round-trip.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["batch_id", "items"],
+  "properties": {
+    "batch_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID identifying the batch. Surfaces as batch_id on every item and as a single hash-chain entry in audit_events listing all contained decision_ids."
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/BatchEvaluateResponseItem" },
+      "description": "Ordered per-item decisions. Same length as the inbound requests array; items[i] decides requests[i]."
+    }
+  },
+  "$defs": {
+    "BatchEvaluateResponseItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "permitted",
+        "decision_id",
+        "reason",
+        "audit_hash",
+        "timestamp",
+        "batch_id"
+      ],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based position in the inbound requests array. Redundant with array ordering but carried so callers can regroup after parallel post-processing."
+        },
+        "permitted": {
+          "type": "boolean",
+          "description": "True on allow, false on deny/hold/escalate. Hold/escalate surface via the reason field — SDKs translate into higher-level AtlaSentDenied / hold-pending states."
+        },
+        "decision_id": {
+          "type": "string",
+          "description": "Per-item permit id. Same semantics as v1 EvaluateResponse.decision_id. Pass to /v1-verify-permit (or /v2/permits/:id/verify) independently of the batch."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable explanation. Always present; empty string if the policy engine has nothing to add on allow."
+        },
+        "audit_hash": {
+          "type": "string",
+          "description": "Per-item audit-chain hash. Present even on deny so audit exports carry a complete record."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of this item's decision. Items in the same batch share a batch_id but can have distinct timestamps (the engine evaluates them as a stream)."
+        },
+        "batch_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Echo of the top-level batch_id, repeated per item so consumers that process items independently still have the correlation."
+        },
+        "proof_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Present only when the corresponding request carried a payload_hash (Pillar 9 opt-in). Points to the proof row this decision will be consumed against."
+        },
+        "proof_status": {
+          "type": "string",
+          "enum": ["pending", "executed", "failed", "not_applicable"],
+          "description": "Pillar 9 proof SLA. 'not_applicable' means the request didn't opt in to the proof flow. 'pending' means evaluate has cleared but consume has not. 'executed' / 'failed' after consume. Callers poll via GET /v2/proofs/:id."
+        }
+      }
+    }
+  }
+}

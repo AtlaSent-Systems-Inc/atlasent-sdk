@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v2/consume-request.schema.json",
+  "title": "ConsumeRequest",
+  "description": "Wire payload sent to POST /v2/permits/:id/consume. Closes the protect() lifecycle: evaluate → verifyPermit → callback → CONSUME. The raw payload is never sent — only its canonical hash — so the server can bind the proof to what the callback actually ran against without ever seeing customer data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["permit_id", "payload_hash", "execution_status", "api_key"],
+  "properties": {
+    "permit_id": {
+      "type": "string",
+      "description": "The decision_id from the originating /v2/evaluate call."
+    },
+    "payload_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 hex of canonicalJSON(payload). Server cross-checks against the hash submitted on evaluate; mismatch = payload_hash_mismatch on verify."
+    },
+    "execution_status": {
+      "type": "string",
+      "enum": ["executed", "failed"],
+      "description": "Outcome of the wrapped callback. On 'failed', the SDK still calls consume so the proof records the attempt — the original error is re-thrown to the caller unchanged."
+    },
+    "execution_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Optional SHA-256 hex of execution-result metadata (e.g. deploy sha). Omit when the caller has nothing to bind. Open question: should we accept a free-form metadata object and hash it server-side? Recommendation: no — client-side hashing keeps payload bodies off the wire."
+    },
+    "api_key": {
+      "type": "string",
+      "description": "API key echoed in the body for wire parity with /v1-evaluate."
+    }
+  }
+}
