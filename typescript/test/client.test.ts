@@ -589,3 +589,238 @@ describe("keySelf()", () => {
     await expect(client.keySelf()).rejects.toBeInstanceOf(AtlaSentError);
   });
 });
+
+describe("listAuditEvents()", () => {
+  const EVENT_ALPHA = {
+    id: "evt_a",
+    org_id: "org-1",
+    sequence: 1,
+    type: "evaluate.allow",
+    decision: "allow" as const,
+    actor_id: "agent-1",
+    resource_type: null,
+    resource_id: null,
+    payload: { action: "read_data" },
+    hash: "a".repeat(64),
+    previous_hash: "0".repeat(64),
+    occurred_at: "2026-04-21T00:00:00Z",
+    created_at: "2026-04-21T00:00:01Z",
+  };
+
+  const EVENTS_PAGE_WIRE = {
+    events: [EVENT_ALPHA],
+    total: 1,
+    next_cursor: "cursor_beta",
+  };
+
+  it("issues a GET to /v1-audit/events and preserves snake_case wire fields", async () => {
+    const fetchImpl = mockFetch((url, init) => {
+      expect(url).toMatch(/\/v1-audit\/events$/);
+      expect(init.method).toBe("GET");
+      expect(init.body).toBeUndefined();
+      expect((init.headers as Record<string, string>).Authorization).toBe(
+        "Bearer ask_live_test",
+      );
+      return jsonResponse(EVENTS_PAGE_WIRE);
+    });
+    const client = makeClient(fetchImpl);
+    const result = await client.listAuditEvents();
+
+    expect(result.total).toBe(1);
+    expect(result.next_cursor).toBe("cursor_beta");
+    expect(result.events[0]).toMatchObject({
+      id: "evt_a",
+      previous_hash: "0".repeat(64),
+      hash: "a".repeat(64),
+      decision: "allow",
+    });
+    expect(result.rateLimit).toBeNull();
+  });
+
+  it("serializes all query fields as snake_case URL params", async () => {
+    const fetchImpl = mockFetch((url) => {
+      expect(url).toContain("/v1-audit/events?");
+      const parsed = new URL(url);
+      expect(parsed.searchParams.get("types")).toBe(
+        "evaluate.allow,policy.updated",
+      );
+      expect(parsed.searchParams.get("actor_id")).toBe("agent-1");
+      expect(parsed.searchParams.get("from")).toBe("2026-04-20T00:00:00Z");
+      expect(parsed.searchParams.get("to")).toBe("2026-04-22T00:00:00Z");
+      expect(parsed.searchParams.get("limit")).toBe("25");
+      expect(parsed.searchParams.get("cursor")).toBe("abc");
+      return jsonResponse({ events: [], total: 0 });
+    });
+    const client = makeClient(fetchImpl);
+    await client.listAuditEvents({
+      types: "evaluate.allow,policy.updated",
+      actor_id: "agent-1",
+      from: "2026-04-20T00:00:00Z",
+      to: "2026-04-22T00:00:00Z",
+      limit: 25,
+      cursor: "abc",
+    });
+  });
+
+  it("sends no query string when the filter is empty", async () => {
+    const fetchImpl = mockFetch((url) => {
+      expect(url).toMatch(/\/v1-audit\/events$/);
+      expect(url).not.toContain("?");
+      return jsonResponse({ events: [], total: 0 });
+    });
+    const client = makeClient(fetchImpl);
+    await client.listAuditEvents({});
+  });
+
+  it("surfaces rateLimit when X-RateLimit-* headers are present", async () => {
+    const fetchImpl = mockFetch(() =>
+      new Response(JSON.stringify(EVENTS_PAGE_WIRE), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "X-RateLimit-Limit": "500",
+          "X-RateLimit-Remaining": "499",
+          "X-RateLimit-Reset": "1714070000",
+        },
+      }),
+    );
+    const client = makeClient(fetchImpl);
+    const result = await client.listAuditEvents();
+    expect(result.rateLimit).toEqual({
+      limit: 500,
+      remaining: 499,
+      resetAt: new Date(1_714_070_000 * 1000),
+    });
+  });
+
+  it("throws bad_response when events is not an array", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse({ total: 0 }));
+    const client = makeClient(fetchImpl);
+    await expect(client.listAuditEvents()).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+
+  it("throws bad_response when total is missing", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse({ events: [] }));
+    const client = makeClient(fetchImpl);
+    await expect(client.listAuditEvents()).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+});
+
+describe("createAuditExport()", () => {
+  const BUNDLE_WIRE = {
+    export_id: "export-1",
+    org_id: "org-1",
+    events: [
+      {
+        id: "evt-1",
+        org_id: "org-1",
+        sequence: 1,
+        type: "policy.event",
+        decision: null,
+        actor_id: "actor-1",
+        resource_type: "policy",
+        resource_id: "policy-1",
+        payload: { action: "create" },
+        hash: "a".repeat(64),
+        previous_hash: "0".repeat(64),
+        occurred_at: "2026-04-21T00:00:00Z",
+        created_at: "2026-04-21T00:00:00Z",
+      },
+    ],
+    chain_head_hash: "a".repeat(64),
+    chain_integrity_ok: true,
+    tampered_event_ids: [],
+    signature: "sig_bytes_base64url",
+    signature_status: "signed" as const,
+    signing_key_id: "test-key",
+    signed_at: "2026-04-21T00:00:00Z",
+    event_count: 1,
+  };
+
+  it("POSTs to /v1-audit/exports with an empty body by default and returns the bundle verbatim", async () => {
+    const fetchImpl = mockFetch((url, init) => {
+      expect(url).toMatch(/\/v1-audit\/exports$/);
+      expect(init.method).toBe("POST");
+      expect(init.body).toBe("{}");
+      expect((init.headers as Record<string, string>)["Content-Type"]).toBe(
+        "application/json",
+      );
+      return jsonResponse(BUNDLE_WIRE);
+    });
+    const client = makeClient(fetchImpl);
+    const result = await client.createAuditExport();
+
+    expect(result.export_id).toBe("export-1");
+    expect(result.chain_head_hash).toBe("a".repeat(64));
+    expect(result.signature).toBe("sig_bytes_base64url");
+    expect(result.signature_status).toBe("signed");
+    expect(result.signing_key_id).toBe("test-key");
+    expect(result.events).toHaveLength(1);
+    expect(result.rateLimit).toBeNull();
+  });
+
+  it("forwards the filter fields as JSON body", async () => {
+    const fetchImpl = mockFetch((url, init) => {
+      const body = JSON.parse(init.body as string);
+      expect(body).toEqual({
+        types: "evaluate.allow",
+        actor_id: "agent-1",
+        from: "2026-04-20T00:00:00Z",
+        to: "2026-04-22T00:00:00Z",
+      });
+      return jsonResponse(BUNDLE_WIRE);
+    });
+    const client = makeClient(fetchImpl);
+    await client.createAuditExport({
+      types: "evaluate.allow",
+      actor_id: "agent-1",
+      from: "2026-04-20T00:00:00Z",
+      to: "2026-04-22T00:00:00Z",
+    });
+  });
+
+  it("surfaces rateLimit when X-RateLimit-* headers are present", async () => {
+    const fetchImpl = mockFetch(() =>
+      new Response(JSON.stringify(BUNDLE_WIRE), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "X-RateLimit-Limit": "10",
+          "X-RateLimit-Remaining": "9",
+          "X-RateLimit-Reset": "1714070000",
+        },
+      }),
+    );
+    const client = makeClient(fetchImpl);
+    const result = await client.createAuditExport();
+    expect(result.rateLimit).toEqual({
+      limit: 10,
+      remaining: 9,
+      resetAt: new Date(1_714_070_000 * 1000),
+    });
+  });
+
+  it("throws bad_response when export_id is missing", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({ chain_head_hash: "x", events: [] }),
+    );
+    const client = makeClient(fetchImpl);
+    await expect(client.createAuditExport()).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+
+  it("throws bad_response when events is not an array", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({ export_id: "e", chain_head_hash: "x" }),
+    );
+    const client = makeClient(fetchImpl);
+    await expect(client.createAuditExport()).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+});

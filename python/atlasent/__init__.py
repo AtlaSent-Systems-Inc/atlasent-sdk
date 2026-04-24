@@ -23,6 +23,13 @@ older data-not-exception idiom if you prefer to branch on
 
 from ._version import __version__
 from .async_client import AsyncAtlaSentClient
+from .audit import (
+    AuditDecision,
+    AuditEvent,
+    AuditEventsResult,
+    AuditExportResult,
+    AuditExportSignatureStatus,
+)
 from .audit_bundle import (
     BundleVerificationResult,
     VerifyKey,
@@ -86,4 +93,9 @@ __all__ = [
     "verify_audit_bundle",
     "BundleVerificationResult",
     "VerifyKey",
+    "AuditDecision",
+    "AuditEvent",
+    "AuditEventsResult",
+    "AuditExportResult",
+    "AuditExportSignatureStatus",
 ]

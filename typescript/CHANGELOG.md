@@ -8,6 +8,36 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ### Added
 
+- **`AtlaSentClient.listAuditEvents()` and `createAuditExport()`.**
+  Two new client methods close the long-standing `/v1-audit` parity
+  gap. Together with the offline verifier shipped in 1.3.0 and the
+  shared wire types shipped earlier this release, a customer can now
+  go from "I have an API key" to "I have a signed, offline-verifiable
+  bundle of my org's audit events" without leaving the SDK:
+
+      const page = await client.listAuditEvents({
+        types: "evaluate.allow,policy.updated",
+        limit: 100,
+      });
+      // → { events: AuditEvent[], total, next_cursor?, rateLimit }
+
+      const bundle = await client.createAuditExport({
+        from: "2026-04-01T00:00:00Z",
+        to: "2026-04-30T23:59:59Z",
+      });
+      // → signed bundle; hand straight to verifyAuditBundle(bundle, keys)
+
+  Both methods return `*Result` types that extend the pure wire shape
+  with a camelCase `rateLimit` field so rate-limit state surfaces
+  consistently with `evaluate()` / `verifyPermit()`. The signed
+  envelope fields (`export_id`, `org_id`, `chain_head_hash`,
+  `event_count`, `signed_at`, `events`, `signature`) are preserved
+  byte-for-byte, so `createAuditExport`'s return value drops straight
+  into the offline verifier.
+
+  `AuditEventsResult` and `AuditExportRequest` are exported alongside
+  `AuditExportResult` for downstream typing.
+
 - **Shared audit wire types.** `AuditEvent`, `AuditEventsPage`,
   `AuditEventsQuery`, and `AuditExport` are now exported from
   `@atlasent/sdk`, sourced from the `/v1/audit/*` wire contract served
@@ -29,7 +59,7 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ### Non-breaking
 
-This is purely additive — existing exports are unchanged.
+This release is purely additive — existing exports are unchanged.
 
 ## 1.4.0 — 2026-04-23
 

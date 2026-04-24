@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from ._version import __version__
+from .audit import AuditEventsResult, AuditExportResult
 from .exceptions import (
     AtlaSentDenied,
     AtlaSentDeniedError,
@@ -451,6 +452,133 @@ class AtlaSentClient:
             {**data, "rate_limit": rate_limit}
         )
 
+    def list_audit_events(
+        self,
+        *,
+        types: str | None = None,
+        actor_id: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> AuditEventsResult:
+        """List persisted audit events (``GET /v1-audit/events``).
+
+        Returned rows are wire-identical with the server — snake_case
+        field names, including ``previous_hash`` and the ``hash`` chain
+        — so the response can be fed to
+        :func:`atlasent.verify_audit_bundle` when paired with a signed
+        export.
+
+        Args:
+            types: Comma-joined list of event types (e.g.
+                ``"evaluate.allow,policy.updated"``).
+            actor_id: Filter to a single actor.
+            from_: Inclusive lower bound on ``occurred_at`` (ISO 8601).
+                Trailing underscore avoids the Python keyword.
+            to: Inclusive upper bound on ``occurred_at``.
+            limit: Page size. Server default 50, max 500.
+            cursor: Opaque cursor returned as ``next_cursor`` by the
+                prior page.
+
+        Raises:
+            AtlaSentError: Network error, timeout, unexpected response,
+                or malformed payload.
+            RateLimitError: HTTP 429.
+        """
+        params: dict[str, str] = {}
+        if types:
+            params["types"] = types
+        if actor_id:
+            params["actor_id"] = actor_id
+        if from_:
+            params["from"] = from_
+        if to:
+            params["to"] = to
+        if limit is not None:
+            params["limit"] = str(limit)
+        if cursor:
+            params["cursor"] = cursor
+
+        logger.debug("list_audit_events params=%r", params)
+        data, rate_limit, request_id = self._request(
+            "GET", "/v1-audit/events", None, params=params
+        )
+
+        if not isinstance(data.get("events"), list) or not isinstance(
+            data.get("total"), int
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-audit/events response: missing `events` or `total`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        return AuditEventsResult.model_validate({**data, "rate_limit": rate_limit})
+
+    def create_audit_export(
+        self,
+        *,
+        types: str | None = None,
+        actor_id: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
+    ) -> AuditExportResult:
+        """Request a signed audit-export bundle
+        (``POST /v1-audit/exports``).
+
+        The returned :class:`AuditExportResult` wraps the raw server
+        JSON in :attr:`AuditExportResult.bundle`. Pass that dict to
+        :func:`atlasent.verify_audit_bundle` to run the offline
+        integrity + signature check::
+
+            result = client.create_audit_export()
+            outcome = atlasent.verify_audit_bundle(
+                result.bundle, keys=[...]
+            )
+
+        All filter args are optional; omit for a full-org bundle.
+
+        Args:
+            types: Comma-joined list of event types.
+            actor_id: Filter to a single actor.
+            from_: Inclusive lower bound on ``occurred_at``.
+            to: Inclusive upper bound on ``occurred_at``.
+
+        Raises:
+            AtlaSentError: Network error, timeout, unexpected response,
+                or malformed payload.
+            RateLimitError: HTTP 429.
+        """
+        payload: dict[str, Any] = {}
+        if types:
+            payload["types"] = types
+        if actor_id:
+            payload["actor_id"] = actor_id
+        if from_:
+            payload["from"] = from_
+        if to:
+            payload["to"] = to
+
+        logger.debug("create_audit_export filter=%r", payload)
+        data, rate_limit, request_id = self._post("/v1-audit/exports", payload)
+
+        if (
+            not isinstance(data.get("export_id"), str)
+            or not isinstance(data.get("chain_head_hash"), str)
+            or not isinstance(data.get("events"), list)
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-audit/exports response: missing "
+                "`export_id`, `chain_head_hash`, or `events`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        return AuditExportResult(bundle=data, rate_limit=rate_limit)
+
     # ── internals ─────────────────────────────────────────────────
 
     def _post(
@@ -479,10 +607,14 @@ class AtlaSentClient:
         method: str,
         path: str,
         payload: dict[str, Any] | None,
+        *,
+        params: dict[str, str] | None = None,
     ) -> tuple[dict[str, Any], RateLimitState | None, str]:
         """Shared retry + error-mapping core for POST / GET.
 
         ``payload`` is serialized as JSON for POST; GET sends no body.
+        ``params`` is only honored for GET and is serialized as URL
+        query parameters.
         """
         url = f"{self._base_url}{path}"
         request_id = uuid.uuid4().hex[:12]
@@ -493,7 +625,9 @@ class AtlaSentClient:
                 if method == "POST":
                     response = self._client.post(url, json=payload, headers=headers)
                 else:
-                    response = self._client.get(url, headers=headers)
+                    response = self._client.get(
+                        url, headers=headers, params=params
+                    )
             except httpx.TimeoutException as exc:
                 logger.warning(
                     "%s timeout (attempt %d/%d)",

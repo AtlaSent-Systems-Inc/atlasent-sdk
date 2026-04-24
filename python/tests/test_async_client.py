@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from atlasent.async_client import AsyncAtlaSentClient
+from atlasent.audit import AuditEventsResult, AuditExportResult
 from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
 from atlasent.models import ApiKeySelfResult, EvaluateResult, GateResult, VerifyResult
 
@@ -552,3 +553,188 @@ class TestAsyncKeySelf:
         assert result.rate_limit is not None
         assert result.rate_limit.limit == 600
         assert result.rate_limit.remaining == 0
+
+
+# ── list_audit_events / create_audit_export ──────────────────────────
+
+
+AUDIT_EVENT_ALPHA = {
+    "id": "evt-1",
+    "org_id": "org-1",
+    "sequence": 1,
+    "type": "evaluate.allow",
+    "decision": "allow",
+    "actor_id": "agent-1",
+    "resource_type": None,
+    "resource_id": None,
+    "payload": {"action": "read_data"},
+    "hash": "a" * 64,
+    "previous_hash": "0" * 64,
+    "occurred_at": "2026-04-21T00:00:00Z",
+    "created_at": "2026-04-21T00:00:01Z",
+}
+
+AUDIT_EVENTS_PAGE = {
+    "events": [AUDIT_EVENT_ALPHA],
+    "total": 1,
+    "next_cursor": "cursor_beta",
+}
+
+AUDIT_EXPORT_BUNDLE = {
+    "export_id": "export-1",
+    "org_id": "org-1",
+    "events": [AUDIT_EVENT_ALPHA],
+    "chain_head_hash": "a" * 64,
+    "chain_integrity_ok": True,
+    "tampered_event_ids": [],
+    "signature": "sig_bytes_base64url",
+    "signature_status": "signed",
+    "signing_key_id": "test-key",
+    "signed_at": "2026-04-21T00:00:00Z",
+    "event_count": 1,
+}
+
+
+class TestAsyncListAuditEvents:
+    @pytest.mark.asyncio
+    async def test_issues_get_with_snake_case_params(self, async_client, mocker):
+        get_mock = mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(mocker, json_data=AUDIT_EVENTS_PAGE),
+        )
+        result = await async_client.list_audit_events(
+            types="evaluate.allow",
+            actor_id="agent-1",
+            from_="2026-04-20T00:00:00Z",
+            to="2026-04-22T00:00:00Z",
+            limit=25,
+            cursor="abc",
+        )
+
+        assert isinstance(result, AuditEventsResult)
+        assert result.total == 1
+        assert result.next_cursor == "cursor_beta"
+        assert result.events[0].id == "evt-1"
+        assert "/v1-audit/events" in get_mock.call_args[0][0]
+        assert get_mock.call_args.kwargs["params"] == {
+            "types": "evaluate.allow",
+            "actor_id": "agent-1",
+            "from": "2026-04-20T00:00:00Z",
+            "to": "2026-04-22T00:00:00Z",
+            "limit": "25",
+            "cursor": "abc",
+        }
+
+    @pytest.mark.asyncio
+    async def test_omits_unset_params(self, async_client, mocker):
+        get_mock = mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(mocker, json_data={"events": [], "total": 0}),
+        )
+        await async_client.list_audit_events()
+        assert get_mock.call_args.kwargs["params"] == {}
+
+    @pytest.mark.asyncio
+    async def test_surfaces_rate_limit_headers(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(
+                mocker,
+                json_data=AUDIT_EVENTS_PAGE,
+                headers={
+                    "x-ratelimit-limit": "500",
+                    "x-ratelimit-remaining": "499",
+                    "x-ratelimit-reset": "1714070000",
+                },
+            ),
+        )
+        result = await async_client.list_audit_events()
+        assert result.rate_limit is not None
+        assert result.rate_limit.remaining == 499
+
+    @pytest.mark.asyncio
+    async def test_bad_response_on_missing_events(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(mocker, json_data={"total": 0}),
+        )
+        with pytest.raises(AtlaSentError) as excinfo:
+            await async_client.list_audit_events()
+        assert excinfo.value.code == "bad_response"
+
+
+class TestAsyncCreateAuditExport:
+    @pytest.mark.asyncio
+    async def test_posts_empty_body_by_default_and_preserves_bundle(
+        self, async_client, mocker
+    ):
+        post_mock = mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=AUDIT_EXPORT_BUNDLE),
+        )
+        result = await async_client.create_audit_export()
+
+        assert isinstance(result, AuditExportResult)
+        assert result.bundle is AUDIT_EXPORT_BUNDLE
+        assert result.export_id == "export-1"
+        assert result.signature == "sig_bytes_base64url"
+        assert result.signing_key_id == "test-key"
+        assert "/v1-audit/exports" in post_mock.call_args[0][0]
+        assert post_mock.call_args.kwargs["json"] == {}
+
+    @pytest.mark.asyncio
+    async def test_forwards_filter_fields(self, async_client, mocker):
+        post_mock = mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=AUDIT_EXPORT_BUNDLE),
+        )
+        await async_client.create_audit_export(
+            types="evaluate.allow",
+            actor_id="agent-1",
+            from_="2026-04-20T00:00:00Z",
+            to="2026-04-22T00:00:00Z",
+        )
+        assert post_mock.call_args.kwargs["json"] == {
+            "types": "evaluate.allow",
+            "actor_id": "agent-1",
+            "from": "2026-04-20T00:00:00Z",
+            "to": "2026-04-22T00:00:00Z",
+        }
+
+    @pytest.mark.asyncio
+    async def test_surfaces_rate_limit_headers(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(
+                mocker,
+                json_data=AUDIT_EXPORT_BUNDLE,
+                headers={
+                    "x-ratelimit-limit": "10",
+                    "x-ratelimit-remaining": "9",
+                    "x-ratelimit-reset": "1714070000",
+                },
+            ),
+        )
+        result = await async_client.create_audit_export()
+        assert result.rate_limit is not None
+        assert result.rate_limit.limit == 10
+
+    @pytest.mark.asyncio
+    async def test_bad_response_on_missing_fields(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(
+                mocker, json_data={"chain_head_hash": "x", "events": []}
+            ),
+        )
+        with pytest.raises(AtlaSentError) as excinfo:
+            await async_client.create_audit_export()
+        assert excinfo.value.code == "bad_response"

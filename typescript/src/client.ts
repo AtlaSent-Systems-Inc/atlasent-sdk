@@ -10,6 +10,11 @@
  * all throw {@link AtlaSentError}.
  */
 
+import type {
+  AuditEventsPage,
+  AuditEventsQuery,
+  AuditExport,
+} from "./audit.js";
 import {
   AtlaSentError,
   type AtlaSentErrorCode,
@@ -18,6 +23,9 @@ import {
 import type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
+  AuditEventsResult,
+  AuditExportRequest,
+  AuditExportResult,
   EvaluateRequest,
   EvaluateResponse,
   RateLimitState,
@@ -185,25 +193,98 @@ export class AtlaSentClient {
     };
   }
 
+  /**
+   * List persisted audit events for the authenticated organization
+   * (`GET /v1-audit/events`). Returned rows are wire-identical with
+   * the server: snake_case field names, including `previous_hash` and
+   * the `hash` chain, so the response can be fed straight into the
+   * offline verifier when paired with a signed export.
+   *
+   * `query.types` is a comma-joined list (e.g.
+   * `"evaluate.allow,policy.updated"`). `cursor` is the opaque
+   * `next_cursor` from the prior page. All fields are optional; the
+   * server defaults `limit` to 50 (capped at 500).
+   *
+   * Throws {@link AtlaSentError} on transport / auth failures — same
+   * taxonomy as {@link AtlaSentClient.evaluate}.
+   */
+  async listAuditEvents(
+    query: AuditEventsQuery = {},
+  ): Promise<AuditEventsResult> {
+    const { body: wire, rateLimit } = await this.get<AuditEventsPage>(
+      "/v1-audit/events",
+      buildAuditEventsQuery(query),
+    );
+
+    if (!Array.isArray(wire.events) || typeof wire.total !== "number") {
+      throw new AtlaSentError(
+        "Malformed response from /v1-audit/events: missing `events` or `total`",
+        { code: "bad_response" },
+      );
+    }
+
+    return { ...wire, rateLimit };
+  }
+
+  /**
+   * Request a signed audit export bundle
+   * (`POST /v1-audit/exports`). The returned object is wire-identical
+   * with the server — `signature`, `chain_head_hash`, `events`, and
+   * friends survive untouched so the bundle can be persisted to disk
+   * and handed to the offline verifier (`verifyBundle` /
+   * `verifyAuditBundle`) without any reshaping.
+   *
+   * Pass `filter.types`, `filter.from`, `filter.to`, or `filter.actor_id`
+   * to narrow the export; omit for a full-org bundle. `rateLimit` is
+   * attached alongside the wire fields for observability.
+   *
+   * Throws {@link AtlaSentError} on transport / auth failures — same
+   * taxonomy as {@link AtlaSentClient.evaluate}.
+   */
+  async createAuditExport(
+    filter: AuditExportRequest = {},
+  ): Promise<AuditExportResult> {
+    const { body: wire, rateLimit } = await this.post<AuditExport>(
+      "/v1-audit/exports",
+      filter,
+    );
+
+    if (
+      typeof wire.export_id !== "string" ||
+      typeof wire.chain_head_hash !== "string" ||
+      !Array.isArray(wire.events)
+    ) {
+      throw new AtlaSentError(
+        "Malformed response from /v1-audit/exports: missing `export_id`, `chain_head_hash`, or `events`",
+        { code: "bad_response" },
+      );
+    }
+
+    return { ...wire, rateLimit };
+  }
+
   private async post<T>(
     path: string,
     body: unknown,
   ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
-    return this.request<T>(path, "POST", body);
+    return this.request<T>(path, "POST", body, undefined);
   }
 
   private async get<T>(
     path: string,
+    query?: URLSearchParams,
   ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
-    return this.request<T>(path, "GET", undefined);
+    return this.request<T>(path, "GET", undefined, query);
   }
 
   private async request<T>(
     path: string,
     method: "GET" | "POST",
     body: unknown,
+    query: URLSearchParams | undefined,
   ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
-    const url = `${this.baseUrl}${path}`;
+    const qs = query && Array.from(query).length > 0 ? `?${query.toString()}` : "";
+    const url = `${this.baseUrl}${path}${qs}`;
     const requestId = globalThis.crypto.randomUUID();
 
     const headers: Record<string, string> = {
@@ -406,6 +487,36 @@ async function readServerMessage(response: Response): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Translate an {@link AuditEventsQuery} into `URLSearchParams`. The
+ * server expects snake_case keys (`actor_id`) and accepts
+ * comma-joined values for `types`; numeric `limit` serializes via
+ * `String(n)`. Undefined / empty fields are dropped so the query
+ * string stays minimal.
+ */
+function buildAuditEventsQuery(query: AuditEventsQuery): URLSearchParams {
+  const params = new URLSearchParams();
+  if (query.types !== undefined && query.types !== "") {
+    params.set("types", query.types);
+  }
+  if (query.actor_id !== undefined && query.actor_id !== "") {
+    params.set("actor_id", query.actor_id);
+  }
+  if (query.from !== undefined && query.from !== "") {
+    params.set("from", query.from);
+  }
+  if (query.to !== undefined && query.to !== "") {
+    params.set("to", query.to);
+  }
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  if (query.cursor !== undefined && query.cursor !== "") {
+    params.set("cursor", query.cursor);
+  }
+  return params;
 }
 
 function parseRetryAfter(raw: string | null): number | undefined {

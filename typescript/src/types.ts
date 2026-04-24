@@ -6,6 +6,8 @@
  * SDK side; the client handles snake_case translation on the wire.
  */
 
+import type { AuditEventsPage, AuditExport } from "./audit.js";
+
 /** The two possible policy decisions. */
 export type Decision = "ALLOW" | "DENY";
 
@@ -122,6 +124,53 @@ export interface ApiKeySelfResponse {
   clientIp: string | null;
   /** Server-stored expiry; `null` means the key does not auto-expire. */
   expiresAt: string | null;
+  /**
+   * Per-key rate-limit state for this request's response, parsed from
+   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
+   */
+  rateLimit: RateLimitState | null;
+}
+
+/**
+ * Result of {@link AtlaSentClient.listAuditEvents}. Extends the raw
+ * wire page with a camelCase `rateLimit` alongside the snake_case
+ * wire fields — the wire shape (`events`, `total`, `next_cursor`) is
+ * untouched so callers that pass it to the offline verifier get
+ * byte-identical behaviour.
+ */
+export interface AuditEventsResult extends AuditEventsPage {
+  /**
+   * Per-key rate-limit state for this request's response, parsed from
+   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
+   */
+  rateLimit: RateLimitState | null;
+}
+
+/**
+ * Filter accepted by {@link AtlaSentClient.createAuditExport}. Fields
+ * are snake_case to match the server's `POST /v1-audit/exports`
+ * request body; an empty object requests a full-org bundle.
+ */
+export interface AuditExportRequest {
+  /** Comma-joined list of event types to include (e.g. `"evaluate.allow,policy.updated"`). */
+  types?: string;
+  /** Filter to a single actor. */
+  actor_id?: string;
+  /** Inclusive lower bound on `occurred_at` (ISO 8601). */
+  from?: string;
+  /** Inclusive upper bound on `occurred_at` (ISO 8601). */
+  to?: string;
+}
+
+/**
+ * Result of {@link AtlaSentClient.createAuditExport}. Extends the
+ * signed bundle shape with a camelCase `rateLimit`. The signed
+ * envelope fields (`export_id`, `org_id`, `chain_head_hash`,
+ * `event_count`, `signed_at`, `events`, `signature`) are preserved
+ * byte-for-byte so the object can be handed straight to
+ * `verifyAuditBundle(bundle, keys)`.
+ */
+export interface AuditExportResult extends AuditExport {
   /**
    * Per-key rate-limit state for this request's response, parsed from
    * `X-RateLimit-*` headers. `null` when the server didn't emit them.

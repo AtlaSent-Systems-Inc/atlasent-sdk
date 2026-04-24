@@ -4,6 +4,39 @@
 
 ### Added
 
+- **`list_audit_events()` and `create_audit_export()`.** Both
+  `AtlaSentClient` and `AsyncAtlaSentClient` gain two new methods
+  that close the long-standing `/v1-audit` parity gap. Together with
+  the offline verifier (this release) and the pydantic models added
+  here, customers can go from "I have an API key" to "I have a
+  signed, offline-verifiable bundle of my org's audit events"
+  without leaving the SDK:
+
+        page = client.list_audit_events(
+            types="evaluate.allow,policy.updated",
+            limit=100,
+        )
+        # → AuditEventsResult(events=[AuditEvent(...)], total=..., next_cursor=..., rate_limit=...)
+
+        result = client.create_audit_export(
+            from_="2026-04-01T00:00:00Z",
+            to="2026-04-30T23:59:59Z",
+        )
+        outcome = atlasent.verify_audit_bundle(result.bundle, keys=[...])
+
+  `AuditEventsResult` is a pydantic model; `AuditExportResult` is a
+  dataclass that wraps the raw server JSON so signature verification
+  round-trips byte-for-byte (re-serializing through a pydantic model
+  could reorder nested event fields and break the Ed25519 signature).
+  Convenience accessors — `result.export_id`, `result.events`,
+  `result.signature`, etc. — read from the preserved dict. A snake_case
+  `from_` keyword sidesteps the Python reserved word without drifting
+  from the wire.
+
+  New public exports from `atlasent`:
+  `AuditEvent`, `AuditEventsResult`, `AuditExportResult`,
+  `AuditDecision`, `AuditExportSignatureStatus`.
+
 - **Offline audit-bundle verifier.** `atlasent.verify_bundle(path,
   public_keys_pem=[...])` and the lower-level
   `atlasent.audit_bundle.verify_audit_bundle(bundle, keys)` produce a
