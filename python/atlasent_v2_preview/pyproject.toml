@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlasent-v2-preview"
+version = "2.0.0a0"
+description = "Preview package for the v2 AtlaSent SDK. DO NOT USE IN PRODUCTION — surfaces here are under active design and will change without semver discipline until v2 GA."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "AtlaSent Systems Inc.", email = "sdk@atlasent.io" },
+]
+keywords = ["atlasent", "v2-preview", "proof", "verifiable"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+# No runtime deps on atlasent (v1) — canonicalization is reimplemented
+# here so this package can evolve independently until v2 GA chooses a
+# consolidation story.
+dependencies = [
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "atlasent>=1.4.0",
+    "jsonschema>=4.0.0",
+    "pytest>=7.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk"
+Repository = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk"
+Issues = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues"
+
+[tool.setuptools.packages.find]
+include = ["atlasent_v2_preview*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+atlasent_v2_preview = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+source = ["atlasent_v2_preview"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
