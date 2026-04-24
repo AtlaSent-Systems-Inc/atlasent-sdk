@@ -248,6 +248,35 @@ TypeScript CHANGELOG mirrors.
 
 ---
 
+## Growth waves — SDK surface impact
+
+All seven waves are **in-scope for v2.0.0**. Full spec:
+[canonical plan → Growth waves](https://github.com/AtlaSent-Systems-Inc/atlasent-docs/blob/main/docs/V2_ARCHITECTURE.md#growth-waves-v200--orthogonal-to-layers-ae).
+First-ships: Anthropic SDK middleware (Wave F), SOC2 Type II (Wave G).
+
+This repo's slice of each wave:
+
+| Wave | `atlasent-sdk` is... | What to add |
+|---|---|---|
+| F — guards | **primary** | New packages, each ~500 LOC, separate publish cadence: `@atlasent/anthropic-middleware` (reference), then `@atlasent/langchain`, `@atlasent/llamaindex`, `@atlasent/openai-middleware`, `@atlasent/claude-code` (MCP server), `@atlasent/cursor`. Python parity where the framework has a Python SDK (LangChain, LlamaIndex, Anthropic, OpenAI). |
+| G — compliance | supporting | `atlasent bundles install <slug>` subcommand in the CLI; pydantic + TS types for `ComplianceRegime`, `EvidenceExportRequest`, `EvidenceExportResponse`; shared fixtures for the SOC2 reference bundle. |
+| H — AI gates | supporting | Middleware chain helper: `atlasent.chain(piiRedact(), promptInjectScan(), budgetCheck(maxUsd: 5), guard({ ... }))`. Each gate a separate opt-in package; consumers compose. |
+| I — crypto | **primary** (verifier) | Extends v1's `audit_bundle.py` / `auditBundle.ts`: decision-scope verifier, Merkle-inclusion proof checker, ZK disclosure helper. `atlasent verify` CLI subcommand. |
+| J — DX | **primary** | `atlasent dev` + `atlasent lint` CLI subcommands; VS Code extension (separate repo, reuses `atlasent` CLI). New SDK languages land as sibling repos (atlasent-sdk-go, -rust, -java, -dotnet, -ruby) — each wires into the existing `contract/schemas/` + drift detector. |
+| K — ops | supporting | `atlasent.otel.enable()` — one-call OTel instrumentation. Streaming-client helper for the SSE decision feed: `atlasent.streamDecisions({ since, onDecision })`. |
+| L — identity | supporting | mTLS client opt-in: `new AtlaSentClient({ mTls: { cert, key } })`. SPIFFE workload-api consumer for per-run credentials. |
+
+Rollout order on the SDK side: Wave F Anthropic middleware first
+(reference implementation; unblocks Wave F follow-ons). Then Wave I
+verifier extensions (crypto is additive to the v1 audit-bundle
+verifier). Then Wave J CLI + dev kit. Then H/G/K/L as capacity
+allows.
+
+Each wave F follow-on package publishes independently; pin
+`"@atlasent/sdk": "^2.0.0"` as a peer dependency in every adapter.
+
+---
+
 ## Peer repos
 
 - Console: [`atlasent-console/docs/V2_ARCHITECTURE.md`](https://github.com/AtlaSent-Systems-Inc/atlasent-console/blob/main/docs/V2_ARCHITECTURE.md)
