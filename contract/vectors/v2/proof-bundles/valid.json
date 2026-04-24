@@ -1,0 +1,70 @@
+{
+  "description": "3-proof chain signed by v2-proof-key-active. All checks pass.",
+  "expected": {
+    "passed": 3,
+    "failed": 0,
+    "incomplete": 0
+  },
+  "proofs": [
+    {
+      "proof_id": "proof-00-0000-0000-0000-000000000000",
+      "permit_id": "dec_0000",
+      "org_id": "org-v2-proof-fixture",
+      "agent": "fixture-agent",
+      "action": "fixture.action",
+      "target": "target-0",
+      "payload_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "policy_version": "policy-v2-fixture-1",
+      "decision": "allow",
+      "execution_status": "executed",
+      "execution_hash": null,
+      "audit_hash": "8080808080808080808080808080808080808080808080808080808080808080",
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "chain_hash": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
+      "signing_key_id": "v2-proof-key-active",
+      "signature": "hd8CjzxjMhVw2u2JrLMX4GOliDC07_rv9z5_1fe_m_sFe8_jrR5aX-5DemTbw75KKtehnTCpuX5xTUgDssirCA",
+      "issued_at": "2026-04-24T12:00:00Z",
+      "consumed_at": "2026-04-24T12:00:01Z"
+    },
+    {
+      "proof_id": "proof-01-0000-0000-0000-000000000000",
+      "permit_id": "dec_0001",
+      "org_id": "org-v2-proof-fixture",
+      "agent": "fixture-agent",
+      "action": "fixture.action",
+      "target": "target-1",
+      "payload_hash": "0101010101010101010101010101010101010101010101010101010101010101",
+      "policy_version": "policy-v2-fixture-1",
+      "decision": "allow",
+      "execution_status": "executed",
+      "execution_hash": null,
+      "audit_hash": "8181818181818181818181818181818181818181818181818181818181818181",
+      "previous_hash": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
+      "chain_hash": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+      "signing_key_id": "v2-proof-key-active",
+      "signature": "SyochsDbObz33FCkflrOZlyouxDcdD1lamB1S0NJYABkkbd6y7Tadq0l0hUFXPFi0Neulh8sqqZ1geEz2crNAA",
+      "issued_at": "2026-04-24T12:01:00Z",
+      "consumed_at": "2026-04-24T12:01:01Z"
+    },
+    {
+      "proof_id": "proof-02-0000-0000-0000-000000000000",
+      "permit_id": "dec_0002",
+      "org_id": "org-v2-proof-fixture",
+      "agent": "fixture-agent",
+      "action": "fixture.action",
+      "target": "target-2",
+      "payload_hash": "0202020202020202020202020202020202020202020202020202020202020202",
+      "policy_version": "policy-v2-fixture-1",
+      "decision": "allow",
+      "execution_status": "executed",
+      "execution_hash": null,
+      "audit_hash": "8282828282828282828282828282828282828282828282828282828282828282",
+      "previous_hash": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+      "chain_hash": "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2",
+      "signing_key_id": "v2-proof-key-active",
+      "signature": "ZuKMitNIZcbxwI5j7v-13F0ZiVm6Hvz_Is0EBjWJCiN4cH7oAFENP52j91py5v_9lMn_oTxCS0P02gLjT2OfBA",
+      "issued_at": "2026-04-24T12:02:00Z",
+      "consumed_at": "2026-04-24T12:02:01Z"
+    }
+  ]
+}
