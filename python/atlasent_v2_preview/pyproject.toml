@@ -26,8 +26,10 @@ classifiers = [
 ]
 # No runtime deps on atlasent (v1) — canonicalization is reimplemented
 # here so this package can evolve independently until v2 GA chooses a
-# consolidation story.
+# consolidation story. ``cryptography`` is a hard dep because
+# ``replay_proof_bundle`` verifies Ed25519 signatures offline.
 dependencies = [
+    "cryptography>=41.0.0",
     "pydantic>=2.0.0",
 ]
 

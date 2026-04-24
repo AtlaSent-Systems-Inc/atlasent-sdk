@@ -21,6 +21,16 @@ from .types import (
     ProofVerificationResult,
     ProofVerificationStatus,
 )
+from .verify_proof import (
+    GENESIS_HASH,
+    ProofBundleVerificationResult,
+    ProofVerificationEntry,
+    VerifyKey,
+    load_verify_keys,
+    replay_proof_bundle,
+    signed_bytes_for_proof,
+    verify_proof,
+)
 
 __version__ = "2.0.0a0"
 
@@ -39,4 +49,12 @@ __all__ = [
     "ProofVerificationCheck",
     "ProofVerificationResult",
     "ProofVerificationStatus",
+    "GENESIS_HASH",
+    "ProofBundleVerificationResult",
+    "ProofVerificationEntry",
+    "VerifyKey",
+    "load_verify_keys",
+    "replay_proof_bundle",
+    "signed_bytes_for_proof",
+    "verify_proof",
 ]
