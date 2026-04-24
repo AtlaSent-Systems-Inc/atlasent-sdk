@@ -3,6 +3,7 @@
 import httpx
 import pytest
 
+from atlasent.audit import AuditEventsResult, AuditExportResult
 from atlasent.client import AtlaSentClient
 from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
 from atlasent.models import ApiKeySelfResult, EvaluateResult, GateResult, VerifyResult
@@ -843,3 +844,232 @@ class TestKeySelf:
         mocker.patch.object(client._client, "get", return_value=resp)
         with pytest.raises(RateLimitError):
             client.key_self()
+
+
+# ── list_audit_events / create_audit_export ──────────────────────────
+
+
+AUDIT_EVENT_ALPHA = {
+    "id": "evt-1",
+    "org_id": "org-1",
+    "sequence": 1,
+    "type": "evaluate.allow",
+    "decision": "allow",
+    "actor_id": "agent-1",
+    "resource_type": None,
+    "resource_id": None,
+    "payload": {"action": "read_data"},
+    "hash": "a" * 64,
+    "previous_hash": "0" * 64,
+    "occurred_at": "2026-04-21T00:00:00Z",
+    "created_at": "2026-04-21T00:00:01Z",
+}
+
+
+AUDIT_EVENTS_PAGE = {
+    "events": [AUDIT_EVENT_ALPHA],
+    "total": 1,
+    "next_cursor": "cursor_beta",
+}
+
+
+AUDIT_EXPORT_BUNDLE = {
+    "export_id": "export-1",
+    "org_id": "org-1",
+    "events": [AUDIT_EVENT_ALPHA],
+    "chain_head_hash": "a" * 64,
+    "chain_integrity_ok": True,
+    "tampered_event_ids": [],
+    "signature": "sig_bytes_base64url",
+    "signature_status": "signed",
+    "signing_key_id": "test-key",
+    "signed_at": "2026-04-21T00:00:00Z",
+    "event_count": 1,
+}
+
+
+class TestListAuditEvents:
+    def test_issues_get_to_v1_audit_events_with_snake_case_body(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=AUDIT_EVENTS_PAGE)
+        get_mock = mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.list_audit_events()
+
+        assert isinstance(result, AuditEventsResult)
+        assert result.total == 1
+        assert result.next_cursor == "cursor_beta"
+        assert result.events[0].id == "evt-1"
+        assert result.events[0].previous_hash == "0" * 64
+        assert result.events[0].decision == "allow"
+        assert result.rate_limit is None
+
+        url = get_mock.call_args[0][0]
+        assert "/v1-audit/events" in url
+        assert get_mock.call_args.kwargs.get("params") == {}
+
+    def test_forwards_every_filter_as_snake_case_params(self, client, mocker):
+        resp = _mock_resp(mocker, json_data={"events": [], "total": 0})
+        get_mock = mocker.patch.object(client._client, "get", return_value=resp)
+        client.list_audit_events(
+            types="evaluate.allow,policy.updated",
+            actor_id="agent-1",
+            from_="2026-04-20T00:00:00Z",
+            to="2026-04-22T00:00:00Z",
+            limit=25,
+            cursor="abc",
+        )
+        assert get_mock.call_args.kwargs["params"] == {
+            "types": "evaluate.allow,policy.updated",
+            "actor_id": "agent-1",
+            "from": "2026-04-20T00:00:00Z",
+            "to": "2026-04-22T00:00:00Z",
+            "limit": "25",
+            "cursor": "abc",
+        }
+
+    def test_omits_unset_filter_fields(self, client, mocker):
+        resp = _mock_resp(mocker, json_data={"events": [], "total": 0})
+        get_mock = mocker.patch.object(client._client, "get", return_value=resp)
+        client.list_audit_events(types="evaluate.allow")
+        assert get_mock.call_args.kwargs["params"] == {"types": "evaluate.allow"}
+
+    def test_surfaces_rate_limit_headers(self, client, mocker):
+        resp = _mock_resp(
+            mocker,
+            json_data=AUDIT_EVENTS_PAGE,
+            headers={
+                "x-ratelimit-limit": "500",
+                "x-ratelimit-remaining": "499",
+                "x-ratelimit-reset": "1714070000",
+            },
+        )
+        mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.list_audit_events()
+        assert result.rate_limit is not None
+        assert result.rate_limit.limit == 500
+        assert result.rate_limit.remaining == 499
+
+    def test_bad_response_on_missing_events(self, client, mocker):
+        resp = _mock_resp(mocker, json_data={"total": 0})
+        mocker.patch.object(client._client, "get", return_value=resp)
+        with pytest.raises(AtlaSentError) as excinfo:
+            client.list_audit_events()
+        assert excinfo.value.code == "bad_response"
+
+    def test_bad_response_on_missing_total(self, client, mocker):
+        resp = _mock_resp(mocker, json_data={"events": []})
+        mocker.patch.object(client._client, "get", return_value=resp)
+        with pytest.raises(AtlaSentError) as excinfo:
+            client.list_audit_events()
+        assert excinfo.value.code == "bad_response"
+
+
+class TestCreateAuditExport:
+    def test_posts_empty_filter_by_default_and_preserves_bundle(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=AUDIT_EXPORT_BUNDLE)
+        post_mock = mocker.patch.object(client._client, "post", return_value=resp)
+        result = client.create_audit_export()
+
+        assert isinstance(result, AuditExportResult)
+        # bundle is the server's raw dict — identity matters for signature verification.
+        assert result.bundle is AUDIT_EXPORT_BUNDLE
+        assert result.export_id == "export-1"
+        assert result.org_id == "org-1"
+        assert result.chain_head_hash == "a" * 64
+        assert result.signature == "sig_bytes_base64url"
+        assert result.signature_status == "signed"
+        assert result.signing_key_id == "test-key"
+        assert result.event_count == 1
+        assert result.rate_limit is None
+
+        assert "/v1-audit/exports" in post_mock.call_args[0][0]
+        assert post_mock.call_args.kwargs["json"] == {}
+
+    def test_forwards_filter_fields_as_json_body(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=AUDIT_EXPORT_BUNDLE)
+        post_mock = mocker.patch.object(client._client, "post", return_value=resp)
+        client.create_audit_export(
+            types="evaluate.allow",
+            actor_id="agent-1",
+            from_="2026-04-20T00:00:00Z",
+            to="2026-04-22T00:00:00Z",
+        )
+        assert post_mock.call_args.kwargs["json"] == {
+            "types": "evaluate.allow",
+            "actor_id": "agent-1",
+            "from": "2026-04-20T00:00:00Z",
+            "to": "2026-04-22T00:00:00Z",
+        }
+
+    def test_bundle_round_trips_through_offline_verifier(self, client, mocker):
+        """Byte-identical round-trip: the bundle dict returned by
+        create_audit_export should flow straight into verify_audit_bundle
+        without reshaping or key-reorder."""
+        import atlasent
+
+        resp = _mock_resp(mocker, json_data=AUDIT_EXPORT_BUNDLE)
+        mocker.patch.object(client._client, "post", return_value=resp)
+        result = client.create_audit_export()
+        # No signing keys configured — signature check is skipped, but
+        # the chain-integrity check exercises the bundle structure.
+        outcome = atlasent.verify_audit_bundle(result.bundle, keys=[])
+        # The fixture's hash fields are synthetic so the chain check
+        # will fail — the assertion we care about is that the call
+        # completes without raising, proving dict compatibility.
+        assert outcome is not None
+
+    def test_surfaces_rate_limit_headers(self, client, mocker):
+        resp = _mock_resp(
+            mocker,
+            json_data=AUDIT_EXPORT_BUNDLE,
+            headers={
+                "x-ratelimit-limit": "10",
+                "x-ratelimit-remaining": "9",
+                "x-ratelimit-reset": "1714070000",
+            },
+        )
+        mocker.patch.object(client._client, "post", return_value=resp)
+        result = client.create_audit_export()
+        assert result.rate_limit is not None
+        assert result.rate_limit.limit == 10
+
+    def test_bad_response_on_missing_export_id(self, client, mocker):
+        resp = _mock_resp(
+            mocker,
+            json_data={"chain_head_hash": "x", "events": []},
+        )
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as excinfo:
+            client.create_audit_export()
+        assert excinfo.value.code == "bad_response"
+
+    def test_bad_response_on_non_array_events(self, client, mocker):
+        resp = _mock_resp(
+            mocker,
+            json_data={"export_id": "e", "chain_head_hash": "x", "events": "nope"},
+        )
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as excinfo:
+            client.create_audit_export()
+        assert excinfo.value.code == "bad_response"
+
+    def test_empty_bundle_exposes_defaults(self, client, mocker):
+        resp = _mock_resp(
+            mocker,
+            json_data={
+                "export_id": "e",
+                "org_id": "o",
+                "events": [],
+                "chain_head_hash": "0" * 64,
+            },
+        )
+        mocker.patch.object(client._client, "post", return_value=resp)
+        result = client.create_audit_export()
+        assert result.events == []
+        assert result.tampered_event_ids == []
+        assert result.signature == ""
+        # signature_status falls through to 'unsigned' when the server omitted it.
+        assert result.signature_status == "unsigned"
+        assert result.signing_key_id is None
+        assert result.signed_at == ""
+        assert result.event_count == 0  # len(events) fallback when count missing
+        assert result.chain_integrity_ok is False

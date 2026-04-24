@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from ._version import __version__
+from .audit import AuditEventsResult, AuditExportResult
 from .exceptions import (
     AtlaSentDenied,
     AtlaSentDeniedError,
@@ -371,6 +372,96 @@ class AsyncAtlaSentClient:
             {**data, "rate_limit": rate_limit}
         )
 
+    async def list_audit_events(
+        self,
+        *,
+        types: str | None = None,
+        actor_id: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> AuditEventsResult:
+        """List persisted audit events (``GET /v1-audit/events``).
+
+        Async mirror of :meth:`AtlaSentClient.list_audit_events`. See
+        that method for argument semantics.
+        """
+        params: dict[str, str] = {}
+        if types:
+            params["types"] = types
+        if actor_id:
+            params["actor_id"] = actor_id
+        if from_:
+            params["from"] = from_
+        if to:
+            params["to"] = to
+        if limit is not None:
+            params["limit"] = str(limit)
+        if cursor:
+            params["cursor"] = cursor
+
+        logger.debug("list_audit_events params=%r (async)", params)
+        data, rate_limit, request_id = await self._request(
+            "GET", "/v1-audit/events", None, params=params
+        )
+
+        if not isinstance(data.get("events"), list) or not isinstance(
+            data.get("total"), int
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-audit/events response: missing `events` or `total`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        return AuditEventsResult.model_validate({**data, "rate_limit": rate_limit})
+
+    async def create_audit_export(
+        self,
+        *,
+        types: str | None = None,
+        actor_id: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
+    ) -> AuditExportResult:
+        """Request a signed audit-export bundle
+        (``POST /v1-audit/exports``).
+
+        Async mirror of :meth:`AtlaSentClient.create_audit_export`.
+        See that method for verification-workflow notes.
+        """
+        payload: dict[str, Any] = {}
+        if types:
+            payload["types"] = types
+        if actor_id:
+            payload["actor_id"] = actor_id
+        if from_:
+            payload["from"] = from_
+        if to:
+            payload["to"] = to
+
+        logger.debug("create_audit_export filter=%r (async)", payload)
+        data, rate_limit, request_id = await self._post(
+            "/v1-audit/exports", payload
+        )
+
+        if (
+            not isinstance(data.get("export_id"), str)
+            or not isinstance(data.get("chain_head_hash"), str)
+            or not isinstance(data.get("events"), list)
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-audit/exports response: missing "
+                "`export_id`, `chain_head_hash`, or `events`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        return AuditExportResult(bundle=data, rate_limit=rate_limit)
+
     # ── internals ─────────────────────────────────────────────────
 
     async def _post(
@@ -405,8 +496,14 @@ class AsyncAtlaSentClient:
         method: str,
         path: str,
         payload: dict[str, Any] | None,
+        *,
+        params: dict[str, str] | None = None,
     ) -> tuple[dict[str, Any], RateLimitState | None, str]:
-        """Shared retry + error-mapping core for POST / GET."""
+        """Shared retry + error-mapping core for POST / GET.
+
+        ``params`` is only honored for GET and is serialized as URL
+        query parameters.
+        """
         url = f"{self._base_url}{path}"
         request_id = uuid.uuid4().hex[:12]
         headers = {"X-Request-ID": request_id}
@@ -416,7 +513,9 @@ class AsyncAtlaSentClient:
                 if method == "POST":
                     response = await self._client.post(url, json=payload, headers=headers)
                 else:
-                    response = await self._client.get(url, headers=headers)
+                    response = await self._client.get(
+                        url, headers=headers, params=params
+                    )
             except httpx.TimeoutException as exc:
                 logger.warning(
                     "%s timeout (attempt %d/%d)",

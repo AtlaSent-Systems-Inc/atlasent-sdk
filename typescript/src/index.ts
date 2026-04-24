@@ -41,6 +41,9 @@ export {
 export type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
+  AuditEventsResult,
+  AuditExportRequest,
+  AuditExportResult,
   Decision,
   EvaluateRequest,
   EvaluateResponse,
