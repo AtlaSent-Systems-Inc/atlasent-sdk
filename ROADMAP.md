@@ -7,15 +7,15 @@ Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/
 1. **TS SDK publish** — `@atlasent/sdk` v1.4.0 sits on `main`; **not yet published to npm**. `@atlasent/types` lives in `atlasent-api/packages/types`; whether it ships as a separate npm package or folds into `@atlasent/sdk` is open (see atlasent-api reconciliation issue).
 2. ✅ **Python SDK published** — `atlasent` **1.4.1 on PyPI** (2026-04-26). Sync + async clients, `protect()` / `authorize()` / `gate()` / `evaluate()` / `verify()`, `@atlasent_guard` + `@async_atlasent_guard` decorators, typed errors, `TTLCache`, audit-bundle verification.
 3. **Go SDK publish** — pending. Code currently lives in archived `atlasent-sdk-go` repo; planned home per this ROADMAP is `github.com/AtlaSent-Systems-Inc/atlasent-sdk/go`, but the `go/` subdirectory does not exist in this repo yet.
-4. **v1-only API sweep** — done in 1.x line; v2 work is gated behind `claude/v2-*` draft branches.
+4. **v1-only API sweep** — done in 1.x line; v2 capabilities (batch, streaming, GraphQL) are tracked separately in `V2_ROLLOUT.md` on the `claude/plan-v2-rollout-5IPGF` branch and ship in the SDK 2.x line.
 5. **Offline verifier** — `verify_audit_bundle()` ships as part of `atlasent` (Python) and TS SDK. A separate `@atlasent/verify` zero-dep Node CLI is still desired but not yet packaged.
 6. **SSO-aware types** — once `atlasent-api/v1-sso` ships, export `SsoConnection`, `SsoJitRule`, `SsoEvent` from `@atlasent/types`.
 
 ## Post-GA — ordered by impact
 
 7. **Retries with jitter + Sentry breadcrumbs** — the `authorize()` call should retry transient failures (429 with `Retry-After`, 5xx) and record breadcrumbs.
-8. **Batch evaluate** — client-side batching → one HTTP call for N decisions. Requires an atlasent-api `POST /v1/evaluate/batch` endpoint.
-9. **Streaming evaluate** — for long-lived agents, keep the connection warm; server-sent events for risk updates.
+8. **Batch evaluate** — client-side batching → one HTTP call for N decisions. Requires an atlasent-api `POST /v1/evaluate/batch` endpoint. Tracked under v2.
+9. **Streaming evaluate** — for long-lived agents, keep the connection warm; server-sent events for risk updates. Tracked under v2.
 10. **Go parity** — match TS's observer pattern (middleware, gRPC interceptors).
 11. **MCP server bump** — co-versioning with the SDK so `claude_desktop_config.json` entries don't drift.
 
