@@ -69,6 +69,11 @@ export type {
   AuditExport,
   AuditExportSignatureStatus,
 } from "./audit.js";
+export type {
+  SsoConnection,
+  SsoEvent,
+  SsoJitRule,
+} from "./sso.js";
 
 /**
  * Default export. The opinionated, category-defining entry point:
