@@ -125,26 +125,35 @@ class AsyncAtlaSentClient:
         )
         logger.debug("evaluate action=%r actor=%r (async)", action_type, actor_id)
         data, rate_limit, request_id = await self._post(
-            "/v1-evaluate", req.model_dump(by_alias=True)
+            "/v1-evaluate", req.model_dump(by_alias=False)
         )
 
-        if not isinstance(data.get("permitted"), bool) or not isinstance(
-            data.get("decision_id"), str
-        ):
+        # Server returns "allow" (bool). On deny, evaluation_id may be null.
+        allowed = data.get("allow")
+        if not isinstance(allowed, bool):
             raise AtlaSentError(
-                "Malformed /v1-evaluate response: missing or non-scalar "
-                "`permitted` or `decision_id`",
+                "Malformed /v1-evaluate response: missing or non-boolean `allow`",
                 code="bad_response",
                 request_id=request_id,
                 response_body=data,
             )
 
-        permitted = data["permitted"]
-        if not permitted:
+        eval_id = data.get("evaluation_id") or ""
+
+        if not allowed:
             raise AtlaSentDenied(
-                decision=str(permitted),
-                permit_token=data.get("decision_id", ""),
+                decision=data.get("decision", "deny"),
+                permit_token=eval_id,
                 reason=data.get("reason", ""),
+                request_id=request_id,
+                response_body=data,
+            )
+
+        # On allow, evaluation_id must be present
+        if not eval_id:
+            raise AtlaSentError(
+                "Malformed /v1-evaluate response: `evaluation_id` missing on allow",
+                code="bad_response",
                 request_id=request_id,
                 response_body=data,
             )
@@ -181,7 +190,7 @@ class AsyncAtlaSentClient:
         )
         logger.debug("verify token=%s (async)", permit_token)
         data, rate_limit, request_id = await self._post(
-            "/v1-verify-permit", req.model_dump(by_alias=True)
+            "/v1-verify-permit", req.model_dump(by_alias=False)
         )
         if not isinstance(data.get("verified"), bool):
             raise AtlaSentError(

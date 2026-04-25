@@ -75,10 +75,13 @@ class EvaluateResult(BaseModel):
             emit the headers.
     """
 
-    decision: bool = Field(..., alias="permitted")
-    permit_token: str = Field(..., alias="decision_id")
+    # Server sends "allow" (bool) and "evaluation_id" (str).
+    # Legacy wire names "permitted" / "decision_id" are also accepted for
+    # backwards-compat via populate_by_name.
+    decision: bool = Field(..., alias="allow", validation_alias="allow")
+    permit_token: str = Field(..., alias="evaluation_id", validation_alias="evaluation_id")
     reason: str = ""
-    audit_hash: str = ""
+    audit_hash: str = Field(default="", alias="proof", validation_alias="proof")
     timestamp: str = ""
     rate_limit: RateLimitState | None = None
 
