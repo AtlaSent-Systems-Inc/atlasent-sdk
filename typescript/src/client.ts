@@ -21,6 +21,11 @@ import {
   type AtlaSentErrorInit,
 } from "./errors.js";
 import type {
+  SsoEvent,
+  SsoEventsPage,
+  SsoEventsQuery,
+} from "./sso.js";
+import type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
   AuditEventsResult,
@@ -72,6 +77,23 @@ export class AtlaSentClient {
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
+  /**
+   * Namespaced SSO surface. Exposes `client.sso.events.list({ … })`
+   * today; CRUD for connections + JIT rules will land alongside the
+   * console UI work that drives them.
+   */
+  readonly sso: {
+    readonly events: {
+      list: (
+        query?: SsoEventsQuery,
+      ) => Promise<{
+        events: SsoEvent[];
+        next_cursor: string | null;
+        rateLimit: RateLimitState | null;
+      }>;
+    };
+  };
+
   constructor(options: AtlaSentClientOptions) {
     if (!options.apiKey || typeof options.apiKey !== "string") {
       throw new AtlaSentError("apiKey is required", {
@@ -82,6 +104,11 @@ export class AtlaSentClient {
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.sso = {
+      events: {
+        list: (query?: SsoEventsQuery) => this.listSsoEvents(query),
+      },
+    };
   }
 
   /**
@@ -266,6 +293,61 @@ export class AtlaSentClient {
     }
 
     return { ...wire, rateLimit };
+  }
+
+  /**
+   * List persisted SSO events for the authenticated organization
+   * (`GET /v1/sso/events`). Returned rows are wire-identical with
+   * the server: snake_case field names matching `sso_events`.
+   *
+   * `next_cursor` is `null` (not omitted) when the page is the last,
+   * so callers can write a uniform pagination loop:
+   *
+   * ```ts
+   * let cursor: string | null = null;
+   * do {
+   *   const page = await client.sso.events.list({ cursor: cursor ?? undefined });
+   *   handle(page.events);
+   *   cursor = page.next_cursor;
+   * } while (cursor);
+   * ```
+   *
+   * Throws {@link AtlaSentError} on transport / auth failures — same
+   * taxonomy as {@link AtlaSentClient.evaluate}.
+   */
+  private async listSsoEvents(
+    query: SsoEventsQuery = {},
+  ): Promise<{
+    events: SsoEvent[];
+    next_cursor: string | null;
+    rateLimit: RateLimitState | null;
+  }> {
+    const params = new URLSearchParams();
+    if (query.limit !== undefined) params.set("limit", String(query.limit));
+    if (query.cursor !== undefined && query.cursor !== "") {
+      // Wire param name is `after` per the v1-sso handler.
+      params.set("after", query.cursor);
+    }
+    const { body: wire, rateLimit } = await this.get<SsoEventsPage>(
+      "/v1/sso/events",
+      params,
+    );
+
+    if (!Array.isArray(wire.events)) {
+      throw new AtlaSentError(
+        "Malformed response from /v1/sso/events: missing `events`",
+        { code: "bad_response" },
+      );
+    }
+
+    return {
+      events: wire.events as SsoEvent[],
+      next_cursor:
+        typeof wire.next_cursor === "string" || wire.next_cursor === null
+          ? wire.next_cursor
+          : null,
+      rateLimit,
+    };
   }
 
   private async post<T>(

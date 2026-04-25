@@ -60,6 +60,15 @@ from .models import (
     RateLimitState,
     VerifyResult,
 )
+from .sso import (
+    SsoCanonicalRole,
+    SsoConnection,
+    SsoEvent,
+    SsoEventsPage,
+    SsoEventType,
+    SsoJitRule,
+    SsoProtocol,
+)
 
 __all__ = [
     "__version__",
@@ -98,4 +107,11 @@ __all__ = [
     "AuditEventsResult",
     "AuditExportResult",
     "AuditExportSignatureStatus",
+    "SsoCanonicalRole",
+    "SsoConnection",
+    "SsoEvent",
+    "SsoEventsPage",
+    "SsoEventType",
+    "SsoJitRule",
+    "SsoProtocol",
 ]

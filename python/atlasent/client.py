@@ -13,6 +13,7 @@ import httpx
 
 from ._version import __version__
 from .audit import AuditEventsResult, AuditExportResult
+from .sso import SsoEventsPage
 from .exceptions import (
     AtlaSentDenied,
     AtlaSentDeniedError,
@@ -102,6 +103,7 @@ class AtlaSentClient:
             },
             timeout=self._timeout,
         )
+        self.sso = _SsoNamespace(self)
 
     # ── public API ────────────────────────────────────────────────
 
@@ -588,6 +590,65 @@ class AtlaSentClient:
 
         return AuditExportResult(bundle=data, rate_limit=rate_limit)
 
+    def list_sso_events(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> SsoEventsPage:
+        """List persisted SSO events for the authenticated organization
+        (``GET /v1/sso/events``).
+
+        Returned rows are wire-identical with the server: snake_case
+        field names matching ``sso_events``. ``next_cursor`` is
+        ``None`` when the page is the last so callers can write a
+        uniform pagination loop::
+
+            cursor: str | None = None
+            while True:
+                page = client.sso.events.list(cursor=cursor)
+                handle(page.events)
+                if page.next_cursor is None:
+                    break
+                cursor = page.next_cursor
+
+        Args:
+            limit: Page size. Server default 50, capped at 200.
+            cursor: Opaque cursor returned as ``next_cursor`` by the
+                prior page. Wire param name is ``after``.
+
+        Raises:
+            AtlaSentError: Network error, timeout, unexpected response,
+                or malformed payload.
+            RateLimitError: HTTP 429.
+        """
+        params: dict[str, str] = {}
+        if limit is not None:
+            params["limit"] = str(limit)
+        if cursor:
+            # Wire param name is `after` per the v1-sso handler.
+            params["after"] = cursor
+
+        logger.debug("list_sso_events params=%r", params)
+        data, _rate_limit, request_id = self._request(
+            "GET", "/v1/sso/events", None, params=params
+        )
+
+        if not isinstance(data.get("events"), list):
+            raise AtlaSentError(
+                "Malformed /v1/sso/events response: missing `events`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        # Server emits next_cursor as null when there are no further
+        # pages; coerce any non-string non-null value to None defensively.
+        nc = data.get("next_cursor")
+        if not isinstance(nc, str):
+            nc = None
+        return SsoEventsPage.model_validate({"events": data["events"], "next_cursor": nc})
+
     # ── internals ─────────────────────────────────────────────────
 
     def _post(
@@ -825,3 +886,33 @@ def _parse_reset_header(raw: str) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
+
+
+class _SsoEventsNamespace:
+    """Sub-namespace exposing ``client.sso.events.list({...})``.
+
+    The TS SDK exposes the same shape; keeping the call site identical
+    across the two SDKs makes copy-paste examples in the docs cheap.
+    CRUD for connections + JIT rules will land alongside the console
+    UI work that drives them.
+    """
+
+    def __init__(self, client: AtlaSentClient) -> None:
+        self._client = client
+
+    def list(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> SsoEventsPage:
+        return self._client.list_sso_events(limit=limit, cursor=cursor)
+
+
+class _SsoNamespace:
+    """Sub-namespace exposing ``client.sso.events`` (and, in time,
+    ``client.sso.connections`` / ``client.sso.jit_rules``).
+    """
+
+    def __init__(self, client: AtlaSentClient) -> None:
+        self.events = _SsoEventsNamespace(client)
