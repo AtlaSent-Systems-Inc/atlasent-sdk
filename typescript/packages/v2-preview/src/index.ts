@@ -20,3 +20,24 @@ export type {
   ProofVerificationResult,
   ProofVerificationStatus,
 } from "./types.js";
+export {
+  KNOWN_DECISION_EVENT_TYPES,
+  type ConsumedEvent,
+  type ConsumedPayload,
+  type DecisionEvent,
+  type DecisionEventCommon,
+  type EscalatedEvent,
+  type EscalatedPayload,
+  type HoldResolvedEvent,
+  type HoldResolvedPayload,
+  type PermitIssuedEvent,
+  type PermitIssuedPayload,
+  type RateLimitStateEvent,
+  type RateLimitStatePayload,
+  type RevokedEvent,
+  type RevokedPayload,
+  type UnknownDecisionEvent,
+  type VerifiedEvent,
+  type VerifiedPayload,
+} from "./decisionEvent.js";
+export { parseDecisionEventStream } from "./parseSse.js";
