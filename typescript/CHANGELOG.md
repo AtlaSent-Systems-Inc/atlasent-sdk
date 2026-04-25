@@ -8,6 +8,29 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ### Added
 
+- **SSO wire types: `SsoConnection`, `SsoJitRule`, `SsoEvent`** (and
+  the `SsoProtocol` / `SsoCanonicalRole` / `SsoEventType` literal
+  unions) re-exported from the package entry. Sourced from
+  `atlasent-api/v1-sso/handler.ts` + migration 0041; field names are
+  snake_case on the wire and this module mirrors them byte-for-byte.
+- **`client.sso.events.list({ limit?, cursor? })`.** Paginated read of
+  the per-org SSO event log (`GET /v1/sso/events`). Mirror namespace
+  added to the Python SDK as well. Connections + JIT rules CRUD will
+  follow alongside the console UI work that drives them.
+
+### Changed
+
+- **`verifyBundle()` is now sourced from `@atlasent/verify`.** The
+  function still exports from `@atlasent/sdk` unchanged; the
+  underlying logic moved to a new zero-dependency package so auditors
+  can run `npx @atlasent/verify ./bundle.json` without installing the
+  rest of the SDK. There is now exactly one source of truth for the
+  bundle format. Version bump to **1.4.1** to mark the carve-out.
+
+## 1.4.0 — earlier in this release window
+
+### Added
+
 - **`AtlaSentClient.listAuditEvents()` and `createAuditExport()`.**
   Two new client methods close the long-standing `/v1-audit` parity
   gap. Together with the offline verifier shipped in 1.3.0 and the

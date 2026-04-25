@@ -1,12 +1,15 @@
 {
-  "name": "@atlasent/sdk",
-  "version": "1.4.1",
-  "description": "TypeScript SDK for the AtlaSent authorization API",
+  "name": "@atlasent/verify",
+  "version": "1.0.0",
+  "description": "Zero-dependency offline verifier for AtlaSent signed audit-export bundles. Auditors can run `npx @atlasent/verify ./bundle.json` without installing the rest of the SDK.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "atlasent-verify": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "import": {
@@ -16,16 +19,6 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
-      }
-    },
-    "./hono": {
-      "import": {
-        "types": "./dist/hono.d.ts",
-        "default": "./dist/hono.js"
-      },
-      "require": {
-        "types": "./dist/hono.d.cts",
-        "default": "./dist/hono.cjs"
       }
     },
     "./package.json": "./package.json"
@@ -45,26 +38,23 @@
     "prepublishOnly": "npm run clean && npm run typecheck && npm test && npm run build",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "typecheck:examples": "tsc --noEmit --project tsconfig.examples.json"
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "atlasent",
-    "authorization",
-    "ai",
-    "agents",
-    "gxp",
+    "audit",
+    "verify",
+    "ed25519",
     "compliance",
-    "policy"
+    "21cfr11",
+    "gxp"
   ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AtlaSent-Systems-Inc/atlasent-sdk.git",
-    "directory": "typescript"
+    "directory": "typescript/packages/verify"
   },
-  "homepage": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/tree/main/typescript#readme",
+  "homepage": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/tree/main/typescript/packages/verify#readme",
   "bugs": {
     "url": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues"
   },
@@ -74,18 +64,8 @@
   "devDependencies": {
     "@types/node": "^20.12.7",
     "@vitest/coverage-v8": "^1.5.0",
-    "hono": "^4.5.0",
     "tsup": "^8.0.2",
-    "tsx": "^4.7.2",
     "typescript": "^5.4.5",
     "vitest": "^1.5.0"
-  },
-  "peerDependencies": {
-    "hono": "^4.0.0"
-  },
-  "peerDependenciesMeta": {
-    "hono": {
-      "optional": true
-    }
   }
 }
