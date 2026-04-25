@@ -43,3 +43,16 @@ export {
   buildEvaluateBatchRequest,
   parseEvaluateBatchResponse,
 } from "./buildBatch.js";
+// PR #77 plans `@atlasent/sdk/graphql` as a sub-path import at v2 GA.
+// While v2-preview is private:true, we re-export from the top level so
+// existing test infra keeps working without a package.json `exports`
+// map. Migration to the sub-path is a one-line README update at GA.
+export {
+  buildGraphQLRequest,
+  GraphQLClient,
+  GraphQLClientError,
+  type GraphQLClientOptions,
+  type GraphQLError,
+  type GraphQLRequest,
+  type GraphQLResponse,
+} from "./graphql/index.js";
