@@ -29,3 +29,17 @@ export {
   type ReplayProofBundleOptions,
   type VerifyKey,
 } from "./verifyProof.js";
+export {
+  EVALUATE_BATCH_MAX_ITEMS,
+  type BatchEvaluateAllowItem,
+  type BatchEvaluateDenyItem,
+  type BatchEvaluateItem,
+  type BatchEvaluateResponseItem,
+  type BatchProofStatus,
+  type EvaluateBatchRequest,
+  type EvaluateBatchResponse,
+} from "./batch.js";
+export {
+  buildEvaluateBatchRequest,
+  parseEvaluateBatchResponse,
+} from "./buildBatch.js";
