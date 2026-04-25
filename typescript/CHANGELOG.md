@@ -6,14 +6,16 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+## 1.5.0 — 2026-04-25
+
 ### Added
 
 - **`AtlaSentClient.listAuditEvents()` and `createAuditExport()`.**
   Two new client methods close the long-standing `/v1-audit` parity
-  gap. Together with the offline verifier shipped in 1.3.0 and the
-  shared wire types shipped earlier this release, a customer can now
-  go from "I have an API key" to "I have a signed, offline-verifiable
-  bundle of my org's audit events" without leaving the SDK:
+  gap. Together with the offline verifier (also new in this release)
+  and the shared wire types added here, a customer can now go from
+  "I have an API key" to "I have a signed, offline-verifiable bundle
+  of my org's audit events" without leaving the SDK:
 
       const page = await client.listAuditEvents({
         types: "evaluate.allow,policy.updated",
@@ -57,6 +59,18 @@ follows [semver](https://semver.org/): breaking changes bump the major
   (`test/audit-types.test.ts`) lock the field set against the server
   docstring so wire drift fails CI.
 
+- **Offline audit-bundle verifier.** `verifyBundle(path, { publicKeysPem })`
+  and the lower-level `verifyAuditBundle(bundle, keys)` produce a
+  byte-faithful port of `atlasent-api/supabase/functions/v1-audit/verify.ts`.
+  Verifies a signed export from `POST /v1/audit/exports` end-to-end:
+  per-event SHA-256 hash chain, adjacency, `chain_head_hash` match,
+  and Ed25519 signature. Rotation-aware via `signing_key_id`. Runs on
+  Node 20+ using `crypto.webcrypto.subtle`; no extra deps. Canonical
+  JSON (`canonicalJSON`) and `signedBytesFor` are exported for
+  regulator-side custom verifiers.
+- Shared test fixtures at `contract/vectors/audit-bundles/` and
+  reproducible generator at `contract/tools/gen_audit_bundles.py`.
+
 ### Non-breaking
 
 This release is purely additive — existing exports are unchanged.
@@ -95,22 +109,6 @@ This release is purely additive — existing exports are unchanged.
 
 Adding `keySelf()` is purely additive — existing `evaluate` /
 `verifyPermit` / `protect` APIs are unchanged.
-
-## Unreleased
-
-### Added
-
-- **Offline audit-bundle verifier.** `verifyBundle(path, { publicKeysPem })`
-  and the lower-level `verifyAuditBundle(bundle, keys)` produce a
-  byte-faithful port of `atlasent-api/supabase/functions/v1-audit/verify.ts`.
-  Verifies a signed export from `POST /v1/audit/exports` end-to-end:
-  per-event SHA-256 hash chain, adjacency, `chain_head_hash` match,
-  and Ed25519 signature. Rotation-aware via `signing_key_id`. Runs on
-  Node 20+ using `crypto.webcrypto.subtle`; no extra deps. Canonical
-  JSON (`canonicalJSON`) and `signedBytesFor` are exported for
-  regulator-side custom verifiers.
-- Shared test fixtures at `contract/vectors/audit-bundles/` and
-  reproducible generator at `contract/tools/gen_audit_bundles.py`.
 
 ## 1.3.0 — 2026-04-23
 
