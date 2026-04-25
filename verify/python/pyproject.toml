@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlasent-verify"
+version = "0.1.0rc0"
+description = "Offline verifier for AtlaSent signed audit-export bundles"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+    { name = "AtlaSent Systems Inc.", email = "sdk@atlasent.io" },
+]
+keywords = ["atlasent", "audit", "verify", "ed25519", "compliance", "21cfr", "gxp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Typing :: Typed",
+]
+# atlasent-verify currently re-exports the verifier from `atlasent`
+# so its only runtime dep is the main SDK. A future release will
+# relocate the verifier source and drop this dependency.
+dependencies = [
+    "atlasent>=1.4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/tree/main/verify/python"
+Issues = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues"
+
+[tool.setuptools.packages.find]
+include = ["atlasent_verify*"]
