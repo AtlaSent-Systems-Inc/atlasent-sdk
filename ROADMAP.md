@@ -8,16 +8,14 @@ Status snapshot (2026-04-25):
 
 1. **TS SDK publish** — 🚫 BLOCKED on `NPM_TOKEN` (Waqas). Code is at `typescript/package.json` v1.4.0, `publish-npm.yml` workflow exists. Tag → publish.
 2. **Python SDK publish** — 🚫 BLOCKED on `PYPI_TOKEN` (Waqas). Code is at `python/_version.py` v1.4.0, `publish-pypi.yml` workflow exists. Tag → publish.
-3. **Go SDK publish** — ❌ NOT DONE. No `go.mod` exists; no `go/v*` tags. Module needs scaffolding before tag.
+3. **Go SDK publish** — ✅ DONE (scaffold). `go/go.mod`, `go/client.go`, `go/types.go`, `go/client_test.go`, `go/doc.go`, `go/README.md` all in place; `go build / vet / test` green; coverage 96.8%. Tag `go/v1.0.0` to publish — Go modules resolve from git tags, no workflow needed.
 4. **v1-only API sweep** — ✅ DONE. No `v2` references in `typescript/src/` or `python/atlasent/` source. (Roadmap docs reference "v2" planning waves; that's intentional.)
-5. **Offline verifier** — ❌ NOT DONE. `verifyBundle()` is exported from the main SDK; not yet split out as `@atlasent/verify`.
-6. **SSO-aware types** — ❌ NOT DONE. `SsoConnection`, `SsoJitRule`, `SsoEvent` not exported from `@atlasent/types`. The `atlasent-api/v1-sso` handler is shipped, so the wire shapes are pinnable now.
+5. **Offline verifier** — ✅ DONE. Carved out into `typescript/packages/verify/` as `@atlasent/verify@1.0.0` — zero runtime deps, `bin: atlasent-verify`, dual ESM/CJS, README, 34 tests at 98% line coverage. Main SDK re-exports `verifyBundle` so existing consumers keep working; bumped to `1.4.1`.
+6. **SSO-aware types** — ✅ DONE (in this SDK). `SsoConnection`, `SsoJitRule`, `SsoEvent` (+ `SsoProtocol`, `SsoCanonicalRole`, `SsoEventType`) exported from `@atlasent/sdk` and from `atlasent` (Python). New `client.sso.events.list({…})` namespace on both. Upstream sync TODO: also publish from `atlasent-api/packages/types/src/index.ts` so the SDK becomes a thin mirror like the audit surface is today.
 
 ### Movable now (no external dependencies)
 
-- Export `SsoConnection`, `SsoJitRule`, `SsoEvent` from `@atlasent/types` (sourced from `atlasent-api/packages/types/src/`) — item 6.
-- Carve out `@atlasent/verify` as a thin re-export of `verifyBundle()` with no SDK runtime imports — item 5.
-- Scaffold the Go SDK module: `go/go.mod`, `go/client.go`, `go/types.go` (mirror TS shapes), `go/README.md`. Keeps tag-and-publish a one-line operation when `NPM_TOKEN` arrives — item 3.
+_All clear — items 3, 5, 6 above shipped on this branch. Remaining items wait on external secrets._
 
 ### Blocked on external
 
