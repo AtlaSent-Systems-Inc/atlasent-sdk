@@ -1,0 +1,33 @@
+{
+  "name": "@atlasent/sentry-preview",
+  "version": "2.0.0-preview.0",
+  "description": "Preview Sentry adapter for AtlaSent. Wraps an AtlaSentClient with automatic breadcrumb emission around each authorization call. DO NOT USE IN PRODUCTION.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@atlasent/sdk": "^1.5.0",
+    "@sentry/core": "^8.0.0"
+  },
+  "devDependencies": {
+    "@atlasent/sdk": "file:../../",
+    "@sentry/core": "^8.0.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.5.0"
+  },
+  "keywords": [
+    "atlasent",
+    "sentry",
+    "observability",
+    "v2-preview"
+  ]
+}
