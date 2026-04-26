@@ -61,3 +61,10 @@ export {
   type GraphQLRequest,
   type GraphQLResponse,
 } from "./graphql/index.js";
+export {
+  GENESIS_HASH,
+  generateProof,
+  generateProofChain,
+  type GenerateProofInput,
+  type GenerateProofOptions,
+} from "./generateProof.js";
