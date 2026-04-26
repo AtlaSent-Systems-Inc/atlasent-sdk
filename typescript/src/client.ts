@@ -93,31 +93,26 @@ export class AtlaSentClient {
    * {@link AtlaSentError}.
    */
   async evaluate(input: EvaluateRequest): Promise<EvaluateResponse> {
-    // Engine expects action_type / actor_id (not action / agent)
     const body = {
-      action_type: input.action,
-      actor_id: input.agent,
+      action: input.action,
+      agent: input.agent,
       context: input.context ?? {},
       api_key: this.apiKey,
     };
     const { body: wire, rateLimit } = await this.post<EvaluateWire>("/v1-evaluate", body);
 
-    // Engine returns "allow" (bool) and "evaluation_id". On deny, evaluation_id may be null.
-    const allowed = (wire as any).allow ?? wire.permitted;
-    const evalId  = (wire as any).evaluation_id ?? wire.decision_id ?? "";
-
-    if (typeof allowed !== "boolean") {
+    if (typeof wire.permitted !== "boolean" || typeof wire.decision_id !== "string") {
       throw new AtlaSentError(
-        "Malformed response from /v1-evaluate: missing `allow`",
+        "Malformed response from /v1-evaluate: missing `permitted` or `decision_id`",
         { code: "bad_response" },
       );
     }
 
     return {
-      decision: allowed ? "ALLOW" : "DENY",
-      permitId: evalId,
-      reason: wire.reason ?? (wire as any).reason ?? "",
-      auditHash: wire.audit_hash ?? (wire as any).proof ?? "",
+      decision: wire.permitted ? "ALLOW" : "DENY",
+      permitId: wire.decision_id,
+      reason: wire.reason ?? "",
+      auditHash: wire.audit_hash ?? "",
       timestamp: wire.timestamp ?? "",
       rateLimit,
     };
@@ -134,8 +129,8 @@ export class AtlaSentClient {
   ): Promise<VerifyPermitResponse> {
     const body = {
       decision_id: input.permitId,
-      action_type: input.action ?? "",
-      actor_id: input.agent ?? "",
+      action: input.action ?? "",
+      agent: input.agent ?? "",
       context: input.context ?? {},
       api_key: this.apiKey,
     };
