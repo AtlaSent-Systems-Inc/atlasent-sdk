@@ -1,0 +1,23 @@
+{
+  "description": "Empty containers and nested empties.",
+  "vectors": [
+    {
+      "name": "empty_object",
+      "input": {},
+      "expected": "{}"
+    },
+    {
+      "name": "empty_array",
+      "input": [],
+      "expected": "[]"
+    },
+    {
+      "name": "nested_empties",
+      "input": {
+        "obj": {},
+        "arr": []
+      },
+      "expected": "{\"arr\":[],\"obj\":{}}"
+    }
+  ]
+}
