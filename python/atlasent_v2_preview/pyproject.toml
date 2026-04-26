@@ -57,6 +57,7 @@ atlasent_v2_preview = ["py.typed"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["atlasent_v2_preview"]
