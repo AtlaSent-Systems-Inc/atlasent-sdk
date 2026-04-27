@@ -18,7 +18,7 @@ trips the full envelope for signature verification.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -255,5 +255,86 @@ class ProofVerificationResult(BaseModel):
 
     checks: list[ProofVerificationCheck] = Field(min_length=1)
     """Per-check results."""
+
+    model_config = {"extra": "allow"}
+
+
+# ──────────────────────────── EvaluateBatch ────────────────────────────
+
+BatchProofStatus = Literal["pending", "executed", "failed", "not_applicable"]
+"""Pillar 9 proof SLA reported on a batch evaluate item."""
+
+
+class BatchEvaluateItem(BaseModel):
+    """One entry in :class:`EvaluateBatchRequest.requests`.
+
+    Mirrors v1 EvaluateRequest plus optional ``payload_hash`` /
+    ``target`` for items that opt into the Pillar 9 proof flow.
+
+    See ``contract/schemas/v2/evaluate-batch-request.schema.json``.
+    """
+
+    action: str = Field(min_length=1, max_length=256)
+    """Same semantics as ``/v1-evaluate-request.action``."""
+
+    agent: str = Field(min_length=1, max_length=256)
+    """Same semantics as ``/v1-evaluate-request.agent``."""
+
+    context: dict[str, Any]
+    """Same semantics as ``/v1-evaluate-request.context``."""
+
+    payload_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    """Optional SHA-256 hex of ``canonicalize_payload(payload)`` — opt-in proof flow."""
+
+    target: str | None = None
+    """Optional target resource identifier."""
+
+    model_config = {"extra": "forbid"}
+
+
+class EvaluateBatchRequest(BaseModel):
+    """Wire payload for ``POST /v2/evaluate:batch``.
+
+    See ``contract/schemas/v2/evaluate-batch-request.schema.json``.
+    """
+
+    requests: list[BatchEvaluateItem] = Field(min_length=1, max_length=1000)
+    """Per-item evaluate requests. 1..1000 items."""
+
+    api_key: str
+    """API key echoed in the body."""
+
+    model_config = {"extra": "forbid"}
+
+
+class BatchEvaluateResponseItem(BaseModel):
+    """One entry in :class:`EvaluateBatchResponse.items`.
+
+    Matches the inbound request at ``requests[index]``. See
+    ``contract/schemas/v2/evaluate-batch-response.schema.json``.
+    """
+
+    index: int = Field(ge=0)
+    permitted: bool
+    decision_id: str
+    reason: str
+    audit_hash: str
+    timestamp: str
+    batch_id: str
+    proof_id: str | None = None
+    proof_status: BatchProofStatus | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class EvaluateBatchResponse(BaseModel):
+    """Response from ``POST /v2/evaluate:batch``.
+
+    ``items[i]`` decides ``requests[i]`` from the inbound payload —
+    order preservation is a wire guarantee.
+    """
+
+    batch_id: str
+    items: list[BatchEvaluateResponseItem] = Field(min_length=1)
 
     model_config = {"extra": "allow"}

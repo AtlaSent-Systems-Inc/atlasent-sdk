@@ -16,9 +16,14 @@ export {
   type V2ClientOptions,
 } from "./client.js";
 export type {
+  BatchEvaluateItem,
+  BatchEvaluateResponseItem,
+  BatchProofStatus,
   ConsumeExecutionStatus,
   ConsumeRequest,
   ConsumeResponse,
+  EvaluateBatchRequest,
+  EvaluateBatchResponse,
   Proof,
   ProofCheckName,
   ProofDecision,
