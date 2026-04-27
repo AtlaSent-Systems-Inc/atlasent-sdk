@@ -259,3 +259,48 @@ export interface EvaluateBatchResponse {
   /** Ordered per-item decisions. */
   items: BatchEvaluateResponseItem[];
 }
+
+// ─────────────────────────── DecisionEvent (SSE) ──────────────────────────
+
+/**
+ * Discriminator for {@link DecisionEvent}. Seven event types cover the
+ * full permit lifecycle. SDKs MUST forward unknown types verbatim
+ * (forward-compatibility) — old clients against new servers continue
+ * to receive events as opaque data rather than failing parse.
+ *
+ * @see `contract/schemas/v2/decision-event.schema.json`
+ */
+export type DecisionEventType =
+  | "permit_issued"
+  | "verified"
+  | "consumed"
+  | "revoked"
+  | "escalated"
+  | "hold_resolved"
+  | "rate_limit_state";
+
+/**
+ * Server-sent event emitted on `GET /v2/decisions:subscribe`. Each
+ * event is one JSON object on the SSE `data:` line; `id` doubles as
+ * the SSE `Last-Event-ID` so clients resume cleanly after reconnect.
+ *
+ * Per-type payload shapes are documented in the JSON Schema `$defs`;
+ * the SDK keeps `payload` typed as `Record<string, unknown>` so
+ * unknown fields forward-compatibly.
+ */
+export interface DecisionEvent {
+  /** Monotonic per-org event id. Echoes back as Last-Event-ID on reconnect. */
+  id: string;
+  /** Event type discriminator. Unknown types forward as opaque strings. */
+  type: DecisionEventType | string;
+  /** Organization the event belongs to. */
+  org_id: string;
+  /** ISO 8601 timestamp the event was emitted by the server. */
+  emitted_at: string;
+  /** Decision id; present on every type except `rate_limit_state`. */
+  permit_id?: string;
+  /** Actor that triggered the event. Null on system-triggered events. */
+  actor_id?: string | null;
+  /** Per-type payload. Unknown fields forward verbatim. */
+  payload?: Record<string, unknown>;
+}

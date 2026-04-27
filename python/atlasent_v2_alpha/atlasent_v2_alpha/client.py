@@ -12,14 +12,18 @@ mirrors the corresponding v2 schema in ``contract/schemas/v2/``.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Iterator
 from typing import Any, Literal
 
 import httpx
 
+from .sse import parse_sse_lines
 from .types import (
     BatchEvaluateItem,
     ConsumeRequest,
     ConsumeResponse,
+    DecisionEvent,
     EvaluateBatchRequest,
     EvaluateBatchResponse,
     ProofVerificationResult,
@@ -158,6 +162,66 @@ class AtlaSentV2Client:
         path = f"/v2/proofs/{_quote(proof_id)}/verify"
         data = self._post(path, {"api_key": self._api_key})
         return ProofVerificationResult.model_validate(data)
+
+    def subscribe_decisions(
+        self,
+        *,
+        last_event_id: str | None = None,
+    ) -> Iterator[DecisionEvent]:
+        """Subscribe to the v2 decision-event stream (Pillar 3).
+
+        Yields one :class:`DecisionEvent` per server frame. Iterate
+        with ``for event in client.subscribe_decisions():``.
+
+        Reconnect: on disconnect, restart by passing the last seen
+        ``event.id`` as ``last_event_id`` and the server replays from
+        there.
+
+        Cancel: stop iterating; the underlying httpx stream is closed
+        when the generator is exhausted or garbage-collected.
+        """
+        url = f"{self._base_url}/v2/decisions:subscribe"
+        headers = {
+            "Accept": "text/event-stream",
+            "Authorization": f"Bearer {self._api_key}",
+            "User-Agent": "atlasent-v2-alpha-python/2.0.0a0",
+        }
+        if last_event_id:
+            headers["Last-Event-ID"] = last_event_id
+
+        try:
+            with self._client.stream("GET", url, headers=headers) as response:
+                if response.status_code == 401:
+                    raise V2Error(
+                        "Invalid API key",
+                        status_code=401,
+                        code="invalid_api_key",
+                    )
+                if not response.is_success:
+                    raise V2Error(
+                        f"API error {response.status_code} on /v2/decisions:subscribe",
+                        status_code=response.status_code,
+                        code="http_error",
+                    )
+                for frame in parse_sse_lines(response.iter_lines()):
+                    if not frame.data:
+                        continue
+                    try:
+                        payload = json.loads(frame.data)
+                    except ValueError:
+                        # Malformed JSON in a frame — skip rather than
+                        # tear down the whole stream. Wire contract is
+                        # JSON-per-frame.
+                        continue
+                    if isinstance(payload, dict):
+                        yield DecisionEvent.model_validate(payload)
+        except httpx.TimeoutException as exc:
+            raise V2Error(
+                f"Request to /v2/decisions:subscribe timed out after {self._timeout}s",
+                code="timeout",
+            ) from exc
+        except httpx.ConnectError as exc:
+            raise V2Error(f"Failed to connect to {url}: {exc}", code="network") from exc
 
     def _post(self, path: str, body: Any) -> Any:
         url = f"{self._base_url}{path}"

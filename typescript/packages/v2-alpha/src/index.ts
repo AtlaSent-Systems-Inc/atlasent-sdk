@@ -15,6 +15,7 @@ export {
   type ConsumeInput,
   type V2ClientOptions,
 } from "./client.js";
+export { parseSSE, type SSEFrame } from "./sse.js";
 export type {
   BatchEvaluateItem,
   BatchEvaluateResponseItem,
@@ -22,6 +23,8 @@ export type {
   ConsumeExecutionStatus,
   ConsumeRequest,
   ConsumeResponse,
+  DecisionEvent,
+  DecisionEventType,
   EvaluateBatchRequest,
   EvaluateBatchResponse,
   Proof,
