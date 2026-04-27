@@ -1,4 +1,5 @@
 """Tests for atlasent.behavior — consent + redaction MVP."""
+
 from __future__ import annotations
 
 import json
@@ -7,7 +8,6 @@ from dataclasses import asdict
 import pytest
 
 from atlasent.behavior import (
-    DEFAULT_CONSENT,
     SENSITIVE_CATEGORIES,
     BehaviorEvent,
     ConsentDeniedError,
@@ -121,27 +121,18 @@ class TestConsentManager:
 
     def test_private_only_mode_blocks_emit(self) -> None:
         self.consent.set(share_state_summaries=True, private_only_mode=True)
-        assert (
-            self.consent.can_emit("ledgers-me", "behavior.health.mental")
-            is False
-        )
+        assert self.consent.can_emit("ledgers-me", "behavior.health.mental") is False
 
     def test_share_off_blocks_even_with_allowlist(self) -> None:
         self.consent.set(
             share_state_summaries=False,
             receivers={"ledgers-me": ["behavior.health.mental"]},
         )
-        assert (
-            self.consent.can_emit("ledgers-me", "behavior.health.mental")
-            is False
-        )
+        assert self.consent.can_emit("ledgers-me", "behavior.health.mental") is False
 
     def test_share_on_no_allowlist_allows_any(self) -> None:
         self.consent.set(share_state_summaries=True)
-        assert (
-            self.consent.can_emit("ledgers-me", "behavior.health.mental")
-            is True
-        )
+        assert self.consent.can_emit("ledgers-me", "behavior.health.mental") is True
         assert self.consent.can_emit("anyone", "behavior.financial") is True
 
     def test_share_on_with_allowlist_denies_non_listed_pairs(self) -> None:
@@ -149,16 +140,9 @@ class TestConsentManager:
             share_state_summaries=True,
             receivers={"ledgers-me": ["behavior.health.mental"]},
         )
-        assert (
-            self.consent.can_emit("ledgers-me", "behavior.health.mental")
-            is True
-        )
-        assert (
-            self.consent.can_emit("ledgers-me", "behavior.financial") is False
-        )
-        assert (
-            self.consent.can_emit("other", "behavior.health.mental") is False
-        )
+        assert self.consent.can_emit("ledgers-me", "behavior.health.mental") is True
+        assert self.consent.can_emit("ledgers-me", "behavior.financial") is False
+        assert self.consent.can_emit("other", "behavior.health.mental") is False
 
     def test_falls_back_to_defaults_on_malformed_json(self) -> None:
         self.storage.set("atlasent.behavior.consent.u_1", "{not-json")
@@ -254,7 +238,9 @@ class TestStateEventCache:
         cache = StateEventCache(2)
         snap = _sample_snapshot()
         for i in (1, 2, 3):
-            cache.add(redact_state_snapshot(StateSnapshot(**{**asdict(snap), "intensity": i})))
+            cache.add(
+                redact_state_snapshot(StateSnapshot(**{**asdict(snap), "intensity": i}))
+            )
         recent = cache.recent()
         assert tuple(s.intensity for s in recent) == (2, 3)
 
@@ -262,7 +248,9 @@ class TestStateEventCache:
         cache = StateEventCache(5)
         snap = _sample_snapshot()
         for i in range(1, 6):
-            cache.add(redact_state_snapshot(StateSnapshot(**{**asdict(snap), "intensity": i})))
+            cache.add(
+                redact_state_snapshot(StateSnapshot(**{**asdict(snap), "intensity": i}))
+            )
         assert tuple(s.intensity for s in cache.recent(2)) == (4, 5)
 
     def test_recent_no_arg_returns_all(self) -> None:

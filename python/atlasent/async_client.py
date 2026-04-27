@@ -13,6 +13,7 @@ import httpx
 
 from ._version import __version__
 from .audit import AuditEventsResult, AuditExportResult
+from .client import _parse_rate_limit_headers
 from .exceptions import (
     AtlaSentDenied,
     AtlaSentDeniedError,
@@ -20,7 +21,6 @@ from .exceptions import (
     PermissionDeniedError,
     RateLimitError,
 )
-from .client import _parse_rate_limit_headers
 from .models import (
     ApiKeySelfResult,
     AuthorizationResult,
@@ -368,9 +368,7 @@ class AsyncAtlaSentClient:
                 response_body=data,
             )
 
-        return ApiKeySelfResult.model_validate(
-            {**data, "rate_limit": rate_limit}
-        )
+        return ApiKeySelfResult.model_validate({**data, "rate_limit": rate_limit})
 
     async def list_audit_events(
         self,
@@ -443,9 +441,7 @@ class AsyncAtlaSentClient:
             payload["to"] = to
 
         logger.debug("create_audit_export filter=%r (async)", payload)
-        data, rate_limit, request_id = await self._post(
-            "/v1-audit/exports", payload
-        )
+        data, rate_limit, request_id = await self._post("/v1-audit/exports", payload)
 
         if (
             not isinstance(data.get("export_id"), str)
@@ -511,7 +507,9 @@ class AsyncAtlaSentClient:
         for attempt in range(1 + self._max_retries):
             try:
                 if method == "POST":
-                    response = await self._client.post(url, json=payload, headers=headers)
+                    response = await self._client.post(
+                        url, json=payload, headers=headers
+                    )
                 else:
                     response = await self._client.get(
                         url, headers=headers, params=params

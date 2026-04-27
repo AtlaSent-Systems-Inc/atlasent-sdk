@@ -783,7 +783,6 @@ class TestKeySelf:
         client.key_self()
         assert get_mock.call_count == 1
         assert post_mock.call_count == 0
-        url, _ = get_mock.call_args[0], get_mock.call_args[1]
         assert "/v1-api-key-self" in get_mock.call_args[0][0]
 
     def test_surfaces_rate_limit_headers(self, client, mocker):
@@ -820,7 +819,11 @@ class TestKeySelf:
     def test_bad_response_on_missing_key_id(self, client, mocker):
         resp = _mock_resp(
             mocker,
-            json_data={"organization_id": "o", "environment": "live", "rate_limit_per_minute": 60},
+            json_data={
+                "organization_id": "o",
+                "environment": "live",
+                "rate_limit_per_minute": 60,
+            },
         )
         mocker.patch.object(client._client, "get", return_value=resp)
         with pytest.raises(AtlaSentError) as excinfo:

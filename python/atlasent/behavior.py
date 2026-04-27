@@ -49,12 +49,13 @@ The MVP is pure and on-device — no HTTP calls. A future
 ``RemoteBehaviorLedger`` will POST to ``/v1/behavior/events`` once the
 atlasent-api endpoint ships.
 """
+
 from __future__ import annotations
 
 import json
 from collections import deque
-from dataclasses import asdict, dataclass, field
-from typing import Deque, Iterable, Literal, Optional, Protocol, Tuple
+from dataclasses import dataclass
+from typing import Literal, Protocol
 
 # ---------------------------------------------------------------------------
 # Sensitive-category vocabulary
@@ -67,7 +68,7 @@ SensitiveCategory = Literal[
     "behavior.minor",
 ]
 
-SENSITIVE_CATEGORIES: Tuple[SensitiveCategory, ...] = (
+SENSITIVE_CATEGORIES: tuple[SensitiveCategory, ...] = (
     "behavior.health.mental",
     "behavior.health.adherence",
     "behavior.financial",
@@ -120,7 +121,7 @@ class StateSnapshot:
     readiness_level: ReadinessLevel
     confidence_score: float  # 0..1
     created_at: str  # ISO 8601
-    note: Optional[str] = None  # NEVER part of the redacted summary
+    note: str | None = None  # NEVER part of the redacted summary
 
 
 @dataclass(frozen=True)
@@ -144,11 +145,11 @@ class BehaviorEvent:
     source: str  # "hicoach" | "echobloom" | "ledgers-me" | <other>
     category: SensitiveCategory
     entry_state_summary: StateEventSummary
-    exit_state_summary: Optional[StateEventSummary]
-    relief_delta: Optional[float]
+    exit_state_summary: StateEventSummary | None
+    relief_delta: float | None
     confidence_score: float
     timestamp: str  # ISO 8601
-    safety_signals: Tuple[str, ...] = ()
+    safety_signals: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +164,7 @@ class ConsentSettings:
     share_state_summaries: bool = False
     private_only_mode: bool = False
     # Optional per-receiver allowlist mapping receiver name to allowed categories.
-    receivers: Optional[dict] = None  # type: ignore[type-arg]
+    receivers: dict | None = None  # type: ignore[type-arg]
 
 
 DEFAULT_CONSENT: ConsentSettings = ConsentSettings()
@@ -172,7 +173,7 @@ DEFAULT_CONSENT: ConsentSettings = ConsentSettings()
 class ConsentStorage(Protocol):
     """Storage abstraction so the helper works in-memory or on disk."""
 
-    def get(self, key: str) -> Optional[str]: ...
+    def get(self, key: str) -> str | None: ...
     def set(self, key: str, value: str) -> None: ...
 
 
@@ -182,7 +183,7 @@ class MemoryStorage:
     def __init__(self) -> None:
         self._store: dict = {}
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         return self._store.get(key)
 
     def set(self, key: str, value: str) -> None:
@@ -200,8 +201,8 @@ class ConsentManager:
         self,
         *,
         user_id: str,
-        storage: Optional[ConsentStorage] = None,
-        defaults: Optional[ConsentSettings] = None,
+        storage: ConsentStorage | None = None,
+        defaults: ConsentSettings | None = None,
     ) -> None:
         self._key = f"atlasent.behavior.consent.{user_id}"
         self._storage = storage or MemoryStorage()
@@ -214,9 +215,7 @@ class ConsentManager:
                 share_state_summaries=self._defaults.share_state_summaries,
                 private_only_mode=self._defaults.private_only_mode,
                 receivers=(
-                    dict(self._defaults.receivers)
-                    if self._defaults.receivers
-                    else None
+                    dict(self._defaults.receivers) if self._defaults.receivers else None
                 ),
             )
         try:
@@ -226,9 +225,7 @@ class ConsentManager:
                 share_state_summaries=self._defaults.share_state_summaries,
                 private_only_mode=self._defaults.private_only_mode,
                 receivers=(
-                    dict(self._defaults.receivers)
-                    if self._defaults.receivers
-                    else None
+                    dict(self._defaults.receivers) if self._defaults.receivers else None
                 ),
             )
         return ConsentSettings(
@@ -247,9 +244,9 @@ class ConsentManager:
     def set(
         self,
         *,
-        share_state_summaries: Optional[bool] = None,
-        private_only_mode: Optional[bool] = None,
-        receivers: Optional[dict] = None,  # type: ignore[type-arg]
+        share_state_summaries: bool | None = None,
+        private_only_mode: bool | None = None,
+        receivers: dict | None = None,  # type: ignore[type-arg]
     ) -> ConsentSettings:
         current = self.get()
         nxt = ConsentSettings(
@@ -354,9 +351,7 @@ class InMemoryBehaviorLedger:
     ``/v1/behavior/events`` once that endpoint ships.
     """
 
-    def __init__(
-        self, *, consent: ConsentManager, receiver: str = "in-memory"
-    ) -> None:
+    def __init__(self, *, consent: ConsentManager, receiver: str = "in-memory") -> None:
         self._consent = consent
         self._receiver = receiver
         self._events: list = []
@@ -366,7 +361,7 @@ class InMemoryBehaviorLedger:
             raise ConsentDeniedError(self._receiver, event.category)
         self._events.append(event)
 
-    def list(self) -> Tuple[BehaviorEvent, ...]:
+    def list(self) -> tuple[BehaviorEvent, ...]:
         """Read all events accepted so far. Test/demo helper."""
         return tuple(self._events)
 
@@ -391,12 +386,12 @@ class StateEventCache:
     def __init__(self, capacity: int = 10) -> None:
         if capacity <= 0:
             raise ValueError("capacity must be > 0")
-        self._buf: Deque[StateEventSummary] = deque(maxlen=capacity)
+        self._buf: deque[StateEventSummary] = deque(maxlen=capacity)
 
     def add(self, summary: StateEventSummary) -> None:
         self._buf.append(summary)
 
-    def recent(self, n: Optional[int] = None) -> Tuple[StateEventSummary, ...]:
+    def recent(self, n: int | None = None) -> tuple[StateEventSummary, ...]:
         items = list(self._buf)
         if n is None:
             return tuple(items)

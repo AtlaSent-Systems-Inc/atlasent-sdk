@@ -448,9 +448,7 @@ class AtlaSentClient:
                 response_body=data,
             )
 
-        return ApiKeySelfResult.model_validate(
-            {**data, "rate_limit": rate_limit}
-        )
+        return ApiKeySelfResult.model_validate({**data, "rate_limit": rate_limit})
 
     def list_audit_events(
         self,
@@ -592,9 +590,7 @@ class AtlaSentClient:
         """
         return self._request("POST", path, payload)
 
-    def _get(
-        self, path: str
-    ) -> tuple[dict[str, Any], RateLimitState | None, str]:
+    def _get(self, path: str) -> tuple[dict[str, Any], RateLimitState | None, str]:
         """GET with retry on transient failures (5xx, timeouts).
 
         Returns ``(body, rate_limit, request_id)`` — same shape as
@@ -625,9 +621,7 @@ class AtlaSentClient:
                 if method == "POST":
                     response = self._client.post(url, json=payload, headers=headers)
                 else:
-                    response = self._client.get(
-                        url, headers=headers, params=params
-                    )
+                    response = self._client.get(url, headers=headers, params=params)
             except httpx.TimeoutException as exc:
                 logger.warning(
                     "%s timeout (attempt %d/%d)",
