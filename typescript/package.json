@@ -28,6 +28,16 @@
         "default": "./dist/hono.cjs"
       }
     },
+    "./behavior": {
+      "import": {
+        "types": "./dist/behavior.d.ts",
+        "default": "./dist/behavior.js"
+      },
+      "require": {
+        "types": "./dist/behavior.d.cts",
+        "default": "./dist/behavior.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
