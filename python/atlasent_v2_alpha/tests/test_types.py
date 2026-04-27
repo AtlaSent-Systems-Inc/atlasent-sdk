@@ -89,9 +89,9 @@ class TestSchemaParity:
         schema = _load_schema(schema_file)
         fields = set(model.model_fields.keys())
         for req in schema.get("required", []):
-            assert req in fields, (
-                f"{model.__name__} missing schema-required field '{req}'"
-            )
+            assert (
+                req in fields
+            ), f"{model.__name__} missing schema-required field '{req}'"
 
     def test_proof_round_trips(self):
         proof = Proof.model_validate(FULL_PROOF)
@@ -141,6 +141,6 @@ class TestProofFieldOrder:
         schema = _load_schema("proof.schema.json")
         schema_order = list(schema["properties"].keys())
         model_order = list(Proof.model_fields.keys())
-        assert model_order == schema_order, (
-            "Proof field order drifted from contract/schemas/v2/proof.schema.json"
-        )
+        assert (
+            model_order == schema_order
+        ), "Proof field order drifted from contract/schemas/v2/proof.schema.json"

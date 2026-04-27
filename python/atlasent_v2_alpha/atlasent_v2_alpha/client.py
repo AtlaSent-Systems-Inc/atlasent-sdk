@@ -1,0 +1,178 @@
+"""V2 HTTP client (synchronous, httpx-based).
+
+Surfaces the v2 lifecycle methods the alpha pack ships:
+
+* ``consume()``      — close a permit lifecycle with a proof
+* ``verify_proof()`` — server-side verification of an emitted proof
+
+Future PRs in the v2-alpha series add ``evaluate_batch()`` and
+``subscribe_decisions()``. Each method returns a pydantic model that
+mirrors the corresponding v2 schema in ``contract/schemas/v2/``.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Literal
+
+import httpx
+
+from .types import ConsumeRequest, ConsumeResponse, ProofVerificationResult
+
+DEFAULT_BASE_URL = "https://api.atlasent.io"
+DEFAULT_TIMEOUT = 10.0
+
+
+class V2Error(Exception):
+    """Raised for any non-2xx response, network failure, or timeout."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        code: str | None = None,
+        response_body: Any = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+        self.response_body = response_body
+
+
+class AtlaSentV2Client:
+    """Synchronous client for the v2 AtlaSent API.
+
+    Args:
+        api_key: Your AtlaSent API key (required).
+        base_url: Override the default ``https://api.atlasent.io``.
+        timeout: Per-request timeout in seconds. Defaults to 10s.
+        client: Inject a custom ``httpx.Client`` (primarily for tests).
+
+    The client owns its underlying ``httpx.Client``. Use as a context
+    manager or call :meth:`close` when finished, mirroring v1 ergonomics.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        base_url: str = DEFAULT_BASE_URL,
+        timeout: float = DEFAULT_TIMEOUT,
+        client: httpx.Client | None = None,
+    ) -> None:
+        if not api_key:
+            raise V2Error("api_key is required", code="invalid_api_key")
+        self._api_key = api_key
+        self._base_url = base_url.rstrip("/")
+        self._timeout = timeout
+        self._client = client or httpx.Client(
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": f"Bearer {api_key}",
+                "User-Agent": "atlasent-v2-alpha-python/2.0.0a0",
+            },
+            timeout=timeout,
+        )
+
+    def __enter__(self) -> AtlaSentV2Client:
+        return self
+
+    def __exit__(self, *_exc_info: Any) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Close the underlying HTTP client."""
+        self._client.close()
+
+    def consume(
+        self,
+        permit_id: str,
+        payload_hash: str,
+        execution_status: Literal["executed", "failed"],
+        *,
+        execution_hash: str | None = None,
+    ) -> ConsumeResponse:
+        """Close a permit lifecycle by recording the wrapped callback's outcome.
+
+        Mirrors ``POST /v2/permits/:id/consume``. The raw payload is
+        never sent — only ``payload_hash`` (compute it via
+        :func:`hash_payload`).
+        """
+        request = ConsumeRequest(
+            permit_id=permit_id,
+            payload_hash=payload_hash,
+            execution_status=execution_status,
+            execution_hash=execution_hash,
+            api_key=self._api_key,
+        )
+        path = f"/v2/permits/{_quote(permit_id)}/consume"
+        data = self._post(
+            path,
+            request.model_dump(by_alias=True, exclude_none=True),
+        )
+        return ConsumeResponse.model_validate(data)
+
+    def verify_proof(self, proof_id: str) -> ProofVerificationResult:
+        """Server-side proof verification.
+
+        Mirrors ``POST /v2/proofs/:id/verify``. Returns the canonical
+        :class:`ProofVerificationResult` that the offline CLI also
+        produces — online and offline paths emit byte-identical output.
+        """
+        if not proof_id:
+            raise V2Error("proof_id is required", code="invalid_argument")
+        path = f"/v2/proofs/{_quote(proof_id)}/verify"
+        data = self._post(path, {"api_key": self._api_key})
+        return ProofVerificationResult.model_validate(data)
+
+    def _post(self, path: str, body: Any) -> Any:
+        url = f"{self._base_url}{path}"
+        try:
+            response = self._client.post(url, json=body)
+        except httpx.TimeoutException as exc:
+            raise V2Error(
+                f"Request to {path} timed out after {self._timeout}s",
+                code="timeout",
+            ) from exc
+        except httpx.ConnectError as exc:
+            raise V2Error(
+                f"Failed to connect to {url}: {exc}",
+                code="network",
+            ) from exc
+
+        body_text = response.text or ""
+        parsed: Any = None
+        if body_text:
+            try:
+                parsed = response.json()
+            except ValueError:
+                if response.is_success:
+                    raise V2Error(
+                        f"Malformed JSON in response from {path}",
+                        status_code=response.status_code,
+                        code="bad_response",
+                    ) from None
+
+        if not response.is_success:
+            code = "invalid_api_key" if response.status_code == 401 else "http_error"
+            message = (
+                "Invalid API key"
+                if response.status_code == 401
+                else f"API error {response.status_code} on {path}"
+            )
+            raise V2Error(
+                message,
+                status_code=response.status_code,
+                code=code,
+                response_body=parsed if parsed is not None else body_text,
+            )
+
+        return parsed
+
+
+def _quote(s: str) -> str:
+    """URL-quote a path segment. Lazy import to avoid a hard urllib import."""
+    from urllib.parse import quote
+
+    return quote(s, safe="")
