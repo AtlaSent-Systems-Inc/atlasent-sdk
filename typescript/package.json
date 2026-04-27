@@ -82,7 +82,7 @@
     "access": "public"
   },
   "devDependencies": {
-    "@types/node": "^20.12.7",
+    "@types/node": "^25.6.0",
     "@vitest/coverage-v8": "^1.5.0",
     "hono": "^4.12.15",
     "tsup": "^8.0.2",
