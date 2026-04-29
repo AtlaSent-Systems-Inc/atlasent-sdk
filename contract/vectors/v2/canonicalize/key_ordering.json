@@ -1,0 +1,56 @@
+{
+  "description": "Object keys MUST sort lexicographically at every depth. Unicode keys sort by their string ordering.",
+  "vectors": [
+    {
+      "name": "two_keys_unsorted_input",
+      "input": {
+        "b": 1,
+        "a": 2
+      },
+      "expected": "{\"a\":2,\"b\":1}"
+    },
+    {
+      "name": "nested_unsorted",
+      "input": {
+        "b": {
+          "d": 4,
+          "c": 3
+        },
+        "a": 1
+      },
+      "expected": "{\"a\":1,\"b\":{\"c\":3,\"d\":4}}"
+    },
+    {
+      "name": "deeply_nested_unsorted",
+      "input": {
+        "z": {
+          "y": {
+            "x": 3,
+            "w": 2
+          },
+          "v": 1
+        },
+        "a": [
+          {
+            "c": 1,
+            "b": 2
+          },
+          {
+            "e": 5,
+            "d": 4
+          }
+        ]
+      },
+      "expected": "{\"a\":[{\"b\":2,\"c\":1},{\"d\":4,\"e\":5}],\"z\":{\"v\":1,\"y\":{\"w\":2,\"x\":3}}}"
+    },
+    {
+      "name": "unicode_keys",
+      "input": {
+        "漢": 1,
+        "z": 2,
+        "a": 3
+      },
+      "expected": "{\"a\":3,\"z\":2,\"漢\":1}"
+    }
+  ]
+}
