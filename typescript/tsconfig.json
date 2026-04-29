@@ -27,7 +27,9 @@
 
     "baseUrl": ".",
     "paths": {
-      "@atlasent/sdk": ["./src/index.ts"]
+      "@atlasent/sdk": ["./src/index.ts"],
+      "@atlasent/sdk/hono": ["./src/hono.ts"],
+      "@atlasent/sdk/behavior": ["./src/behavior.ts"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
