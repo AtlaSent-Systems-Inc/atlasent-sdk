@@ -19,6 +19,10 @@ from .batch import (
     parse_evaluate_batch_response,
 )
 from .canonicalize import canonicalize_payload
+from .evaluate_batch_polyfill import (
+    evaluate_batch_polyfilled,
+    evaluate_batch_polyfilled_async,
+)
 from .hash import hash_payload
 from .types import (
     ConsumeExecutionStatus,
@@ -79,4 +83,6 @@ __all__ = [
     "EvaluateBatchResponse",
     "build_evaluate_batch_request",
     "parse_evaluate_batch_response",
+    "evaluate_batch_polyfilled",
+    "evaluate_batch_polyfilled_async",
 ]
