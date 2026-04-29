@@ -111,3 +111,60 @@ An SDK is done with v1 when:
 
 - every checkbox in its section is ticked, AND
 - CI shows `Contract CI` green on the PR that flips the last box.
+
+---
+
+## v2-alpha SDK compatibility
+
+Tracks the `atlasent-v2-alpha` (Py) / `@atlasent/sdk-v2-alpha` (TS)
+packages against the `contract/schemas/v2/` wire law. These packages
+follow alpha semantics — no semver discipline between alpha releases.
+Drift is enforced by `python contract/tools/drift.py` (extended to v2
+in the 2.0.0-alpha.1 cycle).
+
+### Shared (both languages — v2)
+
+- [x] `POST /v2/evaluate:batch` — request body matches
+      `schemas/v2/evaluate-batch-request.schema.json`; response parsed
+      against `evaluate-batch-response.schema.json`. Vectors:
+      `contract/vectors/v2/evaluate-batch.json`.
+- [x] `POST /v2/permits/:id/consume` — request body matches
+      `schemas/v2/consume-request.schema.json`; raw payload NEVER sent,
+      only `payload_hash`. Vectors: `contract/vectors/v2/consume.json`.
+- [x] `POST /v2/proofs/:id/verify` — response parsed against
+      `schemas/v2/proof-verification-result.schema.json`. No request
+      body schema (path param only).
+- [x] `POST /v2/permits:bulk-revoke` — request body matches
+      `schemas/v2/bulk-revoke-request.schema.json`; `revoked_count: 0`
+      not thrown. Vectors: `contract/vectors/v2/bulk-revoke.json`.
+- [x] Drift detector clean: `python contract/tools/drift.py` reports
+      zero drift for both `python-v2` and `typescript-v2` labels.
+
+### v2 Python SDK (`atlasent_v2_alpha`)
+
+| Invariant | Status | Notes |
+|-----------|--------|-------|
+| Pydantic models match schemas | OK | Verified by drift.py v2 extension |
+| `execute` → `executed` status enum | OK | `ConsumeExecutionStatus` |
+| `revoker_id` omitted when `None` | OK | Pydantic `exclude_none` on serialize |
+| `BulkRevokeResponse.revoked_count: 0` not raised | OK | Returns normally |
+
+### v2 TypeScript SDK (`@atlasent/sdk-v2-alpha`)
+
+| Invariant | Status | Notes |
+|-----------|--------|-------|
+| Wire interfaces match schemas | OK | Verified by drift.py v2 extension |
+| `revoker_id` omitted (not sent as `null`) | OK | Conditional spread in `bulkRevoke` |
+| `revoked_count: 0` not thrown | OK | Returns `BulkRevokeResponse` normally |
+| camelCase SDK surface → snake_case wire | OK | All body literals use snake_case |
+
+### v2 follow-up work
+
+- **v2-VEC-001** — wire the `contract/vectors/v2/*.json` vectors into
+  both SDK test suites (mirroring `test_contract_vectors.py` /
+  `contract-vectors.test.ts` on the v1 side).
+- **v2-SSE-001** — add `GET /v2/decisions:subscribe` to the drift
+  detector response check (SSE frames, not pydantic models; needs a
+  separate parser-level vector format).
+- **v2-PROOF-001** — add `GET /v2/proofs/:id` response vectors once
+  the proof system is deployed and a test proof is available.
