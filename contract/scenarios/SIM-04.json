@@ -1,0 +1,64 @@
+{
+  "id": "SIM-04",
+  "title": "Replay attempt",
+  "description": "A permit is consumed by the first Enforce.run() call. A second Enforce.run() call with the same permit token is denied with permit_consumed. execute runs exactly once (on the first call). The mock sequences verify_permit responses: first call succeeds, second returns 409 permit_consumed.",
+  "enforce_config": {
+    "bindings": {
+      "org_id": "org_test",
+      "actor_id": "actor_test",
+      "action_type": "deploy"
+    },
+    "fail_closed": true
+  },
+  "clock": { "now_iso": "2026-04-29T12:00:00Z" },
+  "request": { "commit": "abc123", "environment": "production" },
+  "mocks": {
+    "evaluate": {
+      "type": "response",
+      "decision": "allow",
+      "permit": {
+        "token": "pt_single_use_aabbcc",
+        "expires_at": "2026-04-29T13:00:00Z"
+      },
+      "reason_code": null
+    },
+    "verify_permit": {
+      "type": "sequence",
+      "responses": [
+        {
+          "type": "response",
+          "verified_permit": {
+            "token": "pt_single_use_aabbcc",
+            "org_id": "org_test",
+            "actor_id": "actor_test",
+            "action_type": "deploy",
+            "expires_at": "2026-04-29T13:00:00Z"
+          }
+        },
+        {
+          "type": "http_error",
+          "http_status": 409,
+          "reason_code": "permit_consumed"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "phases": [
+      {
+        "label": "first_run",
+        "decision": "allow",
+        "reason_code": null,
+        "execute_called": true,
+        "verify_permit_called": true
+      },
+      {
+        "label": "replay_attempt",
+        "decision": "deny",
+        "reason_code": "permit_consumed",
+        "execute_called": false,
+        "verify_permit_called": true
+      }
+    ]
+  }
+}

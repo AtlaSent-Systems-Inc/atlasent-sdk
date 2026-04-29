@@ -1,0 +1,30 @@
+{
+  "id": "SIM-01",
+  "title": "No-permit deny",
+  "description": "Server responds to evaluate with a deny decision. No permit is issued. execute must never run.",
+  "enforce_config": {
+    "bindings": {
+      "org_id": "org_test",
+      "actor_id": "actor_test",
+      "action_type": "deploy"
+    },
+    "fail_closed": true
+  },
+  "clock": { "now_iso": "2026-04-29T12:00:00Z" },
+  "request": { "commit": "abc123", "environment": "production" },
+  "mocks": {
+    "evaluate": {
+      "type": "response",
+      "decision": "deny",
+      "permit": null,
+      "reason_code": "policy_deny"
+    },
+    "verify_permit": null
+  },
+  "expected": {
+    "decision": "deny",
+    "reason_code": "policy_deny",
+    "execute_called": false,
+    "verify_permit_called": false
+  }
+}

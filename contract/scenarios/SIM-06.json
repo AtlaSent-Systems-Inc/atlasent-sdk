@@ -1,0 +1,64 @@
+{
+  "id": "SIM-06",
+  "title": "Latency-budget breach during verify",
+  "description": "evaluate returns allow. verifyPermit is artificially slowed past latency_budget_ms. Two cases: deny mode rejects immediately with verify_latency_breach; warn mode waits for verify completion and returns the actual result.",
+  "enforce_config": {
+    "bindings": {
+      "org_id": "org_test",
+      "actor_id": "actor_test",
+      "action_type": "deploy"
+    },
+    "fail_closed": true,
+    "latency_budget_ms": 200
+  },
+  "clock": { "now_iso": "2026-04-29T12:00:00Z" },
+  "request": { "commit": "abc123", "environment": "production" },
+  "mocks": {
+    "evaluate": {
+      "type": "response",
+      "decision": "allow",
+      "permit": {
+        "token": "pt_valid_latency_aabbcc",
+        "expires_at": "2026-04-29T13:00:00Z"
+      },
+      "reason_code": null
+    },
+    "verify_permit": {
+      "type": "delayed",
+      "delay_ms": 500,
+      "then": {
+        "type": "response",
+        "verified_permit": {
+          "token": "pt_valid_latency_aabbcc",
+          "org_id": "org_test",
+          "actor_id": "actor_test",
+          "action_type": "deploy",
+          "expires_at": "2026-04-29T13:00:00Z"
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "label": "deny_mode",
+      "latency_breach_mode": "deny",
+      "expected": {
+        "decision": "deny",
+        "reason_code": "verify_latency_breach",
+        "execute_called": false,
+        "verify_permit_called": true
+      }
+    },
+    {
+      "label": "warn_mode",
+      "latency_breach_mode": "warn",
+      "expected": {
+        "decision": "allow",
+        "reason_code": null,
+        "execute_called": true,
+        "verify_permit_called": true,
+        "warn_emitted": true
+      }
+    }
+  ]
+}

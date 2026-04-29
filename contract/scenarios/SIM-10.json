@@ -1,0 +1,20 @@
+{
+  "id": "SIM-10",
+  "title": "Wrapper-bypass attempt (static lint)",
+  "description": "The enforce-no-bypass lint rule must reject any source file that imports the v1 SDK client and calls evaluate() directly, bypassing the Enforce wrapper. This is a static analysis test, not a runtime test.",
+  "lint_rule": "enforce-no-bypass",
+  "fixtures": {
+    "typescript": "contract/scenarios/SIM-10-bypass-fixture.ts",
+    "python": "contract/scenarios/SIM-10-bypass-fixture.py"
+  },
+  "expected": {
+    "lint_exit_code": 1,
+    "offending_patterns": [
+      "import.*@atlasent/sdk.*evaluate",
+      "AtlasentClient.*evaluate\\(",
+      "from atlasent.*import.*evaluate",
+      "client\\.evaluate\\("
+    ],
+    "error_message_contains": ["enforce-no-bypass", "evaluate"]
+  }
+}
