@@ -1,0 +1,54 @@
+{
+  "id": "SIM-09",
+  "title": "Concurrent consume",
+  "description": "Two Enforce instances with the same bindings race a single-use permit. verifyPermit is allowed to succeed exactly once. Exactly one run() returns allow (execute runs once); the other returns deny with permit_consumed. execute never runs twice.",
+  "enforce_config": {
+    "bindings": {
+      "org_id": "org_test",
+      "actor_id": "actor_test",
+      "action_type": "deploy"
+    },
+    "fail_closed": true
+  },
+  "clock": { "now_iso": "2026-04-29T12:00:00Z" },
+  "request": { "commit": "abc123", "environment": "production" },
+  "mocks": {
+    "evaluate": {
+      "type": "response",
+      "decision": "allow",
+      "permit": {
+        "token": "pt_single_use_concurrent_aabbcc",
+        "expires_at": "2026-04-29T13:00:00Z"
+      },
+      "reason_code": null
+    },
+    "verify_permit": {
+      "type": "concurrent_sequence",
+      "note": "First concurrent call wins; subsequent calls for the same token return permit_consumed. Harness must enforce first-wins ordering deterministically.",
+      "responses": [
+        {
+          "type": "response",
+          "verified_permit": {
+            "token": "pt_single_use_concurrent_aabbcc",
+            "org_id": "org_test",
+            "actor_id": "actor_test",
+            "action_type": "deploy",
+            "expires_at": "2026-04-29T13:00:00Z"
+          }
+        },
+        {
+          "type": "http_error",
+          "http_status": 409,
+          "reason_code": "permit_consumed"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "concurrent_calls": 2,
+    "allow_count": 1,
+    "deny_count": 1,
+    "deny_reason_code": "permit_consumed",
+    "execute_call_count": 1
+  }
+}

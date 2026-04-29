@@ -1,0 +1,37 @@
+{
+  "id": "SIM-02",
+  "title": "Expired permit deny",
+  "description": "evaluate returns allow with a permit whose expires_at is before clock.now_iso. verifyPermit rejects on TTL. execute must never run.",
+  "enforce_config": {
+    "bindings": {
+      "org_id": "org_test",
+      "actor_id": "actor_test",
+      "action_type": "deploy"
+    },
+    "fail_closed": true
+  },
+  "clock": { "now_iso": "2026-04-29T12:00:00Z" },
+  "request": { "commit": "abc123", "environment": "production" },
+  "mocks": {
+    "evaluate": {
+      "type": "response",
+      "decision": "allow",
+      "permit": {
+        "token": "pt_expired_aabbcc",
+        "expires_at": "2026-04-29T11:59:00Z"
+      },
+      "reason_code": null
+    },
+    "verify_permit": {
+      "type": "http_error",
+      "http_status": 400,
+      "reason_code": "permit_expired"
+    }
+  },
+  "expected": {
+    "decision": "deny",
+    "reason_code": "permit_expired",
+    "execute_called": false,
+    "verify_permit_called": true
+  }
+}

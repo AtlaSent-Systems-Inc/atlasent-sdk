@@ -1,0 +1,37 @@
+{
+  "id": "SIM-08",
+  "title": "Cross-org permit",
+  "description": "evaluate returns allow with a permit issued for org_A. Enforce instance is configured with bindings.org_id = org_B. Both the SDK-level binding check and server-side verifyPermit must deny with binding_mismatch.",
+  "enforce_config": {
+    "bindings": {
+      "org_id": "org_B",
+      "actor_id": "actor_test",
+      "action_type": "deploy"
+    },
+    "fail_closed": true
+  },
+  "clock": { "now_iso": "2026-04-29T12:00:00Z" },
+  "request": { "commit": "abc123", "environment": "production" },
+  "mocks": {
+    "evaluate": {
+      "type": "response",
+      "decision": "allow",
+      "permit": {
+        "token": "pt_wrong_org_aabbcc",
+        "expires_at": "2026-04-29T13:00:00Z"
+      },
+      "reason_code": null
+    },
+    "verify_permit": {
+      "type": "http_error",
+      "http_status": 403,
+      "reason_code": "binding_mismatch"
+    }
+  },
+  "expected": {
+    "decision": "deny",
+    "reason_code": "binding_mismatch",
+    "execute_called": false,
+    "verify_permit_called": true
+  }
+}
