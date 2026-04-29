@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlasent-otel-preview"
+version = "2.0.0a0"
+description = "Preview OpenTelemetry adapter for AtlaSent. Wraps an AtlaSentClient with automatic span creation around each authorization call. DO NOT USE IN PRODUCTION."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "AtlaSent Systems Inc.", email = "sdk@atlasent.io" }]
+keywords = ["atlasent", "opentelemetry", "observability", "v2-preview"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Monitoring",
+    "Typing :: Typed",
+]
+# Hard runtime requirements:
+# - atlasent (v1) for the wrapped client surface
+# - opentelemetry-api for span creation
+dependencies = [
+    # Floor stays at 1.4.0 until v1.5.0 publishes (PR #83). Bump to
+    # >=1.5.0 once that merges so adopters can't accidentally install
+    # against a pre-listAuditEvents v1.
+    "atlasent>=1.4.0",
+    "opentelemetry-api>=1.20.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "opentelemetry-sdk>=1.20.0",
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.10",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk"
+Repository = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk"
+Issues = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues"
+
+[tool.setuptools.packages.find]
+include = ["atlasent_otel_preview*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+atlasent_otel_preview = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["atlasent_otel_preview"]
+branch = true
+
+[tool.coverage.report]
+# 90% floor for this preview. The remaining branches are defensive
+# (resolver-receives-None, attribute-missing on result objects)
+# and not worth one-test-each in a preview package.
+fail_under = 90
+show_missing = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
