@@ -44,17 +44,56 @@ with the same signature as `activityFn`. Each call:
    and the workflow handles it.
 4. On allow, runs `activityFn(input)` and returns its result.
 
+## Workflow-side helpers
+
+Pillar 8 also calls for a workflow signal that triggers bulk revoke
+of every permit issued under a workflow run id. The signal +
+default handler are exported from this package; the activity that
+actually performs the revoke stubs out until the v2 server endpoint
+lands.
+
+```ts
+// In workflow code (separate bundle from activity code):
+import {
+  installRevokeHandler,
+  RevokeAtlaSentPermitsSignal,
+} from "@atlasent/temporal-preview";
+
+export async function deployWorkflow(input: DeployInput) {
+  installRevokeHandler();          // wires the signal once
+  // ... workflow body ...
+}
+
+// In external code firing the signal:
+await client.workflow
+  .getHandle(workflowId)
+  .signal(RevokeAtlaSentPermitsSignal, { reason: "operator pause" });
+```
+
+The default handler:
+
+1. Reads `workflowInfo()` to get `workflowId` + `runId`.
+2. Schedules a `bulkRevokeAtlaSentPermits` activity (30s
+   `startToCloseTimeout` by default) with `{ workflow_id, run_id,
+   reason, revoker_id? }`.
+
+`installRevokeHandler({ activities: ..., startToCloseTimeout: ... })`
+overrides either piece. The default activity throws
+`BulkRevokeNotImplementedError` until the v2 server endpoint
+(`POST /v2/permits:bulk-revoke`) lands; customers can register
+their own activity reference today to wire a per-permit revoke
+loop against the existing v1 surface.
+
 ## What's NOT in here
 
 - **The v2 callback / consume flow.** That requires server-side
   endpoints from PR #61. Once those land, this package extends
   to call `consume` after the Activity completes and surface the
   resulting Proof to the workflow via Activity result metadata.
-- **Workflow-side helpers** (`revokeAtlaSentPermits()` signal
-  helper). Those wrap the bulk-revoke endpoint, which is also
-  v2 server-side. Forward-declared in PR #57's V2 plan.
-- **`@temporalio/workflow` imports.** This package only wraps
-  Activities; workflow-side concerns stay in user code until v2 GA.
+- **`@temporalio/workflow` imports inside `withAtlaSentActivity`.**
+  Temporal forbids workflow code from importing activity-side APIs
+  and vice versa — workflow-side concerns live in
+  `./workflowSignals.ts` which only Workflow code imports.
 
 ## Installation (dev)
 
