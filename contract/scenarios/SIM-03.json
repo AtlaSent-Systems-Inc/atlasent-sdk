@@ -1,0 +1,37 @@
+{
+  "id": "SIM-03",
+  "title": "Permit-binding mismatch (actor)",
+  "description": "evaluate returns allow with a permit issued for actor_A. Enforce instance is configured with bindings.actor_id = actor_B. The wrapper must deny pre-execute with binding_mismatch; server-side verifyPermit also asserts the mismatch as a belt-and-suspenders check.",
+  "enforce_config": {
+    "bindings": {
+      "org_id": "org_test",
+      "actor_id": "actor_B",
+      "action_type": "deploy"
+    },
+    "fail_closed": true
+  },
+  "clock": { "now_iso": "2026-04-29T12:00:00Z" },
+  "request": { "commit": "abc123", "environment": "production" },
+  "mocks": {
+    "evaluate": {
+      "type": "response",
+      "decision": "allow",
+      "permit": {
+        "token": "pt_wrong_actor_aabbcc",
+        "expires_at": "2026-04-29T13:00:00Z"
+      },
+      "reason_code": null
+    },
+    "verify_permit": {
+      "type": "http_error",
+      "http_status": 403,
+      "reason_code": "binding_mismatch"
+    }
+  },
+  "expected": {
+    "decision": "deny",
+    "reason_code": "binding_mismatch",
+    "execute_called": false,
+    "verify_permit_called": true
+  }
+}

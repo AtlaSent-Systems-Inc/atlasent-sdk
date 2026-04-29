@@ -1,0 +1,270 @@
+{
+  "$schema": "../../schemas/v2/evaluate-batch-request.schema.json",
+  "description": "Round-trip vectors for POST /v2/evaluate:batch. Every SDK MUST: (a) serialize sdk_input into exactly wire_request on the wire; (b) when the server returns wire_response, produce sdk_output with camelCase field names (TS) or snake_case (Py) as appropriate. Order preservation is a wire guarantee — items[i] decides requests[i].",
+  "vectors": [
+    {
+      "name": "batch_two_items_both_allow",
+      "description": "Minimal two-item batch, no proof opt-in. Both items permit. Verifies order preservation and that context defaults to {} when omitted.",
+      "sdk_input": {
+        "requests": [
+          {
+            "agent": "clinical-data-agent",
+            "action": "read_patient_record",
+            "context": {}
+          },
+          {
+            "agent": "compliance-agent",
+            "action": "read_audit_log",
+            "context": {}
+          }
+        ]
+      },
+      "api_key": "ask_live_test_key",
+      "wire_request": {
+        "requests": [
+          {
+            "action": "read_patient_record",
+            "agent": "clinical-data-agent",
+            "context": {}
+          },
+          {
+            "action": "read_audit_log",
+            "agent": "compliance-agent",
+            "context": {}
+          }
+        ],
+        "api_key": "ask_live_test_key"
+      },
+      "wire_response": {
+        "batch_id": "batch-uuid-0001-0000-0000-000000000001",
+        "items": [
+          {
+            "index": 0,
+            "permitted": true,
+            "decision_id": "dec_batch_0001_item0",
+            "reason": "",
+            "audit_hash": "aaaa000000000000000000000000000000000000000000000000000000000001",
+            "timestamp": "2026-04-29T10:00:00Z",
+            "batch_id": "batch-uuid-0001-0000-0000-000000000001"
+          },
+          {
+            "index": 1,
+            "permitted": true,
+            "decision_id": "dec_batch_0001_item1",
+            "reason": "",
+            "audit_hash": "aaaa000000000000000000000000000000000000000000000000000000000002",
+            "timestamp": "2026-04-29T10:00:00Z",
+            "batch_id": "batch-uuid-0001-0000-0000-000000000001"
+          }
+        ]
+      },
+      "sdk_output": {
+        "batch_id": "batch-uuid-0001-0000-0000-000000000001",
+        "items": [
+          {
+            "index": 0,
+            "permitted": true,
+            "decision_id": "dec_batch_0001_item0",
+            "reason": "",
+            "audit_hash": "aaaa000000000000000000000000000000000000000000000000000000000001",
+            "timestamp": "2026-04-29T10:00:00Z",
+            "batch_id": "batch-uuid-0001-0000-0000-000000000001"
+          },
+          {
+            "index": 1,
+            "permitted": true,
+            "decision_id": "dec_batch_0001_item1",
+            "reason": "",
+            "audit_hash": "aaaa000000000000000000000000000000000000000000000000000000000002",
+            "timestamp": "2026-04-29T10:00:00Z",
+            "batch_id": "batch-uuid-0001-0000-0000-000000000001"
+          }
+        ]
+      }
+    },
+    {
+      "name": "batch_mixed_allow_deny",
+      "description": "Three-item batch with one deny in the middle. Verifies order-preservation when outcomes are non-uniform: items[1] is denied, items[0] and items[2] allow.",
+      "sdk_input": {
+        "requests": [
+          {
+            "agent": "deploy-bot",
+            "action": "deploy_to_staging",
+            "context": {
+              "commit": "abc123"
+            }
+          },
+          {
+            "agent": "deploy-bot",
+            "action": "deploy_to_production",
+            "context": {
+              "commit": "abc123"
+            }
+          },
+          {
+            "agent": "deploy-bot",
+            "action": "run_smoke_tests",
+            "context": {
+              "env": "staging"
+            }
+          }
+        ]
+      },
+      "api_key": "ask_live_test_key",
+      "wire_request": {
+        "requests": [
+          {
+            "action": "deploy_to_staging",
+            "agent": "deploy-bot",
+            "context": {
+              "commit": "abc123"
+            }
+          },
+          {
+            "action": "deploy_to_production",
+            "agent": "deploy-bot",
+            "context": {
+              "commit": "abc123"
+            }
+          },
+          {
+            "action": "run_smoke_tests",
+            "agent": "deploy-bot",
+            "context": {
+              "env": "staging"
+            }
+          }
+        ],
+        "api_key": "ask_live_test_key"
+      },
+      "wire_response": {
+        "batch_id": "batch-uuid-0002-0000-0000-000000000002",
+        "items": [
+          {
+            "index": 0,
+            "permitted": true,
+            "decision_id": "dec_batch_0002_item0",
+            "reason": "",
+            "audit_hash": "bbbb000000000000000000000000000000000000000000000000000000000001",
+            "timestamp": "2026-04-29T10:01:00Z",
+            "batch_id": "batch-uuid-0002-0000-0000-000000000002"
+          },
+          {
+            "index": 1,
+            "permitted": false,
+            "decision_id": "dec_batch_0002_item1",
+            "reason": "Production deployment requires change-freeze approval",
+            "audit_hash": "bbbb000000000000000000000000000000000000000000000000000000000002",
+            "timestamp": "2026-04-29T10:01:00Z",
+            "batch_id": "batch-uuid-0002-0000-0000-000000000002"
+          },
+          {
+            "index": 2,
+            "permitted": true,
+            "decision_id": "dec_batch_0002_item2",
+            "reason": "",
+            "audit_hash": "bbbb000000000000000000000000000000000000000000000000000000000003",
+            "timestamp": "2026-04-29T10:01:00Z",
+            "batch_id": "batch-uuid-0002-0000-0000-000000000002"
+          }
+        ]
+      },
+      "sdk_output": {
+        "batch_id": "batch-uuid-0002-0000-0000-000000000002",
+        "items": [
+          {
+            "index": 0,
+            "permitted": true,
+            "decision_id": "dec_batch_0002_item0",
+            "reason": "",
+            "audit_hash": "bbbb000000000000000000000000000000000000000000000000000000000001",
+            "timestamp": "2026-04-29T10:01:00Z",
+            "batch_id": "batch-uuid-0002-0000-0000-000000000002"
+          },
+          {
+            "index": 1,
+            "permitted": false,
+            "decision_id": "dec_batch_0002_item1",
+            "reason": "Production deployment requires change-freeze approval",
+            "audit_hash": "bbbb000000000000000000000000000000000000000000000000000000000002",
+            "timestamp": "2026-04-29T10:01:00Z",
+            "batch_id": "batch-uuid-0002-0000-0000-000000000002"
+          },
+          {
+            "index": 2,
+            "permitted": true,
+            "decision_id": "dec_batch_0002_item2",
+            "reason": "",
+            "audit_hash": "bbbb000000000000000000000000000000000000000000000000000000000003",
+            "timestamp": "2026-04-29T10:01:00Z",
+            "batch_id": "batch-uuid-0002-0000-0000-000000000002"
+          }
+        ]
+      }
+    },
+    {
+      "name": "batch_with_proof_opt_in",
+      "description": "Single-item batch where the request carries payload_hash (Pillar 9 opt-in). Response item must carry proof_id and proof_status='pending'. SDK MUST surface these fields on the output item.",
+      "sdk_input": {
+        "requests": [
+          {
+            "agent": "deploy-bot",
+            "action": "deploy_to_production",
+            "context": {
+              "commit": "deadbeef",
+              "approver": "alice"
+            },
+            "payload_hash": "deadbeef00000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "api_key": "ask_live_test_key",
+      "wire_request": {
+        "requests": [
+          {
+            "action": "deploy_to_production",
+            "agent": "deploy-bot",
+            "context": {
+              "commit": "deadbeef",
+              "approver": "alice"
+            },
+            "payload_hash": "deadbeef00000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "api_key": "ask_live_test_key"
+      },
+      "wire_response": {
+        "batch_id": "batch-uuid-0003-0000-0000-000000000003",
+        "items": [
+          {
+            "index": 0,
+            "permitted": true,
+            "decision_id": "dec_batch_0003_item0",
+            "reason": "GxP-compliant deployment approved",
+            "audit_hash": "cccc000000000000000000000000000000000000000000000000000000000001",
+            "timestamp": "2026-04-29T10:02:00Z",
+            "batch_id": "batch-uuid-0003-0000-0000-000000000003",
+            "proof_id": "proof-uuid-0003-0000-0000-000000000003",
+            "proof_status": "pending"
+          }
+        ]
+      },
+      "sdk_output": {
+        "batch_id": "batch-uuid-0003-0000-0000-000000000003",
+        "items": [
+          {
+            "index": 0,
+            "permitted": true,
+            "decision_id": "dec_batch_0003_item0",
+            "reason": "GxP-compliant deployment approved",
+            "audit_hash": "cccc000000000000000000000000000000000000000000000000000000000001",
+            "timestamp": "2026-04-29T10:02:00Z",
+            "batch_id": "batch-uuid-0003-0000-0000-000000000003",
+            "proof_id": "proof-uuid-0003-0000-0000-000000000003",
+            "proof_status": "pending"
+          }
+        ]
+      }
+    }
+  ]
+}

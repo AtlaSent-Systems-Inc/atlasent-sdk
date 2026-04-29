@@ -519,15 +519,17 @@ class TestAsyncKeySelf:
         assert "/v1-api-key-self" in get_mock.call_args[0][0]
 
     @pytest.mark.asyncio
-    async def test_bad_response_on_missing_organization_id(
-        self, async_client, mocker
-    ):
+    async def test_bad_response_on_missing_organization_id(self, async_client, mocker):
         mocker.patch.object(
             async_client._client,
             "get",
             return_value=_mock_resp(
                 mocker,
-                json_data={"key_id": "k", "environment": "live", "rate_limit_per_minute": 60},
+                json_data={
+                    "key_id": "k",
+                    "environment": "live",
+                    "rate_limit_per_minute": 60,
+                },
             ),
         )
         with pytest.raises(AtlaSentError) as excinfo:

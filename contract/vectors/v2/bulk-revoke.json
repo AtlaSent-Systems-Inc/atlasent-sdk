@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/v2/bulk-revoke-request.schema.json",
+  "description": "Round-trip vectors for POST /v2/permits:bulk-revoke (Pillar 8 — Temporal). Every SDK MUST: (a) serialize sdk_input into exactly wire_request on the wire — revoker_id MUST be omitted (not sent as null) when not provided; (b) when the server returns wire_response, produce sdk_output with idiomatic field names. revoked_count: 0 is not an error and MUST NOT be thrown.",
+  "vectors": [
+    {
+      "name": "bulk_revoke_with_active_permits",
+      "description": "Happy path: three active permits exist for the run_id; all are revoked. SDK MUST echo workflow_id and run_id from the response.",
+      "sdk_input": {
+        "workflowId": "deploy-prod-2026-04-29",
+        "runId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "reason": "Workflow completed successfully — permits no longer needed",
+        "revokerId": "deploy-bot"
+      },
+      "api_key": "ask_live_test_key",
+      "wire_request": {
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "reason": "Workflow completed successfully — permits no longer needed",
+        "revoker_id": "deploy-bot",
+        "api_key": "ask_live_test_key"
+      },
+      "wire_response": {
+        "revoked_count": 3,
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      },
+      "sdk_output": {
+        "revoked_count": 3,
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      }
+    },
+    {
+      "name": "bulk_revoke_zero_permits",
+      "description": "revoked_count: 0 is returned when no active permits exist for the run_id (already expired or consumed). SDK MUST NOT throw — 0 is the expected outcome for the race where permits expired before the signal fires.",
+      "sdk_input": {
+        "workflowId": "deploy-prod-2026-04-29",
+        "runId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "reason": "Rollback triggered — revoking permits"
+      },
+      "api_key": "ask_live_test_key",
+      "wire_request": {
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "reason": "Rollback triggered — revoking permits",
+        "api_key": "ask_live_test_key"
+      },
+      "wire_response": {
+        "revoked_count": 0,
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      },
+      "sdk_output": {
+        "revoked_count": 0,
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      }
+    },
+    {
+      "name": "bulk_revoke_no_revoker_id",
+      "description": "revoker_id is optional. When the caller does not supply it, SDK MUST NOT include the key in the wire request (not null, not empty string — absent entirely). The server defaults revoker_id to workflow_id in the audit log.",
+      "sdk_input": {
+        "workflowId": "deploy-prod-2026-04-29",
+        "runId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+        "reason": "Emergency rollback"
+      },
+      "api_key": "ask_live_test_key",
+      "wire_request": {
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+        "reason": "Emergency rollback",
+        "api_key": "ask_live_test_key"
+      },
+      "wire_response": {
+        "revoked_count": 1,
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+      },
+      "sdk_output": {
+        "revoked_count": 1,
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+      }
+    }
+  ]
+}

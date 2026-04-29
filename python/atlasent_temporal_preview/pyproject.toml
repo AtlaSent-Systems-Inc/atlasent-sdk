@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlasent-temporal-preview"
+version = "2.0.0a0"
+description = "Preview Temporal adapter for AtlaSent. Wraps Temporal Activities with protect() so each invocation produces an audit-chain entry. DO NOT USE IN PRODUCTION."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "AtlaSent Systems Inc.", email = "sdk@atlasent.io" }]
+keywords = ["atlasent", "temporal", "v2-preview"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+# Hard runtime requirements:
+# - atlasent (v1) for protect()
+# - temporalio for activity.info()
+dependencies = [
+    "atlasent>=1.4.0",
+    "temporalio>=1.0.0",
+]
+
+[project.optional-dependencies]
+# v2 extra: wires bulk_revoke_atlasent_permits against the real HTTP endpoint.
+# Install with: pip install atlasent-temporal-preview[v2]
+v2 = [
+    "atlasent-v2-alpha>=2.0.0a1",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.10",
+    "ruff>=0.1.0",
+    "atlasent-v2-alpha>=2.0.0a1",
+]
+
+[project.urls]
+Homepage = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk"
+Repository = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk"
+Issues = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues"
+
+[tool.setuptools.packages.find]
+include = ["atlasent_temporal_preview*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+atlasent_temporal_preview = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["atlasent_temporal_preview"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v2/proof-verification-result.schema.json",
+  "title": "ProofVerificationResult",
+  "description": "Response from POST /v2/proofs/:id/verify. Returned to SDK callers of client.verifyProof(proofId) and reused by the offline CLI (npx @atlasent/verify proof.json) so online + offline paths produce byte-identical output. 'valid' means every check passed; 'invalid' means at least one check failed; 'incomplete' means the proof is well-formed but still pending (e.g. execution_status='pending' with no consumed_at).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verification_status", "proof_id", "checks"],
+  "properties": {
+    "verification_status": {
+      "type": "string",
+      "enum": ["valid", "invalid", "incomplete"],
+      "description": "Top-level status. 'valid' iff every item in `checks` passed. 'incomplete' is reserved for proofs whose consume step has not yet landed (async execution); callers can poll rather than treating it as a hard failure."
+    },
+    "proof_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Echo of the proof id that was verified. Present so batch verifiers can correlate results without reordering the input."
+    },
+    "signing_key_id": {
+      "type": "string",
+      "description": "Registry id of the Ed25519 key the signature verified under. Absent when verification_status='invalid' due to invalid_signature or retired_signing_key."
+    },
+    "audit_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Echo of Proof.audit_hash. Lets callers correlate a verify result with an audit_events row without fetching the full proof."
+    },
+    "payload_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Echo of Proof.payload_hash so callers can cross-check client-side hashPayload() output before trusting the verdict."
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/ProofVerificationCheck" },
+      "description": "Per-check results. Identical set of check names across online and offline verifiers; order is canonical (see check_names in the $defs below)."
+    }
+  },
+  "$defs": {
+    "ProofVerificationCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "passed"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "signature",
+            "chain_link",
+            "payload_hash",
+            "policy_version",
+            "execution_coherence"
+          ],
+          "description": "Canonical check name. New checks appended here are opt-in — older SDKs ignore unknown check names rather than treat them as failures."
+        },
+        "passed": {
+          "type": "boolean",
+          "description": "True iff the check succeeded."
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "missing_policy_version",
+            "payload_hash_mismatch",
+            "expired_permit",
+            "broken_chain",
+            "invalid_signature",
+            "retired_signing_key",
+            "execution_not_consumed"
+          ],
+          "description": "Machine-readable failure reason. Required when passed=false, absent when passed=true. SDKs surface this verbatim so customers can wire alerts on specific codes."
+        }
+      }
+    }
+  }
+}

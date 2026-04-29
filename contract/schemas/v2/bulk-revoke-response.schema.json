@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v2/bulk-revoke-response.schema.json",
+  "title": "BulkRevokeResponse",
+  "description": "Response from POST /v2/permits:bulk-revoke. Returns a summary of the revocation operation. An empty run (no active permits found for the run_id) is NOT an error — revoked_count will be 0. This handles the common case where permits have already expired or been consumed before the revoke signal fires.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["revoked_count", "workflow_id", "run_id"],
+  "properties": {
+    "revoked_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of permits revoked. Zero if no active permits were found for the given run_id (not an error)."
+    },
+    "workflow_id": {
+      "type": "string",
+      "description": "Echo of the workflow_id from the request. Present for correlation — callers matching async revoke results can key on this."
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Echo of the run_id from the request."
+    }
+  }
+}

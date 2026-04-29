@@ -1,0 +1,494 @@
+# OpenAPI 3.1 specification for the AtlaSent authorization API (v2).
+#
+# Status: **DRAFT v2** — derived from the JSON Schemas in
+# `contract/schemas/v2/`. Every operation here is a structural mirror
+# of a schema; the schemas are the wire law, this file lifts them
+# into a full OpenAPI document for downstream consumers (pydantic
+# codegen, `@atlasent/types` v2, Postman / Insomnia / Redoc /
+# Stoplight collections, non-SDK adopters).
+#
+# Companion to:
+#   - `contract/openapi.yaml`         (v1 — already shipped)
+#   - `contract/schemas/v2/`          (the schemas this doc wraps)
+#   - `contract/schemas/v2/README.md` (scope, open questions)
+#
+# If this file and `schemas/v2/*.json` ever disagree, **the JSON
+# Schemas win**. The SDK drift detector introspects from the schemas,
+# not from this OpenAPI document.
+#
+# Do not implement until v1 GA. Do not merge until v2 GA.
+#
+# Scope (v2.0):
+#   - POST /v2/evaluate:batch                 (Pillar 2 — batch evaluate)
+#   - POST /v2/permits/{permit_id}/consume    (Pillar 9 — close protect lifecycle)
+#   - GET  /v2/proofs/{proof_id}              (Pillar 9 — fetch signed proof)
+#   - POST /v2/proofs/{proof_id}/verify       (Pillar 9 — online verify)
+#   - GET  /v2/decisions:subscribe            (Pillar 3 — SSE event stream)
+#   - POST /v2/permits:bulk-revoke            (Pillar 8 — Temporal bulk revoke)
+#
+# Out of scope in v2.0 (tracked in `docs/V2_PLAN.md` /
+# `docs/V2_PILLAR9_PROOF_SYSTEM.md`):
+#   - Pillar 5 (analytics RPCs)
+#   - All v1 surfaces (covered in `contract/openapi.yaml`)
+
+openapi: 3.1.0
+
+info:
+  title: AtlaSent Authorization API — v2 (DRAFT)
+  version: "2.0.0-preview.0"
+  summary: Verifiable proofs, batch evaluation, and decision streaming.
+  description: |
+    **DRAFT.** Surfaces here are under active design and will change
+    without semver discipline until v2 GA.
+
+    v2 keeps the v1 fail-closed contract intact (a clean DENY is
+    HTTP 200 with `permitted: false`; only failures to *confirm*
+    authorization throw / raise) and layers three new capabilities:
+
+    - **Pillar 2 — Batch evaluation.** `POST /v2/evaluate:batch`
+      accepts up to 1000 evaluate requests in one call and returns
+      one HTTP response with order-preserved per-item decisions.
+      One rate-limit decrement for the whole batch; one hash-chain
+      entry in the audit log listing every contained `decision_id`.
+
+    - **Pillar 3 — Decision event stream.** `GET /v2/decisions:subscribe`
+      returns a Server-Sent Events stream covering the full permit
+      lifecycle (issued, verified, consumed, revoked, escalated,
+      hold-resolved) plus per-key rate-limit observability events.
+      Resumable via `Last-Event-ID`.
+
+    - **Pillar 9 — Verifiable Proof System.** Closes the
+      evaluate → verify → execute → CONSUME loop. The SDK's
+      `protect()` callback wraps user code; on completion
+      `POST /v2/permits/{id}/consume` emits a signed Proof bundling
+      the policy version, payload hash (computed client-side, raw
+      payload never crosses the wire), execution outcome, and the
+      hash-chain link to the prior proof. `GET /v2/proofs/{id}`
+      returns the canonical 18-field envelope; `POST /v2/proofs/{id}/verify`
+      runs the same five checks the offline `replayProofBundle()`
+      / `replay_proof_bundle()` SDK helpers run, so online and
+      offline verdicts are byte-identical.
+
+    See `contract/schemas/v2/README.md` for scope, signed-envelope
+    convention, and open contract-level questions.
+  contact:
+    name: AtlaSent Systems Inc.
+    url: https://atlasent.io
+    email: sdk@atlasent.io
+  license:
+    name: MIT (Python SDK) / Apache-2.0 (TypeScript SDK)
+    url: https://github.com/AtlaSent-Systems-Inc/atlasent-sdk
+
+servers:
+  - url: https://api.atlasent.io
+    description: Production. v2 surfaces require an SDK at v2.x.
+
+tags:
+  - name: batch
+    description: Pillar 2 — batch policy evaluation.
+  - name: streaming
+    description: Pillar 3 — decision-event subscription (Server-Sent Events).
+  - name: proofs
+    description: Pillar 9 — verifiable proof issuance and verification.
+  - name: temporal
+    description: Pillar 8 — Temporal workflow adapter (bulk permit revocation).
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v2/evaluate:batch:
+    post:
+      tags: [batch]
+      operationId: evaluateBatch
+      summary: Evaluate up to 1000 actions in a single call.
+      description: |
+        Pillar 2. Items in `requests` are evaluated independently; the
+        response preserves input order so `items[i]` decides
+        `requests[i]`. A single rate-limit decrement covers the whole
+        batch. Items can opt into the Pillar 9 proof flow by setting
+        `payload_hash` (and optionally `target`) — the response item
+        will then carry `proof_id` and `proof_status`.
+
+        Items individually denied carry `permitted: false`; the
+        endpoint itself only fails on transport / auth errors.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvaluateBatchRequest"
+            examples:
+              minimal:
+                summary: "Two-item batch, no proof opt-in"
+                value:
+                  requests:
+                    - action: "modify_patient_record"
+                      agent: "clinical-data-agent"
+                      context: { patient_id: "PT-001" }
+                    - action: "read_audit_log"
+                      agent: "compliance-agent"
+                      context: {}
+                  api_key: "ask_live_..."
+              with_proof_opt_in:
+                summary: "Batch where the first item also wants a proof"
+                value:
+                  requests:
+                    - action: "deploy_to_production"
+                      agent: "deploy-bot"
+                      context: { commit: "abc123" }
+                      payload_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+                      target: "prod-cluster"
+                    - action: "noop"
+                      agent: "deploy-bot"
+                      context: {}
+                  api_key: "ask_live_..."
+      responses:
+        "200":
+          description: Order-preserved per-item decisions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluateBatchResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: One or more referenced resource ids not found.
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "5XX": { $ref: "#/components/responses/ServerError" }
+
+  /v2/permits/{permit_id}/consume:
+    post:
+      tags: [proofs]
+      operationId: consumePermit
+      summary: Close the protect() lifecycle and emit a signed Proof.
+      description: |
+        Pillar 9. Submitted by the SDK (and only the SDK — the raw
+        payload never crosses the wire; only its `payload_hash`).
+        The server cross-checks `payload_hash` against the hash
+        submitted on evaluate, signs the resulting Proof envelope
+        with the active Ed25519 key, and emits a `consumed` event
+        on the `/v2/decisions:subscribe` stream.
+
+        On callback failure the SDK still calls this endpoint with
+        `execution_status: "failed"` so the Proof records the
+        attempt; the original error is re-thrown to the caller
+        unchanged.
+      parameters:
+        - in: path
+          name: permit_id
+          required: true
+          schema: { type: string }
+          description: Decision id from the originating /v2/evaluate call.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsumeRequest"
+            examples:
+              executed:
+                summary: "Successful execution"
+                value:
+                  permit_id: "dec_abc"
+                  payload_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+                  execution_status: "executed"
+                  api_key: "ask_live_..."
+              failed:
+                summary: "Callback raised; SDK still records the attempt"
+                value:
+                  permit_id: "dec_abc"
+                  payload_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+                  execution_status: "failed"
+                  api_key: "ask_live_..."
+      responses:
+        "200":
+          description: Pointer to the issued Proof.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsumeResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: Permit not found, already consumed, or expired.
+        "409":
+          description: |
+            `payload_hash` mismatches the value submitted on evaluate.
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "5XX": { $ref: "#/components/responses/ServerError" }
+
+  /v2/proofs/{proof_id}:
+    get:
+      tags: [proofs]
+      operationId: getProof
+      summary: Fetch the canonical signed Proof envelope.
+      description: |
+        Pillar 9. Returns the 18-field envelope verbatim — declaration
+        order IS signing order. Suitable for piping straight into
+        `replayProofBundle()` / `replay_proof_bundle()` for offline
+        re-verification.
+      parameters:
+        - in: path
+          name: proof_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Signed Proof envelope.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proof"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: Proof not found.
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "5XX": { $ref: "#/components/responses/ServerError" }
+
+  /v2/proofs/{proof_id}/verify:
+    post:
+      tags: [proofs]
+      operationId: verifyProof
+      summary: Server-side proof verification.
+      description: |
+        Pillar 9. Runs the same five checks (`signature`,
+        `chain_link`, `payload_hash`, `policy_version`,
+        `execution_coherence`) the offline replay harness runs.
+        Online verification additionally consults the live signing-key
+        registry — `retired_signing_key` is reachable here in cases
+        the offline harness can't see (the SDK only knows about the
+        keys you handed it).
+      parameters:
+        - in: path
+          name: proof_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Per-check verification result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProofVerificationResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: Proof not found.
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "5XX": { $ref: "#/components/responses/ServerError" }
+
+  /v2/permits:bulk-revoke:
+    post:
+      tags: [temporal]
+      operationId: bulkRevokePermits
+      summary: Revoke all active permits for a Temporal workflow run.
+      description: |
+        Pillar 8. Called by the Temporal worker-side
+        `bulkRevokeAtlaSentPermits` / `bulk_revoke_atlasent_permits`
+        activity when an `revokeAtlaSentPermits` workflow signal fires.
+
+        The server locates every active permit whose
+        `_atlasent_temporal.run_id` context field matches the supplied
+        `run_id` (scoped to the org derived from `api_key`). Matching
+        permits are immediately invalidated — any in-flight
+        `verifyPermit` calls against them will fail with
+        `revoked_by_workflow`.
+
+        A call with no matching permits is **not** an error —
+        `revoked_count` will be 0. This handles the race where
+        permits expire or are consumed before the revoke signal fires.
+
+        Use case: a Temporal workflow that provisions access for a
+        long-running job can revoke all outstanding permits in a single
+        signal when the job completes or fails, rather than tracking
+        individual permit IDs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkRevokeRequest"
+            examples:
+              normal:
+                summary: "Revoke all permits for a completed deploy workflow"
+                value:
+                  workflow_id: "deploy-prod-2026-04-29"
+                  run_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                  reason: "Workflow completed successfully — permits no longer needed"
+                  revoker_id: "deploy-bot"
+                  api_key: "ask_live_..."
+              emergency:
+                summary: "Emergency revoke from a failure signal"
+                value:
+                  workflow_id: "deploy-prod-2026-04-29"
+                  run_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                  reason: "Rollback triggered — revoking all in-flight deployment permits"
+                  api_key: "ask_live_..."
+      responses:
+        "200":
+          description: Revocation summary (revoked_count may be 0 — not an error).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkRevokeResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: workflow_id or run_id not found in the permit store.
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "5XX": { $ref: "#/components/responses/ServerError" }
+
+  /v2/decisions:subscribe:
+    get:
+      tags: [streaming]
+      operationId: subscribeDecisions
+      summary: Subscribe to permit-lifecycle events (SSE).
+      description: |
+        Pillar 3. Long-lived response, `Content-Type: text/event-stream`.
+        Each event's `data:` line is a JSON-encoded
+        :ref:`DecisionEvent`. Resume after a dropped connection by
+        sending the last received event's `id` in the `Last-Event-ID`
+        request header.
+
+        Seven event types are defined; new types are additive.
+        Unknown types — or unknown fields within a known type — MUST
+        be forwarded to clients as opaque data so old SDKs keep
+        consuming events from new servers.
+      parameters:
+        - in: query
+          name: since
+          schema: { type: string }
+          description: |
+            Optional event id to resume from. Equivalent to setting
+            the `Last-Event-ID` header; provided as a query param too
+            for `EventSource` clients that can't set headers.
+        - in: header
+          name: Last-Event-ID
+          schema: { type: string }
+          description: Standard SSE resume token.
+      responses:
+        "200":
+          description: SSE stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  Stream of `event: <type>\ndata: <json>\n\n` blocks.
+                  Each `<json>` validates against the
+                  :ref:`DecisionEvent` schema.
+              examples:
+                permit_issued:
+                  summary: One event from a permit.issued lifecycle
+                  value: |
+                    id: 42
+                    event: permit_issued
+                    data: {"id":"42","type":"permit_issued","org_id":"org-1","emitted_at":"2026-04-24T12:00:00Z","permit_id":"dec_abc","actor_id":"deploy-bot","payload":{"decision":"allow","agent":"deploy-bot","action":"deploy_to_production","audit_hash":"…","reason":"GxP-compliant"}}
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "5XX": { $ref: "#/components/responses/ServerError" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: api_key
+      description: |
+        AtlaSent API key, identical scheme to v1. Pass as
+        `Authorization: Bearer ask_live_...`. Body fields named
+        `api_key` echo the same value (wire parity with v1).
+
+  schemas:
+    # The schemas live in contract/schemas/v2/*.schema.json. Each
+    # entry below is a $ref to the JSON-Schema file so OpenAPI
+    # tooling consumes the same canonical source the SDK drift
+    # detector consumes. If you regenerate these from the schemas,
+    # do NOT inline the field definitions here — keep this file as
+    # a single source of $refs.
+    Proof:
+      $ref: "./schemas/v2/proof.schema.json"
+    ConsumeRequest:
+      $ref: "./schemas/v2/consume-request.schema.json"
+    ConsumeResponse:
+      $ref: "./schemas/v2/consume-response.schema.json"
+    ProofVerificationResult:
+      $ref: "./schemas/v2/proof-verification-result.schema.json"
+    EvaluateBatchRequest:
+      $ref: "./schemas/v2/evaluate-batch-request.schema.json"
+    EvaluateBatchResponse:
+      $ref: "./schemas/v2/evaluate-batch-response.schema.json"
+    DecisionEvent:
+      $ref: "./schemas/v2/decision-event.schema.json"
+    BulkRevokeRequest:
+      $ref: "./schemas/v2/bulk-revoke-request.schema.json"
+    BulkRevokeResponse:
+      $ref: "./schemas/v2/bulk-revoke-response.schema.json"
+
+    ErrorResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        message:
+          type: string
+          description: Human-readable error message.
+        reason:
+          type: string
+          description: Machine-readable error code.
+        request_id:
+          type: string
+          description: |
+            Server-side correlation id. SDKs surface this on
+            `AtlaSentError.requestId` for support escalation.
+
+  responses:
+    BadRequest:
+      description: |
+        Malformed request body or invalid field value. Fix the
+        client-side input; retrying unchanged will produce the same
+        error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthorized:
+      description: Invalid API key, missing scope, or expired key.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Forbidden:
+      description: Authenticated but not authorized for the operation.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    RateLimited:
+      description: |
+        Per-key rate limit exceeded. Response includes
+        `Retry-After` and the `X-RateLimit-*` triple.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds (or HTTP-date) until the bucket refills.
+        X-RateLimit-Limit:
+          schema: { type: integer }
+        X-RateLimit-Remaining:
+          schema: { type: integer }
+        X-RateLimit-Reset:
+          schema: { type: integer }
+          description: Unix seconds (or ISO 8601) until reset.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    ServerError:
+      description: Transient server-side error. SDKs retry with backoff.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }

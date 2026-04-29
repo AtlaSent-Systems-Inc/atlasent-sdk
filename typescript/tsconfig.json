@@ -27,8 +27,12 @@
 
     "baseUrl": ".",
     "paths": {
-      "@atlasent/sdk": ["./src/index.ts"]
-    }
+      "@atlasent/sdk": ["./src/index.ts"],
+      "@atlasent/sdk/hono": ["./src/hono.ts"],
+      "@atlasent/sdk/behavior": ["./src/behavior.ts"]
+    },
+
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
   "exclude": ["dist", "node_modules"]

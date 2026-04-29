@@ -1,0 +1,46 @@
+{
+  "description": "Pillar-9-style payload shapes. Useful as smoke tests for downstream canonicalizers.",
+  "vectors": [
+    {
+      "name": "evaluate_context",
+      "input": {
+        "user": "dr_smith",
+        "environment": "production",
+        "patient_id": "PT-2024-001"
+      },
+      "expected": "{\"environment\":\"production\",\"patient_id\":\"PT-2024-001\",\"user\":\"dr_smith\"}"
+    },
+    {
+      "name": "deploy_payload",
+      "input": {
+        "commit": "abc123",
+        "approver": "sre@example.com",
+        "env": "prod",
+        "meta": {
+          "ts": "2026-04-25T12:00:00Z",
+          "ci": true
+        }
+      },
+      "expected": "{\"approver\":\"sre@example.com\",\"commit\":\"abc123\",\"env\":\"prod\",\"meta\":{\"ci\":true,\"ts\":\"2026-04-25T12:00:00Z\"}}"
+    },
+    {
+      "name": "complex_payload_with_nulls",
+      "input": {
+        "fields": {
+          "a": null,
+          "b": "x",
+          "c": [
+            1,
+            null,
+            3
+          ]
+        },
+        "tags": [],
+        "meta": {
+          "empty": {}
+        }
+      },
+      "expected": "{\"fields\":{\"a\":null,\"b\":\"x\",\"c\":[1,null,3]},\"meta\":{\"empty\":{}},\"tags\":[]}"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "description": "Primitive value canonicalization. Locks string-escape and non-finite-number rendering rules.",
+  "vectors": [
+    {
+      "name": "null",
+      "input": null,
+      "expected": "null"
+    },
+    {
+      "name": "true",
+      "input": true,
+      "expected": "true"
+    },
+    {
+      "name": "false",
+      "input": false,
+      "expected": "false"
+    },
+    {
+      "name": "zero",
+      "input": 0,
+      "expected": "0"
+    },
+    {
+      "name": "positive_int",
+      "input": 42,
+      "expected": "42"
+    },
+    {
+      "name": "negative_int",
+      "input": -7,
+      "expected": "-7"
+    },
+    {
+      "name": "float",
+      "input": -1.5,
+      "expected": "-1.5"
+    },
+    {
+      "name": "empty_string",
+      "input": "",
+      "expected": "\"\""
+    },
+    {
+      "name": "ascii_string",
+      "input": "hello",
+      "expected": "\"hello\""
+    },
+    {
+      "name": "string_with_quote",
+      "input": "he said \"hi\"",
+      "expected": "\"he said \\\"hi\\\"\""
+    },
+    {
+      "name": "string_with_escapes",
+      "input": "tab\there\nnewline",
+      "expected": "\"tab\\there\\nnewline\""
+    },
+    {
+      "name": "unicode_string",
+      "input": "漢字 é π",
+      "expected": "\"漢字 é π\""
+    }
+  ]
+}

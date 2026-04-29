@@ -1,0 +1,69 @@
+{
+  "name": "@atlasent/sdk-v2-alpha",
+  "version": "2.0.0-alpha.1",
+  "description": "Alpha release of the v2 AtlaSent SDK. API is subject to change between alpha releases — pin exact versions if depending from production code.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run typecheck && npm test && npm run build",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "atlasent",
+    "v2",
+    "alpha",
+    "proof",
+    "verifiable",
+    "authorization"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AtlaSent-Systems-Inc/atlasent-sdk.git",
+    "directory": "typescript/packages/v2-alpha"
+  },
+  "homepage": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/tree/main/typescript/packages/v2-alpha#readme",
+  "bugs": {
+    "url": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsup": "^8.0.2",
+    "tsx": "^4.7.2",
+    "typescript": "^5.9.3",
+    "vitest": "^1.5.0"
+  }
+}

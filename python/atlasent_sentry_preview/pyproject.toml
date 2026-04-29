@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlasent-sentry-preview"
+version = "2.0.0a0"
+description = "Preview Sentry adapter for AtlaSent. Wraps an AtlaSentClient with automatic breadcrumb emission around each authorization call. DO NOT USE IN PRODUCTION."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "AtlaSent Systems Inc.", email = "sdk@atlasent.io" }]
+keywords = ["atlasent", "sentry", "observability", "v2-preview"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Monitoring",
+    "Typing :: Typed",
+]
+dependencies = [
+    # Floor stays at 1.4.0 until v1.5.0 publishes (PR #83); bump
+    # to >=1.5.0 once that merges.
+    "atlasent>=1.4.0",
+    "sentry-sdk>=1.40.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.10",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk"
+Repository = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk"
+Issues = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues"
+
+[tool.setuptools.packages.find]
+include = ["atlasent_sentry_preview*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+atlasent_sentry_preview = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["atlasent_sentry_preview"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]

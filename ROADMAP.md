@@ -2,13 +2,13 @@
 
 Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/AtlaSent-Systems-Inc/atlasent-sdk/go`). Nothing ships to customers until these ship.
 
-## GA (v1) — must ship
+## GA (v1) — status
 
-1. **TS SDK publish** — `@atlasent/sdk` v1.0.0 to npm. `@atlasent/types` v1.0.0 as a separate package (already wired via `packages/types/` in `atlasent-api`; keep that as the source of truth, `atlasent-sdk` re-exports).
-2. **Python SDK publish** — `atlasent` v1.0.0 to PyPI. Sync + async clients, `@guard` decorator, typed errors, caching layer.
-3. **Go SDK publish** — `github.com/AtlaSent-Systems-Inc/atlasent-sdk/go` v1.0.0 module publish (Go modules are tag-based; just cut the tag).
-4. **v1-only API sweep** — make sure every client method maps to a `/v1/*` endpoint; remove any experimental methods that were pointing at the retired v2 idea.
-5. **Offline verifier** — standalone, zero-dep Node verifier (`verifyAuditExport()`) is already in `atlasent-api/scripts/verify-export.mjs`. Package as a separate npm module (`@atlasent/verify`) so auditors can `npx @atlasent/verify bundle.json` without installing the full SDK.
+1. **TS SDK publish** — `@atlasent/sdk` v1.4.0 sits on `main`; **not yet published to npm**. `@atlasent/types` lives in `atlasent-api/packages/types`; whether it ships as a separate npm package or folds into `@atlasent/sdk` is open (see atlasent-api reconciliation issue).
+2. ✅ **Python SDK published** — `atlasent` **1.4.1 on PyPI** (2026-04-26). Sync + async clients, `protect()` / `authorize()` / `gate()` / `evaluate()` / `verify()`, `@atlasent_guard` + `@async_atlasent_guard` decorators, typed errors, `TTLCache`, audit-bundle verification.
+3. **Go SDK publish** — pending. Code currently lives in archived `atlasent-sdk-go` repo; planned home per this ROADMAP is `github.com/AtlaSent-Systems-Inc/atlasent-sdk/go`, but the `go/` subdirectory does not exist in this repo yet.
+4. **v1-only API sweep** — done in 1.x line; v2 work is gated behind `claude/v2-*` draft branches.
+5. **Offline verifier** — `verify_audit_bundle()` ships as part of `atlasent` (Python) and TS SDK. A separate `@atlasent/verify` zero-dep Node CLI is still desired but not yet packaged.
 6. **SSO-aware types** — once `atlasent-api/v1-sso` ships, export `SsoConnection`, `SsoJitRule`, `SsoEvent` from `@atlasent/types`.
 
 ## Post-GA — ordered by impact

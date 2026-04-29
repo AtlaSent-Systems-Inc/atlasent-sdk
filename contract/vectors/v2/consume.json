@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schemas/v2/consume-request.schema.json",
+  "description": "Round-trip vectors for POST /v2/permits/:id/consume (Pillar 9). Every SDK MUST: (a) serialize sdk_input into exactly wire_request on the wire — crucially, the raw payload NEVER crosses the wire, only payload_hash; (b) when the server returns wire_response, surface sdk_output with idiomatic field names.",
+  "vectors": [
+    {
+      "name": "consume_executed_minimal",
+      "description": "Happy-path consume after a successful callback. execution_hash is omitted — caller has no execution result to bind. SDK MUST NOT send execution_hash when not provided.",
+      "sdk_input": {
+        "permitId": "dec_batch_0003_item0",
+        "payloadHash": "deadbeef00000000000000000000000000000000000000000000000000000000",
+        "executionStatus": "executed"
+      },
+      "api_key": "ask_live_test_key",
+      "wire_request": {
+        "permit_id": "dec_batch_0003_item0",
+        "payload_hash": "deadbeef00000000000000000000000000000000000000000000000000000000",
+        "execution_status": "executed",
+        "api_key": "ask_live_test_key"
+      },
+      "wire_response": {
+        "proof_id": "proof-uuid-0003-0000-0000-000000000003",
+        "execution_status": "executed",
+        "audit_hash": "dddd000000000000000000000000000000000000000000000000000000000001"
+      },
+      "sdk_output": {
+        "proof_id": "proof-uuid-0003-0000-0000-000000000003",
+        "execution_status": "executed",
+        "audit_hash": "dddd000000000000000000000000000000000000000000000000000000000001"
+      }
+    },
+    {
+      "name": "consume_executed_with_execution_hash",
+      "description": "Consume with an execution_hash. Caller has a deploy SHA to bind to the proof. SDK MUST include execution_hash in the wire body when provided.",
+      "sdk_input": {
+        "permitId": "dec_batch_0003_item0",
+        "payloadHash": "deadbeef00000000000000000000000000000000000000000000000000000000",
+        "executionStatus": "executed",
+        "executionHash": "cafecafe00000000000000000000000000000000000000000000000000000000"
+      },
+      "api_key": "ask_live_test_key",
+      "wire_request": {
+        "permit_id": "dec_batch_0003_item0",
+        "payload_hash": "deadbeef00000000000000000000000000000000000000000000000000000000",
+        "execution_status": "executed",
+        "execution_hash": "cafecafe00000000000000000000000000000000000000000000000000000000",
+        "api_key": "ask_live_test_key"
+      },
+      "wire_response": {
+        "proof_id": "proof-uuid-0003-0000-0000-000000000003",
+        "execution_status": "executed",
+        "audit_hash": "dddd000000000000000000000000000000000000000000000000000000000002"
+      },
+      "sdk_output": {
+        "proof_id": "proof-uuid-0003-0000-0000-000000000003",
+        "execution_status": "executed",
+        "audit_hash": "dddd000000000000000000000000000000000000000000000000000000000002"
+      }
+    },
+    {
+      "name": "consume_failed_callback",
+      "description": "Consume after a failed callback. SDK MUST still call consume with execution_status='failed' so the proof records the attempt. The original exception is re-thrown to the caller unchanged AFTER consume completes.",
+      "sdk_input": {
+        "permitId": "dec_batch_0003_item0",
+        "payloadHash": "deadbeef00000000000000000000000000000000000000000000000000000000",
+        "executionStatus": "failed"
+      },
+      "api_key": "ask_live_test_key",
+      "wire_request": {
+        "permit_id": "dec_batch_0003_item0",
+        "payload_hash": "deadbeef00000000000000000000000000000000000000000000000000000000",
+        "execution_status": "failed",
+        "api_key": "ask_live_test_key"
+      },
+      "wire_response": {
+        "proof_id": "proof-uuid-0003-0000-0000-000000000003",
+        "execution_status": "failed",
+        "audit_hash": "dddd000000000000000000000000000000000000000000000000000000000003"
+      },
+      "sdk_output": {
+        "proof_id": "proof-uuid-0003-0000-0000-000000000003",
+        "execution_status": "failed",
+        "audit_hash": "dddd000000000000000000000000000000000000000000000000000000000003"
+      }
+    }
+  ]
+}

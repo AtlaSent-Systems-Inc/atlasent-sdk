@@ -1,6 +1,6 @@
 {
   "name": "@atlasent/sdk",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "TypeScript SDK for the AtlaSent authorization API",
   "license": "Apache-2.0",
   "type": "module",
@@ -26,6 +26,16 @@
       "require": {
         "types": "./dist/hono.d.cts",
         "default": "./dist/hono.cjs"
+      }
+    },
+    "./behavior": {
+      "import": {
+        "types": "./dist/behavior.d.ts",
+        "default": "./dist/behavior.js"
+      },
+      "require": {
+        "types": "./dist/behavior.d.cts",
+        "default": "./dist/behavior.cjs"
       }
     },
     "./package.json": "./package.json"
@@ -72,13 +82,13 @@
     "access": "public"
   },
   "devDependencies": {
-    "@types/node": "^20.12.7",
-    "@vitest/coverage-v8": "^1.5.0",
-    "hono": "^4.5.0",
+    "@types/node": "^25.6.0",
+    "@vitest/coverage-v8": "^4.1.5",
+    "hono": "^4.12.15",
     "tsup": "^8.0.2",
     "tsx": "^4.7.2",
-    "typescript": "^5.4.5",
-    "vitest": "^1.5.0"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
   },
   "peerDependencies": {
     "hono": "^4.0.0"

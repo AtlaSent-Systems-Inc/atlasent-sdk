@@ -113,7 +113,7 @@ async function sha256Hex(input: string): Promise<string> {
  * `v1-audit/index.ts::handleExport`. V8 preserves insertion order, so
  * the literal below is byte-identical with what the backend signs.
  */
-export function signedBytesFor(bundle: AuditBundle): Uint8Array {
+export function signedBytesFor(bundle: AuditBundle): Uint8Array<ArrayBuffer> {
   const envelope = {
     export_id: bundle.export_id,
     org_id: bundle.org_id,
@@ -164,11 +164,13 @@ async function verifyChainEvents(
 
 // ─── Signature verification ───────────────────────────────────────────────────
 
-function base64UrlDecode(s: string): Uint8Array {
+function base64UrlDecode(s: string): Uint8Array<ArrayBuffer> {
   const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
   const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + pad;
   const bin = Buffer.from(b64, "base64");
-  return new Uint8Array(bin);
+  const out = new Uint8Array(bin.byteLength);
+  out.set(bin);
+  return out;
 }
 
 async function importSpkiPem(pem: string): Promise<WebCryptoKey> {

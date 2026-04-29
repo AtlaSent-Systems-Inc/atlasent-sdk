@@ -6,24 +6,24 @@ against its source. Negative findings in `drift.py` are blocking.
 
 ## Shared (all languages)
 
-- [ ] POST `/v1-evaluate` — body matches
+- [x] POST `/v1-evaluate` — body matches
       `schemas/evaluate-request.schema.json`.
-- [ ] POST `/v1-verify-permit` — body matches
+- [x] POST `/v1-verify-permit` — body matches
       `schemas/verify-permit-request.schema.json`.
-- [ ] Response parsing: every required field in the response schema
+- [x] Response parsing: every required field in the response schema
       is read; missing required fields raise a `bad_response` error
       (see `vectors/evaluate.json::evaluate_response_missing_required_fields`).
-- [ ] A policy DENY (HTTP 200, `permitted: false`) is surfaced as
+- [x] A policy DENY (HTTP 200, `permitted: false`) is surfaced as
       data on at least one public entry point; not a transport error.
-- [ ] Every request carries all headers in `vectors/headers.json`.
-- [ ] Every request generates a fresh `X-Request-ID`.
-- [ ] 401 / 403 / 429 / 5xx / timeout / network all map to the
+- [x] Every request carries all headers in `vectors/headers.json`.
+- [x] Every request generates a fresh `X-Request-ID`.
+- [x] 401 / 403 / 429 / 5xx / timeout / network all map to the
       coarse error codes in `vectors/errors.json`.
-- [ ] `Retry-After` (seconds or HTTP date) is parsed and exposed on
+- [x] `Retry-After` (seconds or HTTP date) is parsed and exposed on
       rate-limit errors.
-- [ ] All four evaluate vectors in `vectors/evaluate.json` pass.
-- [ ] All four verify vectors in `vectors/verify.json` pass.
-- [ ] All seven error vectors in `vectors/errors.json` pass.
+- [x] All four evaluate vectors in `vectors/evaluate.json` pass.
+- [x] All four verify vectors in `vectors/verify.json` pass.
+- [x] All seven error vectors in `vectors/errors.json` pass.
 
 ## Python SDK (`python/`) — current state
 
@@ -33,34 +33,18 @@ against its source. Negative findings in `drift.py` are blocking.
 | Schemas — `EvaluateResult`                      | OK     | Aliases `decision→permitted`, `permit_token→decision_id`              |
 | Schemas — `VerifyRequest`                       | OK     | Aliases `permit_token→decision_id`, `action_type→action`, `actor_id→agent` |
 | Schemas — `VerifyResult`                        | OK     | Alias `valid→verified`                                                |
-| Header: `Authorization: Bearer <key>`           | **MISSING** | `client.py` sets Content-Type + User-Agent only; `api_key` appears in body only. Follow-up branch required. |
-| Header: `Accept: application/json`              | **MISSING** | Add to session headers.                                               |
+| Header: `Authorization: Bearer <key>`           | OK     | `client.py` sets `Authorization: Bearer <api_key>` on the httpx session. |
+| Header: `Accept: application/json`              | OK     | Set on the httpx session alongside `Content-Type`.                    |
 | Header: `X-Request-ID`                          | OK     | `uuid.uuid4().hex[:12]` per request.                                  |
-| Error taxonomy — coarse `code`                  | **PARTIAL** | `AtlaSentError` carries `status_code` + `response_body` but no string `code`. |
-| Vector: `evaluate_deny_no_throw`                | **DIFFERS** | `client.evaluate()` raises `AtlaSentDenied` on DENY; the contract's public `authorize()` surfaces DENY as data. Keep `evaluate()` as fail-closed, but `authorize()` MUST return data on DENY (already does). |
-| Vector: `verify_response_missing_verified`      | NEEDS TEST | Add a test that mocks a response missing `verified` and asserts `bad_response`-shaped error. |
+| Error taxonomy — coarse `code`                  | OK     | All raise sites in `_request()` pass `code=` matching `vectors/errors.json`. |
+| Vector: `evaluate_deny_no_throw`                | OK     | `authorize()` returns `permitted=False` on DENY (data, not exception). |
+| Vector: `verify_response_missing_verified`      | OK     | `client.verify()` checks for `verified` and raises `code="bad_response"`. |
+| Contract vector runner                          | OK     | `python/tests/test_contract_vectors.py` — all vectors pass.           |
 | Drift detector                                  | GREEN  | Run by `Contract CI`.                                                 |
 
 ### Follow-up work (sized)
 
-- **SDK-PY-001 — headers parity** (S, 1 commit): add
-  `Authorization`, `Accept` on the `httpx.Client` headers. Mirror in
-  `async_client.py`.
-- **SDK-PY-002 — coarse error code** (M, 1 commit): introduce an
-  `AtlaSentErrorCode = Literal["invalid_api_key", "forbidden",
-  "rate_limited", "timeout", "network", "bad_response", "bad_request",
-  "server_error"]` and a `code: AtlaSentErrorCode | None` attribute on
-  `AtlaSentError`. Set it at every raise site in `client._post` and
-  `async_client._post`.
-- **SDK-PY-003 — bad_response error** (S, 1 commit): raise a
-  dedicated `code="bad_response"` when the server returns a
-  valid-JSON body that is missing `permitted` / `decision_id` /
-  `verified`. Currently pydantic raises a generic `ValidationError`.
-- **SDK-PY-004 — contract vector runner** (M, 1 commit): add
-  `python/tests/test_contract_vectors.py` that loads
-  `contract/vectors/*.json` and asserts each vector's `sdk_input` →
-  `wire_request` and `wire_response` → `sdk_output` round-trip
-  against the live Python SDK (with httpx mocked).
+_All SDK-PY items landed. No open follow-up._
 
 ## TypeScript SDK (`typescript/`) — current state
 
@@ -77,16 +61,13 @@ against its source. Negative findings in `drift.py` are blocking.
 
 ### Follow-up work (sized)
 
-- **SDK-TS-001 — contract vector runner** (S, 1 commit): add
-  `typescript/test/contract-vectors.test.ts` that reads
-  `contract/vectors/evaluate.json` + `verify.json` and asserts
-  round-trip parity via mocked fetch. Vectors ship in the repo, so no
-  extra deps.
-- **SDK-TS-002 — User-Agent format** (XS, 1 commit, optional): the
-  contract currently accepts either `@atlasent/sdk/<semver> node/...`
-  (TS today) or `atlasent-<lang>/<semver>` (Python today). Either we
-  standardize on one shape or keep `headers.json::notes` as the
-  permanent exception. No code change until that decision is made.
+- **SDK-TS-002 — User-Agent format** (XS, optional): the contract
+  accepts either `@atlasent/sdk/<semver> node/...` (TS) or
+  `atlasent-<lang>/<semver>` (Python). Standardize or keep the
+  `headers.json::notes` exception. No code change until decided.
+
+_SDK-TS-001 (contract vector runner) landed —
+`typescript/test/contract-vectors.test.ts` is green._
 
 ## Follow-up branch plan
 
@@ -111,3 +92,61 @@ An SDK is done with v1 when:
 
 - every checkbox in its section is ticked, AND
 - CI shows `Contract CI` green on the PR that flips the last box.
+
+---
+
+## v2-alpha SDK compatibility
+
+Tracks the `atlasent-v2-alpha` (Py) / `@atlasent/sdk-v2-alpha` (TS)
+packages against the `contract/schemas/v2/` wire law. These packages
+follow alpha semantics — no semver discipline between alpha releases.
+Drift is enforced by `python contract/tools/drift.py` (extended to v2
+in the 2.0.0-alpha.1 cycle).
+
+### Shared (both languages — v2)
+
+- [x] `POST /v2/evaluate:batch` — request body matches
+      `schemas/v2/evaluate-batch-request.schema.json`; response parsed
+      against `evaluate-batch-response.schema.json`. Vectors:
+      `contract/vectors/v2/evaluate-batch.json`.
+- [x] `POST /v2/permits/:id/consume` — request body matches
+      `schemas/v2/consume-request.schema.json`; raw payload NEVER sent,
+      only `payload_hash`. Vectors: `contract/vectors/v2/consume.json`.
+- [x] `POST /v2/proofs/:id/verify` — response parsed against
+      `schemas/v2/proof-verification-result.schema.json`. No request
+      body schema (path param only).
+- [x] `POST /v2/permits:bulk-revoke` — request body matches
+      `schemas/v2/bulk-revoke-request.schema.json`; `revoked_count: 0`
+      not thrown. Vectors: `contract/vectors/v2/bulk-revoke.json`.
+- [x] Drift detector clean: `python contract/tools/drift.py` reports
+      zero drift for both `python-v2` and `typescript-v2` labels.
+
+### v2 Python SDK (`atlasent_v2_alpha`)
+
+| Invariant | Status | Notes |
+|-----------|--------|-------|
+| Pydantic models match schemas | OK | Verified by drift.py v2 extension |
+| `execute` → `executed` status enum | OK | `ConsumeExecutionStatus` |
+| `revoker_id` omitted when `None` | OK | Pydantic `exclude_none` on serialize |
+| `BulkRevokeResponse.revoked_count: 0` not raised | OK | Returns normally |
+
+### v2 TypeScript SDK (`@atlasent/sdk-v2-alpha`)
+
+| Invariant | Status | Notes |
+|-----------|--------|-------|
+| Wire interfaces match schemas | OK | Verified by drift.py v2 extension |
+| `revoker_id` omitted (not sent as `null`) | OK | Conditional spread in `bulkRevoke` |
+| `revoked_count: 0` not thrown | OK | Returns `BulkRevokeResponse` normally |
+| camelCase SDK surface → snake_case wire | OK | All body literals use snake_case |
+
+### v2 follow-up work
+
+- [x] **v2-VEC-001** — `contract/vectors/v2/*.json` vectors wired
+  into `python/atlasent_v2_alpha/tests/test_contract_vectors.py` (18
+  tests) and `typescript/packages/v2-alpha/test/contract-vectors.test.ts`
+  (18 tests). `sdk_output` fields corrected to snake_case. All green.
+- **v2-SSE-001** — add `GET /v2/decisions:subscribe` to the drift
+  detector response check (SSE frames, not pydantic models; needs a
+  separate parser-level vector format).
+- **v2-PROOF-001** — add `GET /v2/proofs/:id` response vectors once
+  the proof system is deployed and a test proof is available.
