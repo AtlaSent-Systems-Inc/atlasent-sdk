@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.5.0 — 2026-04-25
+
 ### Added
 
 - **`list_audit_events()` and `create_audit_export()`.** Both
