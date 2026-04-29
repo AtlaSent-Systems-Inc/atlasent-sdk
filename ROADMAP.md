@@ -32,7 +32,9 @@ Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/
 - **atlasent-action**: bundles `@atlasent/sdk`. Pin at v1.
 - **atlasent-examples**: imports published packages to demo real customer flow.
 
-## Open questions
+## Wave F (AI framework guards)
+
+- ✅ **`@atlasent/anthropic-middleware`** — reference Wave F implementation. `withAtlaSentGuard(tools, client, opts)` wraps Anthropic SDK tool definitions with authorize-first `execute` (evaluate + verifyPermit before each tool call). `runGuardedLoop(opts)` runs the complete Claude tool-use cycle. `onDeny: "tool-result"` surfaces denials as tool results so Claude can adapt; default throws `AtlaSentDeniedError`. 15 tests green. Not yet published.
 
 - Semantic-versioning cadence after v1: monthly minors or cut whenever features land?
 - Do we publish `@atlasent/cli` on npm or keep it internal? (It's useful for policy-as-code workflows.)
