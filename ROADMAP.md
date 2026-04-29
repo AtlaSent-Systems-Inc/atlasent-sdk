@@ -8,7 +8,7 @@ Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/
 2. ✅ **Python SDK published** — `atlasent` **1.4.1 on PyPI** (2026-04-26). Sync + async clients, `protect()` / `authorize()` / `gate()` / `evaluate()` / `verify()`, `@atlasent_guard` + `@async_atlasent_guard` decorators, typed errors, `TTLCache`, audit-bundle verification.
 3. **Go SDK publish** — skeleton landed in `go/` (2026-04-29). `Client`, `Evaluate`, `VerifyPermit`, `AtlaSentError`, all contract vectors green (`go test ./...`). **Not yet published**: needs a `go/v1.0.0` git tag after PR #121 merges (Go proxy resolves from tags, no workflow required). See `contract/SDK_COMPATIBILITY.md` → "Go SDK" section.
 4. **v1-only API sweep** — done in 1.x line; v2 work is gated behind `claude/v2-*` draft branches.
-5. **Offline verifier** — `verify_audit_bundle()` ships as part of `atlasent` (Python) and TS SDK. A separate `@atlasent/verify` zero-dep Node CLI is still desired but not yet packaged.
+5. ✅ **Offline verifier** — `verify_audit_bundle()` ships as part of `atlasent` (Python) and TS SDK. `@atlasent/verify` zero-dep Node CLI + library landed in `typescript/packages/verify/` (2026-04-29): `atlasent-verify <bundle.json> --key <pem>`, exits 0/1/2, `--json` flag, 15 tests green. Not yet published to npm.
 6. **SSO-aware types** — once `atlasent-api/v1-sso` ships, export `SsoConnection`, `SsoJitRule`, `SsoEvent` from `@atlasent/types`.
 
 ## Post-GA — ordered by impact
