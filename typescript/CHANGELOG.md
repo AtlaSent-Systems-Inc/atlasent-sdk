@@ -6,6 +6,71 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Migration notice — `@atlasent/sdk/hono` API will change after Enforce GA
+
+The `atlaSentGuard` middleware currently calls `protect()` directly.
+`protect()` wraps `evaluate` but does **not** enforce the full
+`evaluate → verifyPermit → execute` chain as a non-bypassable
+invariant. Once `@atlasent/enforce` reaches GA, the guard will be
+rebuilt so the route handler becomes the `execute` callback inside
+`Enforce.run()`, closing that gap.
+
+**Current API (stable until Enforce GA):**
+
+```ts
+import { atlaSentGuard, atlaSentErrorHandler } from "@atlasent/sdk/hono";
+
+app.post(
+  "/deploy",
+  atlaSentGuard({
+    action: "deploy_to_production",
+    agent: (c) => c.req.header("x-agent-id") ?? "anonymous",
+    context: async (c) => ({ commit: (await c.req.json()).commit }),
+  }),
+  (c) => {
+    const permit = c.get("atlasent");   // type: Permit
+    return c.json({ ok: true, permitId: permit.permitId });
+  },
+);
+app.onError(atlaSentErrorHandler());
+```
+
+**Future API (post Enforce GA):**
+
+```ts
+import { Enforce } from "@atlasent/enforce";
+import { atlaSentGuard, atlaSentErrorHandler } from "@atlasent/sdk/hono";
+
+const enforce = new Enforce({
+  client,
+  bindings: { actorId: (c) => c.get("userId"), actionType: "deploy_to_production" },
+  failClosed: true,
+});
+
+app.post(
+  "/deploy",
+  atlaSentGuard({ enforce }),           // enforce instance injected
+  (c) => {
+    const permit = c.get("atlasent");   // type: VerifiedPermit (was: Permit)
+    return c.json({ ok: true, permitId: permit.token });
+  },
+);
+app.onError(atlaSentErrorHandler());
+```
+
+Key differences:
+
+| | Current | Post Enforce GA |
+|---|---|---|
+| Guard config | `action`, `agent`, `context` per-route | `enforce` instance (owns bindings) |
+| Context value | `Permit` (v1) | `VerifiedPermit` |
+| Bypass possible? | Yes — `protect()` can skip `verifyPermit` | No — `Enforce.run()` enforces the chain |
+
+The existing `action/agent/context` API is **not deprecated** until
+the migrated guard ships. This notice is informational. See
+[`contract/ENFORCE_PACK.md`](../contract/ENFORCE_PACK.md) for the
+complete migration plan and gating criteria.
+
 ## 1.5.1 — 2026-04-29
 
 ### Fixed

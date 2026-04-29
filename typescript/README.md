@@ -124,6 +124,43 @@ Every `AtlaSentError` carries `err.requestId` — the UUID the SDK sent as `X-Re
 - Node.js **20** or newer (native `fetch`, `AbortSignal.timeout`, `crypto.randomUUID`).
 - TypeScript **5.0+** for best type-inference ergonomics (older is fine — types are plain interfaces).
 
+## Hono middleware
+
+Drop-in protection for [Hono](https://hono.dev) routes via the
+`@atlasent/sdk/hono` subpath export (requires `hono` as a peer dep):
+
+```ts
+import { Hono } from "hono";
+import { atlaSentGuard, atlaSentErrorHandler } from "@atlasent/sdk/hono";
+
+const app = new Hono();
+app.onError(atlaSentErrorHandler());
+
+app.post(
+  "/deploy/:service",
+  atlaSentGuard({
+    action: (c) => `deploy_${c.req.param("service")}`,
+    agent: (c) => c.req.header("x-agent-id") ?? "anonymous",
+    context: async (c) => ({ commit: (await c.req.json()).commit }),
+  }),
+  (c) => c.json({ ok: true, permit: c.get("atlasent") }),
+);
+```
+
+`atlaSentGuard` calls `protect()` under the hood — fail-closed
+semantics. On allow it stashes a `Permit` on the context (key:
+`"atlasent"`, override via `options.key`). On deny or transport error
+it throws; `atlaSentErrorHandler` maps those to 403 / 503 responses
+so every guarded route shares one error-handling path.
+
+> **Upcoming migration:** after `@atlasent/enforce` reaches GA the
+> guard API will change to accept a pre-constructed `Enforce` instance
+> instead of per-route `action/agent/context` options. The current API
+> is **not deprecated** until that ships. See the
+> [CHANGELOG](./CHANGELOG.md) for the full before/after and
+> [`contract/ENFORCE_PACK.md`](../contract/ENFORCE_PACK.md) for
+> migration details.
+
 ## Related
 
 - **Python SDK:** same repo, [`../python/`](../python/README.md). Wire-compatible.
