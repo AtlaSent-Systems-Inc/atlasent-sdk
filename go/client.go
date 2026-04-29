@@ -105,7 +105,6 @@ func New(opts Options) (*Client, error) {
 // Evaluate asks the policy engine whether an agent action is permitted.
 // A DENY response is returned as data (resp.Permitted == false), not an error.
 func (c *Client) Evaluate(ctx context.Context, req EvaluateRequest) (*EvaluateResponse, error) {
-	ctx = ctx // use ctx for the request
 	reqCtx := req.Context
 	if reqCtx == nil {
 		reqCtx = map[string]interface{}{}
@@ -118,7 +117,7 @@ func (c *Client) Evaluate(ctx context.Context, req EvaluateRequest) (*EvaluateRe
 	}
 
 	var wire struct {
-		Permitted  bool   `json:"permitted"`
+		Permitted  *bool  `json:"permitted"`
 		DecisionID string `json:"decision_id"`
 		Reason     string `json:"reason"`
 		AuditHash  string `json:"audit_hash"`
@@ -128,7 +127,7 @@ func (c *Client) Evaluate(ctx context.Context, req EvaluateRequest) (*EvaluateRe
 	if err != nil {
 		return nil, err
 	}
-	if wire.DecisionID == "" {
+	if wire.Permitted == nil || wire.DecisionID == "" {
 		return nil, &AtlaSentError{
 			Code:    CodeBadResponse,
 			Message: "malformed response from /v1-evaluate: missing permitted or decision_id",
@@ -136,12 +135,12 @@ func (c *Client) Evaluate(ctx context.Context, req EvaluateRequest) (*EvaluateRe
 	}
 
 	decision := "DENY"
-	if wire.Permitted {
+	if *wire.Permitted {
 		decision = "ALLOW"
 	}
 	return &EvaluateResponse{
 		Decision:  decision,
-		Permitted: wire.Permitted,
+		Permitted: *wire.Permitted,
 		PermitID:  wire.DecisionID,
 		Reason:    wire.Reason,
 		AuditHash: wire.AuditHash,
