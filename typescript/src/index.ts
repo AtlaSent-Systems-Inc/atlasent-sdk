@@ -21,6 +21,7 @@ import { AtlaSentClient } from "./client.js";
 import { verifyBundle } from "./auditBundle.js";
 import { AtlaSentDeniedError, AtlaSentError } from "./errors.js";
 import { configure, protect } from "./protect.js";
+import { withPermit } from "./withPermit.js";
 
 export { AtlaSentClient } from "./client.js";
 export {
@@ -38,6 +39,7 @@ export {
   type Permit,
   type ProtectRequest,
 } from "./protect.js";
+export { withPermit } from "./withPermit.js";
 export type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
@@ -88,6 +90,7 @@ export {
  */
 const atlasent = {
   protect,
+  withPermit,
   configure,
   verifyBundle,
   AtlaSentClient,

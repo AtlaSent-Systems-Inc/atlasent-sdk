@@ -6,6 +6,39 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Added
+
+- **`withPermit(req, fn)`** — verify-before-run wrapper that lifts
+  the protect lifecycle one level higher than `protect()`. Where
+  `protect` returns a verified `Permit` and leaves the caller to
+  invoke their own action, `withPermit` orchestrates evaluate →
+  verify → run-fn in a single call and returns whatever `fn`
+  returns:
+
+      const result = await atlasent.withPermit(
+        { agent: "deploy-bot", action: "deploy_to_production",
+          context: { commit, approver } },
+        async (permit) => doDeploy(commit),
+      );
+
+  The wrapped function is **never invoked** when evaluate denies,
+  when the permit fails verification, or on transport / auth /
+  server errors — same fail-closed taxonomy as `protect`.
+
+  Replay protection: in v1 the server consumes a permit on first
+  `verifyPermit`. A retry that somehow re-uses a stale permit id
+  returns `verified: false` with `outcome: "permit_consumed"`,
+  which throws `AtlaSentDeniedError` here — the wrapped function
+  still does not run. Closes ledger row **B2** of
+  `LAST_20_EXECUTION_PLAN`.
+
+  Errors thrown by `fn` itself propagate verbatim. The permit is
+  already consumed by `verifyPermit` at the point `fn` runs (v1
+  semantics), so the SDK can't meaningfully roll back; surfacing
+  the caller's exception is the right behaviour.
+
+  Available as both a named import and `atlasent.withPermit`.
+
 ## 1.5.0 — 2026-04-25
 
 ### Added
