@@ -1,45 +1,103 @@
 /**
- * Activity-side bulk-revoke implementation. Stubs out for now —
- * the server-side bulk-revoke endpoint (`POST /v2/permits:bulk-revoke`
- * keyed on workflow `run_id`) is part of v2 server work that
- * hasn't landed (tracked in PR #57's V2 plan, called out in
- * `./workflowSignals.ts`).
+ * Activity-side bulk-revoke implementation (Pillar 8).
  *
- * Customers wiring this preview today can either:
+ * Calls `POST /v2/permits:bulk-revoke` on the AtlaSent v2 server using
+ * `V2Client` from `@atlasent/sdk-v2-alpha`. The activity reads the API key
+ * from `process.env.ATLASENT_API_KEY` on the worker process — never pass
+ * keys through workflow signals.
  *
- *   1. Register the stub and accept that revoke calls throw with
- *      a clear "v2 endpoint required" message.
- *   2. Pass their own `BulkRevokeActivities` to
- *      {@link installRevokeHandler} — useful if they want to wire
- *      their own per-permit revoke loop against the existing v1
- *      surface.
+ * If `ATLASENT_API_KEY` is not set, {@link BulkRevokeNotImplementedError}
+ * is thrown with a clear message so the gap is visible in Temporal's
+ * activity-failure event rather than a silent no-op.
  *
- * At v2 GA this stub becomes a real HTTP call against the server's
- * bulk-revoke endpoint.
+ * Customers who want to inject a pre-built client (e.g. to share it across
+ * activities or to test with a mock) should use
+ * {@link createBulkRevokeActivity} instead of registering this function
+ * directly.
  */
 
 import type { RevokeAtlaSentPermitsArgs } from "./workflowSignals.js";
 
-/**
- * Stub bulk-revoke activity. Throws by default — customers who
- * register this without overriding should at least see a clear
- * message rather than a silent no-op.
- */
-export async function bulkRevokeAtlaSentPermits(
-  args: RevokeAtlaSentPermitsArgs & { run_id: string; workflow_id: string },
-): Promise<void> {
-  throw new BulkRevokeNotImplementedError(
-    `bulkRevokeAtlaSentPermits requires the v2 server endpoint ` +
-      `(POST /v2/permits:bulk-revoke) which is not yet shipped. ` +
-      `Workflow ${args.workflow_id} (run ${args.run_id}) requested revoke; ` +
-      `reason: ${args.reason}`,
-  );
-}
-
-/** Thrown by the stub activity. Distinct class so customer code can branch. */
+/** Thrown when `ATLASENT_API_KEY` is absent or the v2 endpoint is unreachable.
+ * Distinct class so customer code can branch on it. */
 export class BulkRevokeNotImplementedError extends Error {
   readonly name = "BulkRevokeNotImplementedError";
   constructor(message: string) {
     super(message);
   }
+}
+
+type BulkRevokeArgs = RevokeAtlaSentPermitsArgs & {
+  run_id: string;
+  workflow_id: string;
+};
+
+/**
+ * Return a Temporal activity that bulk-revokes via an injected client.
+ *
+ * Useful when the worker already holds a `V2Client` instance and you want
+ * to avoid the implicit `ATLASENT_API_KEY` env-var read:
+ *
+ * ```ts
+ * import { V2Client } from "@atlasent/sdk-v2-alpha";
+ * import { createBulkRevokeActivity } from "@atlasent/temporal-preview";
+ *
+ * const client = new V2Client({ apiKey: process.env.ATLASENT_API_KEY! });
+ * const worker = await Worker.create({
+ *   activities: { bulkRevokeAtlaSentPermits: createBulkRevokeActivity(client) },
+ * });
+ * ```
+ *
+ * The returned function shares the same Temporal-registry name as the
+ * default activity so the workflow side needs no changes.
+ */
+export function createBulkRevokeActivity(
+  client: {
+    bulkRevoke(input: {
+      workflowId: string;
+      runId: string;
+      reason: string;
+      revokerId?: string;
+    }): Promise<unknown>;
+  },
+): (args: BulkRevokeArgs) => Promise<void> {
+  return async function bulkRevokeAtlaSentPermits(args: BulkRevokeArgs) {
+    await client.bulkRevoke({
+      workflowId: args.workflow_id,
+      runId: args.run_id,
+      reason: args.reason,
+      revokerId: args.revoker_id,
+    });
+  };
+}
+
+/**
+ * Bulk-revoke activity — reads `ATLASENT_API_KEY` from the environment.
+ *
+ * Throws {@link BulkRevokeNotImplementedError} when the env var is absent
+ * so the failure is visible and actionable rather than silent.
+ */
+export async function bulkRevokeAtlaSentPermits(
+  args: BulkRevokeArgs,
+): Promise<void> {
+  const apiKey =
+    process.env["ATLASENT_API_KEY"] ?? process.env["ATLASENT_V2_API_KEY"];
+
+  if (!apiKey) {
+    throw new BulkRevokeNotImplementedError(
+      `bulkRevokeAtlaSentPermits requires the ATLASENT_API_KEY env var ` +
+        `on the worker process (wires against POST /v2/permits:bulk-revoke). ` +
+        `Workflow ${args.workflow_id} (run ${args.run_id}) requested revoke; ` +
+        `reason: ${args.reason}`,
+    );
+  }
+
+  const { V2Client } = await import("@atlasent/sdk-v2-alpha");
+  const client = new V2Client({ apiKey });
+  await client.bulkRevoke({
+    workflowId: args.workflow_id,
+    runId: args.run_id,
+    reason: args.reason,
+    revokerId: args.revoker_id,
+  });
 }

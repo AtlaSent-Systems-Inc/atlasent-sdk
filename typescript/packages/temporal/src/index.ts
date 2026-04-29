@@ -27,5 +27,6 @@ export {
 // activities: ... })`.
 export {
   bulkRevokeAtlaSentPermits,
+  createBulkRevokeActivity,
   BulkRevokeNotImplementedError,
 } from "./bulkRevokeActivity.js";

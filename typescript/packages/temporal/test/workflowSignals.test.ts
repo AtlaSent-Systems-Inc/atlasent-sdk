@@ -1,44 +1,43 @@
 /**
- * Tests for the workflow-side signal helper.
+ * Tests for the workflow-side signal helper and bulk-revoke activity.
  *
- * Strategy: stub `@temporalio/workflow` via `vi.mock` (hoisted) so we
- * can assert what `setHandler` registers without standing up a real
- * Temporal worker / workflow runtime. The signal-firing path is
- * exercised by manually invoking the captured handler with a
- * synthetic `RevokeAtlaSentPermitsArgs`.
- *
- * Companion to `withAtlaSentActivity.test.ts` — both stub the
- * `@temporalio/*` import boundary the same way.
+ * Strategy:
+ *   - Stub `@temporalio/workflow` via `vi.mock` (hoisted) to test
+ *     `installRevokeHandler` without a real Temporal runtime.
+ *   - Stub `@atlasent/sdk-v2-alpha` via `vi.mock` to test the env-key
+ *     path of `bulkRevokeAtlaSentPermits` without a real HTTP call.
+ *   - `createBulkRevokeActivity` is tested with a plain mock client.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-// `vi.mock` is hoisted; state must come from `vi.hoisted`.
+// ── Hoist: all mock state must come from vi.hoisted ─────────────────
+
 const {
   setHandlerMock,
   proxyActivitiesMock,
   workflowInfoMock,
   defineSignalSentinel,
   bulkRevokeProxy,
+  v2BulkRevokeMock,
 } = vi.hoisted(() => {
   const bulkRevokeProxy = vi.fn(async () => undefined);
   const proxyObj = { bulkRevokeAtlaSentPermits: bulkRevokeProxy };
   const proxyActivitiesMock = vi.fn(() => proxyObj);
-  // Capture every setHandler call; tests inspect.
   const setHandlerMock = vi.fn();
   const workflowInfoMock = vi.fn(() => ({
     workflowId: "wf-1",
     runId: "run-abc",
   }));
-  // `defineSignal` returns an opaque object; we don't care about its
-  // shape, just that the same object is passed to `setHandler`.
   const defineSignalSentinel = { __kind: "signal-def" };
+  const v2BulkRevokeMock = vi.fn(async () => undefined);
   return {
     setHandlerMock,
     proxyActivitiesMock,
     workflowInfoMock,
     defineSignalSentinel,
     bulkRevokeProxy,
+    v2BulkRevokeMock,
   };
 });
 
@@ -49,15 +48,19 @@ vi.mock("@temporalio/workflow", () => ({
   workflowInfo: workflowInfoMock,
 }));
 
+vi.mock("@atlasent/sdk-v2-alpha", () => ({
+  V2Client: vi.fn(() => ({ bulkRevoke: v2BulkRevokeMock })),
+}));
+
 import {
   bulkRevokeAtlaSentPermits,
   BulkRevokeNotImplementedError,
+  createBulkRevokeActivity,
   installRevokeHandler,
   RevokeAtlaSentPermitsSignal,
 } from "../src/index.js";
 
 // ── installRevokeHandler ─────────────────────────────────────────────
-
 
 describe("installRevokeHandler", () => {
   it("registers a handler for RevokeAtlaSentPermitsSignal", () => {
@@ -119,10 +122,7 @@ describe("installRevokeHandler", () => {
   it("the handler delegates to a custom activity reference", async () => {
     setHandlerMock.mockClear();
     const customActivity = vi.fn(async () => undefined);
-    workflowInfoMock.mockReturnValue({
-      workflowId: "my-wf",
-      runId: "my-run",
-    });
+    workflowInfoMock.mockReturnValue({ workflowId: "my-wf", runId: "my-run" });
 
     installRevokeHandler({
       activities: { bulkRevokeAtlaSentPermits: customActivity },
@@ -141,10 +141,22 @@ describe("installRevokeHandler", () => {
   });
 });
 
-// ── bulkRevokeAtlaSentPermits stub ──────────────────────────────────
+// ── bulkRevokeAtlaSentPermits — no API key ───────────────────────────
 
+describe("bulkRevokeAtlaSentPermits without ATLASENT_API_KEY", () => {
+  const savedKey = process.env["ATLASENT_API_KEY"];
+  const savedV2Key = process.env["ATLASENT_V2_API_KEY"];
 
-describe("bulkRevokeAtlaSentPermits stub", () => {
+  beforeEach(() => {
+    delete process.env["ATLASENT_API_KEY"];
+    delete process.env["ATLASENT_V2_API_KEY"];
+  });
+
+  afterEach(() => {
+    if (savedKey !== undefined) process.env["ATLASENT_API_KEY"] = savedKey;
+    if (savedV2Key !== undefined) process.env["ATLASENT_V2_API_KEY"] = savedV2Key;
+  });
+
   it("throws BulkRevokeNotImplementedError with workflow context", async () => {
     await expect(
       bulkRevokeAtlaSentPermits({
@@ -169,14 +181,90 @@ describe("bulkRevokeAtlaSentPermits stub", () => {
 
   it("preserves a typed name on the error class", async () => {
     try {
-      await bulkRevokeAtlaSentPermits({
-        reason: "test",
-        workflow_id: "w",
-        run_id: "r",
-      });
+      await bulkRevokeAtlaSentPermits({ reason: "t", workflow_id: "w", run_id: "r" });
     } catch (err) {
       expect(err).toBeInstanceOf(BulkRevokeNotImplementedError);
       expect((err as Error).name).toBe("BulkRevokeNotImplementedError");
     }
+  });
+});
+
+// ── bulkRevokeAtlaSentPermits — with API key ─────────────────────────
+
+describe("bulkRevokeAtlaSentPermits with ATLASENT_API_KEY set", () => {
+  const savedKey = process.env["ATLASENT_API_KEY"];
+
+  beforeEach(() => {
+    process.env["ATLASENT_API_KEY"] = "ask_test_key";
+    v2BulkRevokeMock.mockClear();
+  });
+
+  afterEach(() => {
+    if (savedKey !== undefined) {
+      process.env["ATLASENT_API_KEY"] = savedKey;
+    } else {
+      delete process.env["ATLASENT_API_KEY"];
+    }
+  });
+
+  it("calls V2Client.bulkRevoke with camelCase args", async () => {
+    await bulkRevokeAtlaSentPermits({
+      workflow_id: "wf-deploy",
+      run_id: "run-99",
+      reason: "emergency",
+      revoker_id: "ops-bot",
+    });
+    expect(v2BulkRevokeMock).toHaveBeenCalledWith({
+      workflowId: "wf-deploy",
+      runId: "run-99",
+      reason: "emergency",
+      revokerId: "ops-bot",
+    });
+  });
+
+  it("passes undefined revokerId when revoker_id is absent", async () => {
+    await bulkRevokeAtlaSentPermits({
+      workflow_id: "wf",
+      run_id: "run",
+      reason: "ttl",
+    });
+    expect(v2BulkRevokeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ revokerId: undefined }),
+    );
+  });
+});
+
+// ── createBulkRevokeActivity ─────────────────────────────────────────
+
+describe("createBulkRevokeActivity", () => {
+  it("calls injected client.bulkRevoke with camelCase args", async () => {
+    const mockBulkRevoke = vi.fn(async () => ({ revoked_count: 2 }));
+    const mockClient = { bulkRevoke: mockBulkRevoke };
+    const activity = createBulkRevokeActivity(mockClient);
+
+    await activity({
+      workflow_id: "wf-1",
+      run_id: "run-1",
+      reason: "operator pause",
+      revoker_id: "alice",
+    });
+
+    expect(mockBulkRevoke).toHaveBeenCalledWith({
+      workflowId: "wf-1",
+      runId: "run-1",
+      reason: "operator pause",
+      revokerId: "alice",
+    });
+  });
+
+  it("passes undefined revokerId when revoker_id is absent", async () => {
+    const mockBulkRevoke = vi.fn(async () => undefined);
+    const activity = createBulkRevokeActivity({ bulkRevoke: mockBulkRevoke });
+
+    await activity({ workflow_id: "wf", run_id: "run", reason: "ttl" });
+
+    expect(mockBulkRevoke).toHaveBeenCalledWith(
+      expect.objectContaining({ revokerId: undefined }),
+    );
   });
 });
