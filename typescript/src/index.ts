@@ -69,6 +69,14 @@ export type {
   AuditExport,
   AuditExportSignatureStatus,
 } from "./audit.js";
+export {
+  DEFAULT_RETRY_POLICY,
+  computeBackoffMs,
+  hasAttemptsLeft,
+  isRetryable,
+  mergePolicy,
+  type RetryPolicy,
+} from "./retry.js";
 
 /**
  * Default export. The opinionated, category-defining entry point:
