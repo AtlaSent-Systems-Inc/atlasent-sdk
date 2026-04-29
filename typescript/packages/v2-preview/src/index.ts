@@ -43,6 +43,11 @@ export {
   buildEvaluateBatchRequest,
   parseEvaluateBatchResponse,
 } from "./buildBatch.js";
+export {
+  evaluateBatchPolyfilled,
+  type BatchPolyfillClient,
+  type EvaluateBatchPolyfillOptions,
+} from "./evaluateBatchPolyfill.js";
 // PR #77 plans `@atlasent/sdk/graphql` as a sub-path import at v2 GA.
 // While v2-preview is private:true, we re-export from the top level so
 // existing test infra keeps working without a package.json `exports`
