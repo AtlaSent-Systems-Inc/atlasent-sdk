@@ -6,6 +6,7 @@ on:
   push:
     tags:
       - "python-v2-alpha-v*"
+  workflow_dispatch:
 
 permissions:
   contents: read

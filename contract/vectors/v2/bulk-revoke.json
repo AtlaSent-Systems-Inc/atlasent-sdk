@@ -25,9 +25,9 @@
         "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
       },
       "sdk_output": {
-        "revokedCount": 3,
-        "workflowId": "deploy-prod-2026-04-29",
-        "runId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        "revoked_count": 3,
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
       }
     },
     {
@@ -51,9 +51,9 @@
         "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
       },
       "sdk_output": {
-        "revokedCount": 0,
-        "workflowId": "deploy-prod-2026-04-29",
-        "runId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        "revoked_count": 0,
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
       }
     },
     {
@@ -77,9 +77,9 @@
         "run_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901"
       },
       "sdk_output": {
-        "revokedCount": 1,
-        "workflowId": "deploy-prod-2026-04-29",
-        "runId": "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        "revoked_count": 1,
+        "workflow_id": "deploy-prod-2026-04-29",
+        "run_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901"
       }
     }
   ]

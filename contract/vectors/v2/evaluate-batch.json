@@ -7,15 +7,31 @@
       "description": "Minimal two-item batch, no proof opt-in. Both items permit. Verifies order preservation and that context defaults to {} when omitted.",
       "sdk_input": {
         "requests": [
-          { "agent": "clinical-data-agent", "action": "read_patient_record", "context": {} },
-          { "agent": "compliance-agent",    "action": "read_audit_log",       "context": {} }
+          {
+            "agent": "clinical-data-agent",
+            "action": "read_patient_record",
+            "context": {}
+          },
+          {
+            "agent": "compliance-agent",
+            "action": "read_audit_log",
+            "context": {}
+          }
         ]
       },
       "api_key": "ask_live_test_key",
       "wire_request": {
         "requests": [
-          { "action": "read_patient_record", "agent": "clinical-data-agent", "context": {} },
-          { "action": "read_audit_log",      "agent": "compliance-agent",    "context": {} }
+          {
+            "action": "read_patient_record",
+            "agent": "clinical-data-agent",
+            "context": {}
+          },
+          {
+            "action": "read_audit_log",
+            "agent": "compliance-agent",
+            "context": {}
+          }
         ],
         "api_key": "ask_live_test_key"
       },
@@ -43,25 +59,25 @@
         ]
       },
       "sdk_output": {
-        "batchId": "batch-uuid-0001-0000-0000-000000000001",
+        "batch_id": "batch-uuid-0001-0000-0000-000000000001",
         "items": [
           {
             "index": 0,
             "permitted": true,
-            "decisionId": "dec_batch_0001_item0",
+            "decision_id": "dec_batch_0001_item0",
             "reason": "",
-            "auditHash": "aaaa000000000000000000000000000000000000000000000000000000000001",
+            "audit_hash": "aaaa000000000000000000000000000000000000000000000000000000000001",
             "timestamp": "2026-04-29T10:00:00Z",
-            "batchId": "batch-uuid-0001-0000-0000-000000000001"
+            "batch_id": "batch-uuid-0001-0000-0000-000000000001"
           },
           {
             "index": 1,
             "permitted": true,
-            "decisionId": "dec_batch_0001_item1",
+            "decision_id": "dec_batch_0001_item1",
             "reason": "",
-            "auditHash": "aaaa000000000000000000000000000000000000000000000000000000000002",
+            "audit_hash": "aaaa000000000000000000000000000000000000000000000000000000000002",
             "timestamp": "2026-04-29T10:00:00Z",
-            "batchId": "batch-uuid-0001-0000-0000-000000000001"
+            "batch_id": "batch-uuid-0001-0000-0000-000000000001"
           }
         ]
       }
@@ -71,17 +87,53 @@
       "description": "Three-item batch with one deny in the middle. Verifies order-preservation when outcomes are non-uniform: items[1] is denied, items[0] and items[2] allow.",
       "sdk_input": {
         "requests": [
-          { "agent": "deploy-bot", "action": "deploy_to_staging",    "context": { "commit": "abc123" } },
-          { "agent": "deploy-bot", "action": "deploy_to_production", "context": { "commit": "abc123" } },
-          { "agent": "deploy-bot", "action": "run_smoke_tests",      "context": { "env": "staging" } }
+          {
+            "agent": "deploy-bot",
+            "action": "deploy_to_staging",
+            "context": {
+              "commit": "abc123"
+            }
+          },
+          {
+            "agent": "deploy-bot",
+            "action": "deploy_to_production",
+            "context": {
+              "commit": "abc123"
+            }
+          },
+          {
+            "agent": "deploy-bot",
+            "action": "run_smoke_tests",
+            "context": {
+              "env": "staging"
+            }
+          }
         ]
       },
       "api_key": "ask_live_test_key",
       "wire_request": {
         "requests": [
-          { "action": "deploy_to_staging",    "agent": "deploy-bot", "context": { "commit": "abc123" } },
-          { "action": "deploy_to_production", "agent": "deploy-bot", "context": { "commit": "abc123" } },
-          { "action": "run_smoke_tests",      "agent": "deploy-bot", "context": { "env": "staging" } }
+          {
+            "action": "deploy_to_staging",
+            "agent": "deploy-bot",
+            "context": {
+              "commit": "abc123"
+            }
+          },
+          {
+            "action": "deploy_to_production",
+            "agent": "deploy-bot",
+            "context": {
+              "commit": "abc123"
+            }
+          },
+          {
+            "action": "run_smoke_tests",
+            "agent": "deploy-bot",
+            "context": {
+              "env": "staging"
+            }
+          }
         ],
         "api_key": "ask_live_test_key"
       },
@@ -118,34 +170,34 @@
         ]
       },
       "sdk_output": {
-        "batchId": "batch-uuid-0002-0000-0000-000000000002",
+        "batch_id": "batch-uuid-0002-0000-0000-000000000002",
         "items": [
           {
             "index": 0,
             "permitted": true,
-            "decisionId": "dec_batch_0002_item0",
+            "decision_id": "dec_batch_0002_item0",
             "reason": "",
-            "auditHash": "bbbb000000000000000000000000000000000000000000000000000000000001",
+            "audit_hash": "bbbb000000000000000000000000000000000000000000000000000000000001",
             "timestamp": "2026-04-29T10:01:00Z",
-            "batchId": "batch-uuid-0002-0000-0000-000000000002"
+            "batch_id": "batch-uuid-0002-0000-0000-000000000002"
           },
           {
             "index": 1,
             "permitted": false,
-            "decisionId": "dec_batch_0002_item1",
+            "decision_id": "dec_batch_0002_item1",
             "reason": "Production deployment requires change-freeze approval",
-            "auditHash": "bbbb000000000000000000000000000000000000000000000000000000000002",
+            "audit_hash": "bbbb000000000000000000000000000000000000000000000000000000000002",
             "timestamp": "2026-04-29T10:01:00Z",
-            "batchId": "batch-uuid-0002-0000-0000-000000000002"
+            "batch_id": "batch-uuid-0002-0000-0000-000000000002"
           },
           {
             "index": 2,
             "permitted": true,
-            "decisionId": "dec_batch_0002_item2",
+            "decision_id": "dec_batch_0002_item2",
             "reason": "",
-            "auditHash": "bbbb000000000000000000000000000000000000000000000000000000000003",
+            "audit_hash": "bbbb000000000000000000000000000000000000000000000000000000000003",
             "timestamp": "2026-04-29T10:01:00Z",
-            "batchId": "batch-uuid-0002-0000-0000-000000000002"
+            "batch_id": "batch-uuid-0002-0000-0000-000000000002"
           }
         ]
       }
@@ -158,7 +210,10 @@
           {
             "agent": "deploy-bot",
             "action": "deploy_to_production",
-            "context": { "commit": "deadbeef", "approver": "alice" },
+            "context": {
+              "commit": "deadbeef",
+              "approver": "alice"
+            },
             "payload_hash": "deadbeef00000000000000000000000000000000000000000000000000000000"
           }
         ]
@@ -169,7 +224,10 @@
           {
             "action": "deploy_to_production",
             "agent": "deploy-bot",
-            "context": { "commit": "deadbeef", "approver": "alice" },
+            "context": {
+              "commit": "deadbeef",
+              "approver": "alice"
+            },
             "payload_hash": "deadbeef00000000000000000000000000000000000000000000000000000000"
           }
         ],
@@ -192,18 +250,18 @@
         ]
       },
       "sdk_output": {
-        "batchId": "batch-uuid-0003-0000-0000-000000000003",
+        "batch_id": "batch-uuid-0003-0000-0000-000000000003",
         "items": [
           {
             "index": 0,
             "permitted": true,
-            "decisionId": "dec_batch_0003_item0",
+            "decision_id": "dec_batch_0003_item0",
             "reason": "GxP-compliant deployment approved",
-            "auditHash": "cccc000000000000000000000000000000000000000000000000000000000001",
+            "audit_hash": "cccc000000000000000000000000000000000000000000000000000000000001",
             "timestamp": "2026-04-29T10:02:00Z",
-            "batchId": "batch-uuid-0003-0000-0000-000000000003",
-            "proofId": "proof-uuid-0003-0000-0000-000000000003",
-            "proofStatus": "pending"
+            "batch_id": "batch-uuid-0003-0000-0000-000000000003",
+            "proof_id": "proof-uuid-0003-0000-0000-000000000003",
+            "proof_status": "pending"
           }
         ]
       }
