@@ -35,7 +35,16 @@ import type {
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const SDK_VERSION = "0.1.0";
+const SDK_VERSION = "1.5.1";
+
+function _buildUserAgent(): string {
+  const isNode =
+    typeof process !== "undefined" &&
+    typeof process?.versions?.node === "string";
+  return isNode
+    ? `@atlasent/sdk/${SDK_VERSION} node/${process.version}`
+    : `@atlasent/sdk/${SDK_VERSION} browser`;
+}
 
 /** Raw JSON shape received from `POST /v1-evaluate`. */
 interface EvaluateWire {
@@ -71,6 +80,7 @@ export class AtlaSentClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
+  private readonly userAgent: string;
 
   constructor(options: AtlaSentClientOptions) {
     if (!options.apiKey || typeof options.apiKey !== "string") {
@@ -82,6 +92,7 @@ export class AtlaSentClient {
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.userAgent = _buildUserAgent();
   }
 
   /**
@@ -290,7 +301,7 @@ export class AtlaSentClient {
     const headers: Record<string, string> = {
       Accept: "application/json",
       Authorization: `Bearer ${this.apiKey}`,
-      "User-Agent": `@atlasent/sdk/${SDK_VERSION} node/${process.version}`,
+      "User-Agent": this.userAgent,
       "X-Request-ID": requestId,
     };
     if (method === "POST") headers["Content-Type"] = "application/json";
