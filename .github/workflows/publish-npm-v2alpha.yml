@@ -1,0 +1,91 @@
+name: Publish @atlasent/sdk-v2-alpha to npm
+
+# Triggers on typescript-v2-alpha-v* tags (e.g. typescript-v2-alpha-v2.0.0-alpha.1).
+# Release procedure: see /RELEASING.md, section "v2-alpha packages".
+on:
+  push:
+    tags:
+      - "typescript-v2-alpha-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test before publishing
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["20.x", "22.x"]
+    defaults:
+      run:
+        working-directory: typescript/packages/v2-alpha
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: typescript/packages/v2-alpha/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  publish:
+    name: Build and publish to npm
+    runs-on: ubuntu-latest
+    needs: test
+    environment: npm
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: typescript/packages/v2-alpha
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: typescript/packages/v2-alpha/package-lock.json
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package version
+        if: github.event_name == 'push'
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/typescript-v2-alpha-v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)."
+            exit 1
+          fi
+          echo "Tag and package version agree: $PKG_VERSION"
+
+      - name: Build
+        run: npm run build
+
+      - name: Inspect tarball contents (dry-run)
+        run: npm pack --dry-run
+
+      - name: Publish (with provenance)
+        run: npm publish --access public --provenance --tag alpha
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -6,14 +6,29 @@ each has its own git-tag prefix and its own publish workflow.
 
 ## Tag convention
 
+### v1 stable packages
+
 | Package         | Tag format               | Workflow                              |
 |-----------------|--------------------------|---------------------------------------|
 | `atlasent` (py) | `python-v<semver>`       | `.github/workflows/publish-pypi.yml`  |
 | `@atlasent/sdk` | `typescript-v<semver>`   | `.github/workflows/publish-npm.yml`   |
 
-A single push can trigger **one** of these workflows, not both — the
-tag-prefix filters are mutually exclusive. Push two tags if you're
-releasing both languages at once.
+### v2-alpha packages
+
+| Package                    | Tag format                        | Workflow                                    |
+|----------------------------|-----------------------------------|---------------------------------------------|
+| `atlasent-v2-alpha` (py)   | `python-v2-alpha-v<pep440>`       | `.github/workflows/publish-pypi-v2alpha.yml`|
+| `@atlasent/sdk-v2-alpha`   | `typescript-v2-alpha-v<semver>`   | `.github/workflows/publish-npm-v2alpha.yml` |
+
+Alpha tags use PEP 440 / npm pre-release versions (e.g. `2.0.0a1` /
+`2.0.0-alpha.1`). The v2-alpha packages publish to the `alpha` dist-tag
+on npm so `npm install @atlasent/sdk-v2-alpha` does not accidentally
+install an alpha unless the user explicitly passes `@alpha`.
+
+A single push can trigger **one** workflow per tag-prefix. Push all
+four tags in a single command if releasing all four packages at once.
+
+All four tag-prefix filters are mutually exclusive.
 
 ## Pre-flight (both languages)
 
@@ -93,6 +108,74 @@ Post-publish: check the release on npm
 (<https://www.npmjs.com/package/@atlasent/sdk>) and that
 `npm view @atlasent/sdk@<version>` resolves. The provenance badge on
 the npm page confirms the Sigstore attestation.
+
+## v2-alpha packages
+
+The `atlasent-v2-alpha` and `@atlasent/sdk-v2-alpha` packages follow
+alpha-release semantics — **no semver discipline between alpha
+releases**. Callers who depend on them from production code should
+pin to an exact version.
+
+### Pre-flight (v2-alpha)
+
+Before tagging:
+
+1. `python/atlasent_v2_alpha/pyproject.toml` `version` and
+   `atlasent_v2_alpha/__init__.__version__` agree.
+2. `typescript/packages/v2-alpha/package.json` `"version"` is correct.
+3. `RELEASE_NOTES.md` has an entry for the release.
+4. `python/atlasent_v2_alpha/tests/` pass: `cd python/atlasent_v2_alpha && pytest`.
+5. `typescript/packages/v2-alpha` tests pass:
+   `cd typescript/packages/v2-alpha && npm test && npm run typecheck && npm run build`.
+
+### Python v2-alpha release
+
+```bash
+# Bump pyproject.toml version + __init__.__version__; land via PR.
+# Once merged to main:
+git checkout main && git pull
+git tag python-v2-alpha-v2.0.0a1
+git push origin python-v2-alpha-v2.0.0a1
+```
+
+The `publish-pypi-v2alpha.yml` workflow:
+
+1. `pytest` across Python 3.10 / 3.11 / 3.12.
+2. Verifies tag version matches `pyproject.toml` `version`.
+3. `python -m build` + `twine check`.
+4. Smoke-installs the wheel and imports the public surface.
+5. Publishes via PyPI trusted publishing (OIDC).
+
+Post-publish: `pip install atlasent-v2-alpha==2.0.0a1`.
+
+### TypeScript v2-alpha release
+
+```bash
+# Bump typescript/packages/v2-alpha/package.json "version"; land via PR.
+# Once merged to main:
+git checkout main && git pull
+git tag typescript-v2-alpha-v2.0.0-alpha.1
+git push origin typescript-v2-alpha-v2.0.0-alpha.1
+```
+
+The `publish-npm-v2alpha.yml` workflow:
+
+1. `npm run typecheck`, `npm test`, `npm run build` across Node 20 and 22.
+2. Verifies tag version matches `package.json` `"version"`.
+3. `npm pack --dry-run` — inspect file list in Actions output.
+4. `npm publish --access public --provenance --tag alpha` — tagged `alpha`
+   so `npm install @atlasent/sdk-v2-alpha` doesn't accidentally
+   pull an alpha.
+
+Post-publish: `npm install @atlasent/sdk-v2-alpha@2.0.0-alpha.1`.
+
+### Coordinated v2-alpha release (both languages)
+
+```bash
+git tag python-v2-alpha-v2.0.0a1
+git tag typescript-v2-alpha-v2.0.0-alpha.1
+git push origin python-v2-alpha-v2.0.0a1 typescript-v2-alpha-v2.0.0-alpha.1
+```
 
 ## If a publish fails
 
