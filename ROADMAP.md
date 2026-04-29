@@ -32,6 +32,14 @@ Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/
 - **atlasent-action**: bundles `@atlasent/sdk`. Pin at v1.
 - **atlasent-examples**: imports published packages to demo real customer flow.
 
+## Wave F (AI framework guards)
+
+- ✅ **`@atlasent/langchain`** — `withLangChainGuard(tools, client, opts)` wraps LangChain-style tool definitions (`name`, `description`, `schema?`, `execute`) with authorize-first execute. Returns strings per LangChain convention; JSON object results annotated with permit metadata; plain strings pass through unchanged. Zero dependency on `@langchain/core` — the wrapped `execute` is passed to `DynamicStructuredTool` or any LangChain tool factory. 13 tests green. Not yet published.
+
+- ✅ **`@atlasent/llamaindex`** — `withLlamaIndexGuard(tools, client, opts)` wraps LlamaIndex-style tool definitions (`metadata.{name,description,parameters?}`, `execute`). Returns `unknown` per LlamaIndex convention; object results annotated, arrays and primitives pass through. Zero dependency on `llamaindex` — wrapped `execute` is passed to `FunctionTool.from()` or used in `AgentRunner`. 13 tests green. Not yet published.
+
+- ✅ **`@atlasent/cursor`** — `withCursorGuard(tools, client, opts)` wraps Cursor agent tools (MCP-style: flat `parameters` JSON Schema, string return). JSON object string results annotated with permit metadata; plain text passes through. Integrates with Cursor MCP server `CallToolRequestSchema` handlers. 13 tests green. Not yet published.
+
 ## Open questions
 
 - Semantic-versioning cadence after v1: monthly minors or cut whenever features land?
