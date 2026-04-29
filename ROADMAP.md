@@ -36,6 +36,8 @@ Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/
 
 - ✅ **`@atlasent/anthropic-middleware`** — reference Wave F implementation. `withAtlaSentGuard(tools, client, opts)` wraps Anthropic SDK tool definitions with authorize-first `execute` (evaluate + verifyPermit before each tool call). `runGuardedLoop(opts)` runs the complete Claude tool-use cycle. `onDeny: "tool-result"` surfaces denials as tool results so Claude can adapt; default throws `AtlaSentDeniedError`. 15 tests green. Not yet published.
 
+- ✅ **`@atlasent/openai-middleware`** — OpenAI SDK counterpart. `withOpenAIGuard(tools, client, opts)` wraps OpenAI function-tool definitions (`{type:"function", function:{name,parameters}}`) with the same authorize-first pattern. `runOpenAIGuardedLoop(opts)` runs the full OpenAI tool-call cycle, parsing `tool_calls[].function.arguments` JSON and appending `{role:"tool", tool_call_id, content}` results. `onDeny` / `DenialResult` API identical to the Anthropic package. 16 tests green. Not yet published.
+
 - Semantic-versioning cadence after v1: monthly minors or cut whenever features land?
 - Do we publish `@atlasent/cli` on npm or keep it internal? (It's useful for policy-as-code workflows.)
 - Go SDK module path — keep `/go` subdirectory or split into its own repo? Subdirectory is simpler; customers don't mind.
