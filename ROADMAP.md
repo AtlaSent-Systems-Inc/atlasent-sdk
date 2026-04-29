@@ -13,10 +13,10 @@ Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/
 
 ## Post-GA — ordered by impact
 
-7. **Retries with jitter + Sentry breadcrumbs** — the `authorize()` call should retry transient failures (429 with `Retry-After`, 5xx) and record breadcrumbs.
+7. ✅ **Retries with jitter + Sentry breadcrumbs** — `AtlaSentClient` retries 429+`Retry-After` and 5xx with capped-exponential full-jitter backoff. `onRetry` hook decouples observability; `@atlasent/sentry` wires it to Sentry breadcrumbs via `makeSentryOnRetry()`. Landed 2026-04-29.
 8. **Batch evaluate** — client-side batching → one HTTP call for N decisions. Requires an atlasent-api `POST /v1/evaluate/batch` endpoint.
 9. **Streaming evaluate** — for long-lived agents, keep the connection warm; server-sent events for risk updates.
-10. **Go parity** — match TS's observer pattern (middleware, gRPC interceptors).
+10. ✅ **Go parity** — retry loop + `OnRetry` hook wired into Go `Client`; `Protect()` combines Evaluate + VerifyPermit (mirrors TS `protect()`); `Guard()` returns a `net/http` middleware with `PermitContextKey` + `PermitFromContext` helpers. `DeniedError` wraps `*AtlaSentError` via `Unwrap()`. Landed 2026-04-29.
 11. **MCP server bump** — co-versioning with the SDK so `claude_desktop_config.json` entries don't drift.
 
 ## Publishing mechanics

@@ -46,9 +46,10 @@ func readVectors(t *testing.T, name string) []map[string]interface{} {
 func newClientAgainst(t *testing.T, srv *httptest.Server) *atlasent.Client {
 	t.Helper()
 	c, err := atlasent.New(atlasent.Options{
-		APIKey:  "ask_live_test_key",
-		BaseURL: srv.URL,
-		HTTPClient: &http.Client{Timeout: 5 * time.Second},
+		APIKey:      "ask_live_test_key",
+		BaseURL:     srv.URL,
+		HTTPClient:  &http.Client{Timeout: 5 * time.Second},
+		RetryPolicy: atlasent.RetryPolicy{MaxAttempts: 1}, // disable retries in contract tests
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -296,9 +297,10 @@ func TestErrorVectors(t *testing.T) {
 			}
 
 			c, _ := atlasent.New(atlasent.Options{
-				APIKey:     "ask_live_test_key",
-				BaseURL:    baseURL,
-				HTTPClient: &http.Client{Timeout: 5 * time.Second},
+				APIKey:      "ask_live_test_key",
+				BaseURL:     baseURL,
+				HTTPClient:  &http.Client{Timeout: 5 * time.Second},
+				RetryPolicy: atlasent.RetryPolicy{MaxAttempts: 1},
 			})
 
 			// For timeout vectors, use a short context deadline so ctx.Err() is set.
