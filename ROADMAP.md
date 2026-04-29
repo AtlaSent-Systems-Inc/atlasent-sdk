@@ -17,7 +17,7 @@ Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/
 8. **Batch evaluate** — client-side batching → one HTTP call for N decisions. Requires an atlasent-api `POST /v1/evaluate/batch` endpoint.
 9. **Streaming evaluate** — for long-lived agents, keep the connection warm; server-sent events for risk updates.
 10. ✅ **Go parity** — retry loop + `OnRetry` hook wired into Go `Client`; `Protect()` combines Evaluate + VerifyPermit (mirrors TS `protect()`); `Guard()` returns a `net/http` middleware with `PermitContextKey` + `PermitFromContext` helpers. `DeniedError` wraps `*AtlaSentError` via `Unwrap()`. Landed 2026-04-29.
-11. **MCP server bump** — co-versioning with the SDK so `claude_desktop_config.json` entries don't drift.
+11. ✅ **MCP server** — `@atlasent/mcp` package in `typescript/packages/mcp/`. Exposes four tools (`atlasent_evaluate`, `atlasent_protect`, `atlasent_verify_permit`, `atlasent_key_self`) over stdio MCP transport. `npx @atlasent/mcp` entry point reads `ATLASENT_API_KEY` from env. Version co-pins with `@atlasent/sdk` (both 1.5.1). 16 tests green. Not yet published to npm.
 
 ## Publishing mechanics
 
