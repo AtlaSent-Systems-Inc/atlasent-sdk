@@ -86,6 +86,39 @@ Each of those branches will ONLY touch its language subtree plus the
 vectors it consumes — the shared contract in `contract/` is frozen
 until a contract change is justified on its own branch.
 
+## Go SDK (`go/`) — current state
+
+Go SDK skeleton landed in `go/` (2026-04-29). Module:
+`github.com/atlasent-systems-inc/atlasent-sdk/go`, Go 1.22,
+`github.com/google/uuid` for request IDs.
+
+| Invariant                                       | Status | Notes                                                                 |
+|-------------------------------------------------|--------|-----------------------------------------------------------------------|
+| Schemas — `EvaluateRequest`                     | OK     | `action`, `agent`, `context` (defaults to `{}`) + `api_key` on wire  |
+| Schemas — `VerifyPermitRequest`                 | OK     | `decision_id`, `action`, `agent`, `context`, `api_key` on wire       |
+| Response: missing `decision_id` raises error    | OK     | `bad_response` with message containing "permitted or decision_id"     |
+| Response: missing `verified` raises error       | OK     | Detected via `*bool` wire field; `bad_response` returned              |
+| DENY returned as data (not thrown)              | OK     | `EvaluateResponse.Permitted == false`, no error                       |
+| Header: `Authorization: Bearer <key>`           | OK     | `client.go` sets on every `post()` call                               |
+| Header: `Accept: application/json`              | OK     |                                                                       |
+| Header: `Content-Type: application/json`        | OK     |                                                                       |
+| Header: `User-Agent: atlasent-go/<ver> go/...` | OK     | `atlasent-go/1.0.0 go/runtime`                                        |
+| Header: `X-Request-ID`                          | OK     | `uuid.NewString()[:12]` — fresh per request                           |
+| Error taxonomy — 401/403/429/5xx/timeout/net    | OK     | All map to `AtlaSentError.Code` matching `vectors/errors.json`        |
+| `Retry-After` parsed on 429                     | OK     | `parseRetryAfter` handles seconds float and HTTP-date formats         |
+| Rate-limit headers parsed                       | OK     | `parseRateLimitHeaders` → `RateLimitState{Limit, Remaining, ResetAt}` |
+| `HTTPDoer` interface for test injection         | OK     | `*http.Client` satisfies; test uses `httptest.Server`                 |
+| Contract vector runner                          | OK     | `go/client_test.go` — 15 tests, all pass (`go test ./...`)            |
+| Trailing-slash normalisation on `BaseURL`       | OK     | `strings.TrimRight(opts.BaseURL, "/")`                                |
+| Timeout detection (client `http.Client` + ctx)  | OK     | Checks `ctx.Err()` then `net.Error.Timeout()` → `CodeTimeout`         |
+
+### Follow-up work (sized)
+
+- **SDK-GO-001** — publish: tag `go/v1.0.0`; Go proxy picks it up automatically.
+  No workflow needed. Requires human action after PR #121 merges.
+- **SDK-GO-002** (post-GA) — Enforce Pack equivalent in `go/enforce/`.
+  See `contract/ENFORCE_PACK.md` "Go (post-GA)" note.
+
 ## Definition of done
 
 An SDK is done with v1 when:
