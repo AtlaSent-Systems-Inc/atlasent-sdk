@@ -29,7 +29,7 @@ import {
   normalizePermitOutcome,
   type AtlaSentDecision,
 } from "./errors.js";
-import type { AtlaSentClientOptions } from "./types.js";
+import type { AtlaSentClientOptions, OnRetryContext, RetryPolicy } from "./types.js";
 
 /** Input to {@link protect}. Same shape as `EvaluateRequest`. */
 export interface ProtectRequest {
@@ -65,6 +65,10 @@ export interface ConfigureOptions {
   timeoutMs?: number;
   /** Inject a custom fetch (primarily for tests). */
   fetch?: typeof fetch;
+  /** Retry policy override. Pass `{ maxAttempts: 1 }` to disable retries. */
+  retryPolicy?: RetryPolicy;
+  /** Called before each retry sleep. */
+  onRetry?: (ctx: OnRetryContext) => void;
 }
 
 let sharedClient: AtlaSentClient | null = null;
@@ -101,6 +105,8 @@ function getClient(): AtlaSentClient {
   if (overrides.baseUrl !== undefined) options.baseUrl = overrides.baseUrl;
   if (overrides.timeoutMs !== undefined) options.timeoutMs = overrides.timeoutMs;
   if (overrides.fetch !== undefined) options.fetch = overrides.fetch;
+  if (overrides.retryPolicy !== undefined) options.retryPolicy = overrides.retryPolicy;
+  if (overrides.onRetry !== undefined) options.onRetry = overrides.onRetry;
   sharedClient = new AtlaSentClient(options);
   return sharedClient;
 }

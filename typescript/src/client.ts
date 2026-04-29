@@ -20,6 +20,12 @@ import {
   type AtlaSentErrorCode,
   type AtlaSentErrorInit,
 } from "./errors.js";
+import {
+  computeBackoffMs,
+  hasAttemptsLeft,
+  isRetryable,
+  mergePolicy,
+} from "./retry.js";
 import type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
@@ -28,7 +34,9 @@ import type {
   AuditExportResult,
   EvaluateRequest,
   EvaluateResponse,
+  OnRetryContext,
   RateLimitState,
+  RetryPolicy,
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "./types.js";
@@ -81,6 +89,8 @@ export class AtlaSentClient {
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
   private readonly userAgent: string;
+  private readonly retryPolicy: Required<RetryPolicy>;
+  private readonly onRetry: ((ctx: OnRetryContext) => void) | undefined;
 
   constructor(options: AtlaSentClientOptions) {
     if (!options.apiKey || typeof options.apiKey !== "string") {
@@ -93,6 +103,8 @@ export class AtlaSentClient {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.userAgent = _buildUserAgent();
+    this.retryPolicy = mergePolicy(options.retryPolicy ?? {});
+    this.onRetry = options.onRetry;
   }
 
   /**
@@ -296,59 +308,76 @@ export class AtlaSentClient {
   ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
     const qs = query && Array.from(query).length > 0 ? `?${query.toString()}` : "";
     const url = `${this.baseUrl}${path}${qs}`;
-    const requestId = globalThis.crypto.randomUUID();
 
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      Authorization: `Bearer ${this.apiKey}`,
-      "User-Agent": this.userAgent,
-      "X-Request-ID": requestId,
-    };
-    if (method === "POST") headers["Content-Type"] = "application/json";
+    for (let attempt = 0; ; attempt++) {
+      const requestId = globalThis.crypto.randomUUID();
 
-    const init: RequestInit = {
-      method,
-      headers,
-      signal: AbortSignal.timeout(this.timeoutMs),
-    };
-    if (method === "POST") init.body = JSON.stringify(body);
+      const headers: Record<string, string> = {
+        Accept: "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+        "User-Agent": this.userAgent,
+        "X-Request-ID": requestId,
+      };
+      if (method === "POST") headers["Content-Type"] = "application/json";
 
-    let response: Response;
-    try {
-      response = await this.fetchImpl(url, init);
-    } catch (err) {
-      throw mapFetchError(err, requestId);
+      const init: RequestInit = {
+        method,
+        headers,
+        signal: AbortSignal.timeout(this.timeoutMs),
+      };
+      if (method === "POST") init.body = JSON.stringify(body);
+
+      let lastErr: unknown;
+      try {
+        let response: Response;
+        try {
+          response = await this.fetchImpl(url, init);
+        } catch (fetchErr) {
+          throw mapFetchError(fetchErr, requestId);
+        }
+
+        if (!response.ok) {
+          throw await buildHttpError(response, requestId);
+        }
+
+        let parsed: unknown;
+        try {
+          parsed = await response.json();
+        } catch (jsonErr) {
+          throw new AtlaSentError("Invalid JSON response from AtlaSent API", {
+            code: "bad_response",
+            status: response.status,
+            requestId,
+            cause: jsonErr,
+          });
+        }
+
+        if (parsed === null || typeof parsed !== "object") {
+          throw new AtlaSentError("Expected a JSON object from AtlaSent API", {
+            code: "bad_response",
+            status: response.status,
+            requestId,
+          });
+        }
+
+        return { body: parsed as T, rateLimit: parseRateLimitHeaders(response.headers) };
+      } catch (e) {
+        lastErr = e;
+      }
+
+      if (!isRetryable(lastErr) || !hasAttemptsLeft(attempt, this.retryPolicy)) {
+        throw lastErr;
+      }
+
+      const delayMs = computeBackoffMs(attempt, this.retryPolicy, lastErr);
+      this.onRetry?.({ attempt, error: lastErr, delayMs, path });
+      await sleep(delayMs);
     }
-
-    if (!response.ok) {
-      throw await buildHttpError(response, requestId);
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = await response.json();
-    } catch (err) {
-      throw new AtlaSentError("Invalid JSON response from AtlaSent API", {
-        code: "bad_response",
-        status: response.status,
-        requestId,
-        cause: err,
-      });
-    }
-
-    if (parsed === null || typeof parsed !== "object") {
-      throw new AtlaSentError("Expected a JSON object from AtlaSent API", {
-        code: "bad_response",
-        status: response.status,
-        requestId,
-      });
-    }
-
-    return {
-      body: parsed as T,
-      rateLimit: parseRateLimitHeaders(response.headers),
-    };
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

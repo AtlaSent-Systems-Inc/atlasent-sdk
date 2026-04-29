@@ -91,7 +91,7 @@ describe("atlasent.protect (default export API)", () => {
       jsonResponse(EVALUATE_ALLOW_WIRE),
       jsonResponse(VERIFY_OK_WIRE),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
 
     const permit = await atlasent.protect({
       agent: "deploy-bot",
@@ -111,7 +111,7 @@ describe("atlasent.protect (default export API)", () => {
 
   it("throws AtlaSentDeniedError on policy DENY — never returns a decision", async () => {
     const fetchImpl = mockFetchSequence([jsonResponse(EVALUATE_DENY_WIRE)]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
 
     let caught: unknown;
     try {
@@ -136,7 +136,7 @@ describe("atlasent.protect (default export API)", () => {
       jsonResponse(EVALUATE_ALLOW_WIRE),
       jsonResponse(VERIFY_REVOKED_WIRE),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
 
     let caught: unknown;
     try {
@@ -155,7 +155,7 @@ describe("atlasent.protect (default export API)", () => {
     const fetchImpl = mockFetchSequence([
       new Response("server boom", { status: 500 }),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
 
     let caught: unknown;
     try {
@@ -188,7 +188,7 @@ describe("atlasent.protect (default export API)", () => {
     ]);
     process.env.ATLASENT_API_KEY = "ask_live_from_env";
     // Still have to inject `fetch` for testing; the env only supplies the key.
-    configure({ fetch: fetchImpl });
+    configure({ fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
 
     const permit = await atlasent.protect({ agent: "a", action: "b" });
     expect(permit.permitId).toBe("dec_alpha");
@@ -204,12 +204,12 @@ describe("atlasent.protect (default export API)", () => {
       jsonResponse(VERIFY_OK_WIRE),
     ]);
 
-    configure({ apiKey: "ask_1", fetch: first });
+    configure({ apiKey: "ask_1", fetch: first, retryPolicy: { maxAttempts: 1 } });
     await atlasent.protect({ agent: "a", action: "b" });
     expect(first).toHaveBeenCalledTimes(2);
     expect(second).toHaveBeenCalledTimes(0);
 
-    configure({ apiKey: "ask_2", fetch: second });
+    configure({ apiKey: "ask_2", fetch: second, retryPolicy: { maxAttempts: 1 } });
     await atlasent.protect({ agent: "a", action: "b" });
     // First mock must not get further calls after configure() replaces it.
     expect(first).toHaveBeenCalledTimes(2);
@@ -223,7 +223,7 @@ describe("atlasent.protect (default export API)", () => {
       jsonResponse(EVALUATE_ALLOW_WIRE),
       jsonResponse(VERIFY_OK_WIRE),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
 
     await atlasent.protect({ agent: "a", action: "b" });
     await atlasent.protect({ agent: "a", action: "b" });
@@ -235,7 +235,7 @@ describe("atlasent.protect (default export API)", () => {
       jsonResponse(EVALUATE_ALLOW_WIRE),
       jsonResponse(VERIFY_OK_WIRE),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
 
     const ctx = { commit: "abc123", approver: "alice" };
     await atlasent.protect({ agent: "deploy-bot", action: "deploy", context: ctx });
@@ -257,7 +257,7 @@ describe("atlasent.protect (default export API)", () => {
       jsonResponse(EVALUATE_ALLOW_WIRE),
       jsonResponse(VERIFY_OK_WIRE),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
 
     await atlasent.protect({ agent: "a", action: "b" });
 
