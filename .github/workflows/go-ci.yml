@@ -1,0 +1,52 @@
+name: Go CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "go/**"
+      - "contract/vectors/**"
+      - "contract/schemas/**"
+      - ".github/workflows/go-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "go/**"
+      - "contract/vectors/**"
+      - "contract/schemas/**"
+      - ".github/workflows/go-ci.yml"
+
+defaults:
+  run:
+    working-directory: go
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ["1.22", "1.23"]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache-dependency-path: go/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test (with race detector + coverage)
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Coverage summary
+        run: go tool cover -func=coverage.out | tail -1
