@@ -17,8 +17,8 @@ the v2 surface stabilises.
 | `evaluate-batch-request.schema.json` | `POST /v2/evaluate:batch` (req) | `docs/V2_PLAN.md` §Pillar 2 |
 | `evaluate-batch-response.schema.json` | `POST /v2/evaluate:batch` (res) | Pillar 2 |
 | `decision-event.schema.json` | `GET /v2/decisions:subscribe` (SSE) | Pillar 3 |
-| `bulk-revoke-request.schema.json` | `POST /v2/permits:bulk-revoke` (req) | Pillar 8 (Temporal) |
-| `bulk-revoke-response.schema.json` | `POST /v2/permits:bulk-revoke` (res) | Pillar 8 (Temporal) |
+| `bulk-revoke-request.schema.json` | `POST /v2/permits:bulk-revoke` (req) | `docs/V2_PILLAR8_BULK_REVOKE.md` |
+| `bulk-revoke-response.schema.json` | `POST /v2/permits:bulk-revoke` (res) | `docs/V2_PILLAR8_BULK_REVOKE.md` |
 
 Not yet drafted here:
 
@@ -77,12 +77,11 @@ question:" across the files. Summary:
 ## What's NOT in these drafts (and why)
 
 - **Code.** Schemas only. Any SDK code must wait until v1 GA.
-- **Drift detector wiring.** `contract/tools/drift.py` still only
-  covers v1 endpoints. Extending it to v2 is a follow-up PR once
-  the v2 schemas solidify and at least one SDK wires the
-  corresponding method.
-- **OpenAPI document.** `contract/openapi.yaml` describes v1. A v2
-  companion (or a single merged doc at GA) is a follow-up.
+- **Drift detector wiring.** Extended to v2 in the v2.0.0-alpha.1
+  cycle — `contract/tools/drift.py` now covers all four v2 request/
+  response pairs. ✓
+- **OpenAPI document.** `contract/openapi-v2.yaml` covers all 6 v2
+  endpoints with full 400/401/403/404/429/5XX error codes. ✓
 - **Test vectors.** `contract/vectors/v2/` will land alongside the
   first SDK implementation so the vectors exercise a real client
   round-trip, not a schema-only exercise.
@@ -93,12 +92,10 @@ Before this directory leaves draft status:
 
 - [ ] Every schema's open question is resolved and the resolution
       is captured in the `description`.
-- [ ] `contract/tools/drift.py` covers each endpoint represented
-      here.
+- [x] `contract/tools/drift.py` covers each endpoint represented here.
 - [ ] Test vectors exist at `contract/vectors/v2/` for round-trip
       validation.
-- [ ] `contract/openapi.yaml` either merges v1+v2 or a
-      `contract/openapi-v2.yaml` sibling lands.
+- [x] `contract/openapi-v2.yaml` covers all 6 v2 endpoints.
 - [ ] SDK_COMPATIBILITY.md has a v2 section.
 - [ ] Both SDKs implement the corresponding methods and the
       integration suite is green against staging.
