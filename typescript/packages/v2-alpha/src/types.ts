@@ -176,3 +176,86 @@ export interface ProofVerificationResult {
   /** Per-check results. */
   checks: ProofVerificationCheck[];
 }
+
+// ───────────────────────────── EvaluateBatch ─────────────────────────────
+
+/**
+ * Pillar 9 proof SLA reported on a batch evaluate item. `not_applicable`
+ * means the request didn't opt in (no `payload_hash` on the inbound
+ * item); `pending` means evaluate cleared but consume hasn't landed.
+ */
+export type BatchProofStatus = "pending" | "executed" | "failed" | "not_applicable";
+
+/**
+ * One entry in `EvaluateBatchRequest.requests`. Mirrors the v1
+ * EvaluateRequest shape plus optional `payload_hash` / `target` for
+ * batch items that opt into the Pillar 9 proof flow.
+ *
+ * @see `contract/schemas/v2/evaluate-batch-request.schema.json`
+ */
+export interface BatchEvaluateItem {
+  /** Same semantics as `/v1-evaluate-request.action` (1..256 chars). */
+  action: string;
+  /** Same semantics as `/v1-evaluate-request.agent` (1..256 chars). */
+  agent: string;
+  /** Same semantics as `/v1-evaluate-request.context`. */
+  context: Record<string, unknown>;
+  /** Optional SHA-256 hex of `canonicalizePayload(payload)` — opt-in proof flow. */
+  payload_hash?: string;
+  /** Optional target resource identifier. Mirrors `Proof.target`. */
+  target?: string;
+}
+
+/**
+ * Wire payload for `POST /v2/evaluate:batch`. Order is preserved —
+ * `response.items[i]` decides `requests[i]`. Caller-side ergonomic
+ * helpers (omit `api_key`, accept `BatchEvaluateItem[]` directly) are
+ * provided by `V2Client.evaluateBatch`; this is the raw wire shape.
+ */
+export interface EvaluateBatchRequest {
+  /** Per-item evaluate requests. 1..1000 items. */
+  requests: BatchEvaluateItem[];
+  /** API key echoed in the body, same semantics as `/v1-evaluate.api_key`. */
+  api_key: string;
+}
+
+/**
+ * One entry in `EvaluateBatchResponse.items`. Matches the inbound
+ * request at `requests[index]`. Permitted items carry the same fields
+ * as v1 EvaluateResponse; denied items carry `permitted: false` plus a
+ * reason.
+ *
+ * @see `contract/schemas/v2/evaluate-batch-response.schema.json`
+ */
+export interface BatchEvaluateResponseItem {
+  /** Zero-based position in the inbound requests array. */
+  index: number;
+  /** True on allow, false on deny / hold / escalate. */
+  permitted: boolean;
+  /** Per-item permit id. Same semantics as v1 `EvaluateResponse.decision_id`. */
+  decision_id: string;
+  /** Human-readable reason. Empty string when policy has nothing to add. */
+  reason: string;
+  /** Per-item audit-chain hash. */
+  audit_hash: string;
+  /** ISO 8601 timestamp of this item's decision. */
+  timestamp: string;
+  /** Echo of the top-level batch_id, repeated for per-item correlation. */
+  batch_id: string;
+  /** Pillar 9 proof id, present iff the request carried a `payload_hash`. */
+  proof_id?: string;
+  /** Pillar 9 proof SLA. */
+  proof_status?: BatchProofStatus;
+}
+
+/**
+ * Response from `POST /v2/evaluate:batch`. `items[i]` decides
+ * `requests[i]` from the inbound payload — order preservation is a
+ * wire guarantee.
+ */
+export interface EvaluateBatchResponse {
+  /** UUID identifying the batch. */
+  batch_id: string;
+  /** Ordered per-item decisions. */
+  items: BatchEvaluateResponseItem[];
+}

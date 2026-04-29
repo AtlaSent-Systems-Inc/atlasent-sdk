@@ -12,8 +12,11 @@
  */
 
 import type {
+  BatchEvaluateItem,
   ConsumeRequest,
   ConsumeResponse,
+  EvaluateBatchRequest,
+  EvaluateBatchResponse,
   ProofVerificationResult,
 } from "./types.js";
 
@@ -101,6 +104,35 @@ export class V2Client {
       `/v2/permits/${encodeURIComponent(input.permitId)}/consume`,
       body,
     );
+  }
+
+  /**
+   * Batch evaluate. Mirrors `POST /v2/evaluate:batch` — one HTTP call
+   * for N decisions, one rate-limit decrement, one hash-chain entry.
+   * Order is preserved: `result.items[i]` decides `requests[i]`.
+   *
+   * Throws `V2Error` (code `invalid_argument`) when `requests` is
+   * empty or exceeds 1000 — the wire-side contract bound.
+   */
+  async evaluateBatch(
+    requests: BatchEvaluateItem[],
+  ): Promise<EvaluateBatchResponse> {
+    if (!Array.isArray(requests) || requests.length === 0) {
+      throw new V2Error("requests must be a non-empty array", {
+        code: "invalid_argument",
+      });
+    }
+    if (requests.length > 1000) {
+      throw new V2Error(
+        `requests length ${requests.length} exceeds maximum of 1000`,
+        { code: "invalid_argument" },
+      );
+    }
+    const body: EvaluateBatchRequest = {
+      requests,
+      api_key: this.apiKey,
+    };
+    return this.post<EvaluateBatchResponse>("/v2/evaluate:batch", body);
   }
 
   /**

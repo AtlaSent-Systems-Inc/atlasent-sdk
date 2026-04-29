@@ -16,7 +16,14 @@ from typing import Any, Literal
 
 import httpx
 
-from .types import ConsumeRequest, ConsumeResponse, ProofVerificationResult
+from .types import (
+    BatchEvaluateItem,
+    ConsumeRequest,
+    ConsumeResponse,
+    EvaluateBatchRequest,
+    EvaluateBatchResponse,
+    ProofVerificationResult,
+)
 
 DEFAULT_BASE_URL = "https://api.atlasent.io"
 DEFAULT_TIMEOUT = 10.0
@@ -112,6 +119,32 @@ class AtlaSentV2Client:
             request.model_dump(by_alias=True, exclude_none=True),
         )
         return ConsumeResponse.model_validate(data)
+
+    def evaluate_batch(
+        self, requests: list[BatchEvaluateItem]
+    ) -> EvaluateBatchResponse:
+        """Batch evaluate. Mirrors ``POST /v2/evaluate:batch``.
+
+        One HTTP call for N decisions, one rate-limit decrement, one
+        hash-chain entry. Order is preserved: ``result.items[i]``
+        decides ``requests[i]``.
+
+        Raises :class:`V2Error` (``code='invalid_argument'``) when
+        ``requests`` is empty or exceeds the wire-side cap of 1000.
+        """
+        if not isinstance(requests, list) or len(requests) == 0:
+            raise V2Error("requests must be a non-empty list", code="invalid_argument")
+        if len(requests) > 1000:
+            raise V2Error(
+                f"requests length {len(requests)} exceeds maximum of 1000",
+                code="invalid_argument",
+            )
+        body = EvaluateBatchRequest(requests=requests, api_key=self._api_key)
+        data = self._post(
+            "/v2/evaluate:batch",
+            body.model_dump(by_alias=True, exclude_none=True),
+        )
+        return EvaluateBatchResponse.model_validate(data)
 
     def verify_proof(self, proof_id: str) -> ProofVerificationResult:
         """Server-side proof verification.
