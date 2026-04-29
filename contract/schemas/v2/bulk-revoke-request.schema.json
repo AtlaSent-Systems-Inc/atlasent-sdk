@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v2/bulk-revoke-request.schema.json",
+  "title": "BulkRevokeRequest",
+  "description": "Wire payload sent to POST /v2/permits:bulk-revoke. Revokes all active permits that were issued to a specific Temporal workflow run. The server locates permits by (org_id, run_id) pair — org_id is derived from the api_key. Pillar 8 (Temporal adapter).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["workflow_id", "run_id", "reason", "api_key"],
+  "properties": {
+    "workflow_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Temporal workflow ID whose permits should be revoked. Used for audit logging; the actual revoke key is run_id."
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Temporal workflow run ID. Primary revocation key — the server revokes every permit whose protect() call was bound to this run_id via the _atlasent_temporal.run_id context field."
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "Human-readable reason for the revocation. Written to the audit log and surfaced in decision-event SSE stream as the revokedReason field on a 'permit.revoked' event."
+    },
+    "revoker_id": {
+      "type": "string",
+      "description": "Optional identifier of the entity that triggered the revocation (e.g. a user id, service account, or policy rule id). Written to the audit log. If omitted, defaults to the workflow_id."
+    },
+    "api_key": {
+      "type": "string",
+      "description": "API key echoed in the body for wire parity with /v1-evaluate and /v2/permits/:id/consume."
+    }
+  }
+}

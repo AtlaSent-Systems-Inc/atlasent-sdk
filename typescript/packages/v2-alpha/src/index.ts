@@ -12,6 +12,7 @@ export { hashPayload } from "./hash.js";
 export {
   V2Client,
   V2Error,
+  type BulkRevokeInput,
   type ConsumeInput,
   type V2ClientOptions,
 } from "./client.js";
@@ -20,6 +21,8 @@ export type {
   BatchEvaluateItem,
   BatchEvaluateResponseItem,
   BatchProofStatus,
+  BulkRevokeRequest,
+  BulkRevokeResponse,
   ConsumeExecutionStatus,
   ConsumeRequest,
   ConsumeResponse,

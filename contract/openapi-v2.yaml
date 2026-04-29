@@ -18,17 +18,17 @@
 #
 # Do not implement until v1 GA. Do not merge until v2 GA.
 #
-# Scope (v2.0 — same surface as #61's schema PR):
+# Scope (v2.0):
 #   - POST /v2/evaluate:batch                 (Pillar 2 — batch evaluate)
 #   - POST /v2/permits/{permit_id}/consume    (Pillar 9 — close protect lifecycle)
 #   - GET  /v2/proofs/{proof_id}              (Pillar 9 — fetch signed proof)
 #   - POST /v2/proofs/{proof_id}/verify       (Pillar 9 — online verify)
 #   - GET  /v2/decisions:subscribe            (Pillar 3 — SSE event stream)
+#   - POST /v2/permits:bulk-revoke            (Pillar 8 — Temporal bulk revoke)
 #
 # Out of scope in v2.0 (tracked in `docs/V2_PLAN.md` /
 # `docs/V2_PILLAR9_PROOF_SYSTEM.md`):
 #   - Pillar 5 (analytics RPCs)
-#   - Pillar 8 (Temporal adapter — SDK-side only, no new endpoints)
 #   - All v1 surfaces (covered in `contract/openapi.yaml`)
 
 openapi: 3.1.0
@@ -90,6 +90,8 @@ tags:
     description: Pillar 3 — decision-event subscription (Server-Sent Events).
   - name: proofs
     description: Pillar 9 — verifiable proof issuance and verification.
+  - name: temporal
+    description: Pillar 8 — Temporal workflow adapter (bulk permit revocation).
 
 security:
   - bearerAuth: []
@@ -275,6 +277,65 @@ paths:
         "429": { $ref: "#/components/responses/RateLimited" }
         "5XX": { $ref: "#/components/responses/ServerError" }
 
+  /v2/permits:bulk-revoke:
+    post:
+      tags: [temporal]
+      operationId: bulkRevokePermits
+      summary: Revoke all active permits for a Temporal workflow run.
+      description: |
+        Pillar 8. Called by the Temporal worker-side
+        `bulkRevokeAtlaSentPermits` / `bulk_revoke_atlasent_permits`
+        activity when an `revokeAtlaSentPermits` workflow signal fires.
+
+        The server locates every active permit whose
+        `_atlasent_temporal.run_id` context field matches the supplied
+        `run_id` (scoped to the org derived from `api_key`). Matching
+        permits are immediately invalidated — any in-flight
+        `verifyPermit` calls against them will fail with
+        `revoked_by_workflow`.
+
+        A call with no matching permits is **not** an error —
+        `revoked_count` will be 0. This handles the race where
+        permits expire or are consumed before the revoke signal fires.
+
+        Use case: a Temporal workflow that provisions access for a
+        long-running job can revoke all outstanding permits in a single
+        signal when the job completes or fails, rather than tracking
+        individual permit IDs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkRevokeRequest"
+            examples:
+              normal:
+                summary: "Revoke all permits for a completed deploy workflow"
+                value:
+                  workflow_id: "deploy-prod-2026-04-29"
+                  run_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                  reason: "Workflow completed successfully — permits no longer needed"
+                  revoker_id: "deploy-bot"
+                  api_key: "ask_live_..."
+              emergency:
+                summary: "Emergency revoke from a failure signal"
+                value:
+                  workflow_id: "deploy-prod-2026-04-29"
+                  run_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                  reason: "Rollback triggered — revoking all in-flight deployment permits"
+                  api_key: "ask_live_..."
+      responses:
+        "200":
+          description: Revocation summary (revoked_count may be 0 — not an error).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkRevokeResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "5XX": { $ref: "#/components/responses/ServerError" }
+
   /v2/decisions:subscribe:
     get:
       tags: [streaming]
@@ -357,6 +418,10 @@ components:
       $ref: "./schemas/v2/evaluate-batch-response.schema.json"
     DecisionEvent:
       $ref: "./schemas/v2/decision-event.schema.json"
+    BulkRevokeRequest:
+      $ref: "./schemas/v2/bulk-revoke-request.schema.json"
+    BulkRevokeResponse:
+      $ref: "./schemas/v2/bulk-revoke-response.schema.json"
 
     ErrorResponse:
       type: object
