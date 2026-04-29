@@ -6,6 +6,18 @@ without semver discipline until v2 GA. See ``./README.md``.
 
 from __future__ import annotations
 
+from .batch import (
+    EVALUATE_BATCH_MAX_ITEMS,
+    BatchEvaluateAllowItem,
+    BatchEvaluateDenyItem,
+    BatchEvaluateItem,
+    BatchEvaluateResponseItem,
+    BatchProofStatus,
+    EvaluateBatchRequest,
+    EvaluateBatchResponse,
+    build_evaluate_batch_request,
+    parse_evaluate_batch_response,
+)
 from .canonicalize import canonicalize_payload
 from .hash import hash_payload
 from .types import (
@@ -57,4 +69,14 @@ __all__ = [
     "replay_proof_bundle",
     "signed_bytes_for_proof",
     "verify_proof",
+    "EVALUATE_BATCH_MAX_ITEMS",
+    "BatchEvaluateAllowItem",
+    "BatchEvaluateDenyItem",
+    "BatchEvaluateItem",
+    "BatchEvaluateResponseItem",
+    "BatchProofStatus",
+    "EvaluateBatchRequest",
+    "EvaluateBatchResponse",
+    "build_evaluate_batch_request",
+    "parse_evaluate_batch_response",
 ]
