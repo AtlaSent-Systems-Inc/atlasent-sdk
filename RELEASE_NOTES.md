@@ -1,5 +1,79 @@
 # Release Notes
 
+## v2.0.0-alpha.1 / 2.0.0a1 — Pillar 8 bulk-revoke (TS + Py)
+
+**Release date:** 2026-04-29
+
+### What's new
+
+**`bulkRevoke()` / `bulk_revoke()` — Pillar 8 Temporal bulk-revoke.**
+New method on both clients that bulk-revokes all active permits for a
+Temporal workflow run via `POST /v2/permits:bulk-revoke`:
+
+```ts
+// TypeScript
+await client.bulkRevoke({
+  workflowId: "deploy-wf-abc",
+  runId: "run-00000000-...",
+  reason: "emergency shutdown",
+  revokerId: "ops-bot",          // optional
+});
+// → BulkRevokeResponse { revoked_count, workflow_id, run_id }
+```
+
+```python
+# Python
+result = client.bulk_revoke(
+    workflow_id="deploy-wf-abc",
+    run_id="run-00000000-...",
+    reason="emergency shutdown",
+    revoker_id="ops-bot",        # optional
+)
+# → BulkRevokeResponse(revoked_count=..., workflow_id=..., run_id=...)
+```
+
+`revoked_count: 0` is not an error — permits may have already expired
+or been consumed before the revoke signal fires. The method is keyed
+on the Temporal `run_id` so a single call closes the entire permit set
+for that workflow execution.
+
+**Wire contract** — `POST /v2/permits:bulk-revoke`. JSON Schema files
+in `contract/schemas/v2/bulk-revoke-{request,response}.schema.json`.
+Full OpenAPI entry in `contract/openapi-v2.yaml` with `temporal` tag.
+
+**New types exported:**
+`BulkRevokeRequest`, `BulkRevokeResponse` (both languages).
+
+### Temporal workflow helpers updated (preview)
+
+`atlasent-temporal-preview` / `@atlasent/temporal-preview` (PRs #90
+/ #89) have been updated in lockstep:
+
+- `bulk_revoke_atlasent_permits` / `bulkRevokeAtlaSentPermits`
+  activities now make a real HTTP call via `AtlaSentV2Client` /
+  `V2Client` (read from `ATLASENT_API_KEY` env var on the worker).
+- New factory `make_bulk_revoke_activity(client)` /
+  `createBulkRevokeActivity(client)` for dependency-injection when
+  the worker already holds a pre-built client.
+- `BulkRevokeNotImplementedError` is preserved — now signals
+  "missing API key" rather than "missing server endpoint".
+
+### Packages
+
+| Language   | Package                              | Version           |
+|------------|--------------------------------------|-------------------|
+| Python     | `atlasent-v2-alpha`                  | `2.0.0a1`         |
+| TypeScript | `@atlasent/sdk-v2-alpha`             | `2.0.0-alpha.1`   |
+
+### Upgrade
+
+```bash
+pip install "atlasent-v2-alpha==2.0.0a1"
+npm install @atlasent/sdk-v2-alpha@2.0.0-alpha.1
+```
+
+---
+
 ## v2.0.0-alpha.0 / 2.0.0a0 — v2 alpha (TS + Py)
 
 **Release date:** 2026-04-27
