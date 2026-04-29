@@ -31,12 +31,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# v2 extra: wires bulk_revoke_atlasent_permits against the real HTTP endpoint.
+# Install with: pip install atlasent-temporal-preview[v2]
+v2 = [
+    "atlasent-v2-alpha>=2.0.0a1",
+]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "pytest-mock>=3.10",
     "ruff>=0.1.0",
+    "atlasent-v2-alpha>=2.0.0a1",
 ]
 
 [project.urls]

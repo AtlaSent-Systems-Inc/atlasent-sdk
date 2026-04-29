@@ -42,14 +42,66 @@ decorated function:
    `AtlaSentDeniedError` — Temporal records the activity failure.
 4. On allow, runs the original function and returns its result.
 
+## Workflow-side helpers
+
+Pillar 8 also calls for a workflow signal that triggers bulk revoke
+of every permit issued under a workflow run id. The signal name +
+typed args + default activity stub all ship in this package; the
+workflow-side decorator wiring is left to user code (different
+projects structure their workflow classes differently).
+
+```python
+from datetime import timedelta
+from temporalio import workflow
+
+from atlasent_temporal_preview import (
+    REVOKE_SIGNAL_NAME,
+    bulk_revoke_atlasent_permits,
+)
+
+
+@workflow.defn
+class DeployWorkflow:
+    def __init__(self) -> None:
+        self._revoke_pending: dict | None = None
+
+    @workflow.signal(name=REVOKE_SIGNAL_NAME)
+    def revoke_atlasent_permits(self, args: dict) -> None:
+        self._revoke_pending = args
+
+    @workflow.run
+    async def run(self, input: dict) -> str:
+        # ... main workflow body ...
+        if self._revoke_pending is not None:
+            info = workflow.info()
+            await workflow.execute_activity(
+                bulk_revoke_atlasent_permits,
+                {
+                    **self._revoke_pending,
+                    "workflow_id": info.workflow_id,
+                    "run_id": info.run_id,
+                },
+                start_to_close_timeout=timedelta(seconds=30),
+            )
+        return "done"
+```
+
+The default `bulk_revoke_atlasent_permits` activity raises
+`BulkRevokeNotImplementedError` until the v2 server endpoint
+(`POST /v2/permits:bulk-revoke`) lands. Customers can register
+their own activity instead — useful for wiring a per-permit revoke
+loop against the existing v1 surface today.
+
+`REVOKE_SIGNAL_NAME` is the cross-language constant (also exported
+from `@atlasent/temporal-preview` as
+`RevokeAtlaSentPermitsSignal`'s name) so external callers fire the
+same signal regardless of which SDK built the workflow.
+
 ## What's NOT in here
 
 - **The v2 callback / consume flow.** That requires server-side
   endpoints from PR #61. Once those land, this package extends to
   call `consume` after the activity completes.
-- **Workflow-side helpers.** `revokeAtlaSentPermits()` signal
-  helpers wrap a v2 server endpoint; forward-declared in PR #57's
-  V2 plan.
 
 ## Installation (dev)
 
