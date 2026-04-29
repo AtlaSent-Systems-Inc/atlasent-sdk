@@ -1,8 +1,87 @@
-# Release Notes — v1.5.0
+# Release Notes
+
+## v2.0.0-alpha.0 / 2.0.0a0 — v2 alpha (TS + Py)
+
+**Release date:** 2026-04-27
+
+The first publishable v2 surface, gated behind `-alpha` semantics:
+breaking changes are still on the table between alpha releases.
+
+### Packages
+
+| Language   | Package                              | Install                                                |
+|------------|--------------------------------------|--------------------------------------------------------|
+| Python     | `atlasent-v2-alpha` `2.0.0a0`        | `pip install atlasent-v2-alpha`                        |
+| TypeScript | `@atlasent/sdk-v2-alpha` `2.0.0-alpha.0` | `npm install @atlasent/sdk-v2-alpha@alpha` |
+
+Both packages install cleanly **alongside** the v1 packages
+(`atlasent`, `@atlasent/sdk`). The v1 surface is unchanged and remains
+stable at v1.x.
+
+### What's in v2-alpha
+
+**Pillar 9 primitives** — deterministic JSON canonicalization and
+SHA-256 hashing identical with v1's `canonical_json` /
+`canonicalJSON`, plus wire-mirror types for every v2 schema in
+`contract/schemas/v2/`.
+
+**HTTP methods** on `V2Client` (TS) / `AtlaSentV2Client` (Py):
+
+- `consume(permitId, payloadHash, executionStatus, executionHash?)`
+  → `ConsumeResponse`. Closes the permit lifecycle by recording the
+  outcome of the wrapped callback. The raw payload is never sent —
+  only its `payload_hash`.
+- `verifyProof(proofId)` / `verify_proof(proof_id)` →
+  `ProofVerificationResult`. Server-side proof verification; returns
+  the canonical envelope the offline CLI also emits.
+- `evaluateBatch(requests)` / `evaluate_batch(requests)` →
+  `EvaluateBatchResponse`. Pillar 2 batched evaluate — one HTTP
+  call for N decisions (≤ 1000), one rate-limit decrement,
+  order-preserving (`items[i]` decides `requests[i]`).
+- `subscribeDecisions({ lastEventId?, signal? })` /
+  `subscribe_decisions(*, last_event_id=None)` → async iterable
+  of `DecisionEvent`. Pillar 3 SSE stream with reconnect
+  (Last-Event-ID), abort (TS), forward-compat unknown event types,
+  malformed-frame skip semantics.
+
+Both languages export the SSE parser they use (`parseSSE` /
+`parse_sse_lines` + `parse_sse_bytes`) for callers who want to handle
+the stream themselves.
+
+### Error handling
+
+Single error type `V2Error` (both languages) with `status`/`code`
+fields:
+
+- `invalid_api_key` (401)
+- `http_error` (other 4xx/5xx)
+- `network` (transport failure)
+- `timeout` (per-request deadline)
+- `bad_response` (malformed 2xx body)
+- `invalid_argument` (client-side guard fired before the wire call)
+
+### Stability
+
+The v2-alpha line follows alpha-release semantics — **no semver
+discipline between alpha releases**. Pin to an exact version
+(`atlasent-v2-alpha==2.0.0a0` /
+`@atlasent/sdk-v2-alpha@2.0.0-alpha.0`) if you depend from production
+code. Beta will tighten this; the GA `atlasent-v2` / `@atlasent/sdk`
+v2.x packages will fold the alpha surface back under semver.
+
+### Cross-language parity
+
+`canonicalize_payload` / `canonicalizePayload` produces byte-identical
+output across Python and TypeScript on every test vector in
+`contract/schemas/v2/`. The schema-parity tests assert that every
+required schema field is declared on the corresponding model/type;
+drift fails CI.
+
+---
+
+## v1.5.0 — Audit listing, signed exports, offline verification
 
 **Release date:** 2026-04-25
-
-## AtlaSent SDK v1.5.0 — Audit listing, signed exports, offline verification
 
 Closes the long-standing `/v1-audit` parity gap. With this release, a
 caller can go from "I have an API key" to "I have a signed,
