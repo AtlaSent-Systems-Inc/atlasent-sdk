@@ -114,7 +114,11 @@ def test_consume_wire_request(v: dict[str, Any]) -> None:
         permit_id=si["permitId"],
         payload_hash=si["payloadHash"],
         execution_status=si["executionStatus"],
-        **({} if si.get("executionHash") is None else {"execution_hash": si["executionHash"]}),
+        **(
+            {}
+            if si.get("executionHash") is None
+            else {"execution_hash": si["executionHash"]}
+        ),
     )
     assert captured["body"] == v["wire_request"]
 
