@@ -9,6 +9,7 @@ from .atlasent_activity import atlasent_activity
 from .bulk_revoke_activity import (
     BulkRevokeNotImplementedError,
     bulk_revoke_atlasent_permits,
+    make_bulk_revoke_activity,
 )
 from .workflow_signals import (
     REVOKE_SIGNAL_NAME,
@@ -25,5 +26,6 @@ __all__ = [
     "RevokeAtlaSentPermitsArgs",
     "BulkRevokeArgs",
     "bulk_revoke_atlasent_permits",
+    "make_bulk_revoke_activity",
     "BulkRevokeNotImplementedError",
 ]
