@@ -6,7 +6,7 @@ const fx = loadFixture("SIM-07");
 
 describe(fx.title, () => {
   it("denies with permit_tampered when verifyPermit rejects a mutated token", async () => {
-    const { client, verifyCalls } = buildMockClient(
+    const { client, tracker } = buildMockClient(
       fx.mocks.evaluate,
       fx.mocks.verify_permit,
       { tamperToken: true },
@@ -27,6 +27,6 @@ describe(fx.title, () => {
     expect(result.decision).toBe("deny");
     expect((result as { reasonCode: string }).reasonCode).toBe("permit_tampered");
     expect(execute).not.toHaveBeenCalled();
-    expect(verifyCalls).toBeGreaterThan(0);
+    expect(tracker.verifyCalls).toBeGreaterThan(0);
   });
 });

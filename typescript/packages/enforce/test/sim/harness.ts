@@ -15,7 +15,7 @@ import type {
 
 const SCENARIOS_DIR = join(
   new URL(".", import.meta.url).pathname,
-  "../../../../contract/scenarios",
+  "../../../../../contract/scenarios",
 );
 
 export function loadFixture(simId: string): SimFixture {
@@ -160,12 +160,17 @@ function buildSingleVerifyResponse(
   };
 }
 
+export interface MockCallTracker {
+  verifyCalls: number;
+  sequenceIndex: number;
+}
+
 export function buildMockClient(
   evaluateSpec: EvaluateMock,
   verifySpec: VerifyMock | null,
   options: { tamperToken?: boolean } = {},
-): { client: EnforceCompatibleClient; verifyCalls: number } {
-  const state = { verifyCalls: 0, sequenceIndex: 0 };
+): { client: EnforceCompatibleClient; tracker: MockCallTracker } {
+  const state: MockCallTracker = { verifyCalls: 0, sequenceIndex: 0 };
   const evaluateFn = buildEvaluateMock(evaluateSpec);
 
   let verifyFn: ((token: string) => Promise<VerifiedPermit>) | null = null;
@@ -197,8 +202,5 @@ export function buildMockClient(
     },
   };
 
-  return {
-    client,
-    get verifyCalls() { return state.verifyCalls; },
-  };
+  return { client, tracker: state };
 }

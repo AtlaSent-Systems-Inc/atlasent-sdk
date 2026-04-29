@@ -10,7 +10,7 @@ from tests.sim.harness import load_fixture
 
 fx = load_fixture("SIM-10")
 
-REPO_ROOT = Path(__file__).parents[5]
+REPO_ROOT = Path(__file__).parents[4]
 LINT_SCRIPT = REPO_ROOT / "scripts" / "enforce_no_bypass.py"
 BYPASS_FIXTURE = REPO_ROOT / fx["fixtures"]["python"]
 

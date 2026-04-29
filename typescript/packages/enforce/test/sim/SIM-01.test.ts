@@ -6,7 +6,7 @@ const fx = loadFixture("SIM-01");
 
 describe(fx.title, () => {
   it("passes deny decision through without calling execute or verifyPermit", async () => {
-    const { client, verifyCalls } = buildMockClient(fx.mocks.evaluate, fx.mocks.verify_permit);
+    const { client, tracker } = buildMockClient(fx.mocks.evaluate, fx.mocks.verify_permit);
     const execute = vi.fn(async () => "unreachable");
     const enforce = new Enforce({
       client,
@@ -23,6 +23,6 @@ describe(fx.title, () => {
     expect(result.decision).toBe(fx.expected!.decision);
     expect((result as { reasonCode?: string }).reasonCode).toBe(fx.expected!.reason_code ?? undefined);
     expect(execute).not.toHaveBeenCalled();
-    expect(verifyCalls).toBe(0);
+    expect(tracker.verifyCalls).toBe(0);
   });
 });

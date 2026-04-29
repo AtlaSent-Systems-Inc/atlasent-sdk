@@ -14,7 +14,7 @@ from typing import Any
 
 from atlasent_enforce.types import Bindings, EvaluateResponse, VerifiedPermit
 
-SCENARIOS_DIR = Path(__file__).parents[5] / "contract" / "scenarios"
+SCENARIOS_DIR = Path(__file__).parents[4] / "contract" / "scenarios"
 
 
 def load_fixture(sim_id: str) -> dict[str, Any]:

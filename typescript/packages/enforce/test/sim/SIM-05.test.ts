@@ -6,7 +6,7 @@ const fx = loadFixture("SIM-05");
 
 describe(fx.title, () => {
   it("denies with verify_unavailable when verifyPermit returns 5xx", async () => {
-    const { client, verifyCalls } = buildMockClient(fx.mocks.evaluate, fx.mocks.verify_permit);
+    const { client, tracker } = buildMockClient(fx.mocks.evaluate, fx.mocks.verify_permit);
     const execute = vi.fn(async () => "unreachable");
     const enforce = new Enforce({
       client,
@@ -23,6 +23,6 @@ describe(fx.title, () => {
     expect(result.decision).toBe("deny");
     expect((result as { reasonCode: string }).reasonCode).toBe("verify_unavailable");
     expect(execute).not.toHaveBeenCalled();
-    expect(verifyCalls).toBeGreaterThan(0);
+    expect(tracker.verifyCalls).toBeGreaterThan(0);
   });
 });
