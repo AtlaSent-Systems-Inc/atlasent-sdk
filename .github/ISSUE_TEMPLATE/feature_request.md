@@ -1,15 +1,19 @@
 ---
 name: Feature request
-about: Suggest an idea or improvement
+about: Suggest a new feature or enhancement
 labels: enhancement
 ---
 
-## Problem
+**Problem / motivation**
+What problem does this solve or what need does it address?
 
-What are you trying to do?
+**Proposed solution**
+Describe the API or behaviour change you'd like.
 
-## Proposal
+**Backwards-compatibility impact**
+Is this a breaking change? If yes, what is the migration path?
 
-What would solve this?
+**Alternatives considered**
 
-## Alternatives considered
+
+**Additional context**

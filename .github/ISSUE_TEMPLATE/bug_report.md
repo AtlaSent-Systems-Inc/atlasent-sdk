@@ -4,16 +4,29 @@ about: Report a bug or unexpected behavior
 labels: bug
 ---
 
-## What happened
+**Describe the bug**
+A clear, concise description of what the bug is.
+
+**Steps to reproduce**
+1. 
+2. 
+3. 
+
+**Expected behavior**
 
 
-## What you expected
+**Actual behavior**
 
 
-## Steps to reproduce
+**Environment**
+- SDK version (npm / PyPI): 
+- Runtime (Node.js / Python): 
+- OS: 
 
+**Minimal reproduction**
 
-## Environment
-- OS:
-- SDK language (TypeScript or Python):
-- Version:
+```ts
+// paste code here
+```
+
+**Additional context**
