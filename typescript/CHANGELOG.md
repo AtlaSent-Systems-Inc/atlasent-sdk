@@ -43,6 +43,34 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
   Mirrors the Python SDK's `PermitOutcome` (atlasent-sdk PR #132).
 
+## 1.5.1 — 2026-04-29
+
+### Fixed
+
+- **Browser runtime compatibility** (closes #103). `User-Agent` was
+  constructed with `process.version`, a Node-only global that throws a
+  `ReferenceError` in browser environments. The header now uses runtime
+  detection: `@atlasent/sdk/<version> node/<nodeVersion>` in Node,
+  `@atlasent/sdk/<version> browser` everywhere else. Browsers strip
+  `User-Agent` from `fetch` requests anyway (it is a
+  [forbidden header](https://developer.mozilla.org/en-US/docs/Glossary/Forbidden_header_name)),
+  so the value is informational only.
+
+- **`SDK_VERSION` constant** corrected from `"0.1.0"` to track the
+  actual package version.
+
+### Added
+
+- `browserslist` pinned to Chrome ≥ 103, Firefox ≥ 100, Safari ≥ 16
+  — the floor required by `AbortSignal.timeout` and
+  `crypto.randomUUID()`. Versions below this floor will fail loudly on
+  the first request.
+
+- **jsdom browser test** (`test/browser-compat.test.ts`): stubs
+  `process` to `undefined` and verifies that `AtlaSentClient`
+  constructs and round-trips an `evaluate()` call in a simulated
+  browser environment without touching any Node globals.
+
 ## 1.5.0 — 2026-04-25
 
 ### Added
