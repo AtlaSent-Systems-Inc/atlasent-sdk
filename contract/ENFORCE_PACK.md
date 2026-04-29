@@ -108,6 +108,31 @@ uses Enforce in production for ten consecutive business days with
 zero fail-closed-deny noise above baseline. "Real" excludes
 examples-repo demos and dogfooding inside this repo's own tests.
 
+## Migration items (post-GA)
+
+Once Enforce is GA-validated (SIM-01..SIM-10 pass + ≥1 real
+integration), the following v1 surfaces should migrate to call
+`Enforce.run()` instead of `protect()` directly so framework
+integrations also get the non-bypassable wrapper guarantee:
+
+- **Hono middleware** (`typescript/src/hono.ts`): `atlaSentGuard`
+  currently calls `protect(request)` directly. The migration rebuilds
+  the guard on top of `Enforce.run()` so the invariant chain
+  (evaluate → verifyPermit → execute) flows through the framework
+  integration without a parallel path. `atlaSentErrorHandler`
+  continues to map `AtlaSentDeniedError` / `AtlaSentError` to HTTP
+  responses; the deny taxonomy gains `verify_unavailable`,
+  `verify_latency_breach`, and the binding-mismatch codes from the
+  failure-mode table above. Tracked separately; blocked on Enforce
+  GA so we don't rewrite the framework integration twice.
+- **Other framework wrappers** as they ship: same pattern. Any new
+  framework integration MUST be built on `Enforce.run()` from the
+  start, never on `protect()` directly. Reviewers should reject PRs
+  that wire a new framework on top of v1 `protect()`.
+
+These are intentionally post-GA: shipping Enforce + the SIM gate
+first gives us a stable target to migrate against.
+
 ## Out of scope (intentionally)
 
 - Streaming / SSE / batch — those are Preview-pack features that layer on top of Enforce later.
