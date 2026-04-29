@@ -93,8 +93,9 @@ Before this directory leaves draft status:
 - [ ] Every schema's open question is resolved and the resolution
       is captured in the `description`.
 - [x] `contract/tools/drift.py` covers each endpoint represented here.
-- [ ] Test vectors exist at `contract/vectors/v2/` for round-trip
-      validation.
+- [x] Test vectors exist at `contract/vectors/v2/` for round-trip
+      validation (`evaluate-batch.json`, `consume.json`,
+      `bulk-revoke.json`).
 - [x] `contract/openapi-v2.yaml` covers all 6 v2 endpoints.
 - [ ] SDK_COMPATIBILITY.md has a v2 section.
 - [ ] Both SDKs implement the corresponding methods and the
