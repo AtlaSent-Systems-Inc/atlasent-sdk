@@ -4,6 +4,8 @@ including the v1 single-use replay-protection invariant."""
 
 from __future__ import annotations
 
+import sys
+
 import httpx
 import pytest
 
@@ -18,6 +20,12 @@ from atlasent import (
 )
 from atlasent.authorize import _reset_default_client
 from atlasent.config import configure
+
+# `from atlasent import authorize` in atlasent/__init__.py rebinds the
+# `authorize` attribute to the function, shadowing the submodule. Both
+# `import atlasent.authorize as m` and `from atlasent import authorize`
+# return the function. Reach the actual module via sys.modules.
+authorize_module = sys.modules["atlasent.authorize"]
 
 # ── Wire fixtures (kept identical to test_protect.py for parity) ───────
 
@@ -75,7 +83,9 @@ class TestSyncWithPermit:
 
     def test_invokes_fn_with_verified_permit(self, mocker) -> None:
         client = AtlaSentClient(api_key="ask_test", max_retries=0)
-        mocker.patch("atlasent.authorize._get_default_client", return_value=client)
+        mocker.patch.object(
+            authorize_module, "_get_default_client", return_value=client
+        )
         mocker.patch.object(
             client._client,
             "post",
@@ -102,7 +112,9 @@ class TestSyncWithPermit:
 
     def test_raises_denied_on_policy_deny_fn_never_called(self, mocker) -> None:
         client = AtlaSentClient(api_key="ask_test", max_retries=0)
-        mocker.patch("atlasent.authorize._get_default_client", return_value=client)
+        mocker.patch.object(
+            authorize_module, "_get_default_client", return_value=client
+        )
         mocker.patch.object(
             client._client,
             "post",
@@ -125,7 +137,9 @@ class TestSyncWithPermit:
         outcome=permit_consumed on a re-verify. with_permit MUST raise
         AtlaSentDeniedError and MUST NOT invoke fn."""
         client = AtlaSentClient(api_key="ask_test", max_retries=0)
-        mocker.patch("atlasent.authorize._get_default_client", return_value=client)
+        mocker.patch.object(
+            authorize_module, "_get_default_client", return_value=client
+        )
         mocker.patch.object(
             client._client,
             "post",
@@ -151,7 +165,9 @@ class TestSyncWithPermit:
 
     def test_fn_exception_propagates_verbatim(self, mocker) -> None:
         client = AtlaSentClient(api_key="ask_test", max_retries=0)
-        mocker.patch("atlasent.authorize._get_default_client", return_value=client)
+        mocker.patch.object(
+            authorize_module, "_get_default_client", return_value=client
+        )
         mocker.patch.object(
             client._client,
             "post",
@@ -174,7 +190,9 @@ class TestSyncWithPermit:
         self, mocker
     ) -> None:
         client = AtlaSentClient(api_key="ask_test", max_retries=0)
-        mocker.patch("atlasent.authorize._get_default_client", return_value=client)
+        mocker.patch.object(
+            authorize_module, "_get_default_client", return_value=client
+        )
         resp = _mock_resp(mocker, status_code=500)
         resp.text = "Internal Server Error"
         mocker.patch.object(client._client, "post", return_value=resp)
@@ -192,7 +210,9 @@ class TestSyncWithPermit:
 
     def test_returns_arbitrary_fn_return_value(self, mocker) -> None:
         client = AtlaSentClient(api_key="ask_test", max_retries=0)
-        mocker.patch("atlasent.authorize._get_default_client", return_value=client)
+        mocker.patch.object(
+            authorize_module, "_get_default_client", return_value=client
+        )
         mocker.patch.object(
             client._client,
             "post",
