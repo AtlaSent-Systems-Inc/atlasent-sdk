@@ -11,6 +11,7 @@ from __future__ import annotations
 from .canonicalize import canonicalize_payload
 from .client import AtlaSentV2Client, V2Error
 from .hash import hash_payload
+from .sse import SSEFrame, parse_sse_bytes, parse_sse_lines
 from .types import (
     BatchEvaluateItem,
     BatchEvaluateResponseItem,
@@ -18,6 +19,8 @@ from .types import (
     ConsumeExecutionStatus,
     ConsumeRequest,
     ConsumeResponse,
+    DecisionEvent,
+    DecisionEventType,
     EvaluateBatchRequest,
     EvaluateBatchResponse,
     Proof,
@@ -38,12 +41,17 @@ __all__ = [
     "hash_payload",
     "AtlaSentV2Client",
     "V2Error",
+    "SSEFrame",
+    "parse_sse_lines",
+    "parse_sse_bytes",
     "BatchEvaluateItem",
     "BatchEvaluateResponseItem",
     "BatchProofStatus",
     "ConsumeExecutionStatus",
     "ConsumeRequest",
     "ConsumeResponse",
+    "DecisionEvent",
+    "DecisionEventType",
     "EvaluateBatchRequest",
     "EvaluateBatchResponse",
     "Proof",

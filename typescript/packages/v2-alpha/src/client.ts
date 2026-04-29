@@ -15,10 +15,12 @@ import type {
   BatchEvaluateItem,
   ConsumeRequest,
   ConsumeResponse,
+  DecisionEvent,
   EvaluateBatchRequest,
   EvaluateBatchResponse,
   ProofVerificationResult,
 } from "./types.js";
+import { parseSSE } from "./sse.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -149,6 +151,85 @@ export class V2Client {
       `/v2/proofs/${encodeURIComponent(proofId)}/verify`,
       { api_key: this.apiKey },
     );
+  }
+
+  /**
+   * Subscribe to the v2 decision-event stream (Pillar 3). Returns an
+   * async iterable that yields one {@link DecisionEvent} per server
+   * frame; iterate with `for await`.
+   *
+   * Reconnect: on disconnect, restart by passing the last seen
+   * `event.id` as `lastEventId` and the server replays from there.
+   *
+   * Cancel: pass an `AbortSignal`; aborting closes the underlying
+   * connection and ends the iterable.
+   */
+  async *subscribeDecisions(options?: {
+    lastEventId?: string;
+    signal?: AbortSignal;
+  }): AsyncGenerator<DecisionEvent, void, undefined> {
+    const url = `${this.baseUrl}/v2/decisions:subscribe`;
+    const headers: Record<string, string> = {
+      Accept: "text/event-stream",
+      Authorization: `Bearer ${this.apiKey}`,
+      "User-Agent": "atlasent-sdk-v2-alpha/2.0.0-alpha.0",
+    };
+    if (options?.lastEventId) {
+      headers["Last-Event-ID"] = options.lastEventId;
+    }
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: "GET",
+        headers,
+        ...(options?.signal ? { signal: options.signal } : {}),
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      const message = err instanceof Error ? err.message : String(err);
+      throw new V2Error(`Failed to connect to ${url}: ${message}`, {
+        code: "network",
+      });
+    }
+
+    if (!response.ok) {
+      const code = response.status === 401 ? "invalid_api_key" : "http_error";
+      throw new V2Error(
+        response.status === 401
+          ? "Invalid API key"
+          : `API error ${response.status} on /v2/decisions:subscribe`,
+        { status: response.status, code },
+      );
+    }
+
+    if (!response.body) {
+      throw new V2Error("Subscribe response has no body", {
+        status: response.status,
+        code: "bad_response",
+      });
+    }
+
+    const stream = response.body as unknown as AsyncIterable<Uint8Array>;
+    try {
+      for await (const frame of parseSSE(stream)) {
+        if (frame.data === "") continue;
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(frame.data);
+        } catch {
+          // Malformed JSON in a frame — skip it rather than tearing
+          // down the whole stream. The wire contract is JSON-per-frame.
+          continue;
+        }
+        if (parsed && typeof parsed === "object") {
+          yield parsed as DecisionEvent;
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      throw err;
+    }
   }
 
   private async post<TResponse>(path: string, body: unknown): Promise<TResponse> {

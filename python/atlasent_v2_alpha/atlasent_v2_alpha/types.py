@@ -338,3 +338,58 @@ class EvaluateBatchResponse(BaseModel):
     items: list[BatchEvaluateResponseItem] = Field(min_length=1)
 
     model_config = {"extra": "allow"}
+
+
+# ──────────────────────────── DecisionEvent (SSE) ──────────────────────────
+
+DecisionEventType = Literal[
+    "permit_issued",
+    "verified",
+    "consumed",
+    "revoked",
+    "escalated",
+    "hold_resolved",
+    "rate_limit_state",
+]
+"""Discriminator for :class:`DecisionEvent`.
+
+SDKs forward unknown types verbatim (forward-compatibility): old
+clients against new servers continue to receive events as opaque
+data rather than failing parse.
+"""
+
+
+class DecisionEvent(BaseModel):
+    """Server-sent event from ``GET /v2/decisions:subscribe``.
+
+    Each event is one JSON object on the SSE ``data:`` line; ``id``
+    doubles as the SSE ``Last-Event-ID`` so clients resume cleanly
+    after reconnect. Per-type payload shapes are documented in the
+    JSON Schema ``$defs``; ``payload`` is kept as a free-form dict
+    so unknown fields forward verbatim.
+
+    See ``contract/schemas/v2/decision-event.schema.json``.
+    """
+
+    id: str
+    """Monotonic per-org event id; echoes back as Last-Event-ID."""
+
+    type: str
+    """Event type. Known values are listed in :data:`DecisionEventType`."""
+
+    org_id: str
+    """Organization the event belongs to."""
+
+    emitted_at: str
+    """ISO 8601 timestamp the event was emitted by the server."""
+
+    permit_id: str | None = None
+    """Decision id; present on every type except ``rate_limit_state``."""
+
+    actor_id: str | None = None
+    """Actor that triggered the event. Null on system-triggered events."""
+
+    payload: dict[str, Any] | None = None
+    """Per-type payload. Unknown fields forward verbatim."""
+
+    model_config = {"extra": "allow"}
