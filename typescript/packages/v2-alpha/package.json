@@ -1,6 +1,6 @@
 {
   "name": "@atlasent/sdk-v2-alpha",
-  "version": "2.0.0-alpha.0",
+  "version": "2.0.0-alpha.1",
   "description": "Alpha release of the v2 AtlaSent SDK. API is subject to change between alpha releases — pin exact versions if depending from production code.",
   "license": "Apache-2.0",
   "type": "module",

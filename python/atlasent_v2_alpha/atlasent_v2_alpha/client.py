@@ -21,6 +21,8 @@ import httpx
 from .sse import parse_sse_lines
 from .types import (
     BatchEvaluateItem,
+    BulkRevokeRequest,
+    BulkRevokeResponse,
     ConsumeRequest,
     ConsumeResponse,
     DecisionEvent,
@@ -162,6 +164,32 @@ class AtlaSentV2Client:
         path = f"/v2/proofs/{_quote(proof_id)}/verify"
         data = self._post(path, {"api_key": self._api_key})
         return ProofVerificationResult.model_validate(data)
+
+    def bulk_revoke(
+        self,
+        *,
+        workflow_id: str,
+        run_id: str,
+        reason: str,
+        revoker_id: str | None = None,
+    ) -> BulkRevokeResponse:
+        """Bulk-revoke all active permits for a Temporal workflow run.
+
+        Mirrors ``POST /v2/permits:bulk-revoke`` (Pillar 8). Returns the
+        number of revoked permits (``revoked_count``). A count of 0 is
+        not an error — it means no active permits were found for the run
+        (common when permits have already expired or been consumed before
+        the revoke signal fires).
+        """
+        body = BulkRevokeRequest(
+            workflow_id=workflow_id,
+            run_id=run_id,
+            reason=reason,
+            revoker_id=revoker_id,
+            api_key=self._api_key,
+        )
+        data = self._post("/v2/permits:bulk-revoke", body.model_dump(exclude_none=True))
+        return BulkRevokeResponse.model_validate(data)
 
     def subscribe_decisions(
         self,

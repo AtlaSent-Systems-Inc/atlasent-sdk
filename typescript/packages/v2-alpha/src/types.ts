@@ -304,3 +304,21 @@ export interface DecisionEvent {
   /** Per-type payload. Unknown fields forward verbatim. */
   payload?: Record<string, unknown>;
 }
+
+// ───────────────────────────── BulkRevoke ────────────────────────────────
+
+/** Wire shape of `POST /v2/permits:bulk-revoke` request (Pillar 8). */
+export interface BulkRevokeRequest {
+  workflow_id: string;
+  run_id: string;
+  reason: string;
+  revoker_id?: string;
+  api_key: string;
+}
+
+/** Wire shape of `POST /v2/permits:bulk-revoke` response (Pillar 8). */
+export interface BulkRevokeResponse {
+  revoked_count: number;
+  workflow_id: string;
+  run_id: string;
+}

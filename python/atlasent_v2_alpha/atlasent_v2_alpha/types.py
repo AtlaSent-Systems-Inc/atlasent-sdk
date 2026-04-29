@@ -393,3 +393,28 @@ class DecisionEvent(BaseModel):
     """Per-type payload. Unknown fields forward verbatim."""
 
     model_config = {"extra": "allow"}
+
+
+# ─────────────────────────────── BulkRevoke ──────────────────────────────
+
+
+class BulkRevokeRequest(BaseModel):
+    """Wire shape of ``POST /v2/permits:bulk-revoke`` request (Pillar 8)."""
+
+    workflow_id: str
+    run_id: str
+    reason: str
+    revoker_id: str | None = None
+    api_key: str
+
+    model_config = {"extra": "forbid"}
+
+
+class BulkRevokeResponse(BaseModel):
+    """Wire shape of ``POST /v2/permits:bulk-revoke`` response (Pillar 8)."""
+
+    revoked_count: int
+    workflow_id: str
+    run_id: str
+
+    model_config = {"extra": "allow"}

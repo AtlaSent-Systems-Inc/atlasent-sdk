@@ -13,6 +13,8 @@
 
 import type {
   BatchEvaluateItem,
+  BulkRevokeRequest,
+  BulkRevokeResponse,
   ConsumeRequest,
   ConsumeResponse,
   DecisionEvent,
@@ -35,6 +37,14 @@ export interface V2ClientOptions {
   timeoutMs?: number;
   /** Inject a custom fetch (primarily for tests). */
   fetch?: typeof fetch;
+}
+
+/** Input to {@link V2Client.bulkRevoke}. `api_key` is filled in by the client. */
+export interface BulkRevokeInput {
+  workflowId: string;
+  runId: string;
+  reason: string;
+  revokerId?: string;
 }
 
 /** Input to {@link V2Client.consume}. `api_key` is filled in by the client. */
@@ -151,6 +161,28 @@ export class V2Client {
       `/v2/proofs/${encodeURIComponent(proofId)}/verify`,
       { api_key: this.apiKey },
     );
+  }
+
+  /**
+   * Bulk-revoke all active permits for a Temporal workflow run.
+   * Mirrors `POST /v2/permits:bulk-revoke` (Pillar 8).
+   *
+   * Returns the number of revoked permits (`revoked_count`). A count
+   * of 0 is not an error — it means no active permits were found for
+   * the run (common when permits have already expired or been consumed
+   * before the revoke signal fires).
+   */
+  async bulkRevoke(input: BulkRevokeInput): Promise<BulkRevokeResponse> {
+    const body: BulkRevokeRequest = {
+      workflow_id: input.workflowId,
+      run_id: input.runId,
+      reason: input.reason,
+      api_key: this.apiKey,
+      ...(input.revokerId !== undefined
+        ? { revoker_id: input.revokerId }
+        : {}),
+    };
+    return this.post<BulkRevokeResponse>("/v2/permits:bulk-revoke", body);
   }
 
   /**

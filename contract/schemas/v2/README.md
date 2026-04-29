@@ -17,15 +17,14 @@ the v2 surface stabilises.
 | `evaluate-batch-request.schema.json` | `POST /v2/evaluate:batch` (req) | `docs/V2_PLAN.md` §Pillar 2 |
 | `evaluate-batch-response.schema.json` | `POST /v2/evaluate:batch` (res) | Pillar 2 |
 | `decision-event.schema.json` | `GET /v2/decisions:subscribe` (SSE) | Pillar 3 |
+| `bulk-revoke-request.schema.json` | `POST /v2/permits:bulk-revoke` (req) | Pillar 8 (Temporal) |
+| `bulk-revoke-response.schema.json` | `POST /v2/permits:bulk-revoke` (res) | Pillar 8 (Temporal) |
 
 Not yet drafted here:
 
 - **Pillar 5 (analytics RPCs)** — `denialTrends`, `policyDrift`,
   `riskOverTime`, `agentScorecard`. Wire shapes depend on the
   analytics backend design; deferred until that lands.
-- **Pillar 8 (Temporal adapter)** — SDK-side only, no new wire
-  endpoints. Lives in the future `@atlasent/temporal` /
-  `atlasent-temporal` packages, not here.
 - **Streaming evaluate** — separate surface from decision events.
   Proposal `contract/PROPOSALS/001-streaming-evaluate.md` has six
   open questions that need API team input before a schema makes

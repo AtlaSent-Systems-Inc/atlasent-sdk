@@ -16,6 +16,8 @@ from .types import (
     BatchEvaluateItem,
     BatchEvaluateResponseItem,
     BatchProofStatus,
+    BulkRevokeRequest,
+    BulkRevokeResponse,
     ConsumeExecutionStatus,
     ConsumeRequest,
     ConsumeResponse,
@@ -33,7 +35,7 @@ from .types import (
     ProofVerificationStatus,
 )
 
-__version__ = "2.0.0a0"
+__version__ = "2.0.0a1"
 
 __all__ = [
     "__version__",
@@ -47,6 +49,8 @@ __all__ = [
     "BatchEvaluateItem",
     "BatchEvaluateResponseItem",
     "BatchProofStatus",
+    "BulkRevokeRequest",
+    "BulkRevokeResponse",
     "ConsumeExecutionStatus",
     "ConsumeRequest",
     "ConsumeResponse",
