@@ -150,8 +150,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EvaluateBatchResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: One or more referenced resource ids not found.
         "429": { $ref: "#/components/responses/RateLimited" }
         "5XX": { $ref: "#/components/responses/ServerError" }
 
@@ -206,6 +209,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConsumeResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404":
@@ -238,6 +242,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Proof"
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404":
@@ -270,6 +275,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProofVerificationResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404":
@@ -331,8 +337,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BulkRevokeResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: workflow_id or run_id not found in the permit store.
         "429": { $ref: "#/components/responses/RateLimited" }
         "5XX": { $ref: "#/components/responses/ServerError" }
 
@@ -382,9 +391,11 @@ paths:
                     id: 42
                     event: permit_issued
                     data: {"id":"42","type":"permit_issued","org_id":"org-1","emitted_at":"2026-04-24T12:00:00Z","permit_id":"dec_abc","actor_id":"deploy-bot","payload":{"decision":"allow","agent":"deploy-bot","action":"deploy_to_production","audit_hash":"…","reason":"GxP-compliant"}}
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "5XX": { $ref: "#/components/responses/ServerError" }
 
 components:
   securitySchemes:
@@ -440,6 +451,14 @@ components:
             `AtlaSentError.requestId` for support escalation.
 
   responses:
+    BadRequest:
+      description: |
+        Malformed request body or invalid field value. Fix the
+        client-side input; retrying unchanged will produce the same
+        error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
     Unauthorized:
       description: Invalid API key, missing scope, or expired key.
       content:
