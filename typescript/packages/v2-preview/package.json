@@ -7,6 +7,9 @@
   "private": true,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "bin": {
+    "atlasent-v2-verify": "./bin/atlasent-v2-verify.mjs"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -16,6 +19,7 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "tsx": "^4.7.2",
     "typescript": "^5.4.5",
     "vitest": "^1.5.0"
   },
