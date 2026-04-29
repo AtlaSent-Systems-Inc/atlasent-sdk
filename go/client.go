@@ -38,6 +38,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// sleep is a package-level variable so tests can override it.
+var sleep = time.Sleep
+
 const (
 	defaultBaseURL   = "https://api.atlasent.io"
 	defaultTimeoutMs = 10_000
@@ -51,17 +54,26 @@ type HTTPDoer interface {
 
 // Options configures a Client.
 type Options struct {
-	APIKey    string
-	BaseURL   string        // defaults to https://api.atlasent.io
-	Timeout   time.Duration // defaults to 10s
-	HTTPClient HTTPDoer     // defaults to a stock *http.Client
+	APIKey     string
+	BaseURL    string        // defaults to https://api.atlasent.io
+	Timeout    time.Duration // defaults to 10s
+	HTTPClient HTTPDoer      // defaults to a stock *http.Client
+
+	// RetryPolicy controls retry behaviour for transient failures.
+	// Zero values fall back to defaults (3 attempts, 250ms base, 7s max).
+	RetryPolicy RetryPolicy
+	// OnRetry is called before each retry sleep. Use it to emit metrics
+	// or log breadcrumbs without coupling the SDK to an observability library.
+	OnRetry func(OnRetryContext)
 }
 
 // Client is a thread-safe AtlaSent API client.
 type Client struct {
-	apiKey  string
-	baseURL string
-	http    HTTPDoer
+	apiKey      string
+	baseURL     string
+	http        HTTPDoer
+	retryPolicy RetryPolicy
+	onRetry     func(OnRetryContext)
 }
 
 // New creates a Client. Returns an error if APIKey is empty.
@@ -81,7 +93,13 @@ func New(opts Options) (*Client, error) {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: timeout}
 	}
-	return &Client{apiKey: opts.APIKey, baseURL: baseURL, http: httpClient}, nil
+	return &Client{
+		apiKey:      opts.APIKey,
+		baseURL:     baseURL,
+		http:        httpClient,
+		retryPolicy: mergePolicy(opts.RetryPolicy),
+		onRetry:     opts.OnRetry,
+	}, nil
 }
 
 // Evaluate asks the policy engine whether an agent action is permitted.
@@ -180,7 +198,32 @@ func (c *Client) post(ctx context.Context, path string, body interface{}, dest i
 		return nil, &AtlaSentError{Code: CodeBadRequest, Message: fmt.Sprintf("failed to marshal request: %v", err)}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(b))
+	var lastErr error
+	for attempt := 0; ; attempt++ {
+		rl, err := c.doOnce(ctx, path, b, dest)
+		if err == nil {
+			return rl, nil
+		}
+		lastErr = err
+
+		if !isRetryable(lastErr) || attempt+1 >= c.retryPolicy.MaxAttempts {
+			return nil, lastErr
+		}
+		delay := computeBackoff(attempt, c.retryPolicy, lastErr)
+		if c.onRetry != nil {
+			c.onRetry(OnRetryContext{
+				Attempt: attempt,
+				Error:   lastErr,
+				Delay:   delay,
+				Path:    path,
+			})
+		}
+		sleep(delay)
+	}
+}
+
+func (c *Client) doOnce(ctx context.Context, path string, body []byte, dest interface{}) (*RateLimitState, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, &AtlaSentError{Code: CodeNetwork, Message: fmt.Sprintf("failed to build request: %v", err)}
 	}
