@@ -4,8 +4,14 @@ import asyncio
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from .errors import DisallowedConfigError, LatencyBreachSignal, classify_client_error
-from .types import Bindings, EnforceCompatibleClient, RunRequest, RunResult, VerifiedPermit
+from .errors import DisallowedConfigError, LatencyBreachError, classify_client_error
+from .types import (
+    Bindings,
+    EnforceCompatibleClient,
+    RunRequest,
+    RunResult,
+    VerifiedPermit,
+)
 
 T = TypeVar("T")
 
@@ -35,7 +41,8 @@ class Enforce:
     async def run(self, request: RunRequest[T]) -> RunResult[T]:
         # Step 1: evaluate
         try:
-            eval_response = await self._client.evaluate(request.request)  # enforce-no-bypass: allow
+            # enforce-no-bypass: allow
+            eval_response = await self._client.evaluate(request.request)
         except Exception as exc:
             return RunResult(
                 decision="deny",
@@ -53,7 +60,7 @@ class Enforce:
         # Step 2: verifyPermit (with optional latency budget)
         try:
             verified_permit = await self._verify_with_budget(permit_token)
-        except LatencyBreachSignal:
+        except LatencyBreachError:
             return RunResult(decision="deny", reason_code="verify_latency_breach")
         except Exception as exc:
             return RunResult(
@@ -97,7 +104,7 @@ class Enforce:
             return await verify_task  # wait for actual result
 
         verify_task.cancel()
-        raise LatencyBreachSignal()
+        raise LatencyBreachError()
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"Enforce(bindings={self._bindings!r}, fail_closed=True)"

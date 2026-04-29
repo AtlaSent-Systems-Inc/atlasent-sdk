@@ -5,8 +5,8 @@ class DisallowedConfigError(Exception):
     """Raised when an Enforce config violates a non-toggleable invariant."""
 
 
-class LatencyBreachSignal(Exception):
-    """Internal signal: latency budget was breached in deny mode."""
+class LatencyBreachError(Exception):
+    """Raised internally when the latency budget is breached in deny mode."""
 
 
 def classify_client_error(err: Exception, fallback: str) -> str:

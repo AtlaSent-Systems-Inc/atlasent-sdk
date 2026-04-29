@@ -51,8 +51,9 @@ def lint_file(path: Path) -> list[str]:
         return [f"[{RULE_NAME}] Cannot read file {path}: {exc}"]
 
     for i, line in enumerate(lines, start=1):
-        # Per-line pragma: # enforce-no-bypass: allow
-        if "enforce-no-bypass: allow" in line:
+        # Pragma on this line OR the preceding line silences the check.
+        prev = lines[i - 2] if i >= 2 else ""
+        if "enforce-no-bypass: allow" in line or "enforce-no-bypass: allow" in prev:
             continue
         for pattern, message in PATTERNS:
             if pattern.search(line):
