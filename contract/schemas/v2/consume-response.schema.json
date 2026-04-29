@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v2/consume-response.schema.json",
+  "title": "ConsumeResponse",
+  "description": "Response from POST /v2/permits/:id/consume. The consume endpoint returns a pointer to the newly-issued proof rather than the full proof object; callers fetch the object via GET /v2/proofs/:id when they need the signed envelope. Rationale: consume is on the hot path of every protect() call, so the response stays tiny.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["proof_id", "execution_status", "audit_hash"],
+  "properties": {
+    "proof_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the proof row. Fetch with GET /v2/proofs/:id to get the full signed envelope."
+    },
+    "execution_status": {
+      "type": "string",
+      "enum": ["executed", "failed"],
+      "description": "Echo of the execution_status submitted. Present so callers can assert the server recorded what they sent."
+    },
+    "audit_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Audit-chain hash of this proof's audit_events row. Same meaning as Proof.audit_hash. Returned here so callers can correlate with audit exports without a second round-trip."
+    }
+  }
+}

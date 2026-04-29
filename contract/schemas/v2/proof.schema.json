@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v2/proof.schema.json",
+  "title": "Proof",
+  "description": "Canonical 18-field Verifiable Proof Object. Emitted by POST /v2/permits/:id/consume and fetchable via GET /v2/proofs/:id. Companion spec: atlasent-sdk/docs/V2_PILLAR9_PROOF_SYSTEM.md. STATUS: draft v2 — do not implement until v1 GA. This schema is the wire contract both SDK languages verify against; the Ed25519 signature covers the canonical JSON of the 18-field envelope below in declaration order (matching signed_bytes_for semantics established by the v1 audit bundle).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "proof_id",
+    "permit_id",
+    "org_id",
+    "agent",
+    "action",
+    "target",
+    "payload_hash",
+    "policy_version",
+    "decision",
+    "execution_status",
+    "audit_hash",
+    "previous_hash",
+    "chain_hash",
+    "signing_key_id",
+    "signature",
+    "issued_at",
+    "consumed_at",
+    "execution_hash"
+  ],
+  "properties": {
+    "proof_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Server-assigned UUID for the proof."
+    },
+    "permit_id": {
+      "type": "string",
+      "description": "The permit (decision_id from /v1-evaluate) this proof binds to."
+    },
+    "org_id": {
+      "type": "string",
+      "description": "Organization the proof belongs to."
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Agent identifier as submitted on the originating evaluate call."
+    },
+    "action": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Action as submitted on the originating evaluate call."
+    },
+    "target": {
+      "type": "string",
+      "description": "Target resource identifier (e.g. 'prod-cluster'). Empty string when the action has no discrete target."
+    },
+    "payload_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 hex of the canonical JSON of the payload that flowed through the callback. Computed client-side by hashPayload() / hash_payload(); the raw payload is never sent to the server."
+    },
+    "policy_version": {
+      "type": "string",
+      "description": "Opaque identifier of the policy bundle version that produced the decision. Stable: a proof issued under policy_version='v3-a7f1…' remains verifiable after the policy is superseded."
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["allow", "deny", "hold", "escalate"],
+      "description": "Policy decision that produced the permit."
+    },
+    "execution_status": {
+      "type": "string",
+      "enum": ["executed", "failed", "pending"],
+      "description": "Outcome of the callback the SDK wrapped. 'pending' is reserved for proofs fetched before the consume step completes (e.g. async execution)."
+    },
+    "execution_hash": {
+      "type": ["string", "null"],
+      "description": "Optional SHA-256 hex of execution result metadata (deploy sha, output digest, etc.). Null when the caller didn't supply one."
+    },
+    "audit_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Hash-chain entry id — the SHA-256 digest of this proof's audit_events row, the bridge between /v2/proofs and the v1 audit chain."
+    },
+    "previous_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "The audit-chain hash of the event immediately preceding this one in the org's chain. '0'*64 for the genesis entry."
+    },
+    "chain_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Recomputable SHA-256(previous_hash || canonicalJSON(payload of this proof)). Matches audit_events.hash for the same row."
+    },
+    "signing_key_id": {
+      "type": "string",
+      "description": "Registry id of the Ed25519 key that produced signature. Verifiers try this key first then fall through, per rotation semantics established in v1."
+    },
+    "signature": {
+      "type": "string",
+      "description": "Base64url (no padding) Ed25519 signature over canonicalJSON of the 18 fields in declaration order. Empty string on signing failure — verifiers MUST treat that as invalid_signature."
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of the consume call that produced this proof."
+    },
+    "consumed_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the callback completed. Equal to issued_at when the consume was synchronous; may differ for async execution. Null for proofs fetched before consume."
+    }
+  }
+}
