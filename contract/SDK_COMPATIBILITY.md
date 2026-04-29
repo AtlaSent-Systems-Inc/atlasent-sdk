@@ -145,8 +145,9 @@ in the 2.0.0-alpha.1 cycle).
   into `python/atlasent_v2_alpha/tests/test_contract_vectors.py` (18
   tests) and `typescript/packages/v2-alpha/test/contract-vectors.test.ts`
   (18 tests). `sdk_output` fields corrected to snake_case. All green.
-- **v2-SSE-001** — add `GET /v2/decisions:subscribe` to the drift
-  detector response check (SSE frames, not pydantic models; needs a
-  separate parser-level vector format).
+- [x] **v2-SSE-001** — `contract/tools/drift.py` extended to check
+  `/v2/decisions:subscribe` SSE envelope fields (`DecisionEvent` model /
+  `DecisionEvent` TS interface) against `schemas/v2/decision-event.schema.json`.
+  Drift detector reports clean for both `python-v2` and `typescript-v2` labels.
 - **v2-PROOF-001** — add `GET /v2/proofs/:id` response vectors once
   the proof system is deployed and a test proof is available.
