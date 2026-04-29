@@ -9,6 +9,7 @@ Pin to an exact version if you depend on this package from production code.
 from __future__ import annotations
 
 from .canonicalize import canonicalize_payload
+from .client import AtlaSentV2Client, V2Error
 from .hash import hash_payload
 from .types import (
     ConsumeExecutionStatus,
@@ -30,6 +31,8 @@ __all__ = [
     "__version__",
     "canonicalize_payload",
     "hash_payload",
+    "AtlaSentV2Client",
+    "V2Error",
     "ConsumeExecutionStatus",
     "ConsumeRequest",
     "ConsumeResponse",

@@ -9,6 +9,12 @@
 
 export { canonicalizePayload } from "./canonicalize.js";
 export { hashPayload } from "./hash.js";
+export {
+  V2Client,
+  V2Error,
+  type ConsumeInput,
+  type V2ClientOptions,
+} from "./client.js";
 export type {
   ConsumeExecutionStatus,
   ConsumeRequest,
