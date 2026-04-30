@@ -193,6 +193,30 @@ export interface AtlaSentClientOptions {
   fetch?: typeof fetch;
 }
 
+// ── Revoke permit ─────────────────────────────────────────────────────────────
+
+/** Input for {@link AtlaSentClient.revokePermit}. */
+export interface RevokePermitRequest {
+  /** The permit ID returned by a prior evaluate() call. */
+  permitId: string;
+  /** Optional human-readable reason stored in the audit log. */
+  reason?: string;
+}
+
+/** Result of {@link AtlaSentClient.revokePermit}. */
+export interface RevokePermitResponse {
+  /** `true` when the permit was found and successfully revoked. */
+  revoked: boolean;
+  /** Echo of the revoked permit's ID. */
+  permitId: string;
+  /** ISO-8601 timestamp of when the revocation was recorded. `undefined` when not returned by the server. */
+  revokedAt?: string | undefined;
+  /** Audit hash for the revocation event. `undefined` when not returned by the server. */
+  auditHash?: string | undefined;
+  /** Per-key rate-limit state. `null` when the server didn't emit headers. */
+  rateLimit: RateLimitState | null;
+}
+
 // ── Streaming evaluate ────────────────────────────────────────────────────────
 
 /** A policy decision emitted mid-stream. */

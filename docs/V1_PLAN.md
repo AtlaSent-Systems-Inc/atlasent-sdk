@@ -30,8 +30,10 @@ a pilot API key.
       both SDKs: `evaluate`, `verify-permit`, `session`, `audit/events`,
       `audit/exports`, `audit/verify`, `approvals`, `overrides`,
       `permits/consume`, `permits/revoke`.
-      *Current: only `evaluate` and `verify-permit` are wired. The
-      remaining endpoints are queued for follow-up minor bumps.*
+      *Done: `evaluate`, `verify-permit`, `audit/events` (`listAuditEvents`),
+      `audit/exports` (`createAuditExport`), `audit/verify` (`verifyAuditBundle`).
+      Remaining: `session`, `approvals`, `overrides`, `permits/consume`,
+      `permits/revoke` — each needs a contract schema before SDK wiring.*
 - [x] Streaming `evaluate` endpoint exposed as an async iterator
       (Python `async for`, TS `AsyncIterable`).
       Client-side SSE implementation shipped: TS `protectStream()` (9 tests), Python `protect_stream()` (8 tests).

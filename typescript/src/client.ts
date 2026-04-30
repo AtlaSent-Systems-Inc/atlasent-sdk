@@ -29,6 +29,8 @@ import type {
   EvaluateRequest,
   EvaluateResponse,
   RateLimitState,
+  RevokePermitRequest,
+  RevokePermitResponse,
   StreamDecisionEvent,
   StreamEvent,
   StreamProgressEvent,
@@ -165,6 +167,45 @@ export class AtlaSentClient {
       outcome: wire.outcome ?? "",
       permitHash: wire.permit_hash ?? "",
       timestamp: wire.timestamp ?? "",
+      rateLimit,
+    };
+  }
+
+  /**
+   * Revoke a previously-issued permit so it can no longer pass
+   * {@link verifyPermit}.
+   *
+   * Use this when an agent's action is cancelled, superseded, or
+   * determined to be unauthorized after the fact. The revocation is
+   * recorded in the audit log with the optional `reason`.
+   *
+   * Throws {@link AtlaSentError} on transport / auth failures.
+   */
+  async revokePermit(input: RevokePermitRequest): Promise<RevokePermitResponse> {
+    const body = {
+      decision_id: input.permitId,
+      reason: input.reason ?? "",
+      api_key: this.apiKey,
+    };
+    const { body: wire, rateLimit } = await this.post<{
+      revoked: boolean;
+      decision_id: string;
+      revoked_at?: string;
+      audit_hash?: string;
+    }>("/v1-revoke-permit", body);
+
+    if (typeof wire.revoked !== "boolean" || typeof wire.decision_id !== "string") {
+      throw new AtlaSentError(
+        "Malformed response from /v1-revoke-permit: missing `revoked` or `decision_id`",
+        { code: "bad_response" },
+      );
+    }
+
+    return {
+      revoked: wire.revoked,
+      permitId: wire.decision_id,
+      revokedAt: wire.revoked_at,
+      auditHash: wire.audit_hash,
       rateLimit,
     };
   }

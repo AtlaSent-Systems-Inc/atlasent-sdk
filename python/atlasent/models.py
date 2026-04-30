@@ -261,6 +261,21 @@ class AuthorizationResult:
         return self.permitted
 
 
+# ── Revoke permit ─────────────────────────────────────────────────────────────
+
+
+class RevokePermitResult(BaseModel):
+    """Result of :meth:`AtlaSentClient.revoke_permit`."""
+
+    revoked: bool
+    permit_id: str = Field(alias="decision_id")
+    revoked_at: str | None = None
+    audit_hash: str | None = None
+    rate_limit: RateLimitState | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 # ── Streaming evaluate events ─────────────────────────────────────────────────
 
 

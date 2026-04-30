@@ -200,7 +200,7 @@ describe("protectStream", () => {
       `event: decision\ndata: ${JSON.stringify({ permitted: true, decision_id: "d1", reason: "", audit_hash: "", timestamp: "", is_final: true })}\n\n`,
       "event: done\ndata: {}\n\n",
     ];
-    const fetch = vi.fn((_url: unknown, init: RequestInit) => {
+    const fetch = vi.fn((_url: unknown, init?: RequestInit) => {
       capturedInit = init;
       return Promise.resolve(sseResponse(chunks));
     });

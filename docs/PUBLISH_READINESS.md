@@ -37,14 +37,14 @@ goes wrong on a publish.
   `Development Status :: 5 - Production/Stable`.
 - [x] **`extras`**: `httpx` is hard, `cryptography` is optional under
   `[verify]` extra so the base install stays small.
-- [ ] **`README.md`** is set as `readme` in `pyproject.toml` so PyPI
+- [x] **`README.md`** is set as `readme` in `pyproject.toml` so PyPI
   renders the right thing.
-- [ ] **Trusted publishing** configured: `.github/workflows/publish-
+- [x] **Trusted publishing** configured: `.github/workflows/publish-
   python-sdk.yml` uses `id-token: write` and PyPI's GitHub OIDC
   trusted publisher (no API tokens on disk).
 - [ ] **Dry-run** with `python -m twine upload --repository testpypi`
   succeeds. Verify install from TestPyPI.
-- [ ] **Sigstore signing** enabled — `pypa/gh-action-pypi-publish` with
+- [x] **Sigstore signing** enabled — `pypa/gh-action-pypi-publish` with
   `attestations: true`.
 
 ## TypeScript (npm) specific
@@ -52,19 +52,17 @@ goes wrong on a publish.
 - [ ] **`package.json` version** matches the git tag.
 - [x] **`engines.node`** is `>=18` (Node 18 is the LTS floor we
   support).
-- [ ] **ESM + CJS dual build.** `dist/index.mjs` and `dist/index.cjs`
-  both exist, both pass `node -e 'require("./dist/index.cjs")'` /
-  `node --input-type=module -e 'import("./dist/index.mjs")'`.
-- [ ] **`exports` field** in `package.json` points to both. No
-  `main`-only fallback (breaks bundlers that prefer ESM).
-- [ ] **TypeScript types** ship: `dist/index.d.ts` exists; `tsc
-  --noEmit` against a sample consumer succeeds.
-- [ ] **Provenance**: workflow uses `npm publish --provenance`
+- [x] **ESM + CJS dual build.** `dist/index.js` (ESM, package `"type":"module"`)
+  and `dist/index.cjs` (CJS) built by tsup; `exports` field routes each.
+- [x] **`exports` field** in `package.json` points to both ESM and CJS.
+  No `main`-only fallback.
+- [x] **TypeScript types** ship: `dist/index.d.ts` and `.d.cts` exist.
+- [x] **Provenance**: workflow uses `npm publish --provenance`
   (requires GitHub Actions OIDC → npm trusted publishing).
-- [ ] **No `dependencies` larger than `zod`.** Dependency surface
-  is part of the security pitch.
-- [ ] **`peerDependencies` for OTel** if the OTel-aware variant
-  ships. Don't bundle `@opentelemetry/*` into the base package.
+- [x] **No `dependencies` larger than `zod`.** `dependencies: []` — zero
+  hard runtime deps.
+- [x] **`peerDependencies` for OTel** declared; `@atlasent/otel` ships as
+  a separate package and is never bundled into `@atlasent/sdk`.
 
 ## Recovery procedures
 

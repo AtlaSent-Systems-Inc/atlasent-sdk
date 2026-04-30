@@ -29,6 +29,7 @@ from .models import (
     GateResult,
     Permit,
     RateLimitState,
+    RevokePermitResult,
     VerifyRequest,
     VerifyResult,
 )
@@ -451,6 +452,49 @@ class AtlaSentClient:
             )
 
         return ApiKeySelfResult.model_validate({**data, "rate_limit": rate_limit})
+
+    def revoke_permit(
+        self,
+        permit_id: str,
+        *,
+        reason: str | None = None,
+    ) -> RevokePermitResult:
+        """Revoke a previously-issued permit (``POST /v1-revoke-permit``).
+
+        Once revoked, the permit will no longer pass :meth:`verify`.
+        The revocation is recorded in the audit log with the optional *reason*.
+
+        Args:
+            permit_id: The ``decision_id`` / ``permit_token`` to revoke.
+            reason: Human-readable reason stored in the audit log.
+
+        Returns:
+            :class:`RevokePermitResult` with ``revoked=True`` on success.
+
+        Raises:
+            :class:`AtlaSentError` on transport or server errors.
+        """
+        payload = {
+            "decision_id": permit_id,
+            "reason": reason or "",
+            "api_key": self._api_key,
+        }
+        logger.debug("revoke_permit permit_id=%r", permit_id)
+        data, rate_limit, request_id = self._post("/v1-revoke-permit", payload)
+
+        if not isinstance(data.get("revoked"), bool) or not isinstance(
+            data.get("decision_id"), str
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-revoke-permit response: missing `revoked` or `decision_id`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        result = RevokePermitResult.model_validate(data)
+        result.rate_limit = rate_limit
+        return result
 
     def list_audit_events(
         self,
