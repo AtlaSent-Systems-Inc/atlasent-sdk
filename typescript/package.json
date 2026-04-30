@@ -47,7 +47,7 @@
   ],
   "sideEffects": false,
   "engines": {
-    "node": ">=20"
+    "node": ">=18"
   },
   "browserslist": [
     "Chrome >= 103",
@@ -98,6 +98,11 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
+  "browserslist": [
+    "Chrome >= 103",
+    "Firefox >= 100",
+    "Safari >= 16"
+  ],
   "peerDependencies": {
     "hono": "^4.0.0"
   },

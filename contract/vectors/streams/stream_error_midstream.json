@@ -1,0 +1,30 @@
+{
+  "_comment": "Server-side error mid-stream: SDK must raise AtlaSentError.",
+  "request": {
+    "method": "POST",
+    "path": "/v1-evaluate-stream",
+    "headers": { "Accept": "text/event-stream", "Content-Type": "application/json" },
+    "body": {
+      "action": "query_database",
+      "agent": "data-agent",
+      "context": {},
+      "api_key": "ask_test_vector"
+    }
+  },
+  "sse_events": [
+    { "event": "progress", "data": { "stage": "policy_loading" } },
+    {
+      "event": "error",
+      "data": {
+        "code": "server_error",
+        "message": "downstream policy engine timeout",
+        "request_id": "req_vector_err_01"
+      }
+    }
+  ],
+  "expected_sdk_behavior": {
+    "throws": true,
+    "error_code": "server_error",
+    "error_message_contains": "downstream policy engine timeout"
+  }
+}

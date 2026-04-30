@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any
@@ -30,6 +32,9 @@ from .models import (
     GateResult,
     Permit,
     RateLimitState,
+    RevokePermitResult,
+    StreamDecisionEvent,
+    StreamProgressEvent,
     VerifyRequest,
     VerifyResult,
 )
@@ -256,6 +261,63 @@ class AsyncAtlaSentClient:
             timestamp=verify_result.timestamp,
         )
 
+    async def protect_stream(
+        self,
+        agent: str,
+        action: str,
+        context: dict[str, Any] | None = None,
+    ) -> AsyncIterator[StreamDecisionEvent | StreamProgressEvent]:
+        """Open a streaming evaluation session against ``POST /v1-evaluate-stream``.
+
+        Yields :class:`StreamDecisionEvent` and :class:`StreamProgressEvent`
+        objects as the server emits them. The iterator ends cleanly when the
+        server sends ``event: done``; it raises :class:`AtlaSentError` on
+        transport errors or when the server sends ``event: error``.
+
+        Usage::
+
+            async for event in client.protect_stream("my-agent", "my-action"):
+                if event.type == "decision" and event.is_final:
+                    break
+        """
+        url = f"{self._base_url}/v1-evaluate-stream"
+        payload = {
+            "action": action,
+            "agent": agent,
+            "context": context or {},
+            "api_key": self._api_key,
+        }
+        request_id = uuid.uuid4().hex[:12]
+        headers = {
+            "Accept": "text/event-stream",
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._api_key}",
+            "User-Agent": f"atlasent-python/{__version__}",
+            "X-Request-ID": request_id,
+        }
+
+        async with self._client.stream(
+            "POST",
+            url,
+            content=json.dumps(payload).encode(),
+            headers=headers,
+        ) as response:
+            if response.status_code != 200:
+                # Drain the body so the connection can be reused; we don't
+                # surface the body in the error because it's an SSE stream
+                # and the head bytes are unlikely to be a useful message.
+                await response.aread()
+                raise AtlaSentError(
+                    "AtlaSent stream request failed with status "
+                    f"{response.status_code}",
+                    code="server_error",
+                    status_code=response.status_code,
+                    request_id=request_id,
+                )
+
+            async for event in _parse_sse(response.aiter_lines(), request_id):
+                yield event
+
     async def gate(
         self,
         action_type: str,
@@ -371,6 +433,40 @@ class AsyncAtlaSentClient:
             )
 
         return ApiKeySelfResult.model_validate({**data, "rate_limit": rate_limit})
+
+    async def revoke_permit(
+        self,
+        permit_id: str,
+        *,
+        reason: str | None = None,
+    ) -> RevokePermitResult:
+        """Revoke a previously-issued permit (``POST /v1-revoke-permit``).
+
+        Once revoked the permit will no longer pass :meth:`verify`.
+        The revocation is recorded in the audit log with the optional *reason*.
+        """
+        payload = {
+            "decision_id": permit_id,
+            "reason": reason or "",
+            "api_key": self._api_key,
+        }
+        logger.debug("revoke_permit permit_id=%r (async)", permit_id)
+        data, rate_limit, request_id = await self._post("/v1-revoke-permit", payload)
+
+        if not isinstance(data.get("revoked"), bool) or not isinstance(
+            data.get("decision_id"), str
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-revoke-permit response: "
+                "missing `revoked` or `decision_id`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        result = RevokePermitResult.model_validate(data)
+        result.rate_limit = rate_limit
+        return result
 
     async def list_audit_events(
         self,
@@ -614,7 +710,7 @@ class AsyncAtlaSentClient:
                     request_id=request_id,
                 ) from exc
 
-        raise AtlaSentError(
+        raise AtlaSentError(  # pragma: no cover
             f"Request to {path} failed after {1 + self._max_retries} attempts",
             code="network",
             request_id=request_id,
@@ -664,7 +760,69 @@ def _parse_retry_after(response: httpx.Response) -> float | None:
         parsed = parsedate_to_datetime(value)
     except (ValueError, TypeError):
         return None
-    if parsed.tzinfo is None:
+    if parsed.tzinfo is None:  # pragma: no cover
         parsed = parsed.replace(tzinfo=timezone.utc)
     delta = (parsed - datetime.now(timezone.utc)).total_seconds()
     return max(0.0, delta)
+
+
+# ── SSE parser ────────────────────────────────────────────────────────────────
+
+
+async def _parse_sse(
+    lines: AsyncIterator[str],
+    request_id: str,
+) -> AsyncIterator[StreamDecisionEvent | StreamProgressEvent]:
+    """Parse server-sent events from an async line iterator.
+
+    Yields :class:`StreamDecisionEvent` and :class:`StreamProgressEvent`.
+    Raises :class:`AtlaSentError` on ``event: error``.
+    Returns (stops iterating) on ``event: done``.
+    Unknown event types are silently skipped for forward compatibility.
+    """
+    event_type = "message"
+    data_lines: list[str] = []
+
+    async for line in lines:
+        if line == "":
+            # Blank line: dispatch accumulated event
+            if data_lines:
+                data = "\n".join(data_lines)
+                data_lines = []
+
+                if event_type == "done":
+                    return
+
+                try:
+                    parsed: dict[str, Any] = json.loads(data)
+                except (ValueError, TypeError) as exc:
+                    raise AtlaSentError(
+                        "Malformed SSE data from AtlaSent API",
+                        code="bad_response",
+                        request_id=request_id,
+                    ) from exc
+
+                if event_type == "error":
+                    raise AtlaSentError(
+                        parsed.get("message", "Stream error from AtlaSent API"),
+                        code=parsed.get("code", "server_error"),
+                        request_id=parsed.get("request_id", request_id),
+                    )
+
+                if event_type == "decision":
+                    yield StreamDecisionEvent.from_wire(parsed)
+                elif event_type == "progress":
+                    extra = {
+                        k: v for k, v in parsed.items() if k not in ("type", "stage")
+                    }
+                    yield StreamProgressEvent(
+                        stage=str(parsed.get("stage", "")),
+                        **extra,
+                    )
+                # unknown event types skipped
+
+            event_type = "message"
+        elif line.startswith("event: "):
+            event_type = line[7:].strip()
+        elif line.startswith("data: "):
+            data_lines.append(line[6:])

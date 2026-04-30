@@ -1,0 +1,57 @@
+{
+  "_comment": "Progress frames followed by final allow decision.",
+  "request": {
+    "method": "POST",
+    "path": "/v1-evaluate-stream",
+    "headers": { "Accept": "text/event-stream", "Content-Type": "application/json" },
+    "body": {
+      "action": "run_multi_step_workflow",
+      "agent": "lab-automation-agent",
+      "context": { "workflow_id": "wf_abc" },
+      "api_key": "ask_test_vector"
+    }
+  },
+  "sse_events": [
+    { "event": "progress", "data": { "stage": "policy_loading" } },
+    {
+      "event": "decision",
+      "data": {
+        "permitted": true,
+        "decision_id": "dec_vector_interim",
+        "reason": "interim check passed",
+        "audit_hash": "sha256:dd00ee",
+        "timestamp": "2026-04-30T00:00:01Z",
+        "is_final": false
+      }
+    },
+    { "event": "progress", "data": { "stage": "context_enrichment" } },
+    {
+      "event": "decision",
+      "data": {
+        "permitted": true,
+        "decision_id": "dec_vector_final",
+        "reason": "workflow authorized",
+        "audit_hash": "sha256:ff1122",
+        "timestamp": "2026-04-30T00:00:02Z",
+        "is_final": true
+      }
+    },
+    { "event": "done", "data": {} }
+  ],
+  "expected_sdk_events": [
+    { "type": "progress", "stage": "policy_loading" },
+    {
+      "type": "decision",
+      "decision": "ALLOW",
+      "permit_id": "dec_vector_interim",
+      "is_final": false
+    },
+    { "type": "progress", "stage": "context_enrichment" },
+    {
+      "type": "decision",
+      "decision": "ALLOW",
+      "permit_id": "dec_vector_final",
+      "is_final": true
+    }
+  ]
+}

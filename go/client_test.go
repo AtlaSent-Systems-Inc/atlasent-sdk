@@ -474,6 +474,7 @@ func TestEvaluateMissingPermittedIsError(t *testing.T) {
 	}
 }
 
+
 // ── deny as data ──────────────────────────────────────────────────────────────
 
 func TestEvaluateDenyIsNotAnError(t *testing.T) {

@@ -824,3 +824,116 @@ describe("createAuditExport()", () => {
     });
   });
 });
+
+describe("response-shape error paths", () => {
+  // These guard against stream-or-non-stream JSON malformation that
+  // sneaks past the HTTP layer (200 OK, but the body isn't a JSON
+  // object). All three paths flow through `post()` so any endpoint
+  // call exercises them; we use evaluate() because it's the simplest.
+
+  it("throws bad_response when the body is not parseable JSON", async () => {
+    const fetchImpl = mockFetch(
+      () =>
+        new Response("<!doctype html>oops", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    const client = makeClient(fetchImpl);
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  it("throws bad_response when the body parses to a non-object (null)", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(null));
+    const client = makeClient(fetchImpl);
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  it("throws bad_response when the body parses to a primitive", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(42));
+    const client = makeClient(fetchImpl);
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({ code: "bad_response" });
+  });
+});
+
+describe("revokePermit()", () => {
+  // Wire shape mirrors the server response: snake_case, decision_id is the
+  // permit identifier the SDK exposes as permitId.
+  const REVOKE_OK_WIRE = {
+    revoked: true,
+    decision_id: "dec_to_revoke",
+    revoked_at: "2026-04-30T01:00:00Z",
+    audit_hash: "hash_revoked",
+  };
+
+  it("POSTs to /v1-revoke-permit with decision_id + reason and returns the SDK shape", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(REVOKE_OK_WIRE));
+    const client = makeClient(fetchImpl);
+
+    const result = await client.revokePermit({
+      permitId: "dec_to_revoke",
+      reason: "policy violation",
+    });
+
+    expect(fetchImpl.mock.calls).toHaveLength(1);
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toContain("/v1-revoke-permit");
+    expect(init!.method).toBe("POST");
+    const body = JSON.parse(init!.body as string);
+    expect(body).toMatchObject({
+      decision_id: "dec_to_revoke",
+      reason: "policy violation",
+      api_key: "ask_live_test",
+    });
+
+    expect(result).toMatchObject({
+      revoked: true,
+      permitId: "dec_to_revoke",
+      revokedAt: "2026-04-30T01:00:00Z",
+      auditHash: "hash_revoked",
+    });
+  });
+
+  it("defaults reason to empty string when omitted", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(REVOKE_OK_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.revokePermit({ permitId: "dec_to_revoke" });
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1]!.body as string);
+    expect(body.reason).toBe("");
+  });
+
+  it("surfaces revoked=false from the server without throwing", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({ ...REVOKE_OK_WIRE, revoked: false }),
+    );
+    const client = makeClient(fetchImpl);
+    const result = await client.revokePermit({ permitId: "dec_to_revoke" });
+    expect(result.revoked).toBe(false);
+  });
+
+  it("throws bad_response when revoked is not a boolean", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({ ...REVOKE_OK_WIRE, revoked: "yes" }),
+    );
+    const client = makeClient(fetchImpl);
+    await expect(
+      client.revokePermit({ permitId: "dec_to_revoke" }),
+    ).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  it("throws bad_response when decision_id is missing", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({ revoked: true }),
+    );
+    const client = makeClient(fetchImpl);
+    await expect(
+      client.revokePermit({ permitId: "dec_to_revoke" }),
+    ).rejects.toMatchObject({ code: "bad_response" });
+  });
+});

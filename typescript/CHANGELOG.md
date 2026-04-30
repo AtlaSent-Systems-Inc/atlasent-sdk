@@ -45,6 +45,71 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
   Mirrors the Python SDK's `PermitOutcome` (atlasent-sdk PR #132).
 
+### Migration notice — `@atlasent/sdk/hono` API will change after Enforce GA
+
+The `atlaSentGuard` middleware currently calls `protect()` directly.
+`protect()` wraps `evaluate` but does **not** enforce the full
+`evaluate → verifyPermit → execute` chain as a non-bypassable
+invariant. Once `@atlasent/enforce` reaches GA, the guard will be
+rebuilt so the route handler becomes the `execute` callback inside
+`Enforce.run()`, closing that gap.
+
+**Current API (stable until Enforce GA):**
+
+```ts
+import { atlaSentGuard, atlaSentErrorHandler } from "@atlasent/sdk/hono";
+
+app.post(
+  "/deploy",
+  atlaSentGuard({
+    action: "deploy_to_production",
+    agent: (c) => c.req.header("x-agent-id") ?? "anonymous",
+    context: async (c) => ({ commit: (await c.req.json()).commit }),
+  }),
+  (c) => {
+    const permit = c.get("atlasent");   // type: Permit
+    return c.json({ ok: true, permitId: permit.permitId });
+  },
+);
+app.onError(atlaSentErrorHandler());
+```
+
+**Future API (post Enforce GA):**
+
+```ts
+import { Enforce } from "@atlasent/enforce";
+import { atlaSentGuard, atlaSentErrorHandler } from "@atlasent/sdk/hono";
+
+const enforce = new Enforce({
+  client,
+  bindings: { actorId: (c) => c.get("userId"), actionType: "deploy_to_production" },
+  failClosed: true,
+});
+
+app.post(
+  "/deploy",
+  atlaSentGuard({ enforce }),           // enforce instance injected
+  (c) => {
+    const permit = c.get("atlasent");   // type: VerifiedPermit (was: Permit)
+    return c.json({ ok: true, permitId: permit.token });
+  },
+);
+app.onError(atlaSentErrorHandler());
+```
+
+Key differences:
+
+| | Current | Post Enforce GA |
+|---|---|---|
+| Guard config | `action`, `agent`, `context` per-route | `enforce` instance (owns bindings) |
+| Context value | `Permit` (v1) | `VerifiedPermit` |
+| Bypass possible? | Yes — `protect()` can skip `verifyPermit` | No — `Enforce.run()` enforces the chain |
+
+The existing `action/agent/context` API is **not deprecated** until
+the migrated guard ships. This notice is informational. See
+[`contract/ENFORCE_PACK.md`](../contract/ENFORCE_PACK.md) for the
+complete migration plan and gating criteria.
+
 ## 1.6.0 — 2026-04-30
 
 ### Fixed
@@ -105,6 +170,34 @@ This release is purely additive / bug-fix. The Node-side API surface
 classes, types) is unchanged. Server-side consumers see no difference.
 
 Closes [#103](https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues/103).
+
+## 1.5.1 — 2026-04-29
+
+### Fixed
+
+- **Browser runtime compatibility** (closes #103). `User-Agent` was
+  constructed with `process.version`, a Node-only global that throws a
+  `ReferenceError` in browser environments. The header now uses runtime
+  detection: `@atlasent/sdk/<version> node/<nodeVersion>` in Node,
+  `@atlasent/sdk/<version> browser` everywhere else. Browsers strip
+  `User-Agent` from `fetch` requests anyway (it is a
+  [forbidden header](https://developer.mozilla.org/en-US/docs/Glossary/Forbidden_header_name)),
+  so the value is informational only.
+
+- **`SDK_VERSION` constant** corrected from `"0.1.0"` to track the
+  actual package version.
+
+### Added
+
+- `browserslist` pinned to Chrome ≥ 103, Firefox ≥ 100, Safari ≥ 16
+  — the floor required by `AbortSignal.timeout` and
+  `crypto.randomUUID()`. Versions below this floor will fail loudly on
+  the first request.
+
+- **jsdom browser test** (`test/browser-compat.test.ts`): stubs
+  `process` to `undefined` and verifies that `AtlaSentClient`
+  constructs and round-trips an `evaluate()` call in a simulated
+  browser environment without touching any Node globals.
 ## 1.5.0 — 2026-04-25
 
 ### Added

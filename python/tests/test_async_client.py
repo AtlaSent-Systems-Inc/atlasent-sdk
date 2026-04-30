@@ -740,3 +740,164 @@ class TestAsyncCreateAuditExport:
         with pytest.raises(AtlaSentError) as excinfo:
             await async_client.create_audit_export()
         assert excinfo.value.code == "bad_response"
+
+
+REVOKE_OK_WIRE = {
+    "revoked": True,
+    "decision_id": "dec_to_revoke",
+    "revoked_at": "2026-04-30T01:00:00Z",
+    "audit_hash": "hash_revoked",
+}
+
+
+class TestAsyncRevokePermit:
+    async def test_revoke_returns_result(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client, "post",
+            return_value=_mock_resp(mocker, json_data=REVOKE_OK_WIRE),
+        )
+        result = await async_client.revoke_permit("dec_to_revoke", reason="policy")
+        assert result.revoked is True
+        assert result.permit_id == "dec_to_revoke"
+
+    async def test_revoke_sends_correct_payload(self, async_client, mocker):
+        mock_post = mocker.patch.object(
+            async_client._client, "post",
+            return_value=_mock_resp(mocker, json_data=REVOKE_OK_WIRE),
+        )
+        await async_client.revoke_permit("dec_to_revoke", reason="audit")
+        payload = mock_post.call_args[1]["json"]
+        assert payload["decision_id"] == "dec_to_revoke"
+        assert payload["reason"] == "audit"
+
+    async def test_revoke_defaults_reason_to_empty_string(self, async_client, mocker):
+        mock_post = mocker.patch.object(
+            async_client._client, "post",
+            return_value=_mock_resp(mocker, json_data=REVOKE_OK_WIRE),
+        )
+        await async_client.revoke_permit("dec_to_revoke")
+        assert mock_post.call_args[1]["json"]["reason"] == ""
+
+    async def test_revoke_bad_response_missing_revoked(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client, "post",
+            return_value=_mock_resp(mocker, json_data={"decision_id": "dec_x"}),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.revoke_permit("dec_x")
+        assert exc_info.value.code == "bad_response"
+
+    async def test_revoke_bad_response_missing_decision_id(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client, "post",
+            return_value=_mock_resp(mocker, json_data={"revoked": True}),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.revoke_permit("dec_x")
+        assert exc_info.value.code == "bad_response"
+
+
+class TestAsyncRetryExhaustionNetwork:
+    async def test_all_connect_retries_exhausted_raises_network(
+        self, async_client_retry, mocker
+    ):
+        mocker.patch.object(
+            async_client_retry._client,
+            "post",
+            side_effect=httpx.ConnectError("refused"),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client_retry.evaluate("a", "b")
+        assert exc_info.value.code == "network"
+        assert "attempts" in exc_info.value.message
+
+
+class TestAsyncServerMessageEdgeCases:
+    async def test_403_body_with_no_message_or_reason_key(
+        self, async_client, mocker
+    ):
+        resp = _mock_resp(mocker, status_code=403)
+        resp.json.return_value = {"error": "forbidden"}
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.code == "forbidden"
+
+    async def test_403_json_parse_failure_uses_default_message(
+        self, async_client, mocker
+    ):
+        resp = _mock_resp(mocker, status_code=403)
+        resp.json.side_effect = ValueError("not json")
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert exc_info.value.code == "forbidden"
+
+    async def test_parse_retry_after_naive_http_date_gets_utc(
+        self, async_client, mocker
+    ):
+        from atlasent.async_client import _parse_retry_after
+
+        resp = _mock_resp(mocker, status_code=429, headers={"retry-after": "not-a-number"})
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(RateLimitError):
+            await async_client.evaluate("a", "b")
+
+
+class TestParseSseEdgeCases:
+    """Coverage for _parse_sse() paths not reached by test_stream.py."""
+
+    async def test_blank_line_with_no_accumulated_data_is_ignored(self):
+        from atlasent.async_client import _parse_sse
+
+        async def lines():
+            yield ""   # blank line with no prior data
+            yield "event: decision"
+            yield 'data: {"permitted":true,"decision_id":"d1","reason":"ok","audit_hash":"h","timestamp":"2026-01-01T00:00:00Z","is_final":true}'
+            yield ""   # dispatch decision
+            yield "event: done"
+            yield "data: {}"
+            yield ""   # dispatch done → return
+
+        events = [e async for e in _parse_sse(lines(), "rid_test")]
+        assert len(events) == 1
+
+    async def test_malformed_json_in_sse_data_raises(self):
+        from atlasent.async_client import _parse_sse
+
+        async def lines():
+            yield "event: decision"
+            yield "data: {not valid json"
+            yield ""
+
+        with pytest.raises(AtlaSentError) as exc_info:
+            async for _ in _parse_sse(lines(), "rid_test"):
+                pass
+        assert exc_info.value.code == "bad_response"
+
+    async def test_iterator_exhausts_without_done_returns_cleanly(self):
+        from atlasent.async_client import _parse_sse
+
+        async def lines():
+            yield "event: decision"
+            yield 'data: {"permitted":true,"decision_id":"d1","reason":"ok","audit_hash":"h","timestamp":"2026-01-01T00:00:00Z","is_final":true}'
+            yield ""
+            # no done event — iterator just ends
+
+        events = [e async for e in _parse_sse(lines(), "rid_test")]
+        assert len(events) == 1
+
+    async def test_unknown_line_type_is_silently_skipped(self):
+        from atlasent.async_client import _parse_sse
+
+        async def lines():
+            yield ": this is a comment"   # SSE comment, matches none of the conditions
+            yield "event: decision"
+            yield 'data: {"permitted":true,"decision_id":"d2","reason":"ok","audit_hash":"h","timestamp":"2026-01-01T00:00:00Z","is_final":true}'
+            yield ""
+            yield "event: done"
+            yield "data: {}"
+            yield ""
+
+        events = [e async for e in _parse_sse(lines(), "rid_test")]
+        assert len(events) == 1

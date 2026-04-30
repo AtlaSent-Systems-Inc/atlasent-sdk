@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/revoke-permit-request.schema.json",
+  "title": "RevokePermitRequest",
+  "description": "Wire payload sent to POST /v1-revoke-permit. Invalidates a previously-issued permit so it can no longer pass verifyPermit.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision_id", "api_key"],
+  "properties": {
+    "decision_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The decision_id returned by a prior /v1-evaluate call. This is the permit to revoke."
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 1024,
+      "description": "Human-readable reason for revocation. Stored in the audit log."
+    },
+    "api_key": {
+      "type": "string",
+      "description": "API key echoed in the body. Also sent as Authorization: Bearer <key>."
+    }
+  }
+}

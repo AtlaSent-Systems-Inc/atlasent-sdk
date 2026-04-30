@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ── Rate-limit state (shared by evaluate + verify) ───────────────────
 
@@ -259,3 +259,61 @@ class AuthorizationResult:
         Allows the idiomatic ``if authorize(...):`` check.
         """
         return self.permitted
+
+
+# ── Revoke permit ─────────────────────────────────────────────────────────────
+
+
+class RevokePermitResult(BaseModel):
+    """Result of :meth:`AtlaSentClient.revoke_permit`."""
+
+    revoked: bool
+    permit_id: str = Field(alias="decision_id")
+    revoked_at: str | None = None
+    audit_hash: str | None = None
+    rate_limit: RateLimitState | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+# ── Streaming evaluate events ─────────────────────────────────────────────────
+
+
+class StreamDecisionEvent(BaseModel):
+    """A policy decision emitted mid-stream by ``/v1-evaluate-stream``."""
+
+    type: Literal["decision"] = "decision"
+    decision: str
+    permit_id: str = Field(alias="decision_id", default="")
+    reason: str = ""
+    audit_hash: str = ""
+    timestamp: str = ""
+    is_final: bool = False
+
+    @classmethod
+    def from_wire(cls, data: dict[str, Any]) -> StreamDecisionEvent:
+        permitted = data.get("permitted", True)
+        return cls(
+            decision="ALLOW" if permitted else "DENY",
+            decision_id=data.get("decision_id", ""),
+            reason=data.get("reason", ""),
+            audit_hash=data.get("audit_hash", ""),
+            timestamp=data.get("timestamp", ""),
+            is_final=bool(data.get("is_final", False)),
+        )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class StreamProgressEvent(BaseModel):
+    """An intermediate progress hint emitted before the final decision."""
+
+    type: Literal["progress"] = "progress"
+    stage: str = ""
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+
+StreamEvent = Annotated[
+    StreamDecisionEvent | StreamProgressEvent,
+    Field(discriminator="type"),
+]

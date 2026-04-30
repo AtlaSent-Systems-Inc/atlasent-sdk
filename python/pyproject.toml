@@ -8,15 +8,16 @@ dynamic = ["version"]
 description = "Python SDK for the AtlaSent authorization API"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 authors = [
     { name = "AtlaSent Systems Inc.", email = "sdk@atlasent.io" },
 ]
 keywords = ["atlasent", "authorization", "ai", "agents", "gxp", "compliance"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -27,11 +28,14 @@ classifiers = [
 dependencies = [
     "httpx>=0.24.0",
     "pydantic>=2.0.0",
-    "cryptography>=41.0.0",
 ]
 
 [project.optional-dependencies]
+verify = [
+    "cryptography>=41.0.0",
+]
 dev = [
+    "cryptography>=41.0.0",
     "pytest>=7.0",
     "pytest-mock>=3.10",
     "pytest-asyncio>=0.21.0",
@@ -50,12 +54,15 @@ Issues = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues"
 version = {attr = "atlasent._version.__version__"}
 
 [tool.setuptools.packages.find]
-# Sibling top-level dirs (atlasent_v2_alpha, atlasent_enforce, etc.) are
-# independent distributions with their own pyproject.toml. Without this
-# include filter, setuptools' flat-layout auto-discovery refuses to build.
+# Sibling top-level dirs (atlasent_v2_alpha, atlasent_enforce, atlasent_langchain,
+# atlasent_llamaindex, etc.) are independent distributions with their own
+# pyproject.toml. Without this include filter, setuptools' flat-layout
+# auto-discovery refuses to build.
 include = ["atlasent*"]
 exclude = [
     "atlasent_enforce*",
+    "atlasent_langchain*",
+    "atlasent_llamaindex*",
     "atlasent_v2_alpha*",
     "atlasent_v2_preview*",
     "atlasent_otel_preview*",
@@ -80,6 +87,7 @@ target-version = ["py310"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 markers = [
     "integration: hits the real AtlaSent API (skipped unless ATLASENT_API_KEY is set)",
 ]

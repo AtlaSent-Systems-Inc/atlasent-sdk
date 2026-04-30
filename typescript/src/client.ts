@@ -29,13 +29,27 @@ import type {
   EvaluateRequest,
   EvaluateResponse,
   RateLimitState,
+  RevokePermitRequest,
+  RevokePermitResponse,
+  StreamDecisionEvent,
+  StreamEvent,
+  StreamProgressEvent,
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "./types.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const SDK_VERSION = "0.1.0";
+const SDK_VERSION = "1.6.0";
+
+function _buildUserAgent(): string {
+  const isNode =
+    typeof process !== "undefined" &&
+    typeof process?.versions?.node === "string";
+  return isNode
+    ? `@atlasent/sdk/${SDK_VERSION} node/${process.version}`
+    : `@atlasent/sdk/${SDK_VERSION} browser`;
+}
 
 /**
  * True when running in Node.js (or a Node-compatible server runtime that
@@ -87,6 +101,7 @@ export class AtlaSentClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
+  private readonly userAgent: string;
 
   constructor(options: AtlaSentClientOptions) {
     if (!options.apiKey || typeof options.apiKey !== "string") {
@@ -106,6 +121,7 @@ export class AtlaSentClient {
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.userAgent = _buildUserAgent();
   }
 
   /**
@@ -175,6 +191,45 @@ export class AtlaSentClient {
       outcome: wire.outcome ?? "",
       permitHash: wire.permit_hash ?? "",
       timestamp: wire.timestamp ?? "",
+      rateLimit,
+    };
+  }
+
+  /**
+   * Revoke a previously-issued permit so it can no longer pass
+   * {@link verifyPermit}.
+   *
+   * Use this when an agent's action is cancelled, superseded, or
+   * determined to be unauthorized after the fact. The revocation is
+   * recorded in the audit log with the optional `reason`.
+   *
+   * Throws {@link AtlaSentError} on transport / auth failures.
+   */
+  async revokePermit(input: RevokePermitRequest): Promise<RevokePermitResponse> {
+    const body = {
+      decision_id: input.permitId,
+      reason: input.reason ?? "",
+      api_key: this.apiKey,
+    };
+    const { body: wire, rateLimit } = await this.post<{
+      revoked: boolean;
+      decision_id: string;
+      revoked_at?: string;
+      audit_hash?: string;
+    }>("/v1-revoke-permit", body);
+
+    if (typeof wire.revoked !== "boolean" || typeof wire.decision_id !== "string") {
+      throw new AtlaSentError(
+        "Malformed response from /v1-revoke-permit: missing `revoked` or `decision_id`",
+        { code: "bad_response" },
+      );
+    }
+
+    return {
+      revoked: wire.revoked,
+      permitId: wire.decision_id,
+      revokedAt: wire.revoked_at,
+      auditHash: wire.audit_hash,
       rateLimit,
     };
   }
@@ -287,6 +342,81 @@ export class AtlaSentClient {
     return { ...wire, rateLimit };
   }
 
+  /**
+   * Open a streaming evaluation session against `POST /v1-evaluate-stream`.
+   *
+   * Yields {@link StreamDecisionEvent} and {@link StreamProgressEvent} objects
+   * as the server emits them. The iterator ends cleanly when the server sends
+   * `event: done`; it throws {@link AtlaSentError} on transport errors or when
+   * the server sends `event: error`.
+   *
+   * The final {@link StreamDecisionEvent} (isFinal: true) carries a `permitId`
+   * suitable for passing to {@link verifyPermit} after the stream closes.
+   *
+   * ```ts
+   * for await (const event of client.protectStream({ agent, action })) {
+   *   if (event.type === "decision" && event.isFinal) {
+   *     await client.verifyPermit({ permitId: event.permitId });
+   *   }
+   * }
+   * ```
+   */
+  async *protectStream(
+    input: EvaluateRequest,
+    opts: { signal?: AbortSignal } = {},
+  ): AsyncIterable<StreamEvent> {
+    const body = {
+      action: input.action,
+      agent: input.agent,
+      context: input.context ?? {},
+      api_key: this.apiKey,
+    };
+
+    const requestId = globalThis.crypto.randomUUID();
+    const url = `${this.baseUrl}/v1-evaluate-stream`;
+    const headers: Record<string, string> = {
+      Accept: "text/event-stream",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${this.apiKey}`,
+      "User-Agent": this.userAgent,
+      "X-Request-ID": requestId,
+    };
+
+    const timeoutSignal = AbortSignal.timeout(this.timeoutMs);
+    const signal = opts.signal
+      ? (AbortSignal as unknown as { any(s: AbortSignal[]): AbortSignal }).any([
+          timeoutSignal,
+          opts.signal,
+        ])
+      : timeoutSignal;
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (err) {
+      throw mapFetchError(err, requestId);
+    }
+
+    if (!response.ok) {
+      throw await buildHttpError(response, requestId);
+    }
+
+    if (!response.body) {
+      throw new AtlaSentError("Expected streaming body from AtlaSent API", {
+        code: "bad_response",
+        status: response.status,
+        requestId,
+      });
+    }
+
+    yield* parseSseStream(response.body, requestId);
+  }
+
   private async post<T>(
     path: string,
     body: unknown,
@@ -314,9 +444,7 @@ export class AtlaSentClient {
     const headers: Record<string, string> = {
       Accept: "application/json",
       Authorization: `Bearer ${this.apiKey}`,
-      "User-Agent": NODE_VERSION !== null
-        ? `@atlasent/sdk/${SDK_VERSION} node/${NODE_VERSION}`
-        : `@atlasent/sdk/${SDK_VERSION} browser`,
+      "User-Agent": this.userAgent,
       "X-Request-ID": requestId,
     };
     if (method === "POST") headers["Content-Type"] = "application/json";
@@ -555,4 +683,89 @@ function parseRetryAfter(raw: string | null): number | undefined {
     return delta > 0 ? delta : 0;
   }
   return undefined;
+}
+
+// ── SSE stream parser ─────────────────────────────────────────────────────────
+
+async function* parseSseStream(
+  body: ReadableStream<Uint8Array>,
+  requestId: string,
+): AsyncIterable<StreamEvent> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buf = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      let boundary: number;
+      while ((boundary = buf.indexOf("\n\n")) !== -1) {
+        const block = buf.slice(0, boundary);
+        buf = buf.slice(boundary + 2);
+
+        let eventType = "message";
+        let data = "";
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event: ")) eventType = line.slice(7).trim();
+          else if (line.startsWith("data: ")) data = line.slice(6);
+        }
+
+        if (!data) continue;
+        if (eventType === "done") return;
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(data);
+        } catch {
+          throw new AtlaSentError("Malformed SSE data from AtlaSent API", {
+            code: "bad_response",
+            requestId,
+          });
+        }
+
+        if (eventType === "error") {
+          const e = parsed as { code?: string; message?: string; request_id?: string };
+          throw new AtlaSentError(e.message ?? "Stream error from AtlaSent API", {
+            code: (e.code as AtlaSentErrorCode | undefined) ?? "server_error",
+            requestId: e.request_id ?? requestId,
+          });
+        }
+
+        if (eventType === "decision") {
+          const d = parsed as {
+            permitted?: boolean;
+            decision_id?: string;
+            reason?: string;
+            audit_hash?: string;
+            timestamp?: string;
+            is_final?: boolean;
+          };
+          if (typeof d.permitted !== "boolean" || typeof d.decision_id !== "string") {
+            throw new AtlaSentError("Malformed decision event from AtlaSent API", {
+              code: "bad_response",
+              requestId,
+            });
+          }
+          yield {
+            type: "decision",
+            decision: d.permitted ? "ALLOW" : "DENY",
+            permitId: d.decision_id,
+            reason: d.reason ?? "",
+            auditHash: d.audit_hash ?? "",
+            timestamp: d.timestamp ?? "",
+            isFinal: d.is_final ?? false,
+          } satisfies StreamDecisionEvent;
+        } else if (eventType === "progress") {
+          const p = parsed as Record<string, unknown>;
+          yield { type: "progress", stage: String(p["stage"] ?? ""), ...p } satisfies StreamProgressEvent;
+        }
+        // Unknown event types skipped for forward compatibility.
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }

@@ -4,11 +4,11 @@ Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/
 
 ## GA (v1) — status
 
-1. **TS SDK publish** — `@atlasent/sdk` v1.4.0 sits on `main`; **not yet published to npm**. `@atlasent/types` lives in `atlasent-api/packages/types`; whether it ships as a separate npm package or folds into `@atlasent/sdk` is open (see atlasent-api reconciliation issue).
+1. **TS SDK publish** — `@atlasent/sdk` v1.5.1 on `main`; **not yet published to npm**. `@atlasent/types` lives in `atlasent-api/packages/types`; whether it ships as a separate npm package or folds into `@atlasent/sdk` is open (see atlasent-api reconciliation issue).
 2. ✅ **Python SDK published** — `atlasent` **1.4.1 on PyPI** (2026-04-26). Sync + async clients, `protect()` / `authorize()` / `gate()` / `evaluate()` / `verify()`, `@atlasent_guard` + `@async_atlasent_guard` decorators, typed errors, `TTLCache`, audit-bundle verification.
-3. **Go SDK publish** — pending. Code currently lives in archived `atlasent-sdk-go` repo; planned home per this ROADMAP is `github.com/AtlaSent-Systems-Inc/atlasent-sdk/go`, but the `go/` subdirectory does not exist in this repo yet.
-4. **v1-only API sweep** — done in 1.x line; v2 work is gated behind `claude/v2-*` draft branches.
-5. **Offline verifier** — `verify_audit_bundle()` ships as part of `atlasent` (Python) and TS SDK. A separate `@atlasent/verify` zero-dep Node CLI is still desired but not yet packaged.
+3. **Go SDK publish** — code ready in PR #128 (`go/` subdirectory). Pending merge + `go/v1.0.0` tag push for the Go module proxy.
+4. ✅ **v1-only API sweep** — done in 1.x line.
+5. ✅ **Offline verifier** — `@atlasent/verify` zero-dep Node CLI + library packaged in PR #128. `verify_audit_bundle()` also ships as part of `atlasent` (Python) and TS SDK.
 6. **SSO-aware types** — once `atlasent-api/v1-sso` ships, export `SsoConnection`, `SsoJitRule`, `SsoEvent` from `@atlasent/types`.
 
 ## Post-GA — ordered by impact
@@ -31,6 +31,14 @@ Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/
 - **atlasent-console**: imports `@atlasent/sdk` and `@atlasent/types`. Version-lock at GA.
 - **atlasent-action**: bundles `@atlasent/sdk`. Pin at v1.
 - **atlasent-examples**: imports published packages to demo real customer flow.
+
+## Wave F (AI framework guards)
+
+- ✅ **`@atlasent/langchain`** — `withLangChainGuard(tools, client, opts)` wraps LangChain-style tool definitions (`name`, `description`, `schema?`, `execute`) with authorize-first execute. Returns strings per LangChain convention; JSON object results annotated with permit metadata; plain strings pass through unchanged. Zero dependency on `@langchain/core` — the wrapped `execute` is passed to `DynamicStructuredTool` or any LangChain tool factory. 13 tests green. Not yet published.
+
+- ✅ **`@atlasent/llamaindex`** — `withLlamaIndexGuard(tools, client, opts)` wraps LlamaIndex-style tool definitions (`metadata.{name,description,parameters?}`, `execute`). Returns `unknown` per LlamaIndex convention; object results annotated, arrays and primitives pass through. Zero dependency on `llamaindex` — wrapped `execute` is passed to `FunctionTool.from()` or used in `AgentRunner`. 13 tests green. Not yet published.
+
+- ✅ **`@atlasent/cursor`** — `withCursorGuard(tools, client, opts)` wraps Cursor agent tools (MCP-style: flat `parameters` JSON Schema, string return). JSON object string results annotated with permit metadata; plain text passes through. Integrates with Cursor MCP server `CallToolRequestSchema` handlers. 13 tests green. Not yet published.
 
 ## Open questions
 
