@@ -37,3 +37,41 @@ Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/
 - Semantic-versioning cadence after v1: monthly minors or cut whenever features land?
 - Do we publish `@atlasent/cli` on npm or keep it internal? (It's useful for policy-as-code workflows.)
 - Go SDK module path — keep `/go` subdirectory or split into its own repo? Subdirectory is simpler; customers don't mind.
+
+## Per-repo task slice — atlasent meta-repo plans (2026-04-30)
+
+Tasks below are copied from the umbrella atlasent meta-repo planning docs so
+contributors landing changes here see only the slice targeting this repo.
+Authoritative deadlines and acceptance criteria stay in the umbrella docs:
+
+- [`docs/LAST_20_EXECUTION_PLAN.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/docs/LAST_20_EXECUTION_PLAN.md)
+- [`docs/V1_FINISH_LINE_2026-04-25.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/docs/V1_FINISH_LINE_2026-04-25.md)
+
+### From `LAST_20_EXECUTION_PLAN.md`
+
+| # | Task | Done when | Target |
+|---|---|---|---|
+| A3 | Remove any local re-declaration of decision/permit shapes; consume `@atlasent/types` (TS) or codegen-from-spec (Py/Go). | `grep -R 'type Decision' sdk/` returns one source per language. | 05-04 |
+| B2 (TS) | Tighten `withPermit` so `verifyPermit` runs **before** the wrapped function and throws `PermitVerificationError` on any non-`consumed=true` response. | Existing tests still pass; new replay-attempt test added. | 05-02 |
+| B3 (Py) | Mirror B2 in `atlasent` and `atlasent.aio`. Same error class names. | `python/tests/` covers replay + expiry; CI green. | 05-04 |
+| B4 (Go) | Same surface in Go: `WithPermit(ctx, req, fn)`; replay test in `_test.go`. | Test added; module tagged. | 05-06 |
+| C2 | Make the fail-closed matrix executable: a shared "fail-closed conformance" test suite that each SDK runs against the HTTP mock (network error, 5xx, timeout, malformed body, replay → all throw, `fn` never runs). | Suite green in TS, Py, Go CIs. | 05-05 |
+| D4 | `withPermit` distinguishes `revoked` from `expired` in the thrown error; document operator runbook. | Error class added; docs updated. | 05-09 |
+
+### From `V1_FINISH_LINE_2026-04-25.md`
+
+**Section C — SDK 1.5.0 release (atlasent-sdk #83, currently a draft):**
+
+Ships the artifacts that directly unlock an enterprise sales demo:
+
+- `audits.list` (audit listing)
+- Signed exports (KMS-backed)
+- Offline verifier CLI (`@atlasent/verify`)
+
+Disposition action: ship by end of week.
+
+**Explicitly NOT in scope for v1 finish (stay in draft):**
+
+- Pillar 9 Verifiable Proof System — atlasent-sdk #99–100
+- Batch / streaming / GraphQL — atlasent-sdk #77–99
+- Temporal / OTel / Sentry preview wrappers — atlasent-sdk #79–92
