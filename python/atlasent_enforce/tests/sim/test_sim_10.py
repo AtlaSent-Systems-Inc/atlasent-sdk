@@ -4,8 +4,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 from tests.sim.harness import load_fixture
 
 fx = load_fixture("SIM-10")
