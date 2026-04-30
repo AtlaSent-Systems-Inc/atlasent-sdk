@@ -83,6 +83,8 @@ Enforce Pack is specifically for gated execution.
 | Permit binding mismatch | deny | `binding_mismatch` | execute does not run |
 | Permit expired | deny | `permit_expired` | execute does not run |
 | Permit already consumed | deny | `permit_consumed` | execute does not run |
+| Permit revoked (D3 endpoint) | deny | `permit_revoked` | execute does not run |
+| Permit not found (lookup miss) | deny | `permit_not_found` | execute does not run |
 | `execute` throws | propagated | n/a | permit recorded as consumed; caller's exception preserved |
 
 ## Test obligations
@@ -207,7 +209,16 @@ new `ReasonCode` values surfaced by `Enforce.run()`:
 | `binding_mismatch` | 403 | permit org/actor/action doesn't match Enforce bindings |
 | `permit_expired` | 403 | permit TTL passed before verify completed |
 | `permit_consumed` | 409 | permit was already used (replay attempt) |
+| `permit_revoked` | 403 | permit explicitly revoked via `POST /v1/permits/{id}/revoke` (D3) |
+| `permit_not_found` | 404 | permit id not recognized server-side |
 | `permit_tampered` | 403 | permit signature invalid |
+
+The `permit_*` reasonCodes are aligned by name with the v1 SDK's
+`PermitOutcome` discriminator (atlasent-sdk PR #132 / #133), so an
+adapter that surfaces a v1 `AtlaSentDeniedError` to Enforce can
+forward `err.outcome` directly as the `reasonCode` without remapping.
+The `PermitOutcomeReasonCode` exported from `@atlasent/enforce`
+narrows `ReasonCode` to exactly that subset.
 
 These codes are additive — existing `deny` / `hold` / `escalate`
 mappings remain unchanged.

@@ -46,7 +46,26 @@ export type ReasonCode =
   | "binding_mismatch"
   | "permit_expired"
   | "permit_consumed"
+  | "permit_revoked"
+  | "permit_not_found"
   | "permit_tampered";
+
+/**
+ * Subset of ReasonCode values that align with the v1 SDK's
+ * `PermitOutcome` (atlasent-sdk PR #132 / #133). When a verifyPermit
+ * adapter throws an error carrying `reasonCode` set to one of these,
+ * Enforce.run() surfaces it verbatim — no remapping, no string
+ * massaging, byte-identical with the SDK's typed `outcome` field.
+ *
+ * See `contract/ENFORCE_PACK.md` § "Decision matrix" for the full
+ * mapping; `atlasent/docs/REVOCATION_RUNBOOK.md` for the operator-
+ * facing matrix this discriminator drives.
+ */
+export type PermitOutcomeReasonCode =
+  | "permit_expired"
+  | "permit_consumed"
+  | "permit_revoked"
+  | "permit_not_found";
 
 export type EnforceRunResult<T> =
   | { decision: "allow"; value: T; permit: VerifiedPermit }

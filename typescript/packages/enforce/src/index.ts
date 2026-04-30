@@ -7,6 +7,7 @@ export type {
   EnforceRunRequest,
   EnforceRunResult,
   EvaluateResponse,
+  PermitOutcomeReasonCode,
   ReasonCode,
   VerifiedPermit,
 } from "./types.js";
