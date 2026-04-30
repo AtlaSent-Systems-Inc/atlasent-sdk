@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.6.0 — 2026-04-30
+
 ### Added
 
 - **`AtlaSentDeniedError.outcome`** — discriminator that distinguishes
