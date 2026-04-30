@@ -441,6 +441,39 @@ func TestRequestIDIsFreshPerRequest(t *testing.T) {
 	}
 }
 
+// ── missing required fields ───────────────────────────────────────────────────
+
+func TestEvaluateMissingPermittedIsError(t *testing.T) {
+	// API response omits "permitted" entirely — must be CodeBadResponse, not a
+	// silent DENY (which would happen if the field were a plain bool defaulting
+	// to false).
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"decision_id":"dec_no_permitted_001"}`))
+	}))
+	defer srv.Close()
+
+	c, _ := atlasent.New(atlasent.Options{
+		APIKey:     "ask_test",
+		BaseURL:    srv.URL,
+		HTTPClient: &http.Client{Timeout: 5 * time.Second},
+	})
+	_, err := c.Evaluate(context.Background(), atlasent.EvaluateRequest{Agent: "a", Action: "b"})
+	if err == nil {
+		t.Fatal("expected error when permitted is missing, got nil")
+	}
+	aerr, ok := err.(*atlasent.AtlaSentError)
+	if !ok {
+		t.Fatalf("expected *AtlaSentError, got %T: %v", err, err)
+	}
+	if aerr.Code != atlasent.CodeBadResponse {
+		t.Errorf("Code: got %q, want %q", aerr.Code, atlasent.CodeBadResponse)
+	}
+	if !strings.Contains(aerr.Message, "permitted") {
+		t.Errorf("Message %q should mention 'permitted'", aerr.Message)
+	}
+}
+
 // ── deny as data ──────────────────────────────────────────────────────────────
 
 func TestEvaluateDenyIsNotAnError(t *testing.T) {
