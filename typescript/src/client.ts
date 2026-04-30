@@ -37,6 +37,22 @@ const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const SDK_VERSION = "0.1.0";
 
+/**
+ * True when running in Node.js (or a Node-compatible server runtime that
+ * exposes `process.versions.node`). False in browsers and browser-like
+ * environments such as jsdom / Cloudflare Workers.
+ */
+const isNode =
+  typeof process !== "undefined" && typeof process.versions?.node === "string";
+
+/**
+ * Node.js version string captured at module-load time so request code
+ * never accesses `process` lazily — safe even if `process` is absent
+ * (browsers) or replaced after load (bundlers, test environments).
+ * `null` in every non-Node runtime.
+ */
+const NODE_VERSION: string | null = isNode ? process.version : null;
+
 /** Raw JSON shape received from `POST /v1-evaluate`. */
 interface EvaluateWire {
   permitted: boolean;
@@ -77,6 +93,14 @@ export class AtlaSentClient {
       throw new AtlaSentError("apiKey is required", {
         code: "invalid_api_key",
       });
+    }
+    if (typeof AbortSignal.timeout !== "function") {
+      throw new AtlaSentError(
+        "@atlasent/sdk requires AbortSignal.timeout, which is not available in this runtime. " +
+          "Minimum supported browsers: Chrome 103+, Firefox 100+, Safari 16+. " +
+          "Upgrade your browser or add an AbortSignal.timeout polyfill.",
+        { code: "network" },
+      );
     }
     this.apiKey = options.apiKey;
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
@@ -290,7 +314,9 @@ export class AtlaSentClient {
     const headers: Record<string, string> = {
       Accept: "application/json",
       Authorization: `Bearer ${this.apiKey}`,
-      "User-Agent": `@atlasent/sdk/${SDK_VERSION} node/${process.version}`,
+      "User-Agent": NODE_VERSION !== null
+        ? `@atlasent/sdk/${SDK_VERSION} node/${NODE_VERSION}`
+        : `@atlasent/sdk/${SDK_VERSION} browser`,
       "X-Request-ID": requestId,
     };
     if (method === "POST") headers["Content-Type"] = "application/json";

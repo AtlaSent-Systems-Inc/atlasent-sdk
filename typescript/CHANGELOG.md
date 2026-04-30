@@ -43,6 +43,66 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
   Mirrors the Python SDK's `PermitOutcome` (atlasent-sdk PR #132).
 
+## 1.6.0 — 2026-04-30
+
+### Fixed
+
+- **Browser compatibility: `process.version` reference removed.**
+  The `User-Agent` header in every outbound request was constructed as
+  `` `@atlasent/sdk/${SDK_VERSION} node/${process.version}` ``.
+  In a browser, `process` is `undefined` → `ReferenceError` on the
+  very first call. The client now detects the runtime at module-load
+  time via `typeof process !== "undefined" && typeof process.versions?.node === "string"`
+  and emits one of two shapes:
+
+      // Node / server runtimes
+      User-Agent: @atlasent/sdk/1.6.0 node/20.11.0
+
+      // Browser / jsdom / Cloudflare Workers
+      User-Agent: @atlasent/sdk/1.6.0 browser
+
+  Browsers strip `User-Agent` from `fetch` requests (it is a [forbidden
+  header](https://developer.mozilla.org/en-US/docs/Glossary/Forbidden_header_name));
+  the browser-shaped header is therefore sent into the void harmlessly.
+
+- **Browser compatibility: `AbortSignal.timeout` guard.**
+  The SDK's per-request timeout relies on `AbortSignal.timeout(n)`,
+  available in Chrome 103+, Firefox 100+, and Safari 16+. On older
+  runtimes the previous code would silently create a request with no
+  timeout at all. The constructor now throws an `AtlaSentError` with
+  `code: "network"` and a human-readable message that names the
+  minimum browser versions, so the failure is loud and actionable
+  rather than silent.
+
+### Added
+
+- **`browserslist` field in `package.json`** — declares the minimum
+  supported browser targets (Chrome ≥ 103, Firefox ≥ 100, Safari ≥ 16,
+  Edge ≥ 103). Bundlers that respect `browserslist` (Vite, webpack,
+  Parcel) will use these targets for transpilation and polyfill
+  decisions automatically.
+
+- **Browser test suite** (`test/browser.test.ts`) — runs under
+  `@vitest-environment jsdom` with `process` stubbed to `undefined`.
+  Covers: construction, `evaluate()` ALLOW/DENY round-trip, browser-shaped
+  `User-Agent` header, `Authorization` / `X-Request-ID` headers, HTTP 401
+  error mapping, network-failure mapping, and the `AbortSignal.timeout`
+  absence error. All without touching `process`, `Buffer`, or other
+  Node-only globals.
+
+- **Browser support section in `README.md`** — documents minimum browser
+  versions, the `process.version` fix, the `AbortSignal.timeout` guard,
+  and the two recommended auth models for browser-facing deployments
+  (browser-scoped keys for internal dashboards; session-token mode for
+  atlasent-hosted surfaces).
+
+### Non-breaking
+
+This release is purely additive / bug-fix. The Node-side API surface
+(`AtlaSentClient`, `evaluate`, `verifyPermit`, `protect`, error
+classes, types) is unchanged. Server-side consumers see no difference.
+
+Closes [#103](https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues/103).
 ## 1.5.0 — 2026-04-25
 
 ### Added
