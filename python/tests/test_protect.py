@@ -199,7 +199,9 @@ class TestSyncProtect:
         mocker.patch.object(
             client,
             "evaluate",
-            side_effect=AtlaSentDenied("denied", permit_token="tok", response_body=None),
+            side_effect=AtlaSentDenied(
+                "denied", permit_token="tok", response_body=None
+            ),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
             client.protect(agent="bot", action="deploy")
@@ -279,7 +281,9 @@ class TestAsyncProtect:
         mocker.patch.object(
             client,
             "evaluate",
-            side_effect=AtlaSentDenied("denied", permit_token="tok", response_body=None),
+            side_effect=AtlaSentDenied(
+                "denied", permit_token="tok", response_body=None
+            ),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
             await client.protect(agent="bot", action="deploy")
