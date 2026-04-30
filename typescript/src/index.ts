@@ -26,10 +26,12 @@ export { AtlaSentClient } from "./client.js";
 export {
   AtlaSentDeniedError,
   AtlaSentError,
+  normalizePermitOutcome,
   type AtlaSentDecision,
   type AtlaSentDeniedErrorInit,
   type AtlaSentErrorCode,
   type AtlaSentErrorInit,
+  type PermitOutcome,
 } from "./errors.js";
 export {
   configure,
