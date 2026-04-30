@@ -28,7 +28,6 @@ import type {
   ApiKeySelfResponse,
   EvaluateRequest,
   EvaluateResponse,
-  OnRetryContext,
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "@atlasent/sdk";
@@ -235,35 +234,6 @@ async function runWithBreadcrumb<T>(
     }
     throw err;
   }
-}
-
-/**
- * Returns an `onRetry` callback for {@link AtlaSentClientOptions} that
- * emits a Sentry breadcrumb before each retry sleep.
- *
- * @example
- *   const client = new AtlaSentClient({
- *     apiKey,
- *     onRetry: makeSentryOnRetry({ service: "deploy-bot" }),
- *   });
- */
-export function makeSentryOnRetry(
-  extraData?: Record<string, unknown>,
-): (ctx: OnRetryContext) => void {
-  return (ctx: OnRetryContext) => {
-    addBreadcrumb({
-      category: "atlasent",
-      message: "retry",
-      level: "warning",
-      data: {
-        ...extraData,
-        attempt: ctx.attempt,
-        delay_ms: ctx.delayMs,
-        path: ctx.path,
-        ...errorData(ctx.error),
-      },
-    } satisfies Breadcrumb);
-  };
 }
 
 function errorData(err: unknown): Record<string, unknown> {

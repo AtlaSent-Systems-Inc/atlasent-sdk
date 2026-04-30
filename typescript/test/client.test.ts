@@ -54,7 +54,6 @@ function makeClient(fetchImpl: FetchMock, overrides: Partial<ConstructorParamete
     apiKey: "ask_live_test",
     fetch: fetchImpl,
     timeoutMs: 5_000,
-    retryPolicy: { maxAttempts: 1 }, // disable retries in unit tests; retry behaviour tested separately
     ...overrides,
   });
 }
@@ -823,97 +822,5 @@ describe("createAuditExport()", () => {
     await expect(client.createAuditExport()).rejects.toMatchObject({
       code: "bad_response",
     });
-  });
-});
-
-// ─── Retry integration ────────────────────────────────────────────────────────
-
-describe("retry loop (integration)", () => {
-  function makeRetryClient(fetchImpl: FetchMock, onRetry?: (ctx: import("../src/index.js").OnRetryContext) => void) {
-    const opts: ConstructorParameters<typeof AtlaSentClient>[0] = {
-      apiKey: "ask_live_test",
-      fetch: fetchImpl,
-      timeoutMs: 5_000,
-      retryPolicy: { maxAttempts: 3, baseDelayMs: 0, maxDelayMs: 0 },
-    };
-    if (onRetry !== undefined) opts.onRetry = onRetry;
-    return new AtlaSentClient(opts);
-  }
-
-  it("retries a 5xx and succeeds on the second attempt", async () => {
-    let calls = 0;
-    const fetchImpl = mockFetch(() => {
-      calls++;
-      if (calls === 1) return jsonResponse({ error: "boom" }, { status: 500 });
-      return jsonResponse(EVALUATE_PERMIT_WIRE);
-    });
-    const client = makeRetryClient(fetchImpl);
-    const resp = await client.evaluate({ agent: "a", action: "b" });
-    expect(resp.decision).toBe("ALLOW");
-    expect(calls).toBe(2);
-  });
-
-  it("retries a 429 and succeeds on the third attempt", async () => {
-    let calls = 0;
-    const fetchImpl = mockFetch(() => {
-      calls++;
-      if (calls <= 2) return jsonResponse({ error: "rate" }, { status: 429, headers: { "Retry-After": "0" } });
-      return jsonResponse(EVALUATE_PERMIT_WIRE);
-    });
-    const client = makeRetryClient(fetchImpl);
-    const resp = await client.evaluate({ agent: "a", action: "b" });
-    expect(resp.decision).toBe("ALLOW");
-    expect(calls).toBe(3);
-  });
-
-  it("exhausts retries and throws the last error", async () => {
-    const fetchImpl = mockFetch(() => jsonResponse({ error: "boom" }, { status: 503 }));
-    const client = makeRetryClient(fetchImpl);
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({ code: "server_error" });
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
-  });
-
-  it("does not retry a 401", async () => {
-    const fetchImpl = mockFetch(() => jsonResponse({ error: "bad key" }, { status: 401 }));
-    const client = makeRetryClient(fetchImpl);
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({ code: "invalid_api_key" });
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not retry a 400", async () => {
-    const fetchImpl = mockFetch(() => jsonResponse({ message: "bad input" }, { status: 400 }));
-    const client = makeRetryClient(fetchImpl);
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({ code: "bad_request" });
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-  });
-
-  it("calls onRetry with correct context before each retry sleep", async () => {
-    const retryCalls: unknown[] = [];
-    let calls = 0;
-    const fetchImpl = mockFetch(() => {
-      calls++;
-      if (calls < 3) return jsonResponse({ error: "boom" }, { status: 503 });
-      return jsonResponse(EVALUATE_PERMIT_WIRE);
-    });
-    const client = makeRetryClient(fetchImpl, (ctx) => retryCalls.push({ ...ctx }));
-    await client.evaluate({ agent: "a", action: "b" });
-    expect(retryCalls).toHaveLength(2);
-    expect((retryCalls[0] as { attempt: number }).attempt).toBe(0);
-    expect((retryCalls[1] as { attempt: number }).attempt).toBe(1);
-    expect((retryCalls[0] as { path: string }).path).toBe("/v1-evaluate");
-  });
-
-  it("uses a fresh X-Request-ID on each retry attempt", async () => {
-    const requestIds: string[] = [];
-    let calls = 0;
-    const fetchImpl = mockFetch((_, init) => {
-      requestIds.push((init.headers as Record<string, string>)["X-Request-ID"] ?? "");
-      calls++;
-      if (calls < 3) return jsonResponse({ error: "boom" }, { status: 503 });
-      return jsonResponse(EVALUATE_PERMIT_WIRE);
-    });
-    const client = makeRetryClient(fetchImpl);
-    await client.evaluate({ agent: "a", action: "b" });
-    expect(new Set(requestIds).size).toBe(3);
   });
 });

@@ -7,7 +7,6 @@
  */
 
 import type { AuditEventsPage, AuditExport } from "./audit.js";
-import type { RetryPolicy } from "./retry.js";
 
 /** The two possible policy decisions. */
 export type Decision = "ALLOW" | "DENY";
@@ -179,19 +178,7 @@ export interface AuditExportResult extends AuditExport {
   rateLimit: RateLimitState | null;
 }
 
-export type { RetryPolicy };
-
-export interface OnRetryContext {
-  /** Zero-indexed retry attempt (0 = first retry after the initial failure). */
-  attempt: number;
-  /** The error that triggered the retry. */
-  error: unknown;
-  /** Milliseconds the client will sleep before the next attempt. */
-  delayMs: number;
-  /** The HTTP path being retried (e.g. "/v1-evaluate"). */
-  path: string;
-}
-
+/** Constructor options for {@link AtlaSentClient}. */
 export interface AtlaSentClientOptions {
   /** Required. Your AtlaSent API key. */
   apiKey: string;
@@ -204,15 +191,4 @@ export interface AtlaSentClientOptions {
    * Defaults to `globalThis.fetch`.
    */
   fetch?: typeof fetch;
-  /**
-   * Retry policy for transient failures (network, timeout, 429, 5xx).
-   * Pass `{ maxAttempts: 1 }` to disable retries entirely.
-   */
-  retryPolicy?: RetryPolicy;
-  /**
-   * Called before each retry sleep. Use this hook to emit observability
-   * signals (e.g. Sentry breadcrumbs, structured logs) without coupling
-   * the SDK core to any monitoring library.
-   */
-  onRetry?: (ctx: OnRetryContext) => void;
 }

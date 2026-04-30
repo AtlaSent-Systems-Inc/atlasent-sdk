@@ -5,7 +5,6 @@
  */
 
 export {
-  makeSentryOnRetry,
   withSentry,
   wrapProtect,
   type SentryInstrumentedClient,

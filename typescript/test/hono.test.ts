@@ -75,7 +75,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
       jsonResponse(EVALUATE_ALLOW_WIRE),
       jsonResponse(VERIFY_OK_WIRE),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
     const app = new Hono<AppEnv>();
     app.post(
@@ -98,7 +98,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
       jsonResponse(EVALUATE_ALLOW_WIRE),
       jsonResponse(VERIFY_OK_WIRE),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
     const app = new Hono();
     app.post(
@@ -135,7 +135,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
 
   it("on DENY, throws AtlaSentDeniedError — not caught inside the middleware", async () => {
     const fetchImpl = mockFetchSequence([jsonResponse(EVALUATE_DENY_WIRE)]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
     const app = new Hono();
     // Capture whatever app.onError sees so we can assert on the exception
@@ -165,7 +165,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
       jsonResponse(EVALUATE_ALLOW_WIRE),
       jsonResponse(VERIFY_OK_WIRE),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
     const app = new Hono<AppEnv>();
     app.post(
@@ -184,7 +184,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
 
   it("does not run the downstream handler when deny throws", async () => {
     const fetchImpl = mockFetchSequence([jsonResponse(EVALUATE_DENY_WIRE)]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
     const handlerSpy = vi.fn();
     const app = new Hono();
@@ -214,7 +214,7 @@ describe("atlaSentErrorHandler", () => {
 
   it("maps AtlaSentDeniedError → 403 with a default JSON body", async () => {
     const fetchImpl = mockFetchSequence([jsonResponse(EVALUATE_DENY_WIRE)]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
     const app = new Hono();
     app.onError(atlaSentErrorHandler());
@@ -238,7 +238,7 @@ describe("atlaSentErrorHandler", () => {
     const fetchImpl = mockFetchSequence([
       new Response("server boom", { status: 500 }),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
     const app = new Hono();
     app.onError(atlaSentErrorHandler());
@@ -257,7 +257,7 @@ describe("atlaSentErrorHandler", () => {
 
   it("honours custom denyStatus / errorStatus / renderers", async () => {
     const fetchImpl = mockFetchSequence([jsonResponse(EVALUATE_DENY_WIRE)]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
     const app = new Hono();
     app.onError(

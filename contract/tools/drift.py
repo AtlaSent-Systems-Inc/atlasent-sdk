@@ -222,7 +222,6 @@ def _python_v2_sdk_wire_fields() -> dict[str, dict[str, set[str] | None]]:
             BulkRevokeResponse,
             ConsumeRequest,
             ConsumeResponse,
-            DecisionEvent,
             EvaluateBatchRequest,
             EvaluateBatchResponse,
             ProofVerificationResult,
@@ -254,11 +253,6 @@ def _python_v2_sdk_wire_fields() -> dict[str, dict[str, set[str] | None]]:
         "/v2/permits:bulk-revoke": {
             "request_keys": _aliases(BulkRevokeRequest),
             "response_keys": _aliases(BulkRevokeResponse),
-        },
-        # GET SSE endpoint — no request body; response is a stream of DecisionEvent frames.
-        "/v2/decisions:subscribe": {
-            "request_keys": None,
-            "response_keys": _aliases(DecisionEvent),
         },
     }
 
@@ -316,11 +310,6 @@ def _typescript_v2_sdk_wire_fields() -> dict[str, dict[str, set[str] | None]]:
         "/v2/permits:bulk-revoke": {
             "request_keys": _body_keys_in_method("bulkRevoke"),
             "response_keys": _interface_keys("BulkRevokeResponse"),
-        },
-        # GET SSE endpoint — no request body; event frame shape is DecisionEvent.
-        "/v2/decisions:subscribe": {
-            "request_keys": None,
-            "response_keys": _interface_keys("DecisionEvent"),
         },
     }
 
@@ -410,10 +399,6 @@ def run() -> DriftReport:
         "/v2/permits:bulk-revoke": {
             "request": _load_v2("bulk-revoke-request.schema.json"),
             "response": _load_v2("bulk-revoke-response.schema.json"),
-        },
-        # GET SSE — no request body schema; frame envelope is DecisionEvent.
-        "/v2/decisions:subscribe": {
-            "response": _load_v2("decision-event.schema.json"),
         },
     }
 

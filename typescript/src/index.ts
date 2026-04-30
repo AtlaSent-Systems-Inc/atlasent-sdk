@@ -49,7 +49,6 @@ export type {
   Decision,
   EvaluateRequest,
   EvaluateResponse,
-  OnRetryContext,
   RateLimitState,
   VerifyPermitRequest,
   VerifyPermitResponse,

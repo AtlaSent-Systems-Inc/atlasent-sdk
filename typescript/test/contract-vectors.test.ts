@@ -86,7 +86,6 @@ function makeClient(fetchImpl: typeof fetch) {
     apiKey: API_KEY,
     fetch: fetchImpl,
     timeoutMs: 5_000,
-    retryPolicy: { maxAttempts: 1 },
   });
 }
 
