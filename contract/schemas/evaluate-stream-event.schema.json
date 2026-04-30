@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/evaluate-stream-event.schema.json",
+  "title": "EvaluateStreamEvent",
+  "description": "One SSE event emitted by POST /v1-evaluate-stream. Discriminated on the 'type' field.",
+  "oneOf": [
+    {
+      "title": "DecisionEvent",
+      "description": "Interim or final policy decision. Mirrors EvaluateResponse plus is_final.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "permitted", "decision_id", "reason", "audit_hash", "timestamp", "is_final"],
+      "properties": {
+        "type":        { "type": "string", "const": "decision" },
+        "permitted":   { "type": "boolean" },
+        "decision_id": { "type": "string", "minLength": 1 },
+        "reason":      { "type": "string" },
+        "audit_hash":  { "type": "string" },
+        "timestamp":   { "type": "string" },
+        "is_final":    { "type": "boolean", "description": "true → stream will emit event:done and close." }
+      }
+    },
+    {
+      "title": "ProgressEvent",
+      "description": "Intermediate progress hint. Shape is intentionally open — only 'type' and 'stage' are required.",
+      "type": "object",
+      "required": ["type", "stage"],
+      "properties": {
+        "type":  { "type": "string", "const": "progress" },
+        "stage": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    {
+      "title": "ErrorEvent",
+      "description": "Server-side error. SDKs translate this into AtlaSentError and abort the iterator.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "code", "message"],
+      "properties": {
+        "type":       { "type": "string", "const": "error" },
+        "code":       { "type": "string", "enum": ["invalid_api_key","forbidden","rate_limited","timeout","network","bad_response","bad_request","server_error","stream_aborted"] },
+        "message":    { "type": "string" },
+        "request_id": { "type": "string" }
+      }
+    },
+    {
+      "title": "DoneEvent",
+      "description": "Synthetic terminal event emitted when SSE event:done is received.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "const": "done" }
+      }
+    }
+  ]
+}

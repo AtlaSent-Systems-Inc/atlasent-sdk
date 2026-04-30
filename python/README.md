@@ -6,6 +6,8 @@ verified permit.
 
 ```bash
 pip install atlasent
+# offline audit-bundle verification (Ed25519):
+pip install "atlasent[verify]"
 ```
 
 ## Quickstart

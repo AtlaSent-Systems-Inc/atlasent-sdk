@@ -12,7 +12,7 @@ goes wrong on a publish.
   check, unit tests, contract-vector replay against latest API, lint,
   formatter check.
 - [ ] **CHANGELOG.md** has an entry for the new version with date.
-- [ ] **Version bump** is the only diff in the version-bump commit
+- [x] **Version bump** is the only diff in the version-bump commit
   (no API changes co-mingled — review surface stays small).
 - [ ] **Contract vectors current.** Run `pnpm contract:replay` /
   `pytest tests/contract/` against `https://api.atlasent.io` (live
@@ -31,11 +31,11 @@ goes wrong on a publish.
 
 - [ ] **`_version.py`** matches the git tag (`v1.1.0` → `__version__
   = "1.1.0"`).
-- [ ] **`pyproject.toml`** declares `requires-python = ">=3.9"`.
+- [x] **`pyproject.toml`** declares `requires-python = ">=3.9"`.
   Anything stricter cuts off enterprise customers stuck on 3.10.
-- [ ] **Trove classifiers** include the supported Python versions and
+- [x] **Trove classifiers** include the supported Python versions and
   `Development Status :: 5 - Production/Stable`.
-- [ ] **`extras`**: `httpx` is hard, `cryptography` is optional under
+- [x] **`extras`**: `httpx` is hard, `cryptography` is optional under
   `[verify]` extra so the base install stays small.
 - [ ] **`README.md`** is set as `readme` in `pyproject.toml` so PyPI
   renders the right thing.
@@ -50,7 +50,7 @@ goes wrong on a publish.
 ## TypeScript (npm) specific
 
 - [ ] **`package.json` version** matches the git tag.
-- [ ] **`engines.node`** is `>=18` (Node 18 is the LTS floor we
+- [x] **`engines.node`** is `>=18` (Node 18 is the LTS floor we
   support).
 - [ ] **ESM + CJS dual build.** `dist/index.mjs` and `dist/index.cjs`
   both exist, both pass `node -e 'require("./dist/index.cjs")'` /

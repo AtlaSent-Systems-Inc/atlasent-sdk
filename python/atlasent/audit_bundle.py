@@ -24,11 +24,26 @@ from base64 import urlsafe_b64decode
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+
+def _require_crypto():  # type: ignore[return]
+    """Import cryptography at call-time; raise a clear error if absent."""
+    try:
+        from cryptography.exceptions import InvalidSignature  # noqa: PLC0415
+        from cryptography.hazmat.primitives import serialization  # noqa: PLC0415
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import (  # noqa: PLC0415
+            Ed25519PublicKey,
+        )
+        return InvalidSignature, serialization, Ed25519PublicKey
+    except ImportError as exc:
+        raise ImportError(
+            "atlasent[verify] is required for audit-bundle verification. "
+            "Install it with: pip install 'atlasent[verify]'"
+        ) from exc
 
 GENESIS_HASH = "0" * 64
 
@@ -175,6 +190,7 @@ def _b64url_decode(s: str) -> bytes:
 def _load_keys(public_keys_pem: Iterable[str] | None) -> list[VerifyKey]:
     if public_keys_pem is None:
         return []
+    _, serialization, Ed25519PublicKey = _require_crypto()
     out: list[VerifyKey] = []
     for i, pem in enumerate(public_keys_pem):
         try:
@@ -233,6 +249,7 @@ def verify_audit_bundle(
                 if hint
                 else keys
             )
+            InvalidSignature, _, __ = _require_crypto()
             for k in ordered:
                 try:
                     k.public_key.verify(sig_bytes, envelope)

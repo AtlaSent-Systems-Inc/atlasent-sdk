@@ -121,8 +121,66 @@ Every `AtlaSentError` carries `err.requestId` — the UUID the SDK sent as `X-Re
 
 ## Requirements
 
-- Node.js **20** or newer (native `fetch`, `AbortSignal.timeout`, `crypto.randomUUID`).
+- Node.js **18** or newer (native `fetch`, `AbortSignal.timeout`, `crypto.randomUUID`).
 - TypeScript **5.0+** for best type-inference ergonomics (older is fine — types are plain interfaces).
+
+## Browser usage
+
+`@atlasent/sdk` runs in modern browsers (Chrome ≥ 103, Firefox ≥ 100, Safari ≥ 16) — the
+`process.version` reference was removed in v1.5.1. **Do not embed `ask_live_…` API keys in browser
+bundles.** Server-side credentials belong on the server.
+
+**Recommended pattern:** add a thin server-side route that calls AtlaSent on behalf of your frontend,
+then guard it with the Hono (or Express) middleware. The browser never touches AtlaSent directly.
+
+```ts
+// server (Hono example) — see "Hono middleware" section below
+app.post("/api/action", atlaSentGuard({ action: "my_action", agent: (c) => c.var.userId }), handler);
+
+// browser
+await fetch("/api/action", { method: "POST", body: JSON.stringify(payload) });
+```
+
+> **Coming:** a session-token mode (`authMode: "session"`) that lets browser clients call
+> AtlaSent directly after SSO sign-in, without ever seeing a raw API key. Tracked in
+> [atlasent-api#144](https://github.com/AtlaSent-Systems-Inc/atlasent-api/issues/144).
+
+## Hono middleware
+
+Drop-in protection for [Hono](https://hono.dev) routes via the
+`@atlasent/sdk/hono` subpath export (requires `hono` as a peer dep):
+
+```ts
+import { Hono } from "hono";
+import { atlaSentGuard, atlaSentErrorHandler } from "@atlasent/sdk/hono";
+
+const app = new Hono();
+app.onError(atlaSentErrorHandler());
+
+app.post(
+  "/deploy/:service",
+  atlaSentGuard({
+    action: (c) => `deploy_${c.req.param("service")}`,
+    agent: (c) => c.req.header("x-agent-id") ?? "anonymous",
+    context: async (c) => ({ commit: (await c.req.json()).commit }),
+  }),
+  (c) => c.json({ ok: true, permit: c.get("atlasent") }),
+);
+```
+
+`atlaSentGuard` calls `protect()` under the hood — fail-closed
+semantics. On allow it stashes a `Permit` on the context (key:
+`"atlasent"`, override via `options.key`). On deny or transport error
+it throws; `atlaSentErrorHandler` maps those to 403 / 503 responses
+so every guarded route shares one error-handling path.
+
+> **Upcoming migration:** after `@atlasent/enforce` reaches GA the
+> guard API will change to accept a pre-constructed `Enforce` instance
+> instead of per-route `action/agent/context` options. The current API
+> is **not deprecated** until that ships. See the
+> [CHANGELOG](./CHANGELOG.md) for the full before/after and
+> [`contract/ENFORCE_PACK.md`](../contract/ENFORCE_PACK.md) for
+> migration details.
 
 ## Related
 

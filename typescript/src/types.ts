@@ -192,3 +192,34 @@ export interface AtlaSentClientOptions {
    */
   fetch?: typeof fetch;
 }
+
+// ── Streaming evaluate ────────────────────────────────────────────────────────
+
+/** A policy decision emitted mid-stream. */
+export interface StreamDecisionEvent {
+  type: "decision";
+  /** "ALLOW" or "DENY". A deny always has isFinal: true and ends the stream. */
+  decision: Decision;
+  /** Opaque permit identifier for a final allow. Pass to verifyPermit. */
+  permitId: string;
+  /** Human-readable explanation from the policy engine. */
+  reason: string;
+  /** Audit hash bound to this decision. */
+  auditHash: string;
+  /** ISO-8601 timestamp of the decision. */
+  timestamp: string;
+  /** When true the stream will emit done and close after this event. */
+  isFinal: boolean;
+}
+
+/** An intermediate progress hint emitted before the final decision. */
+export interface StreamProgressEvent {
+  type: "progress";
+  /** Human-readable stage name (e.g. "policy_loading", "context_enrichment"). */
+  stage: string;
+  /** Additional server-defined fields — forward-compat, do not rely on shape. */
+  [key: string]: unknown;
+}
+
+/** Union of all events yielded by {@link AtlaSentClient.protectStream}. */
+export type StreamEvent = StreamDecisionEvent | StreamProgressEvent;
