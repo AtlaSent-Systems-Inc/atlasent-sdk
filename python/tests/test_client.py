@@ -539,6 +539,35 @@ class TestSyncRetryPaths:
             client.evaluate("a", "b")
         assert exc_info.value.retry_after == 0.0
 
+    def test_all_retries_exhausted_raises_network(self, client_retry, mocker):
+        mocker.patch.object(
+            client_retry._client,
+            "post",
+            side_effect=httpx.ConnectError("refused"),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            client_retry.evaluate("a", "b")
+        assert exc_info.value.code == "network"
+        assert "attempts" in exc_info.value.message
+
+    def test_403_body_with_no_message_or_reason_key(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=403)
+        resp.json.return_value = {"error": "forbidden"}
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert exc_info.value.code == "forbidden"
+
+    def test_parse_reset_header_naive_iso8601_gets_utc(self, client, mocker):
+        from atlasent.client import _parse_reset_header
+
+        naive_iso = "2026-05-01T00:00:00"
+        result = _parse_reset_header(naive_iso)
+        assert result is not None
+        from datetime import timezone as tz
+
+        assert result.tzinfo == tz.utc
+
 
 class TestSyncRequestIdOnExceptions:
     """Every SDK-raised exception must carry the X-Request-ID we sent."""
@@ -889,6 +918,67 @@ AUDIT_EXPORT_BUNDLE = {
     "signed_at": "2026-04-21T00:00:00Z",
     "event_count": 1,
 }
+
+
+class TestRevokePermit:
+    REVOKE_OK = {
+        "revoked": True,
+        "decision_id": "dec_to_revoke",
+        "revoked_at": "2026-04-30T01:00:00Z",
+        "audit_hash": "hash_revoked",
+    }
+
+    def test_revoke_returns_result(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.REVOKE_OK)
+        mocker.patch.object(client._client, "post", return_value=resp)
+        result = client.revoke_permit("dec_to_revoke", reason="policy violation")
+        assert result.revoked is True
+        assert result.permit_id == "dec_to_revoke"
+        assert result.revoked_at == "2026-04-30T01:00:00Z"
+
+    def test_revoke_sends_correct_payload(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.REVOKE_OK)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+        client.revoke_permit("dec_to_revoke", reason="audit")
+        payload = mock_post.call_args[1]["json"]
+        assert payload["decision_id"] == "dec_to_revoke"
+        assert payload["reason"] == "audit"
+        assert payload["api_key"] == "test_key"
+
+    def test_revoke_defaults_reason_to_empty_string(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.REVOKE_OK)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+        client.revoke_permit("dec_to_revoke")
+        assert mock_post.call_args[1]["json"]["reason"] == ""
+
+    def test_revoke_bad_response_missing_revoked(self, client, mocker):
+        resp = _mock_resp(mocker, json_data={"decision_id": "dec_x"})
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.revoke_permit("dec_x")
+        assert exc_info.value.code == "bad_response"
+
+    def test_revoke_bad_response_missing_decision_id(self, client, mocker):
+        resp = _mock_resp(mocker, json_data={"revoked": True})
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.revoke_permit("dec_x")
+        assert exc_info.value.code == "bad_response"
+
+    def test_revoke_surfaces_rate_limit(self, client, mocker):
+        resp = _mock_resp(
+            mocker,
+            json_data=self.REVOKE_OK,
+            headers={
+                "x-ratelimit-limit": "100",
+                "x-ratelimit-remaining": "50",
+                "x-ratelimit-reset": "9999999999",
+            },
+        )
+        mocker.patch.object(client._client, "post", return_value=resp)
+        result = client.revoke_permit("dec_to_revoke")
+        assert result.rate_limit is not None
+        assert result.rate_limit.limit == 100
 
 
 class TestListAuditEvents:

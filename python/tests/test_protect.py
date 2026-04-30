@@ -14,6 +14,7 @@ from atlasent import (
 )
 from atlasent.authorize import _reset_default_client
 from atlasent.config import configure
+from atlasent.models import AuthorizationResult
 
 EVALUATE_PERMIT = {
     "permitted": True,
@@ -193,6 +194,32 @@ class TestSyncProtect:
         client.protect(agent="a", action="b")
         assert mock_post.call_args_list[0][1]["json"]["context"] == {}
 
+    def test_deny_with_none_response_body_uses_empty_audit_hash(self, mocker):
+        client = AtlaSentClient(api_key="k", max_retries=0)
+        mocker.patch.object(
+            client,
+            "evaluate",
+            side_effect=AtlaSentDenied("denied", permit_token="tok", response_body=None),
+        )
+        with pytest.raises(AtlaSentDeniedError) as exc_info:
+            client.protect(agent="bot", action="deploy")
+        assert exc_info.value.audit_hash == ""
+
+    def test_deny_with_non_string_audit_hash_uses_empty_audit_hash(self, mocker):
+        client = AtlaSentClient(api_key="k", max_retries=0)
+        mocker.patch.object(
+            client,
+            "evaluate",
+            side_effect=AtlaSentDenied(
+                "denied",
+                permit_token="tok",
+                response_body={"audit_hash": 12345},
+            ),
+        )
+        with pytest.raises(AtlaSentDeniedError) as exc_info:
+            client.protect(agent="bot", action="deploy")
+        assert exc_info.value.audit_hash == ""
+
 
 # ── Async: AsyncAtlaSentClient.protect ─────────────────────────────────
 
@@ -245,6 +272,50 @@ class TestAsyncProtect:
             await client.protect(agent="bot", action="deploy")
         assert exc_info.value.evaluation_id == "dec_alpha"
         assert "revoked" in exc_info.value.reason
+
+    @pytest.mark.asyncio
+    async def test_deny_with_none_response_body_uses_empty_audit_hash(self, mocker):
+        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        mocker.patch.object(
+            client,
+            "evaluate",
+            side_effect=AtlaSentDenied("denied", permit_token="tok", response_body=None),
+        )
+        with pytest.raises(AtlaSentDeniedError) as exc_info:
+            await client.protect(agent="bot", action="deploy")
+        assert exc_info.value.audit_hash == ""
+
+    @pytest.mark.asyncio
+    async def test_deny_with_non_string_audit_hash_uses_empty_audit_hash(self, mocker):
+        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        mocker.patch.object(
+            client,
+            "evaluate",
+            side_effect=AtlaSentDenied(
+                "denied",
+                permit_token="tok",
+                response_body={"audit_hash": ["not", "a", "string"]},
+            ),
+        )
+        with pytest.raises(AtlaSentDeniedError) as exc_info:
+            await client.protect(agent="bot", action="deploy")
+        assert exc_info.value.audit_hash == ""
+
+    @pytest.mark.asyncio
+    async def test_authorize_verify_false_skips_verify_call(self, mocker):
+        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        mock_post = mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_PERMIT),
+        )
+        result = await client.authorize(agent="bot", action="deploy", verify=False)
+        assert isinstance(result, AuthorizationResult)
+        assert result.permitted is True
+        assert result.permit_hash == ""
+        assert result.verified is False
+        # Only evaluate was called — no verify round-trip.
+        assert mock_post.call_count == 1
 
 
 # ── Module-level: atlasent.protect ─────────────────────────────────────

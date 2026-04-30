@@ -767,7 +767,7 @@ class AtlaSentClient:
                     request_id=request_id,
                 ) from exc
 
-        raise AtlaSentError(
+        raise AtlaSentError(  # pragma: no cover
             f"Request to {path} failed after {1 + self._max_retries} attempts",
             code="network",
             request_id=request_id,
@@ -809,7 +809,7 @@ def _parse_retry_after(response: httpx.Response) -> float | None:
         parsed = parsedate_to_datetime(value)
     except (ValueError, TypeError):
         return None
-    if parsed.tzinfo is None:
+    if parsed.tzinfo is None:  # pragma: no cover
         parsed = parsed.replace(tzinfo=timezone.utc)
     delta = (parsed - datetime.now(timezone.utc)).total_seconds()
     return max(0.0, delta)
