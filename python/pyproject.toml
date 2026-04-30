@@ -54,12 +54,15 @@ Issues = "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues"
 version = {attr = "atlasent._version.__version__"}
 
 [tool.setuptools.packages.find]
-# Sibling top-level dirs (atlasent_v2_alpha, atlasent_enforce, etc.) are
-# independent distributions with their own pyproject.toml. Without this
-# include filter, setuptools' flat-layout auto-discovery refuses to build.
+# Sibling top-level dirs (atlasent_v2_alpha, atlasent_enforce, atlasent_langchain,
+# atlasent_llamaindex, etc.) are independent distributions with their own
+# pyproject.toml. Without this include filter, setuptools' flat-layout
+# auto-discovery refuses to build.
 include = ["atlasent*"]
 exclude = [
     "atlasent_enforce*",
+    "atlasent_langchain*",
+    "atlasent_llamaindex*",
     "atlasent_v2_alpha*",
     "atlasent_v2_preview*",
     "atlasent_otel_preview*",

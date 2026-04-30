@@ -1,4 +1,5 @@
 """Tests for AsyncAtlaSentClient.protect_stream (SSE streaming evaluate)."""
+
 from __future__ import annotations
 
 import json
@@ -8,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from atlasent import AsyncAtlaSentClient, StreamDecisionEvent, StreamProgressEvent
-
 
 API_KEY = "ask_test_stream"
 BASE_URL = "https://api.atlasent.io"
@@ -180,7 +180,7 @@ class TestProtectStream:
             await collect(client, agent="bot", action="read")
 
     async def test_skips_unknown_event_types(self) -> None:
-        unknown = "event: future_hint\ndata: {\"x\": 1}\n"
+        unknown = 'event: future_hint\ndata: {"x": 1}\n'
         lines = _lines_from(unknown, _decision(), _done())
         response = _make_mock_response(lines)
         client = _patched_client()

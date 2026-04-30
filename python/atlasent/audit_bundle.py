@@ -38,12 +38,14 @@ def _require_crypto():  # type: ignore[return]
         from cryptography.hazmat.primitives.asymmetric.ed25519 import (  # noqa: PLC0415
             Ed25519PublicKey,
         )
+
         return InvalidSignature, serialization, Ed25519PublicKey
     except ImportError as exc:
         raise ImportError(
             "atlasent[verify] is required for audit-bundle verification. "
             "Install it with: pip install 'atlasent[verify]'"
         ) from exc
+
 
 GENESIS_HASH = "0" * 64
 
@@ -190,7 +192,7 @@ def _b64url_decode(s: str) -> bytes:
 def _load_keys(public_keys_pem: Iterable[str] | None) -> list[VerifyKey]:
     if public_keys_pem is None:
         return []
-    _, serialization, Ed25519PublicKey = _require_crypto()
+    _, serialization, Ed25519PublicKey = _require_crypto()  # noqa: N806 — class types
     out: list[VerifyKey] = []
     for i, pem in enumerate(public_keys_pem):
         try:
@@ -249,7 +251,7 @@ def verify_audit_bundle(
                 if hint
                 else keys
             )
-            InvalidSignature, _, __ = _require_crypto()
+            InvalidSignature, _, __ = _require_crypto()  # noqa: N806 — class type
             for k in ordered:
                 try:
                     k.public_key.verify(sig_bytes, envelope)

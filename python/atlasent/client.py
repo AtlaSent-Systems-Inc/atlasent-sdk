@@ -486,7 +486,8 @@ class AtlaSentClient:
             data.get("decision_id"), str
         ):
             raise AtlaSentError(
-                "Malformed /v1-revoke-permit response: missing `revoked` or `decision_id`",
+                "Malformed /v1-revoke-permit response: "
+                "missing `revoked` or `decision_id`",
                 code="bad_response",
                 request_id=request_id,
                 response_body=data,

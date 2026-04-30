@@ -31,11 +31,10 @@ from .models import (
     EvaluateResult,
     GateResult,
     Permit,
+    RateLimitState,
     RevokePermitResult,
     StreamDecisionEvent,
-    StreamEvent,
     StreamProgressEvent,
-    RateLimitState,
     VerifyRequest,
     VerifyResult,
 )
@@ -304,9 +303,13 @@ class AsyncAtlaSentClient:
             headers=headers,
         ) as response:
             if response.status_code != 200:
-                body_text = await response.aread()
+                # Drain the body so the connection can be reused; we don't
+                # surface the body in the error because it's an SSE stream
+                # and the head bytes are unlikely to be a useful message.
+                await response.aread()
                 raise AtlaSentError(
-                    f"AtlaSent stream request failed with status {response.status_code}",
+                    "AtlaSent stream request failed with status "
+                    f"{response.status_code}",
                     code="server_error",
                     status_code=response.status_code,
                     request_id=request_id,
@@ -454,7 +457,8 @@ class AsyncAtlaSentClient:
             data.get("decision_id"), str
         ):
             raise AtlaSentError(
-                "Malformed /v1-revoke-permit response: missing `revoked` or `decision_id`",
+                "Malformed /v1-revoke-permit response: "
+                "missing `revoked` or `decision_id`",
                 code="bad_response",
                 request_id=request_id,
                 response_body=data,
@@ -808,9 +812,12 @@ async def _parse_sse(
                 if event_type == "decision":
                     yield StreamDecisionEvent.from_wire(parsed)
                 elif event_type == "progress":
+                    extra = {
+                        k: v for k, v in parsed.items() if k not in ("type", "stage")
+                    }
                     yield StreamProgressEvent(
                         stage=str(parsed.get("stage", "")),
-                        **{k: v for k, v in parsed.items() if k not in ("type", "stage")},
+                        **extra,
                     )
                 # unknown event types skipped
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -314,6 +314,6 @@ class StreamProgressEvent(BaseModel):
 
 
 StreamEvent = Annotated[
-    Union[StreamDecisionEvent, StreamProgressEvent],
+    StreamDecisionEvent | StreamProgressEvent,
     Field(discriminator="type"),
 ]
