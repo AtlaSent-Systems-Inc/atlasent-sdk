@@ -12,7 +12,6 @@ Run:  python examples/01_canonicalize_and_hash.py
 
 from atlasent_v2_preview import canonicalize_payload, hash_payload
 
-
 # Two structurally identical payloads with different key order.
 a = {"commit": "abc123", "env": "prod", "approver": "sre@example.com"}
 b = {"approver": "sre@example.com", "env": "prod", "commit": "abc123"}

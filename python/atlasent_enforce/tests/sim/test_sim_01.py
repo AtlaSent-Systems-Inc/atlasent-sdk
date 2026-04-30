@@ -14,10 +14,14 @@ fx = load_fixture("SIM-01")
 async def test_no_permit_deny() -> None:
     client = build_mock_client(fx)
     execute = AsyncMock(return_value="unreachable")
-    enforce = Enforce(client=client, bindings=bindings_from_fixture(fx), fail_closed=True)
+    enforce = Enforce(
+        client=client, bindings=bindings_from_fixture(fx), fail_closed=True
+    )
 
     result = await enforce.run(
-        __import__("atlasent_enforce").RunRequest(request=fx["request"], execute=execute)
+        __import__("atlasent_enforce").RunRequest(
+            request=fx["request"], execute=execute
+        )
     )
 
     assert result.decision == fx["expected"]["decision"]

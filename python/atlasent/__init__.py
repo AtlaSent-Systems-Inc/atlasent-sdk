@@ -48,6 +48,7 @@ from .exceptions import (
     AtlaSentErrorCode,
     ConfigurationError,
     PermissionDeniedError,
+    PermitOutcome,
     RateLimitError,
 )
 from .guard import async_atlasent_guard, atlasent_guard
@@ -60,6 +61,7 @@ from .models import (
     RateLimitState,
     VerifyResult,
 )
+from .with_permit import with_permit
 
 __all__ = [
     "__version__",
@@ -67,6 +69,7 @@ __all__ = [
     "AsyncAtlaSentClient",
     "configure",
     "protect",
+    "with_permit",
     "authorize",
     "evaluate",
     "verify",
@@ -84,6 +87,7 @@ __all__ = [
     "AtlaSentDenied",
     "AtlaSentDeniedError",
     "PermissionDeniedError",
+    "PermitOutcome",
     "ConfigurationError",
     "RateLimitError",
     "atlasent_guard",

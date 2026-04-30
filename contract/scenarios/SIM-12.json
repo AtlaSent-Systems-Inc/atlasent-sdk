@@ -1,0 +1,42 @@
+{
+  "id": "SIM-12",
+  "title": "Permit not found",
+  "description": "Permit token in evaluate response is not recognized by verify_permit (typo, cross-tenant lookup, pre-issuance race). verify_permit returns HTTP 404 with reason_code permit_not_found. Enforce.run() denies with reason_code permit_not_found, byte-identical with the server response. execute does not run.",
+  "enforce_config": {
+    "bindings": {
+      "org_id": "org_test",
+      "actor_id": "actor_test",
+      "action_type": "deploy"
+    },
+    "fail_closed": true
+  },
+  "clock": { "now_iso": "2026-04-30T06:00:00Z" },
+  "request": { "commit": "abc123", "environment": "production" },
+  "mocks": {
+    "evaluate": {
+      "type": "response",
+      "decision": "allow",
+      "permit": {
+        "token": "pt_not_found_xx",
+        "expires_at": "2026-04-30T07:00:00Z"
+      },
+      "reason_code": null
+    },
+    "verify_permit": {
+      "type": "http_error",
+      "http_status": 404,
+      "reason_code": "permit_not_found"
+    }
+  },
+  "expected": {
+    "phases": [
+      {
+        "label": "permit_not_found",
+        "decision": "deny",
+        "reason_code": "permit_not_found",
+        "execute_called": false,
+        "verify_permit_called": true
+      }
+    ]
+  }
+}

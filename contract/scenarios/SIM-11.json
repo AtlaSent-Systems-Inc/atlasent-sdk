@@ -1,0 +1,42 @@
+{
+  "id": "SIM-11",
+  "title": "Permit revoked mid-flight",
+  "description": "A permit is issued by evaluate, then explicitly revoked by an admin before the gate's verifyPermit call lands. verify_permit returns HTTP 403 with reason_code permit_revoked. Enforce.run() denies with reason_code permit_revoked, byte-identical with the server response. execute does not run.",
+  "enforce_config": {
+    "bindings": {
+      "org_id": "org_test",
+      "actor_id": "actor_test",
+      "action_type": "deploy"
+    },
+    "fail_closed": true
+  },
+  "clock": { "now_iso": "2026-04-30T06:00:00Z" },
+  "request": { "commit": "abc123", "environment": "production" },
+  "mocks": {
+    "evaluate": {
+      "type": "response",
+      "decision": "allow",
+      "permit": {
+        "token": "pt_revoked_aabbcc",
+        "expires_at": "2026-04-30T07:00:00Z"
+      },
+      "reason_code": null
+    },
+    "verify_permit": {
+      "type": "http_error",
+      "http_status": 403,
+      "reason_code": "permit_revoked"
+    }
+  },
+  "expected": {
+    "phases": [
+      {
+        "label": "revoked_mid_flight",
+        "decision": "deny",
+        "reason_code": "permit_revoked",
+        "execute_called": false,
+        "verify_permit_called": true
+      }
+    ]
+  }
+}

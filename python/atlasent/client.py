@@ -19,6 +19,7 @@ from .exceptions import (
     AtlaSentError,
     PermissionDeniedError,
     RateLimitError,
+    _normalize_permit_outcome,
 )
 from .models import (
     ApiKeySelfResult,
@@ -290,6 +291,7 @@ class AtlaSentClient:
                 evaluation_id=eval_result.permit_token,
                 reason=f"Permit failed verification ({verify_result.outcome})",
                 audit_hash=eval_result.audit_hash,
+                outcome=_normalize_permit_outcome(verify_result.outcome),
             )
 
         return Permit(

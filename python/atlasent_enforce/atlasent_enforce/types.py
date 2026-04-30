@@ -17,8 +17,27 @@ ReasonCode = Literal[
     "binding_mismatch",
     "permit_expired",
     "permit_consumed",
+    "permit_revoked",
+    "permit_not_found",
     "permit_tampered",
 ]
+
+PermitOutcomeReasonCode = Literal[
+    "permit_expired",
+    "permit_consumed",
+    "permit_revoked",
+    "permit_not_found",
+]
+"""Subset of :data:`ReasonCode` values aligned with the v1 SDK's
+``PermitOutcome`` (atlasent-sdk PR #132). When a verify-permit adapter
+raises an error carrying ``reason_code`` set to one of these,
+``Enforce.run()`` surfaces it verbatim — byte-identical with the v1
+SDK's typed ``outcome`` field.
+
+See ``contract/ENFORCE_PACK.md`` § "Decision matrix" for the full
+mapping; ``atlasent/docs/REVOCATION_RUNBOOK.md`` for the operator-
+facing matrix this discriminator drives.
+"""
 
 
 @dataclass(frozen=True, slots=True)

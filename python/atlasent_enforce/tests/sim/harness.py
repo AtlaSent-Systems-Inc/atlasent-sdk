@@ -25,7 +25,8 @@ def load_fixture(sim_id: str) -> dict[str, Any]:
 
 class MockClientError(Exception):
     def __init__(self, http_status: int, reason_code: str | None) -> None:
-        super().__init__(f"HTTP {http_status}" + (f": {reason_code}" if reason_code else ""))
+        msg = f"HTTP {http_status}" + (f": {reason_code}" if reason_code else "")
+        super().__init__(msg)
         self.http_status = http_status
         self.reason_code = reason_code
 
@@ -125,4 +126,6 @@ def build_mock_client(
 
 def bindings_from_fixture(fx: dict[str, Any]) -> Bindings:
     b = fx["enforce_config"]["bindings"]
-    return Bindings(org_id=b["org_id"], actor_id=b["actor_id"], action_type=b["action_type"])
+    return Bindings(
+        org_id=b["org_id"], actor_id=b["actor_id"], action_type=b["action_type"]
+    )
