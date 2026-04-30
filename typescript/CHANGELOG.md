@@ -6,6 +6,43 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Added
+
+- **`AtlaSentDeniedError.outcome`** — discriminator that distinguishes
+  permit-side denial reasons (D4 of `LAST_20_EXECUTION_PLAN`).
+  Populated from `/v1-verify-permit` `outcome`. Typed as
+  `PermitOutcome` (`"permit_consumed" | "permit_expired" |
+  "permit_revoked" | "permit_not_found"`). Predicates `isRevoked`,
+  `isExpired`, `isConsumed`, `isNotFound` map directly to the
+  operator runbook matrix in
+  `atlasent/docs/REVOCATION_RUNBOOK.md`.
+
+  Pre-existing callers are unaffected — `outcome` defaults to
+  `undefined` and existing init fields are unchanged. The error
+  message and `reason` field still carry the raw outcome string for
+  log debuggability.
+
+  Unknown / future outcome strings normalize to `undefined` (rather
+  than surfacing an unrecognized literal), so callers branching on
+  `err.outcome` won't accidentally match an outcome string the SDK
+  was built before.
+
+  ```ts
+  import atlasent, { AtlaSentDeniedError } from "@atlasent/sdk";
+
+  try {
+    await atlasent.protect({ agent: "bot", action: "deploy" });
+  } catch (err) {
+    if (err instanceof AtlaSentDeniedError) {
+      if (err.isRevoked) notifySecurity("permit revoked mid-flight");
+      else if (err.isExpired) await retryAfterRefresh();
+      else throw err;
+    }
+  }
+  ```
+
+  Mirrors the Python SDK's `PermitOutcome` (atlasent-sdk PR #132).
+
 ## 1.5.0 — 2026-04-25
 
 ### Added

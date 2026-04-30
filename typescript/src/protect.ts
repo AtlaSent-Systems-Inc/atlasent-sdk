@@ -26,6 +26,7 @@ import { AtlaSentClient } from "./client.js";
 import {
   AtlaSentDeniedError,
   AtlaSentError,
+  normalizePermitOutcome,
   type AtlaSentDecision,
 } from "./errors.js";
 import type { AtlaSentClientOptions } from "./types.js";
@@ -150,11 +151,13 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
   const verification = await client.verifyPermit(verifyRequest);
 
   if (!verification.verified) {
+    const outcome = normalizePermitOutcome(verification.outcome);
     throw new AtlaSentDeniedError({
       decision: "deny",
       evaluationId: evaluation.permitId,
       reason: `Permit failed verification (${verification.outcome})`,
       auditHash: evaluation.auditHash,
+      ...(outcome !== undefined && { outcome }),
     });
   }
 
