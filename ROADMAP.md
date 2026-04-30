@@ -4,11 +4,11 @@ Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`), Go (`github.com/
 
 ## GA (v1) — status
 
-1. **TS SDK publish** — `@atlasent/sdk` v1.4.0 sits on `main`; **not yet published to npm**. `@atlasent/types` lives in `atlasent-api/packages/types`; whether it ships as a separate npm package or folds into `@atlasent/sdk` is open (see atlasent-api reconciliation issue).
+1. **TS SDK publish** — `@atlasent/sdk` v1.5.1 on `main`; **not yet published to npm**. `@atlasent/types` lives in `atlasent-api/packages/types`; whether it ships as a separate npm package or folds into `@atlasent/sdk` is open (see atlasent-api reconciliation issue).
 2. ✅ **Python SDK published** — `atlasent` **1.4.1 on PyPI** (2026-04-26). Sync + async clients, `protect()` / `authorize()` / `gate()` / `evaluate()` / `verify()`, `@atlasent_guard` + `@async_atlasent_guard` decorators, typed errors, `TTLCache`, audit-bundle verification.
-3. **Go SDK publish** — pending. Code currently lives in archived `atlasent-sdk-go` repo; planned home per this ROADMAP is `github.com/AtlaSent-Systems-Inc/atlasent-sdk/go`, but the `go/` subdirectory does not exist in this repo yet.
-4. **v1-only API sweep** — done in 1.x line; v2 work is gated behind `claude/v2-*` draft branches.
-5. **Offline verifier** — `verify_audit_bundle()` ships as part of `atlasent` (Python) and TS SDK. A separate `@atlasent/verify` zero-dep Node CLI is still desired but not yet packaged.
+3. **Go SDK publish** — code ready in PR #128 (`go/` subdirectory). Pending merge + `go/v1.0.0` tag push for the Go module proxy.
+4. ✅ **v1-only API sweep** — done in 1.x line.
+5. ✅ **Offline verifier** — `@atlasent/verify` zero-dep Node CLI + library packaged in PR #128. `verify_audit_bundle()` also ships as part of `atlasent` (Python) and TS SDK.
 6. **SSO-aware types** — once `atlasent-api/v1-sso` ships, export `SsoConnection`, `SsoJitRule`, `SsoEvent` from `@atlasent/types`.
 
 ## Post-GA — ordered by impact
