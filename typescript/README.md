@@ -124,6 +124,27 @@ Every `AtlaSentError` carries `err.requestId` — the UUID the SDK sent as `X-Re
 - Node.js **20** or newer (native `fetch`, `AbortSignal.timeout`, `crypto.randomUUID`).
 - TypeScript **5.0+** for best type-inference ergonomics (older is fine — types are plain interfaces).
 
+## Browser usage
+
+`@atlasent/sdk` runs in modern browsers (Chrome ≥ 103, Firefox ≥ 100, Safari ≥ 16) — the
+`process.version` reference was removed in v1.5.1. **Do not embed `ask_live_…` API keys in browser
+bundles.** Server-side credentials belong on the server.
+
+**Recommended pattern:** add a thin server-side route that calls AtlaSent on behalf of your frontend,
+then guard it with the Hono (or Express) middleware. The browser never touches AtlaSent directly.
+
+```ts
+// server (Hono example) — see "Hono middleware" section below
+app.post("/api/action", atlaSentGuard({ action: "my_action", agent: (c) => c.var.userId }), handler);
+
+// browser
+await fetch("/api/action", { method: "POST", body: JSON.stringify(payload) });
+```
+
+> **Coming:** a session-token mode (`authMode: "session"`) that lets browser clients call
+> AtlaSent directly after SSO sign-in, without ever seeing a raw API key. Tracked in
+> [atlasent-api#144](https://github.com/AtlaSent-Systems-Inc/atlasent-api/issues/144).
+
 ## Hono middleware
 
 Drop-in protection for [Hono](https://hono.dev) routes via the
