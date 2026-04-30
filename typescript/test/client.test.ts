@@ -884,8 +884,8 @@ describe("revokePermit()", () => {
     expect(fetchImpl.mock.calls).toHaveLength(1);
     const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toContain("/v1-revoke-permit");
-    expect(init.method).toBe("POST");
-    const body = JSON.parse(init.body as string);
+    expect(init!.method).toBe("POST");
+    const body = JSON.parse(init!.body as string);
     expect(body).toMatchObject({
       decision_id: "dec_to_revoke",
       reason: "policy violation",
@@ -904,7 +904,7 @@ describe("revokePermit()", () => {
     const fetchImpl = mockFetch(() => jsonResponse(REVOKE_OK_WIRE));
     const client = makeClient(fetchImpl);
     await client.revokePermit({ permitId: "dec_to_revoke" });
-    const body = JSON.parse(fetchImpl.mock.calls[0]![1].body as string);
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1]!.body as string);
     expect(body.reason).toBe("");
   });
 
