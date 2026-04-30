@@ -84,6 +84,7 @@ target-version = ["py310"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 markers = [
     "integration: hits the real AtlaSent API (skipped unless ATLASENT_API_KEY is set)",
 ]

@@ -32,12 +32,15 @@ a pilot API key.
       `permits/consume`, `permits/revoke`.
       *Current: only `evaluate` and `verify-permit` are wired. The
       remaining endpoints are queued for follow-up minor bumps.*
-- [ ] Streaming `evaluate` endpoint exposed as an async iterator
+- [x] Streaming `evaluate` endpoint exposed as an async iterator
       (Python `async for`, TS `AsyncIterable`).
-      *Draft proposal: [`contract/PROPOSALS/001-streaming-evaluate.md`](../contract/PROPOSALS/001-streaming-evaluate.md) — SSE transport, `event: decision | progress | done | error`, open questions flagged for API team.*
-- [ ] Offline audit verifier: both SDKs ship a `verify_bundle(path)`
+      Client-side SSE implementation shipped: TS `protectStream()` (9 tests), Python `protect_stream()` (8 tests).
+      Wire proposal: [`contract/PROPOSALS/001-streaming-evaluate.md`](../contract/PROPOSALS/001-streaming-evaluate.md). Contract vectors in `contract/vectors/streams/`.
+      *Pending: API team to finalize `/v1-evaluate-stream` endpoint (open questions in proposal).*
+- [x] Offline audit verifier: both SDKs ship a `verify_bundle(path)`
       that validates an Ed25519-signed export without hitting the API.
-      *Draft proposal: [`contract/PROPOSALS/002-audit-bundle.md`](../contract/PROPOSALS/002-audit-bundle.md) — NDJSON container, Ed25519 sign-what-you-send, hash-chained events, open questions on key distribution + rotation.*
+      Python: `atlasent.verify_bundle()` / `verify_audit_bundle()` (cryptography in `[verify]` extra).
+      TypeScript: `@atlasent/verify` zero-dep Node CLI + library (in PR #128).
 
 ### Type source of truth
 

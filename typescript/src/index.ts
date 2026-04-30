@@ -50,6 +50,9 @@ export type {
   EvaluateRequest,
   EvaluateResponse,
   RateLimitState,
+  StreamDecisionEvent,
+  StreamEvent,
+  StreamProgressEvent,
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "./types.js";
