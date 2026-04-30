@@ -103,7 +103,6 @@ This release is purely additive / bug-fix. The Node-side API surface
 classes, types) is unchanged. Server-side consumers see no difference.
 
 Closes [#103](https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues/103).
-
 ## 1.5.0 — 2026-04-25
 
 ### Added
