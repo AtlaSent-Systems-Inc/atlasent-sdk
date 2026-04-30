@@ -121,7 +121,7 @@ Every `AtlaSentError` carries `err.requestId` — the UUID the SDK sent as `X-Re
 
 ## Requirements
 
-- Node.js **20** or newer (native `fetch`, `AbortSignal.timeout`, `crypto.randomUUID`).
+- Node.js **18** or newer (native `fetch`, `AbortSignal.timeout`, `crypto.randomUUID`).
 - TypeScript **5.0+** for best type-inference ergonomics (older is fine — types are plain interfaces).
 
 ## Browser usage
