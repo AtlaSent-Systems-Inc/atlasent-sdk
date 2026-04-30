@@ -19,7 +19,9 @@ async def test_concurrent_consume() -> None:
     execute = AsyncMock(return_value="executed")
 
     def make_enforce() -> Enforce:
-        return Enforce(client=client, bindings=bindings_from_fixture(fx), fail_closed=True)
+        return Enforce(
+            client=client, bindings=bindings_from_fixture(fx), fail_closed=True
+        )
 
     r1, r2 = await asyncio.gather(
         make_enforce().run(RunRequest(request=fx["request"], execute=execute)),

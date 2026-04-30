@@ -13,7 +13,9 @@ _stub_client = MockClient(_stub_spec, _stub_spec)
 
 
 def test_constructs_with_fail_closed_true() -> None:
-    assert isinstance(Enforce(client=_stub_client, bindings=_BINDINGS, fail_closed=True), Enforce)
+    assert isinstance(
+        Enforce(client=_stub_client, bindings=_BINDINGS, fail_closed=True), Enforce
+    )
 
 
 def test_rejects_fail_closed_false() -> None:

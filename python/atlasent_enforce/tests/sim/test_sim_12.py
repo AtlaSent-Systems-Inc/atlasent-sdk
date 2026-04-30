@@ -14,7 +14,9 @@ fx = load_fixture("SIM-12")
 async def test_permit_not_found() -> None:
     client = build_mock_client(fx)
     execute = AsyncMock(return_value="unreachable")
-    enforce = Enforce(client=client, bindings=bindings_from_fixture(fx), fail_closed=True)
+    enforce = Enforce(
+        client=client, bindings=bindings_from_fixture(fx), fail_closed=True
+    )
 
     result = await enforce.run(RunRequest(request=fx["request"], execute=execute))
 
