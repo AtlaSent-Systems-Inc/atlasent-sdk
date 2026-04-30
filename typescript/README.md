@@ -122,7 +122,47 @@ Every `AtlaSentError` carries `err.requestId` — the UUID the SDK sent as `X-Re
 ## Requirements
 
 - Node.js **20** or newer (native `fetch`, `AbortSignal.timeout`, `crypto.randomUUID`).
+- **Browser:** Chrome 103+, Firefox 100+, Safari 16+, Edge 103+. The SDK uses
+  `AbortSignal.timeout` for per-request deadlines — the constructor throws a
+  clear `AtlaSentError(code: "network")` on runtimes that lack it so the failure
+  is loud rather than silent.
 - TypeScript **5.0+** for best type-inference ergonomics (older is fine — types are plain interfaces).
+
+## Browser support
+
+The SDK is universal and works in modern browsers with no build-time changes:
+
+```ts
+import { AtlaSentClient } from "@atlasent/sdk";
+
+const client = new AtlaSentClient({
+  apiKey: import.meta.env.VITE_ATLASENT_API_KEY,
+  baseUrl: import.meta.env.VITE_ATLASENT_API_URL,
+});
+
+const result = await client.evaluate({
+  agent: currentUser.id,
+  action: "view_sensitive_report",
+});
+```
+
+**Auth model in browser contexts.** Shipping a long-lived API key in a browser
+bundle exposes it in DevTools and makes it replayable if exfiltrated. The
+recommended options in increasing security order are:
+
+- **Option B — browser-scoped keys (short term):** Create a read-only,
+  scope-restricted, IP-allowlisted key class from the AtlaSent console.
+  Safe for internal dashboards where you control the network. Not suitable
+  for public-facing apps.
+- **Option A — session-token mode (recommended for atlasent-hosted surfaces):**
+  After SSO sign-in, the frontend obtains a short-lived (15-min) Bearer token
+  from `GET /v1-session/token` bound to the user's scopes and tenant. The SDK
+  handles token refresh transparently. See
+  [atlasent-api#144](https://github.com/AtlaSent-Systems-Inc/atlasent-api/issues/144).
+
+The `User-Agent` header is set to `@atlasent/sdk/<version> browser` in browser
+runtimes (browsers strip this header anyway — it's harmless) and
+`@atlasent/sdk/<version> node/<node-version>` in Node.
 
 ## Related
 
