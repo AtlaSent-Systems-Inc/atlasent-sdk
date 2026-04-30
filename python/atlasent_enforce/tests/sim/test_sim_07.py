@@ -14,7 +14,9 @@ fx = load_fixture("SIM-07")
 async def test_tampered_permit() -> None:
     client = build_mock_client(fx, tamper_token=True)
     execute = AsyncMock(return_value="unreachable")
-    enforce = Enforce(client=client, bindings=bindings_from_fixture(fx), fail_closed=True)
+    enforce = Enforce(
+        client=client, bindings=bindings_from_fixture(fx), fail_closed=True
+    )
 
     result = await enforce.run(RunRequest(request=fx["request"], execute=execute))
 

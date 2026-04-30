@@ -15,7 +15,9 @@ phases = fx["expected"]["phases"]
 async def test_replay_attempt() -> None:
     client = build_mock_client(fx)
     execute = AsyncMock(return_value="executed")
-    enforce = Enforce(client=client, bindings=bindings_from_fixture(fx), fail_closed=True)
+    enforce = Enforce(
+        client=client, bindings=bindings_from_fixture(fx), fail_closed=True
+    )
 
     # Phase 1 — first run
     r1 = await enforce.run(RunRequest(request=fx["request"], execute=execute))

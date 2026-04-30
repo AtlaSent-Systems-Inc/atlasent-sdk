@@ -4,8 +4,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 from tests.sim.harness import load_fixture
 
 fx = load_fixture("SIM-10")
@@ -21,6 +19,8 @@ def test_lint_rejects_bypass_fixture() -> None:
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 1, f"Expected lint to fail, got 0. Output:\n{result.stdout}{result.stderr}"
+    assert result.returncode == 1, (
+        f"Expected lint to fail, got 0. Output:\n{result.stdout}{result.stderr}"
+    )
     combined = (result.stdout + result.stderr).lower()
     assert "enforce-no-bypass" in combined or "evaluate" in combined

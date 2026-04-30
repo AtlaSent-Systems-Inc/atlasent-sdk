@@ -1,5 +1,74 @@
 # Release Notes
 
+## v1.6.0 — `AtlaSentDeniedError.outcome` discriminator (TS + Py)
+
+**Release date:** 2026-04-30
+
+Adds a typed `outcome` discriminator to `AtlaSentDeniedError` so callers
+can branch on the permit-side denial reason without parsing the
+`reason` string. Mirrors the operator runbook matrix in
+`atlasent/docs/REVOCATION_RUNBOOK.md`.
+
+### TypeScript (`@atlasent/sdk@1.6.0`)
+
+- **`AtlaSentDeniedError.outcome`** — typed `PermitOutcome`
+  (`"permit_consumed" | "permit_expired" | "permit_revoked" |
+  "permit_not_found"`), populated from `/v1-verify-permit` `outcome`.
+  Predicates `isRevoked`, `isExpired`, `isConsumed`, `isNotFound`
+  surface the same information as named flags. Unknown / future
+  outcome strings normalize to `undefined` — callers branching on
+  `err.outcome` won't accidentally match an outcome the SDK predates.
+
+  ```ts
+  import atlasent, { AtlaSentDeniedError } from "@atlasent/sdk";
+
+  try {
+    await atlasent.protect({ agent: "bot", action: "deploy" });
+  } catch (err) {
+    if (err instanceof AtlaSentDeniedError) {
+      if (err.isRevoked) notifySecurity("permit revoked mid-flight");
+      else if (err.isExpired) await retryAfterRefresh();
+      else throw err;
+    }
+  }
+  ```
+
+### Python (`atlasent==1.6.0`)
+
+- **`AtlaSentDeniedError.outcome`** — typed `PermitOutcome`
+  (`permit_consumed | permit_expired | permit_revoked |
+  permit_not_found`) with companion `is_revoked`, `is_expired`,
+  `is_consumed`, `is_not_found` predicates. Defaults to `None` for
+  pre-existing callers and for unknown future outcome strings.
+
+  ```python
+  try:
+      atlasent.protect(agent="bot", action="deploy")
+  except AtlaSentDeniedError as exc:
+      if exc.is_revoked:
+          notify_security("permit revoked mid-flight")
+      elif exc.is_expired:
+          retry_after_refresh()
+      else:
+          raise
+  ```
+
+### Breaking changes
+
+None — purely additive. `outcome` defaults to `None` / `undefined`,
+existing kwargs / init fields are unchanged, and the error message
+plus `reason` field still carry the raw outcome string for log
+debuggability.
+
+### Upgrade notes
+
+```bash
+npm install @atlasent/sdk@1.6.0
+pip install atlasent==1.6.0
+```
+
+---
+
 ## v2.0.0-alpha.1 / 2.0.0a1 — Pillar 8 bulk-revoke (TS + Py)
 
 **Release date:** 2026-04-29
@@ -232,6 +301,8 @@ APIs while staying within the v1 stability window.
 
 ## Previous releases
 
+- **v1.5.0** (2026-04-25) — Audit listing, signed exports, offline
+  verification on both SDKs.
 - **v1.4.0** (2026-04-23) — `keySelf()` API-key self-introspection on
   both SDKs.
 - **v1.3.0** (2026-04-23) — `rateLimit` / `rate_limit` on every

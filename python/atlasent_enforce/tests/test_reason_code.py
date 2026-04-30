@@ -10,7 +10,6 @@ from typing import get_args
 
 from atlasent_enforce import PermitOutcomeReasonCode, ReasonCode
 
-
 # ── Runtime assertions on the Literal members ─────────────────────────
 
 

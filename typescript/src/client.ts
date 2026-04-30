@@ -40,7 +40,7 @@ import type {
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const SDK_VERSION = "1.5.1";
+const SDK_VERSION = "1.6.0";
 
 function _buildUserAgent(): string {
   const isNode =
@@ -50,6 +50,22 @@ function _buildUserAgent(): string {
     ? `@atlasent/sdk/${SDK_VERSION} node/${process.version}`
     : `@atlasent/sdk/${SDK_VERSION} browser`;
 }
+
+/**
+ * True when running in Node.js (or a Node-compatible server runtime that
+ * exposes `process.versions.node`). False in browsers and browser-like
+ * environments such as jsdom / Cloudflare Workers.
+ */
+const isNode =
+  typeof process !== "undefined" && typeof process.versions?.node === "string";
+
+/**
+ * Node.js version string captured at module-load time so request code
+ * never accesses `process` lazily — safe even if `process` is absent
+ * (browsers) or replaced after load (bundlers, test environments).
+ * `null` in every non-Node runtime.
+ */
+const NODE_VERSION: string | null = isNode ? process.version : null;
 
 /** Raw JSON shape received from `POST /v1-evaluate`. */
 interface EvaluateWire {
@@ -92,6 +108,14 @@ export class AtlaSentClient {
       throw new AtlaSentError("apiKey is required", {
         code: "invalid_api_key",
       });
+    }
+    if (typeof AbortSignal.timeout !== "function") {
+      throw new AtlaSentError(
+        "@atlasent/sdk requires AbortSignal.timeout, which is not available in this runtime. " +
+          "Minimum supported browsers: Chrome 103+, Firefox 100+, Safari 16+. " +
+          "Upgrade your browser or add an AbortSignal.timeout polyfill.",
+        { code: "network" },
+      );
     }
     this.apiKey = options.apiKey;
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
