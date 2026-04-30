@@ -1,0 +1,37 @@
+{
+  "_comment": "Policy deny: decision with permitted=false and is_final=true.",
+  "request": {
+    "method": "POST",
+    "path": "/v1-evaluate-stream",
+    "headers": { "Accept": "text/event-stream", "Content-Type": "application/json" },
+    "body": {
+      "action": "export_patient_data",
+      "agent": "data-agent",
+      "context": { "export_type": "bulk" },
+      "api_key": "ask_test_vector"
+    }
+  },
+  "sse_events": [
+    {
+      "event": "decision",
+      "data": {
+        "permitted": false,
+        "decision_id": "dec_vector_deny_01",
+        "reason": "bulk export not authorized under GxP policy",
+        "audit_hash": "sha256:334455",
+        "timestamp": "2026-04-30T00:00:03Z",
+        "is_final": true
+      }
+    },
+    { "event": "done", "data": {} }
+  ],
+  "expected_sdk_events": [
+    {
+      "type": "decision",
+      "decision": "DENY",
+      "permit_id": "dec_vector_deny_01",
+      "reason": "bulk export not authorized under GxP policy",
+      "is_final": true
+    }
+  ]
+}

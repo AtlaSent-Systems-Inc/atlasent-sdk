@@ -1,0 +1,39 @@
+{
+  "_comment": "Minimal allow stream: single final decision + done.",
+  "request": {
+    "method": "POST",
+    "path": "/v1-evaluate-stream",
+    "headers": { "Accept": "text/event-stream", "Content-Type": "application/json" },
+    "body": {
+      "action": "read_record",
+      "agent": "clinical-data-agent",
+      "context": { "record_id": "rec_001" },
+      "api_key": "ask_test_vector"
+    }
+  },
+  "sse_events": [
+    {
+      "event": "decision",
+      "data": {
+        "permitted": true,
+        "decision_id": "dec_vector_allow_01",
+        "reason": "GxP policy authorized",
+        "audit_hash": "sha256:aabbcc",
+        "timestamp": "2026-04-30T00:00:00Z",
+        "is_final": true
+      }
+    },
+    { "event": "done", "data": {} }
+  ],
+  "expected_sdk_events": [
+    {
+      "type": "decision",
+      "decision": "ALLOW",
+      "permit_id": "dec_vector_allow_01",
+      "reason": "GxP policy authorized",
+      "audit_hash": "sha256:aabbcc",
+      "timestamp": "2026-04-30T00:00:00Z",
+      "is_final": true
+    }
+  ]
+}

@@ -58,6 +58,9 @@ from .models import (
     GateResult,
     Permit,
     RateLimitState,
+    StreamDecisionEvent,
+    StreamEvent,
+    StreamProgressEvent,
     VerifyResult,
 )
 
@@ -98,4 +101,7 @@ __all__ = [
     "AuditEventsResult",
     "AuditExportResult",
     "AuditExportSignatureStatus",
+    "StreamDecisionEvent",
+    "StreamProgressEvent",
+    "StreamEvent",
 ]
