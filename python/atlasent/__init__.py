@@ -48,6 +48,7 @@ from .exceptions import (
     AtlaSentErrorCode,
     ConfigurationError,
     PermissionDeniedError,
+    PermitOutcome,
     RateLimitError,
 )
 from .guard import async_atlasent_guard, atlasent_guard
@@ -86,6 +87,7 @@ __all__ = [
     "AtlaSentDenied",
     "AtlaSentDeniedError",
     "PermissionDeniedError",
+    "PermitOutcome",
     "ConfigurationError",
     "RateLimitError",
     "atlasent_guard",

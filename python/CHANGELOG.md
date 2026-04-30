@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Added
+
+- **`AtlaSentDeniedError.outcome`** — discriminator that distinguishes
+  permit-side denial reasons (D4 of `LAST_20_EXECUTION_PLAN`).
+  Populated from `/v1-verify-permit` `outcome` and typed as
+  `PermitOutcome` (`permit_consumed | permit_expired | permit_revoked
+  | permit_not_found`). Predicates `is_revoked`, `is_expired`,
+  `is_consumed`, `is_not_found` map directly to the operator runbook
+  matrix in `docs/REVOCATION_RUNBOOK.md` (atlasent meta).
+
+  Pre-existing callers are unaffected — `outcome` defaults to `None`
+  and existing kwargs are unchanged. The error message and `reason`
+  field still carry the raw outcome string for log debuggability.
+
+  Unknown / future outcome strings normalize to `None` (rather than
+  surfacing an unrecognized literal), so callers branching on
+  `excinfo.value.outcome` won't accidentally match an outcome the
+  SDK was built before.
+
+  ```python
+  try:
+      atlasent.protect(agent="bot", action="deploy")
+  except AtlaSentDeniedError as exc:
+      if exc.is_revoked:
+          notify_security("permit revoked mid-flight")
+      elif exc.is_expired:
+          retry_after_refresh()
+      else:
+          raise
+  ```
+
 ## 1.5.0 — 2026-04-25
 
 ### Added

@@ -36,6 +36,45 @@ defined by ``contract/vectors/errors.json`` in the SDK repo; any new
 code MUST be added there first.
 """
 
+PermitOutcome = Literal[
+    "permit_consumed",
+    "permit_expired",
+    "permit_revoked",
+    "permit_not_found",
+]
+"""Reason an already-issued permit failed verification.
+
+Surfaced on :class:`AtlaSentDeniedError.outcome` so operators can
+distinguish replay (``permit_consumed``) from revocation
+(``permit_revoked``) from natural expiry (``permit_expired``) without
+parsing :attr:`AtlaSentDeniedError.reason`. The set is defined by
+``contract/vectors/permit_outcomes.json``; any new outcome MUST be
+added there first.
+
+See ``docs/REVOCATION_RUNBOOK.md`` (atlasent meta) for the operator-
+facing matrix this discriminator drives.
+"""
+
+_KNOWN_PERMIT_OUTCOMES: frozenset[str] = frozenset(
+    {"permit_consumed", "permit_expired", "permit_revoked", "permit_not_found"}
+)
+
+
+def _normalize_permit_outcome(raw: str | None) -> PermitOutcome | None:
+    """Map a server-supplied ``outcome`` string to :data:`PermitOutcome`.
+
+    Returns ``None`` for ``None``, ``""``, ``"verified"``, or any
+    unrecognized value. Used at the SDK's deny boundary so we don't
+    raise mis-typed outcomes — when the server adds a new outcome
+    string, callers branching on :attr:`AtlaSentDeniedError.outcome`
+    see ``None`` and fall through to their generic deny path rather
+    than match an unknown literal.
+    """
+    if raw in _KNOWN_PERMIT_OUTCOMES:
+        # mypy: the membership check above narrows to PermitOutcome.
+        return raw  # type: ignore[return-value]
+    return None
+
 
 class AtlaSentError(Exception):
     """Base exception for all AtlaSent SDK errors.
@@ -154,6 +193,12 @@ class AtlaSentDeniedError(AtlaSentDenied):
         reason: Human-readable explanation from the policy engine.
         audit_hash: Hash-chained audit-trail entry associated with
             the decision, if present on the server response.
+        outcome: When the denial came from permit verification (not
+            policy evaluation), the discriminator that distinguishes
+            replay (``"permit_consumed"``), expiry
+            (``"permit_expired"``), revocation (``"permit_revoked"``),
+            and missing-record (``"permit_not_found"``). ``None`` for
+            evaluate-time denials. See :data:`PermitOutcome`.
     """
 
     def __init__(
@@ -163,6 +208,7 @@ class AtlaSentDeniedError(AtlaSentDenied):
         evaluation_id: str,
         reason: str = "",
         audit_hash: str = "",
+        outcome: PermitOutcome | None = None,
         request_id: str | None = None,
     ) -> None:
         super().__init__(
@@ -172,11 +218,41 @@ class AtlaSentDeniedError(AtlaSentDenied):
         )
         self.evaluation_id = evaluation_id
         self.audit_hash = audit_hash
+        self.outcome: PermitOutcome | None = outcome
         # `request_id` lives on `AtlaSentError` in the TS SDK; Python's
         # AtlaSentError doesn't have a first-class request_id attribute
         # yet (that's a separate parity change — see finish-work), so
         # store it on this subclass for now.
         self.request_id = request_id
+
+    # ── Outcome discriminators ────────────────────────────────────────
+    # Convenience predicates that mirror the operator runbook's matrix.
+    # Callers can branch directly on the outcome strings; these are
+    # sugar so the common cases are explicit at the call site.
+
+    @property
+    def is_revoked(self) -> bool:
+        """``True`` when the permit was explicitly revoked (D3 endpoint)."""
+        return self.outcome == "permit_revoked"
+
+    @property
+    def is_expired(self) -> bool:
+        """``True`` when the permit's TTL passed before verification."""
+        return self.outcome == "permit_expired"
+
+    @property
+    def is_consumed(self) -> bool:
+        """``True`` when the permit was already consumed by a prior verify
+        (v1 single-use replay protection).
+        """
+        return self.outcome == "permit_consumed"
+
+    @property
+    def is_not_found(self) -> bool:
+        """``True`` when the permit id wasn't recognized server-side
+        (typo, cross-tenant lookup, or pre-issuance race).
+        """
+        return self.outcome == "permit_not_found"
 
 
 class RateLimitError(AtlaSentError):
