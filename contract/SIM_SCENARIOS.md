@@ -1,7 +1,7 @@
-# SIM-01..SIM-10 — Enforce Pack scenario suite
+# SIM-01..SIM-11 — Enforce Pack scenario suite
 
-Status: **fixtures complete; implementations passing in TS + Python.**  
-Gate: all ten must pass in CI before any Preview-pack code merges.
+Status: **fixtures complete; implementations passing in TS + Python.**
+Gate: all eleven must pass in CI before any Preview-pack code merges.
 
 ## Purpose
 
@@ -38,6 +38,7 @@ their respective harnesses (`test/sim/harness.ts`,
 | [SIM-08](scenarios/SIM-08.md) | Cross-org permit | Org isolation |
 | [SIM-09](scenarios/SIM-09.md) | Concurrent consume | Single-use under concurrency |
 | [SIM-10](scenarios/SIM-10.md) | Wrapper-bypass attempt (static) | enforce-no-bypass lint |
+| [SIM-11](scenarios/SIM-11.md) | Permit revoked mid-flight | Revocation surfaces as typed `permit_revoked` reasonCode |
 
 ## Coverage matrix
 
@@ -51,6 +52,7 @@ their respective harnesses (`test/sim/harness.ts`,
 | Latency budget | SIM-06 |
 | Cryptographic integrity | SIM-07 |
 | Static-analysis non-bypass | SIM-10 |
+| Mid-flight revocation surfaces typed reasonCode | SIM-11 |
 
 ## Promotion gate
 
