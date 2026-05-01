@@ -836,9 +836,9 @@ class TestAsyncServerMessageEdgeCases:
     async def test_parse_retry_after_naive_http_date_gets_utc(
         self, async_client, mocker
     ):
-        from atlasent.async_client import _parse_retry_after
-
-        resp = _mock_resp(mocker, status_code=429, headers={"retry-after": "not-a-number"})
+        resp = _mock_resp(
+            mocker, status_code=429, headers={"retry-after": "not-a-number"}
+        )
         mocker.patch.object(async_client._client, "post", return_value=resp)
         with pytest.raises(RateLimitError):
             await async_client.evaluate("a", "b")
@@ -853,7 +853,11 @@ class TestParseSseEdgeCases:
         async def lines():
             yield ""   # blank line with no prior data
             yield "event: decision"
-            yield 'data: {"permitted":true,"decision_id":"d1","reason":"ok","audit_hash":"h","timestamp":"2026-01-01T00:00:00Z","is_final":true}'
+            yield (
+                'data: {"permitted":true,"decision_id":"d1","reason":"ok",'
+                '"audit_hash":"h","timestamp":"2026-01-01T00:00:00Z",'
+                '"is_final":true}'
+            )
             yield ""   # dispatch decision
             yield "event: done"
             yield "data: {}"
@@ -880,7 +884,11 @@ class TestParseSseEdgeCases:
 
         async def lines():
             yield "event: decision"
-            yield 'data: {"permitted":true,"decision_id":"d1","reason":"ok","audit_hash":"h","timestamp":"2026-01-01T00:00:00Z","is_final":true}'
+            yield (
+                'data: {"permitted":true,"decision_id":"d1","reason":"ok",'
+                '"audit_hash":"h","timestamp":"2026-01-01T00:00:00Z",'
+                '"is_final":true}'
+            )
             yield ""
             # no done event — iterator just ends
 
@@ -893,7 +901,11 @@ class TestParseSseEdgeCases:
         async def lines():
             yield ": this is a comment"   # SSE comment, matches none of the conditions
             yield "event: decision"
-            yield 'data: {"permitted":true,"decision_id":"d2","reason":"ok","audit_hash":"h","timestamp":"2026-01-01T00:00:00Z","is_final":true}'
+            yield (
+                'data: {"permitted":true,"decision_id":"d2","reason":"ok",'
+                '"audit_hash":"h","timestamp":"2026-01-01T00:00:00Z",'
+                '"is_final":true}'
+            )
             yield ""
             yield "event: done"
             yield "data: {}"
