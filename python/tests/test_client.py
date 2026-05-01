@@ -99,7 +99,7 @@ class TestEvaluate:
         result = client.evaluate("read_data", "agent-1", {"study": "S001"})
 
         assert isinstance(result, EvaluateResult)
-        assert result.permitted is True  # legacy attr; canonical: result.decision == "allow"
+        assert result.permitted is True  # legacy attr (canonical: result.decision)
         assert result.permit_token == "dec_100"
         assert result.reason == "Action complies with policy"
 

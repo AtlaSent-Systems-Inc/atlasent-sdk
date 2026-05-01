@@ -34,9 +34,9 @@ info:
     Every call goes through two endpoints:
 
     - `POST /v1-evaluate` — policy decision. A clean DENY is HTTP 200
-      with `permitted: false`, **not** a 4xx.
+      with `decision != 'allow'`, **not** a 4xx.
     - `POST /v1-verify-permit` — confirm a previously-issued permit
-      end-to-end. `verified: false` is similarly an HTTP 200.
+      end-to-end. `valid: false` is similarly an HTTP 200.
 
     SDKs are **fail-closed**: any failure to *confirm* authorization
     (network, server error, malformed body, rate limit, invalid key)
@@ -72,7 +72,7 @@ paths:
       summary: Evaluate whether an action is authorized.
       description: |
         A clean DENY is **not** an HTTP error — it is an HTTP 200
-        response with `permitted: false`. Fail-closed semantics in
+        response with `decision != 'allow'`. Fail-closed semantics in
         SDKs apply only to failures to *confirm* authorization
         (network, timeout, malformed body, 4xx, 5xx).
       requestBody:
@@ -85,26 +85,24 @@ paths:
               clinical_modify_allow:
                 summary: "Clinical-data agent modifying a record under GxP"
                 value:
-                  action: "modify_patient_record"
-                  agent: "clinical-data-agent"
+                  action_type: "modify_patient_record"
+                  actor_id: "clinical-data-agent"
                   context:
                     user: "dr_smith"
                     environment: "production"
                     patient_id: "PT-2024-001"
-                  api_key: "ask_live_abc123"
               minimal:
                 summary: "Minimal valid request"
                 value:
-                  action: "read_data"
-                  agent: "agent-1"
+                  action_type: "read_data"
+                  actor_id: "agent-1"
                   context: {}
-                  api_key: "ask_live_abc123"
       responses:
         "200":
           description: |
-            Policy decision. ALLOW or DENY — branch on `permitted`.
-            This is the only successful status; all non-2xx responses
-            are error conditions.
+            Policy decision. Branch on `decision` ('allow', 'deny',
+            'hold', 'escalate'). This is the only successful status;
+            all non-2xx responses are error conditions.
           content:
             application/json:
               schema:
@@ -113,19 +111,18 @@ paths:
                 allow:
                   summary: "ALLOW"
                   value:
-                    permitted: true
-                    decision_id: "dec_01J8XKQ2"
-                    reason: "Operator authorized under GxP policy"
-                    audit_hash: "sha256:..."
-                    timestamp: "2026-04-17T10:00:00Z"
+                    decision: "allow"
+                    permit_token: "pt_01J8XKQ2"
+                    request_id: "req_abc123"
+                    expires_at: "2026-04-17T11:00:00Z"
                 deny:
-                  summary: "DENY (HTTP 200, permitted=false)"
+                  summary: "DENY (HTTP 200, decision=deny)"
                   value:
-                    permitted: false
-                    decision_id: "dec_01J8XKQ3"
-                    reason: "Missing change_reason for critical field"
-                    audit_hash: "sha256:..."
-                    timestamp: "2026-04-17T10:01:00Z"
+                    decision: "deny"
+                    denial:
+                      reason: "Missing change_reason for critical field"
+                      code: "POLICY_DENY"
+                    request_id: "req_def456"
         "401":
           $ref: "#/components/responses/InvalidApiKey"
         "403":
@@ -144,8 +141,8 @@ paths:
       summary: Verify a previously-issued permit end-to-end.
       description: |
         Used as a second-factor gate (e.g. in a CI deploy pipeline
-        just before side-effects run). `verified: false` is NOT an
-        HTTP error — it is an HTTP 200 with `verified: false`.
+        just before side-effects run). `valid: false` is NOT an
+        HTTP error — it is an HTTP 200 with `outcome: 'deny'`.
       requestBody:
         required: true
         content:
@@ -154,46 +151,37 @@ paths:
               $ref: "#/components/schemas/VerifyPermitRequest"
             examples:
               minimal:
-                summary: "Verify by decision_id alone"
+                summary: "Verify by permit_token alone"
                 value:
-                  decision_id: "dec_01J8XKQ2"
-                  action: ""
-                  agent: ""
-                  context: {}
-                  api_key: "ask_live_abc123"
+                  permit_token: "pt_01J8XKQ2"
               cross_checked:
-                summary: "Verify with agent / action / context re-stated for cross-check"
+                summary: "Verify with action_type / actor_id re-stated for cross-check"
                 value:
-                  decision_id: "dec_01J8XKQ2"
-                  action: "modify_patient_record"
-                  agent: "clinical-data-agent"
-                  context:
-                    user: "dr_smith"
-                  api_key: "ask_live_abc123"
+                  permit_token: "pt_01J8XKQ2"
+                  action_type: "modify_patient_record"
+                  actor_id: "clinical-data-agent"
       responses:
         "200":
           description: |
-            Verification outcome. `verified` is the only required
-            field; `outcome` carries the reason ("verified",
-            "revoked", "expired", etc.).
+            Verification outcome. `valid` and `outcome` are always
+            present; `verify_error_code` is populated when
+            outcome='deny'.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/VerifyPermitResponse"
               examples:
-                verified:
+                valid:
                   value:
-                    verified: true
-                    outcome: "verified"
-                    permit_hash: "ph_abc"
-                    timestamp: "2026-04-17T10:00:01Z"
+                    valid: true
+                    outcome: "allow"
                 revoked:
                   summary: "HTTP 200 even though the permit is no longer valid"
                   value:
-                    verified: false
-                    outcome: "revoked"
-                    permit_hash: "ph_abc"
-                    timestamp: "2026-04-17T10:05:00Z"
+                    valid: false
+                    outcome: "deny"
+                    verify_error_code: "PERMIT_REVOKED"
+                    reason: "Permit was revoked by an operator"
         "401":
           $ref: "#/components/responses/InvalidApiKey"
         "403":
@@ -211,108 +199,135 @@ components:
       type: http
       scheme: bearer
       description: |
-        `Authorization: Bearer <api_key>`. The same key MUST also be
-        echoed in the request body's `api_key` field for wire parity
-        (see `contract/adopt/EXPECTED_ENVELOPES.md`).
+        `Authorization: Bearer <api_key>`. The API key is sent as a
+        header only; the body no longer echoes it.
 
   # Schemas are mirrored from contract/schemas/*.json. Keep in sync —
   # the JSON Schemas are the source of truth for the SDK drift detector.
   schemas:
     EvaluateRequest:
       title: EvaluateRequest
-      description: "Wire payload sent to POST /v1-evaluate. SDKs translate their camelCase surface into this snake_case body."
+      description: "Wire payload sent to POST /v1-evaluate. The legacy {action, agent, api_key} shape is no longer canonical — SDKs may accept it as input for backward-compat with a deprecation warning, but MUST always serialize to this wire shape."
       type: object
-      additionalProperties: false
-      required: [action, agent, context, api_key]
+      additionalProperties: true
+      required: [action_type, actor_id]
       properties:
-        action:
+        action_type:
           type: string
           minLength: 1
           maxLength: 256
-          description: "Action being authorized (e.g. 'modify_patient_record'). Stable identifier, snake_case recommended."
-        agent:
+          description: "Action being authorized (e.g. 'modify_patient_record'). Stable identifier."
+        actor_id:
           type: string
           minLength: 1
           maxLength: 256
-          description: "Identifier of the calling agent or actor (e.g. 'clinical-data-agent')."
+          description: "Identifier of the calling actor / agent (e.g. 'clinical-data-agent')."
         context:
           type: object
-          description: "Arbitrary policy context (user, environment, resource IDs). Values MUST be JSON-serializable."
+          description: "Arbitrary policy context (environment, approvals, resource IDs). Values MUST be JSON-serializable. Defaults to {} if omitted."
           additionalProperties: true
-        api_key:
+        request_id:
           type: string
-          description: "API key echoed in the body. Also sent as Authorization: Bearer <key>; both MUST be present for wire parity."
+          description: "Idempotency key. Repeat calls with the same request_id replay the original decision."
+        shadow:
+          type: boolean
+          description: "When true, evaluation runs but no permit is issued (mode='shadow'). Used for policy testing."
+        explain:
+          type: boolean
+          description: "When true, the response includes the rule-engine trace under `decisionObject.explanation`."
+        traceparent:
+          type: string
+          description: "W3C Trace Context fallback when the SDK can't add the header through a signing layer."
 
     EvaluateResponse:
       title: EvaluateResponse
-      description: "Wire response returned by POST /v1-evaluate. A DENY is NOT an HTTP error; it is a permitted=false body."
+      description: "Wire response returned by POST /v1-evaluate. A non-allow decision is NOT an HTTP error; it is a 200 response with decision != 'allow' and (typically) a populated `denial` block."
       type: object
       additionalProperties: true
-      required: [permitted, decision_id]
+      required: [decision]
       properties:
-        permitted:
-          type: boolean
-          description: "true iff the policy engine allowed the action. SDKs map this to decision = ALLOW | DENY."
-        decision_id:
+        decision:
+          type: string
+          enum: [allow, deny, hold, escalate]
+          description: "Canonical four-value decision. SDKs MUST handle all four."
+        permit_token:
           type: string
           minLength: 1
-          description: "Opaque permit identifier. Passed back in POST /v1-verify-permit as decision_id."
-        reason:
+          description: "Opaque permit identifier. Present iff decision == 'allow'. Passed back to POST /v1-verify-permit as `permit_token`."
+        request_id:
           type: string
-          description: "Human-readable explanation from the policy engine. May be empty on ALLOW."
-        audit_hash:
+          description: "Server-side request identifier. Used as audit deep-link and idempotency key for replays."
+        expires_at:
           type: string
-          description: "Hash-chained audit-trail entry (21 CFR Part 11 / GxP)."
-        timestamp:
+          description: "ISO 8601 timestamp at which the permit expires. Default TTL: 1 hour."
+        denial:
+          type: object
+          description: "Populated on non-allow decisions. Contains the policy-engine reason and a stable code."
+          properties:
+            reason: { type: string }
+            code: { type: string }
+          additionalProperties: true
+        mode:
           type: string
-          description: "ISO 8601 timestamp of the decision. Format: YYYY-MM-DDTHH:MM:SSZ."
-          pattern: "^$|^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+          enum: [live, shadow]
+          description: "Evaluation mode. 'shadow' indicates no permit was minted."
+        cache_hit: { type: boolean }
+        evaluation_ms: { type: number }
+        decisionObject:
+          type: object
+          description: "Canonical Decision Object (CDO) — full structured decision record."
+          additionalProperties: true
+        outcome_kind:
+          type: string
+          enum: [final, requires_confirmation, requires_override]
+        intent_match:
+          type: string
+          enum: [match, mismatch, unknown]
+        audit_entry_hash: { type: string }
+        fingerprint: { type: string }
+        risk_score: { type: number }
 
     VerifyPermitRequest:
       title: VerifyPermitRequest
-      description: "Wire payload sent to POST /v1-verify-permit."
+      description: "Wire payload sent to POST /v1-verify-permit. The legacy {decision_id, action, agent, api_key} shape is no longer canonical — SDKs MUST always serialize to this wire shape."
       type: object
-      additionalProperties: false
-      required: [decision_id, action, agent, context, api_key]
+      additionalProperties: true
+      required: [permit_token]
       properties:
-        decision_id:
+        permit_token:
           type: string
           minLength: 1
-          description: "The decision_id returned by a prior /v1-evaluate call."
-        action:
+          description: "The permit_token returned by a prior /v1-evaluate call."
+        action_type:
           type: string
-          description: "Optional cross-check — re-state the action. May be empty."
-        agent:
+          description: "Optional cross-check — re-state the action_type. ACTION_TYPE_MISMATCH if it disagrees with the original evaluation."
+        actor_id:
           type: string
-          description: "Optional cross-check — re-state the agent. May be empty."
-        context:
-          type: object
-          description: "Optional cross-check — re-state the context. May be empty."
-          additionalProperties: true
-        api_key:
-          type: string
-          description: "API key echoed in the body. Also sent as Authorization: Bearer <key>."
+          description: "Optional cross-check — re-state the actor_id. ACTOR_MISMATCH if it disagrees with the original evaluation."
 
     VerifyPermitResponse:
       title: VerifyPermitResponse
-      description: "Wire response returned by POST /v1-verify-permit. verified=false is NOT an HTTP error."
+      description: "Wire response returned by POST /v1-verify-permit. valid=false is NOT an HTTP error; it is a 200 response with outcome='deny' and a stable verify_error_code."
       type: object
       additionalProperties: true
-      required: [verified]
+      required: [valid, outcome]
       properties:
-        verified:
+        valid:
           type: boolean
-          description: "true iff the permit is still valid and un-revoked."
+          description: "true iff the permit is still valid, un-expired, un-revoked, and un-consumed."
         outcome:
           type: string
-          description: "Verification outcome string (e.g. 'verified', 'revoked', 'expired')."
-        permit_hash:
+          enum: [allow, deny]
+          description: "Server-side verification outcome. 'allow' iff valid=true."
+        verify_error_code:
           type: string
-          description: "Verification hash bound to the permit."
-        timestamp:
+          description: "Stable code populated when outcome='deny'. SDKs map these onto a higher-level verified|expired|invalid|error envelope."
+        reason:
           type: string
-          description: "ISO 8601 timestamp of the verification."
-          pattern: "^$|^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+          description: "Human-readable explanation. Safe to surface to operators; not a stable identifier."
+        decision:
+          type: string
+          description: "Echo of the decision the permit's evaluation produced. Always 'allow' on outcome='allow'."
 
     ErrorResponse:
       title: ErrorResponse
