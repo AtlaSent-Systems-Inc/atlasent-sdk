@@ -3,10 +3,11 @@
 Execution-time authorization for AI agents in GxP-regulated environments.
 Fail-closed by design — no action proceeds without an explicit permit.
 
-| Language   | Package           | Install                    | Source                                   |
-|------------|-------------------|----------------------------|------------------------------------------|
-| Python     | `atlasent`        | `pip install atlasent`     | [`./python/`](./python/)                 |
-| TypeScript | `@atlasent/sdk`   | `npm i @atlasent/sdk`      | [`./typescript/`](./typescript/)         |
+| Language   | Package                                        | Install                                                       | Source                                   |
+|------------|------------------------------------------------|---------------------------------------------------------------|------------------------------------------|
+| Python     | `atlasent`                                     | `pip install atlasent`                                        | [`./python/`](./python/)                 |
+| TypeScript | `@atlasent/sdk`                                | `npm i @atlasent/sdk`                                         | [`./typescript/`](./typescript/)         |
+| Go         | `github.com/atlasent-systems-inc/atlasent-sdk/go` | `go get github.com/atlasent-systems-inc/atlasent-sdk/go@v1.0.0` | [`./go/`](./go/)                        |
 
 ## 30-second quickstart
 
@@ -42,9 +43,39 @@ if (result.decision === "ALLOW") {
 }
 ```
 
+### Go
+
+```go
+import (
+    "context"
+    "os"
+
+    atlasent "github.com/atlasent-systems-inc/atlasent-sdk/go"
+)
+
+client, err := atlasent.New(atlasent.Options{
+    APIKey: os.Getenv("ATLASENT_API_KEY"),
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+resp, err := client.Evaluate(context.Background(), atlasent.EvaluateRequest{
+    Agent:  "clinical-data-agent",
+    Action: "modify_patient_record",
+    Context: map[string]interface{}{"user": "dr_smith", "environment": "production"},
+})
+if err != nil {
+    log.Fatal(err)
+}
+if resp.Permitted {
+    // execute action
+}
+```
+
 ## API endpoints
 
-Both SDKs target the same two endpoints:
+All SDKs target the same two endpoints:
 
 - `POST https://api.atlasent.io/v1-evaluate`
 - `POST https://api.atlasent.io/v1-verify-permit`
@@ -57,6 +88,7 @@ Full wire-format parity: a Python permit token is verifiable from the TypeScript
 atlasent-sdk/
 ├── python/         # Python SDK — pip install atlasent
 ├── typescript/     # TypeScript SDK — npm i @atlasent/sdk
+├── go/             # Go SDK — go get github.com/atlasent-systems-inc/atlasent-sdk/go
 ├── contract/       # Shared API contract — schemas, vectors, drift detector
 └── .github/
     └── workflows/  # per-language CI, path-filtered
@@ -74,3 +106,4 @@ Sign up at [atlasent.io](https://atlasent.io) → Settings → API Keys.
 
 - Python SDK: [MIT](./python/LICENSE)
 - TypeScript SDK: [Apache-2.0](./typescript/LICENSE)
+- Go SDK: [MIT](./go/LICENSE)
