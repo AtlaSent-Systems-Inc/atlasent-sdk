@@ -56,7 +56,7 @@ def _mock_json_response(mocker, body: Any, status_code: int = 200, headers=None)
     return resp
 
 
-# ── evaluate.json ─────────────────────────────────────────────────────
+# ── evaluate.json ─────────────────────────────────────────────────
 
 
 class TestEvaluateVectors:
@@ -89,7 +89,8 @@ class TestEvaluateVectors:
             expected_output = vector["sdk_output"]
             if expected_output["decision"] == "ALLOW":
                 result = client.evaluate(action, agent, context)
-                assert result.permitted is True  # legacy attr; canonical: result.decision == "allow"
+                # legacy attr (canonical: result.decision)
+                assert result.permitted is True
                 assert result.permit_token == expected_output["permit_id"]
                 assert result.reason == expected_output["reason"]
                 assert result.audit_hash == expected_output["audit_hash"]
@@ -109,7 +110,7 @@ class TestEvaluateVectors:
         )
 
 
-# ── verify.json ───────────────────────────────────────────────────────
+# ── verify.json ─────────────────────────────────────────────────
 
 
 class TestVerifyVectors:
@@ -151,7 +152,7 @@ class TestVerifyVectors:
         assert payload == vector["wire_request"]
 
 
-# ── errors.json ───────────────────────────────────────────────────────
+# ── errors.json ─────────────────────────────────────────────────
 
 
 class TestErrorVectors:
@@ -235,7 +236,7 @@ class TestAsyncEvaluateHappyVector:
         result = await client.evaluate(
             vector["sdk_input"]["action"], vector["sdk_input"]["agent"]
         )
-        assert result.permitted is True  # legacy attr; canonical: result.decision == "allow"
+        assert result.permitted is True  # legacy attr (canonical: result.decision)
         payload = mock_post.call_args[1]["json"]
         assert payload == vector["wire_request"]
 

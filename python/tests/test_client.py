@@ -52,7 +52,7 @@ def _mock_resp(mocker, status_code=200, json_data=None, headers=None):
     return resp
 
 
-# ── Init ──────────────────────────────────────────────────────────────
+# ── Init ──────────────────────────────────────────────────────
 
 
 class TestInit:
@@ -89,7 +89,7 @@ class TestInit:
         assert c._client.headers["accept"] == "application/json"
 
 
-# ── Evaluate ──────────────────────────────────────────────────────────
+# ── Evaluate ─────────────────────────────────────────────────
 
 
 class TestEvaluate:
@@ -99,7 +99,7 @@ class TestEvaluate:
         result = client.evaluate("read_data", "agent-1", {"study": "S001"})
 
         assert isinstance(result, EvaluateResult)
-        assert result.permitted is True  # legacy attr; canonical: result.decision == "allow"
+        assert result.permitted is True  # legacy attr (canonical: result.decision)
         assert result.permit_token == "dec_100"
         assert result.reason == "Action complies with policy"
 
@@ -160,7 +160,7 @@ class TestEvaluate:
             client.evaluate("a", "b")
 
 
-# ── Verify ────────────────────────────────────────────────────────────
+# ── Verify ──────────────────────────────────────────────────
 
 
 class TestVerify:
@@ -190,7 +190,7 @@ class TestVerify:
         assert "api_key" not in payload
 
 
-# ── Gate ──────────────────────────────────────────────────────────────
+# ── Gate ────────────────────────────────────────────────────
 
 
 class TestGate:
@@ -223,7 +223,7 @@ class TestGate:
         assert client._client.post.call_count == 1
 
 
-# ── Retry ─────────────────────────────────────────────────────────────
+# ── Retry ───────────────────────────────────────────────────
 
 
 class TestRetry:
@@ -265,7 +265,7 @@ class TestRetry:
         assert client_retry._client.post.call_count == 1
 
 
-# ── Rate Limiting ─────────────────────────────────────────────────────
+# ── Rate Limiting ─────────────────────────────────────────────
 
 
 class TestRateLimit:
@@ -284,7 +284,7 @@ class TestRateLimit:
         assert exc_info.value.retry_after is None
 
 
-# ── Error codes (SDK-PY-002 / SDK-PY-003) ────────────────────────────
+# ── Error codes (SDK-PY-002 / SDK-PY-003) ────────────────────
 
 
 class TestErrorCodes:
@@ -364,7 +364,7 @@ class TestErrorCodes:
         assert exc_info.value.code == "bad_response"
 
 
-# ── Resource Management ───────────────────────────────────────────────
+# ── Resource Management ─────────────────────────────────────────
 
 
 class TestLifecycle:
@@ -379,7 +379,7 @@ class TestLifecycle:
         mock_close.assert_called_once()
 
 
-# ── Edge Cases ────────────────────────────────────────────────────────
+# ── Edge Cases ────────────────────────────────────────────────
 
 
 class TestEdgeCases:
@@ -641,7 +641,7 @@ class TestSyncRequestIdOnExceptions:
         assert exc_info.value.request_id == sent
 
 
-# ── Rate-limit header parsing ────────────────────────────────────────
+# ── Rate-limit header parsing ────────────────────────────────────
 
 
 class TestRateLimitHeaders:
@@ -787,7 +787,7 @@ class TestRateLimitHeaders:
         assert result.rate_limit is None
 
 
-# ── key_self ──────────────────────────────────────────────────────────
+# ── key_self ──────────────────────────────────────────────────
 
 
 KEY_SELF_PAYLOAD = {
@@ -893,7 +893,7 @@ class TestKeySelf:
             client.key_self()
 
 
-# ── list_audit_events / create_audit_export ──────────────────────────
+# ── list_audit_events / create_audit_export ──────────────────────
 
 
 AUDIT_EVENT_ALPHA = {

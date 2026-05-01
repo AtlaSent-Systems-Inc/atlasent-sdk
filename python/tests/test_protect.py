@@ -57,7 +57,7 @@ def _mock_resp(mocker, status_code=200, json_data=None):
     return resp
 
 
-# ── Sync: AtlaSentClient.protect ───────────────────────────────────────
+# ── Sync: AtlaSentClient.protect ────────────────────────────────────
 
 
 class TestSyncProtect:
@@ -200,7 +200,9 @@ class TestSyncProtect:
         mocker.patch.object(
             client,
             "evaluate",
-            side_effect=AtlaSentDenied("denied", permit_token="tok", response_body=None),
+            side_effect=AtlaSentDenied(
+                "denied", permit_token="tok", response_body=None
+            ),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
             client.protect(agent="bot", action="deploy")
@@ -222,7 +224,7 @@ class TestSyncProtect:
         assert exc_info.value.audit_hash == ""
 
 
-# ── Async: AsyncAtlaSentClient.protect ─────────────────────────────────
+# ── Async: AsyncAtlaSentClient.protect ─────────────────────────────
 
 
 class TestAsyncProtect:
@@ -280,7 +282,9 @@ class TestAsyncProtect:
         mocker.patch.object(
             client,
             "evaluate",
-            side_effect=AtlaSentDenied("denied", permit_token="tok", response_body=None),
+            side_effect=AtlaSentDenied(
+                "denied", permit_token="tok", response_body=None
+            ),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
             await client.protect(agent="bot", action="deploy")
@@ -319,7 +323,7 @@ class TestAsyncProtect:
         assert mock_post.call_count == 1
 
 
-# ── Module-level: atlasent.protect ─────────────────────────────────────
+# ── Module-level: atlasent.protect ───────────────────────────────
 
 
 class TestModuleLevelProtect:
@@ -363,7 +367,7 @@ class TestModuleLevelProtect:
             protect(agent="a", action="b")
 
 
-# ── AtlaSentDeniedError shape ──────────────────────────────────────────
+# ── AtlaSentDeniedError shape ────────────────────────────────────
 
 
 class TestAtlaSentDeniedErrorShape:
