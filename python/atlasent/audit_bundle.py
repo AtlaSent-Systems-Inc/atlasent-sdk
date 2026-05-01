@@ -40,7 +40,12 @@ def _require_crypto():  # type: ignore[return]
         )
 
         return InvalidSignature, serialization, Ed25519PublicKey
-    except ImportError as exc:
+    except BaseException as exc:
+        # Catches ImportError (package absent) and pyo3 PanicException
+        # (a BaseException subclass raised when cryptography's Rust extension
+        # is broken, e.g. cffi missing from the environment).
+        if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+            raise
         raise ImportError(
             "atlasent[verify] is required for audit-bundle verification. "
             "Install it with: pip install 'atlasent[verify]'"

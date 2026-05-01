@@ -22,11 +22,19 @@ from atlasent.audit_bundle import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = REPO_ROOT / "contract" / "vectors" / "audit-bundles"
-PUBLIC_PEM = (FIXTURES / "signing-key.pub.pem").read_text()
+PUBLIC_PEM = (FIXTURES / "signing-key.pub.pem").read_text() if FIXTURES.exists() else ""
+
+try:
+    from atlasent.audit_bundle import _require_crypto
+
+    _require_crypto()
+    _CRYPTO_OK = True
+except BaseException:
+    _CRYPTO_OK = False
 
 pytestmark = pytest.mark.skipif(
-    not FIXTURES.exists(),
-    reason="contract/vectors/audit-bundles/ not available in this checkout",
+    not FIXTURES.exists() or not _CRYPTO_OK,
+    reason="contract/vectors/audit-bundles/ not present, or cryptography package unavailable/broken",
 )
 
 
