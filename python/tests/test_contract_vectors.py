@@ -89,7 +89,7 @@ class TestEvaluateVectors:
             expected_output = vector["sdk_output"]
             if expected_output["decision"] == "ALLOW":
                 result = client.evaluate(action, agent, context)
-                assert result.decision is True
+                assert result.permitted is True  # legacy attr; canonical: result.decision == "allow"
                 assert result.permit_token == expected_output["permit_id"]
                 assert result.reason == expected_output["reason"]
                 assert result.audit_hash == expected_output["audit_hash"]
@@ -235,7 +235,7 @@ class TestAsyncEvaluateHappyVector:
         result = await client.evaluate(
             vector["sdk_input"]["action"], vector["sdk_input"]["agent"]
         )
-        assert result.decision is True
+        assert result.permitted is True  # legacy attr; canonical: result.decision == "allow"
         payload = mock_post.call_args[1]["json"]
         assert payload == vector["wire_request"]
 

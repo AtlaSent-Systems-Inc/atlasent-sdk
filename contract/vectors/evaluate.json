@@ -1,6 +1,6 @@
 {
   "$schema": "../schemas/evaluate-request.schema.json",
-  "description": "Round-trip vectors for POST /v1-evaluate. Every SDK MUST: (a) serialize `sdk_input` into exactly `wire_request` on the wire; (b) when the server returns `wire_response`, produce `sdk_output` (keys in the idiomatic casing of that language).",
+  "description": "Round-trip vectors for POST /v1-evaluate. Every SDK MUST: (a) serialize `sdk_input` into exactly `wire_request` on the wire; (b) when the server returns `wire_response`, produce `sdk_output` (keys in the idiomatic casing of that language). Wire shape is canonical (handler.ts) — flat top-level fields, no `api_key` body. SDKs accept legacy `wire_response` shapes for backward-compat with older deployments and translate them transparently.",
   "vectors": [
     {
       "name": "evaluate_allow_minimal",
@@ -11,25 +11,23 @@
       },
       "api_key": "ask_live_test_key",
       "wire_request": {
-        "action": "read_patient_record",
-        "agent": "clinical-data-agent",
-        "context": {},
-        "api_key": "ask_live_test_key"
+        "action_type": "read_patient_record",
+        "actor_id": "clinical-data-agent",
+        "context": {}
       },
       "wire_response": {
-        "permitted": true,
-        "decision_id": "dec_minimal_allow_001",
-        "reason": "",
-        "audit_hash": "hash_a1b2c3",
-        "timestamp": "2026-04-17T10:00:00Z"
+        "decision": "allow",
+        "permit_token": "dec_minimal_allow_001",
+        "request_id": "req_minimal_001",
+        "expires_at": "2026-04-17T11:00:00Z"
       },
       "sdk_output": {
         "decision": "ALLOW",
         "permitted": true,
         "permit_id": "dec_minimal_allow_001",
         "reason": "",
-        "audit_hash": "hash_a1b2c3",
-        "timestamp": "2026-04-17T10:00:00Z"
+        "audit_hash": "",
+        "timestamp": ""
       }
     },
     {
@@ -47,30 +45,28 @@
       },
       "api_key": "ask_live_test_key",
       "wire_request": {
-        "action": "modify_patient_record",
-        "agent": "clinical-data-agent",
+        "action_type": "modify_patient_record",
+        "actor_id": "clinical-data-agent",
         "context": {
           "user": "dr_smith",
           "environment": "production",
           "patient_id": "PT-001",
           "change_reason": "Correct date-of-birth"
-        },
-        "api_key": "ask_live_test_key"
+        }
       },
       "wire_response": {
-        "permitted": true,
-        "decision_id": "dec_ctx_allow_002",
-        "reason": "Operator authorized under GxP policy",
-        "audit_hash": "hash_ctx_002",
-        "timestamp": "2026-04-17T10:01:00Z"
+        "decision": "allow",
+        "permit_token": "dec_ctx_allow_002",
+        "request_id": "req_ctx_002",
+        "expires_at": "2026-04-17T11:01:00Z"
       },
       "sdk_output": {
         "decision": "ALLOW",
         "permitted": true,
         "permit_id": "dec_ctx_allow_002",
-        "reason": "Operator authorized under GxP policy",
-        "audit_hash": "hash_ctx_002",
-        "timestamp": "2026-04-17T10:01:00Z"
+        "reason": "",
+        "audit_hash": "",
+        "timestamp": ""
       }
     },
     {
@@ -83,42 +79,41 @@
       },
       "api_key": "ask_live_test_key",
       "wire_request": {
-        "action": "wire_transfer",
-        "agent": "finance-agent",
-        "context": { "amount_usd": 50000 },
-        "api_key": "ask_live_test_key"
+        "action_type": "wire_transfer",
+        "actor_id": "finance-agent",
+        "context": { "amount_usd": 50000 }
       },
       "wire_response": {
-        "permitted": false,
-        "decision_id": "dec_deny_003",
-        "reason": "Amount exceeds agent limit",
-        "audit_hash": "hash_deny_003",
-        "timestamp": "2026-04-17T10:02:00Z"
+        "decision": "deny",
+        "denial": {
+          "reason": "Amount exceeds agent limit",
+          "code": "AMOUNT_OVER_LIMIT"
+        },
+        "request_id": "req_deny_003"
       },
       "sdk_output": {
         "decision": "DENY",
         "permitted": false,
-        "permit_id": "dec_deny_003",
+        "permit_id": "",
         "reason": "Amount exceeds agent limit",
-        "audit_hash": "hash_deny_003",
-        "timestamp": "2026-04-17T10:02:00Z"
+        "audit_hash": "",
+        "timestamp": ""
       }
     },
     {
       "name": "evaluate_response_missing_required_fields",
-      "description": "Malformed response: missing `permitted` or `decision_id`. SDKs MUST raise a bad-response error (do NOT silently default to DENY or ALLOW).",
+      "description": "Malformed response: missing `decision` (and no legacy `permitted` either). SDKs MUST raise a bad-response error (do NOT silently default to DENY or ALLOW).",
       "sdk_input": { "agent": "a", "action": "b" },
       "api_key": "ask_live_test_key",
       "wire_request": {
-        "action": "b",
-        "agent": "a",
-        "context": {},
-        "api_key": "ask_live_test_key"
+        "action_type": "b",
+        "actor_id": "a",
+        "context": {}
       },
       "wire_response": { "foo": "bar" },
       "sdk_error": {
         "kind": "bad_response",
-        "message_contains": "permitted"
+        "message_contains": "decision"
       }
     }
   ]

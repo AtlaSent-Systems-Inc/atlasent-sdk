@@ -2,6 +2,110 @@
 
 ## Unreleased
 
+## 2.0.0 — 2026-04-30 — wire-format reconciliation (BREAKING)
+
+### Wire format
+
+The SDK now serializes the **canonical** request shape consumed by the
+deployed `atlasent-api/.../v1-{evaluate,verify-permit}/handler.ts`:
+
+- `POST /v1-evaluate` body is `{ action_type, actor_id, context }`
+  (previously `{ action, agent, context, api_key }`).
+- `POST /v1-verify-permit` body is `{ permit_token, action_type,
+  actor_id }` (previously `{ decision_id, action, agent, context,
+  api_key }`).
+- `api_key` is no longer echoed in the request body — the server
+  reads it from the `Authorization: Bearer ...` header (which the
+  client has always sent).
+
+This is the **breaking** part: an SDK upgrade requires the
+counterpart `atlasent-api` deployment to have the handler.ts entry
+wired (the swap landed in `atlasent-api#190`). Older deployments
+that still read the legacy wire shape will return
+`400 BAD_REQUEST: missing 'action_type'` until they pick up the
+handler.ts entry.
+
+### Backward-compat (no silent break for SDK callers)
+
+- **Construction with legacy keyword names keeps working:**
+  `EvaluateRequest(action="...", agent="...", api_key="...")` and
+  `VerifyRequest(decision_id="...", action="...", agent="...",
+  api_key="...")` are accepted via pydantic
+  `validation_alias=AliasChoices(...)` and emit
+  `DeprecationWarning` so callers can surface the migration in their
+  test suites. The actionable warning lands on the construction
+  site.
+- **Result objects still expose legacy attributes:**
+  `result.permitted`, `result.decision_id`, `result.audit_hash`,
+  `result.timestamp`, `result.reason` (on `EvaluateResult`),
+  `result.verified`, `result.permit_hash` (on `VerifyResult`) are
+  populated alongside their canonical counterparts. Existing readers
+  see no change.
+- **Legacy server responses are still parsed:** the model validator
+  accepts both `{permitted, decision_id, ...}` and
+  `{decision, permit_token, request_id, ...}` shapes, so an SDK
+  upgrade ahead of an atlasent-api upgrade still parses cleanly.
+
+### Added — canonical attributes on result objects
+
+- `EvaluateResult.decision`: `Literal["allow", "deny", "hold",
+  "escalate"]` — replaces the bool that used to live under the same
+  name. (In the fail-closed `evaluate()` surface this is always
+  `"allow"` when the result is returned; the other values appear
+  when constructing or parsing the model directly.)
+- `EvaluateResult.permit_token`, `request_id`, `expires_at`,
+  `denial: { reason, code }`.
+- `VerifyResult.valid: bool`, `outcome: Literal["allow", "deny"]`,
+  `verify_error_code: str | None` — surface the canonical handler.ts
+  shape so SDK callers can branch on `verify_error_code` (e.g.
+  `PERMIT_EXPIRED`, `PERMIT_REVOKED`, `RATE_LIMITED`) without parsing
+  free-form `reason` strings.
+
+### Changed — `EvaluateResult.decision` is no longer a `bool`
+
+The single non-additive break for code that READ `result.decision`:
+it is now `"allow"` rather than `True`. The truthy check
+(`if result.decision:`) keeps working; explicit `==` against `True`
+or `False` does not. Migration is one keystroke per call site:
+
+```diff
+- if result.decision == True:
++ if result.decision == "allow":
+```
+
+The legacy boolean is preserved on `result.permitted` (`True` iff
+`decision == "allow"`).
+
+### Changed — `verify()` no longer sends `context` on the wire
+
+The deployed verify handler does not consult the `context` field;
+the client now omits it from the wire to keep the body honest. The
+public `verify(...)` keyword argument still exists for backward
+compat with callers — it is silently dropped. PR2 will add a
+`DeprecationWarning` for non-empty `context` passed to `verify()`
+specifically.
+
+### Migration guide
+
+Most callers need zero changes: the public `client.evaluate(...)`
+and `client.verify(...)` methods already use canonical kwargs, and
+result-attribute readers continue to work via the legacy mirror.
+
+If you build models directly:
+
+```diff
+- EvaluateRequest(action="deploy", agent="bot", api_key="...")
++ EvaluateRequest(action_type="deploy", actor_id="bot")
+```
+
+```diff
+- VerifyRequest(decision_id="dec_x", action="deploy", agent="bot")
++ VerifyRequest(permit_token="dec_x", action_type="deploy", actor_id="bot")
+```
+
+If you branch on `result.decision` as a bool, switch to the string
+enum or read `result.permitted`.
+
 ## 1.6.0 — 2026-04-30
 
 ### Added

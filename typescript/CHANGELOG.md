@@ -6,6 +6,58 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+## 2.0.0 — 2026-04-30 — wire-format reconciliation (BREAKING)
+
+PR1 of the contract reconciliation. Wire shape moves to canonical
+(handler.ts in `atlasent-api`); the public TS SDK surface
+(`AtlaSentClient.evaluate`, `AtlaSentClient.verifyPermit`) is
+unchanged for callers using the documented method signature. PR2
+adds the dual-shape *input* bridge (`DeprecationWarning` when callers
+construct request bodies with legacy field names directly).
+
+### Wire format
+
+- `POST /v1-evaluate` body: `{ action_type, actor_id, context }`
+  (was `{ action, agent, context, api_key }`).
+- `POST /v1-verify-permit` body: `{ permit_token, action_type,
+  actor_id }` (was `{ decision_id, action, agent, context,
+  api_key }`).
+- `api_key` is no longer echoed in the request body — server reads
+  the `Authorization: Bearer ...` header (always sent).
+- `context` is no longer sent on `verifyPermit` — the deployed
+  verify handler does not consult it.
+
+### Backward-compat
+
+- The public TS API (`evaluate({ agent, action, context })`,
+  `verifyPermit({ permitId, action, agent, context })`) is
+  unchanged. The internal wire translation is what moved.
+- Server responses are parsed in both shapes: canonical
+  `{ decision, permit_token, request_id, expires_at, denial }` and
+  legacy `{ permitted, decision_id, reason, audit_hash, timestamp }`.
+  A SDK upgrade ahead of an atlasent-api upgrade still parses the
+  old wire response cleanly.
+
+### Wire interfaces (`EvaluateWire`, `VerifyPermitWire`)
+
+Internal types now expose the canonical shape with legacy fields as
+optional passthrough so unit tests asserting on either shape
+continue to pass.
+
+### Coupled change — atlasent-api
+
+This release expects `atlasent-api/.../v1-evaluate/index.ts` to
+delegate to `handler.ts` (atlasent-api PR for #190). Older
+deployments serving the slim `index.ts` will return
+`400 BAD_REQUEST: missing 'action_type'` when called with the new
+wire. Coordinate the SDK upgrade with the atlasent-api deploy.
+
+### Stacked
+
+PR2 will add the dual-shape **input** bridge for TS — accept
+`{ action, agent }` plus `{ actionType, actorId }` user input, emit
+a deprecation warning on the legacy form.
+
 ## 1.6.0 — 2026-04-30
 
 ### Added

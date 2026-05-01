@@ -1,12 +1,42 @@
-"""Pydantic models for AtlaSent API requests and responses."""
+"""Pydantic models for AtlaSent API requests and responses.
+
+Wire format (post 2026-04-30 contract reconciliation): every model
+serializes to the canonical wire shape read by
+``atlasent-api/supabase/functions/v1-{evaluate,verify-permit}/handler.ts``:
+
+  POST /v1-evaluate request:
+      { action_type, actor_id, context }                                     (canonical)
+      { action, agent, context, api_key }                                    (legacy, accepted with DeprecationWarning)
+
+  POST /v1-evaluate response:
+      { decision: "allow"|"deny"|"hold"|"escalate", permit_token?,
+        request_id?, expires_at?, denial?: {reason, code}, ... }             (canonical)
+      { permitted: bool, decision_id, reason?, audit_hash?, timestamp? }     (legacy server, transparently translated)
+
+  POST /v1-verify-permit request:
+      { permit_token, action_type?, actor_id? }                              (canonical)
+      { decision_id, action, agent, context, api_key }                       (legacy, accepted with DeprecationWarning)
+
+  POST /v1-verify-permit response:
+      { valid, outcome: "allow"|"deny", verify_error_code?, reason? }        (canonical)
+      { verified, outcome, permit_hash, timestamp }                          (legacy, transparently translated)
+
+Construction with legacy keyword names (``action=``, ``agent=``,
+``decision_id=``, ``api_key=``) keeps working but emits
+``DeprecationWarning``. Reading legacy attributes on result objects
+(``permitted``, ``decision_id``, ``verified``, ``permit_hash``,
+``audit_hash``, ``timestamp``) is supported transparently and will
+remain so for the duration of the deprecation window.
+"""
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 # ── Rate-limit state (shared by evaluate + verify) ───────────────────
 
@@ -44,82 +74,271 @@ class RateLimitState:
     reset_at: datetime
 
 
+def _warn_legacy(label: str, mapping: str) -> None:
+    """Emit a DeprecationWarning describing a single legacy input field.
+
+    ``stacklevel=4`` lands on the caller of ``EvaluateRequest(...)`` /
+    ``VerifyRequest(...)`` — the actionable site for fixing the code.
+    """
+    warnings.warn(
+        f"AtlaSent SDK: legacy {label} ({mapping}) is deprecated and "
+        "will be removed in a future major release.",
+        DeprecationWarning,
+        stacklevel=4,
+    )
+
+
 # ── Evaluate ──────────────────────────────────────────────────────────
 
 
 class EvaluateRequest(BaseModel):
-    """Payload sent to ``POST /v1-evaluate``."""
+    """Payload sent to ``POST /v1-evaluate``.
 
-    action_type: str = Field(..., alias="action")
-    actor_id: str = Field(..., alias="agent")
+    Accepts both the canonical input shape
+    (``action_type=``, ``actor_id=``) and the legacy shape
+    (``action=``, ``agent=``, ``api_key=``). Legacy field names emit
+    ``DeprecationWarning`` on construction. Always serializes to the
+    canonical wire (``{action_type, actor_id, context}``); ``api_key``
+    is intentionally excluded — the server reads it from the
+    ``Authorization`` header.
+    """
+
+    action_type: str = Field(
+        ...,
+        validation_alias=AliasChoices("action_type", "action"),
+        description="Action being authorized (e.g. 'modify_patient_record').",
+    )
+    actor_id: str = Field(
+        ...,
+        validation_alias=AliasChoices("actor_id", "agent"),
+        description="Identifier of the calling actor / agent.",
+    )
     context: dict[str, Any] = Field(default_factory=dict)
-    api_key: str = ""
+    # Kept for backward-compat with code that constructs the request
+    # directly. Excluded from wire serialization — the server reads the
+    # API key from the Authorization header, never from the body.
+    api_key: str = Field(default="", exclude=True)
 
-    model_config = {"populate_by_name": True}
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_on_legacy_input(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if "action" in data and "action_type" not in data:
+            _warn_legacy("EvaluateRequest field", "action= -> action_type=")
+        if "agent" in data and "actor_id" not in data:
+            _warn_legacy("EvaluateRequest field", "agent= -> actor_id=")
+        if data.get("api_key"):
+            _warn_legacy(
+                "EvaluateRequest field",
+                "api_key= (request body) -> Authorization header (handled by client)",
+            )
+        return data
 
 
 class EvaluateResult(BaseModel):
-    """Successful response from ``POST /v1-evaluate``.
+    """Response from ``POST /v1-evaluate``.
 
-    In the fail-closed SDK, you only receive this object when the
-    action is **permitted**.  A denial raises :class:`AtlaSentDenied`.
+    Pydantic parses both the canonical handler.ts shape and the legacy
+    ``{permitted, decision_id, ...}`` shape; legacy responses are
+    translated to canonical fields via ``_accept_legacy_response``.
 
-    Attributes:
-        decision: The authorization decision (``True`` when permitted).
-        permit_token: An opaque token used to verify the permit later.
-        reason: Human-readable explanation of the decision.
-        audit_hash: Hash-chained audit trail entry.
-        timestamp: ISO 8601 timestamp of the decision.
-        rate_limit: Per-key rate-limit state parsed from ``X-RateLimit-*``
-            headers on this response. ``None`` when the server didn't
-            emit the headers.
+    In the fail-closed SDK you only receive this object when the
+    decision is ``"allow"``. Anything else raises
+    :class:`AtlaSentDenied` from the client.
+
+    Canonical attributes:
+        decision: Four-value decision (``"allow"|"deny"|"hold"|"escalate"``).
+            Always ``"allow"`` when this object reaches user code via
+            the fail-closed client; the other values may appear when
+            constructing or parsing this model directly.
+        permit_token: Opaque permit identifier. Pass to
+            :meth:`AtlaSentClient.verify` to confirm the permit later.
+        request_id: Server-side request identifier. Useful as an
+            audit deep-link.
+        expires_at: ISO 8601 timestamp at which the permit expires.
+        denial: Populated on non-allow decisions. ``{"reason", "code"}``.
+        rate_limit: Per-key rate-limit state from ``X-RateLimit-*``
+            headers. ``None`` when the server didn't emit them.
+
+    Legacy attributes (kept for backward-compat with existing readers,
+    populated alongside their canonical counterparts):
+        permitted: ``True`` iff ``decision == "allow"``.
+        decision_id: Alias for :attr:`permit_token`.
+        reason: Pulled from ``denial.reason`` when present.
+        audit_hash: Legacy hash field. Empty under the canonical wire.
+        timestamp: Legacy timestamp field. Empty under the canonical wire.
     """
 
-    decision: bool = Field(..., alias="permitted")
-    permit_token: str = Field(..., alias="decision_id")
+    decision: Literal["allow", "deny", "hold", "escalate"] = "allow"
+    permit_token: str = ""
+    request_id: str = ""
+    expires_at: str = ""
+    denial: dict[str, Any] | None = None
+    rate_limit: RateLimitState | None = None
+
+    # Legacy fields. Populated by the model_validator (from canonical
+    # `decision` / `permit_token` / `denial`) so existing readers like
+    # ``result.permitted`` and ``result.decision_id`` keep working.
+    permitted: bool = False
+    decision_id: str = ""
     reason: str = ""
     audit_hash: str = ""
     timestamp: str = ""
-    rate_limit: RateLimitState | None = None
 
-    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        extra="ignore",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_legacy_response(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+
+        # Legacy server shape: {permitted, decision_id, reason, audit_hash, timestamp}.
+        # Translate to canonical {decision, permit_token, denial} so the rest of
+        # the model populates uniformly.
+        if "decision" not in out and isinstance(out.get("permitted"), bool):
+            out["decision"] = "allow" if out["permitted"] else "deny"
+        if "permit_token" not in out and "decision_id" in out:
+            out["permit_token"] = out["decision_id"]
+        if "denial" not in out and out.get("decision") not in (None, "allow") and out.get("reason"):
+            out["denial"] = {"reason": out["reason"]}
+
+        # Now mirror canonical → legacy so consumers reading either shape see
+        # consistent values.
+        decision = out.get("decision", "allow")
+        if "permitted" not in out:
+            out["permitted"] = decision == "allow"
+        if "decision_id" not in out and out.get("permit_token"):
+            out["decision_id"] = out["permit_token"]
+        if "reason" not in out and isinstance(out.get("denial"), dict):
+            out["reason"] = str(out["denial"].get("reason", ""))
+
+        return out
 
 
 # ── Verify ────────────────────────────────────────────────────────────
 
 
 class VerifyRequest(BaseModel):
-    """Payload sent to ``POST /v1-verify-permit``."""
+    """Payload sent to ``POST /v1-verify-permit``.
 
-    permit_token: str = Field(..., alias="decision_id")
-    action_type: str = Field(default="", alias="action")
-    actor_id: str = Field(default="", alias="agent")
-    context: dict[str, Any] = Field(default_factory=dict)
-    api_key: str = ""
+    Accepts both canonical input (``permit_token=``) and legacy
+    (``decision_id=``, ``action=``, ``agent=``, ``api_key=``). Legacy
+    field names emit ``DeprecationWarning``. Always serializes to the
+    canonical wire (``{permit_token, action_type, actor_id}``);
+    ``context`` and ``api_key`` are intentionally excluded — the
+    server doesn't read them.
+    """
 
-    model_config = {"populate_by_name": True}
+    permit_token: str = Field(
+        ...,
+        validation_alias=AliasChoices("permit_token", "decision_id"),
+        description="The permit_token returned by a prior /v1-evaluate call.",
+    )
+    action_type: str = Field(
+        default="",
+        validation_alias=AliasChoices("action_type", "action"),
+        description="Optional cross-check — re-state the action.",
+    )
+    actor_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("actor_id", "agent"),
+        description="Optional cross-check — re-state the actor.",
+    )
+    # Legacy fields, excluded from wire serialization.
+    context: dict[str, Any] = Field(default_factory=dict, exclude=True)
+    api_key: str = Field(default="", exclude=True)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_on_legacy_input(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if "decision_id" in data and "permit_token" not in data:
+            _warn_legacy("VerifyRequest field", "decision_id= -> permit_token=")
+        if "action" in data and "action_type" not in data:
+            _warn_legacy("VerifyRequest field", "action= -> action_type=")
+        if "agent" in data and "actor_id" not in data:
+            _warn_legacy("VerifyRequest field", "agent= -> actor_id=")
+        if data.get("api_key"):
+            _warn_legacy(
+                "VerifyRequest field",
+                "api_key= (request body) -> Authorization header (handled by client)",
+            )
+        if data.get("context"):
+            _warn_legacy(
+                "VerifyRequest field",
+                "context= (request body) is no longer cross-checked by the server",
+            )
+        return data
 
 
 class VerifyResult(BaseModel):
     """Response from ``POST /v1-verify-permit``.
 
-    Attributes:
-        outcome: The verification outcome (e.g. ``"verified"``).
-        valid: Whether the permit is still valid.
-        permit_hash: The permit hash returned by the API.
-        timestamp: ISO 8601 timestamp of the verification.
-        rate_limit: Per-key rate-limit state parsed from ``X-RateLimit-*``
-            headers on this response. ``None`` when the server didn't
-            emit the headers.
+    Parses both the canonical handler.ts shape
+    (``{valid, outcome, verify_error_code, reason}``) and the legacy
+    shape (``{verified, outcome, permit_hash, timestamp}``); legacy
+    responses are translated by ``_accept_legacy_response``.
+
+    Canonical attributes:
+        valid: ``True`` iff the permit is still valid, un-expired,
+            un-revoked, and un-consumed.
+        outcome: Server-side ``"allow"`` or ``"deny"``.
+        verify_error_code: Stable code populated when ``outcome=="deny"``
+            (e.g. ``"PERMIT_EXPIRED"``, ``"PERMIT_ALREADY_USED"``).
+        reason: Human-readable explanation. Safe to surface to operators.
+        rate_limit: Per-key rate-limit state from ``X-RateLimit-*``
+            headers. ``None`` when the server didn't emit them.
+
+    Legacy attributes:
+        verified: Alias for :attr:`valid`.
+        permit_hash: Legacy verification hash. Empty under canonical wire.
+        timestamp: Legacy timestamp. Empty under canonical wire.
     """
 
+    valid: bool = False
     outcome: str = ""
-    valid: bool = Field(..., alias="verified")
-    permit_hash: str = ""
-    timestamp: str = ""
+    verify_error_code: str | None = None
+    reason: str = ""
     rate_limit: RateLimitState | None = None
 
-    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
+    # Legacy passthrough.
+    verified: bool = False
+    permit_hash: str = ""
+    timestamp: str = ""
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        extra="ignore",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_legacy_response(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+
+        # Legacy server shape: {verified, outcome, permit_hash, timestamp}.
+        if "valid" not in out and isinstance(out.get("verified"), bool):
+            out["valid"] = out["verified"]
+        # Mirror canonical → legacy so existing `result.verified` keeps working.
+        if "verified" not in out and isinstance(out.get("valid"), bool):
+            out["verified"] = out["valid"]
+
+        return out
 
 
 # ── Key self-introspection ────────────────────────────────────────────
@@ -167,7 +386,7 @@ class ApiKeySelfResult(BaseModel):
     expires_at: str | None = None
     rate_limit: RateLimitState | None = None
 
-    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
+    model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
 
 
 # ── Gate (convenience) ────────────────────────────────────────────────
@@ -193,10 +412,6 @@ class Permit:
     action is authorized end-to-end (evaluate passed AND the resulting
     permit verified).
 
-    Shape mirrors the TypeScript SDK's ``Permit`` interface for
-    cross-language parity; every attribute is also a field on the
-    underlying API responses.
-
     Attributes:
         permit_id: Opaque permit / decision identifier.
         permit_hash: Verification hash bound to the permit.
@@ -216,7 +431,6 @@ class Permit:
 class AuthorizationResult:
     """Result of an :func:`atlasent.authorize` call.
 
-    This is the primary return type for the public SDK surface.
     Check :attr:`permitted` to decide whether to proceed.
 
     Attributes:
@@ -226,19 +440,11 @@ class AuthorizationResult:
         context: The context dict passed to ``authorize``.
         reason: Human-readable explanation from the policy engine.
         permit_token: Opaque decision identifier for audit lookup.
-        audit_hash: Hash-chained audit trail entry (21 CFR Part 11).
+        audit_hash: Hash-chained audit trail entry.
         permit_hash: Verification hash bound to the permit.
         verified: ``True`` if the permit was server-verified end-to-end.
-        timestamp: ISO 8601 timestamp of the authorization decision.
+        timestamp: ISO 8601 timestamp.
         raw: The raw JSON response body from the API.
-
-    Example::
-
-        result = authorize(agent="clinical-agent", action="read_phi")
-        if result.permitted:
-            do_the_thing()
-        else:
-            logger.warning("Denied: %s", result.reason)
     """
 
     permitted: bool
@@ -254,14 +460,10 @@ class AuthorizationResult:
     raw: dict[str, Any] = field(default_factory=dict)
 
     def __bool__(self) -> bool:
-        """Truthy iff the action was permitted.
-
-        Allows the idiomatic ``if authorize(...):`` check.
-        """
         return self.permitted
 
 
-# ── Revoke permit ─────────────────────────────────────────────────────────────
+# ── Revoke permit ─────────────────────────────────────────────────────
 
 
 class RevokePermitResult(BaseModel):
@@ -276,7 +478,7 @@ class RevokePermitResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
-# ── Streaming evaluate events ─────────────────────────────────────────────────
+# ── Streaming evaluate events ─────────────────────────────────────────
 
 
 class StreamDecisionEvent(BaseModel):
@@ -291,7 +493,7 @@ class StreamDecisionEvent(BaseModel):
     is_final: bool = False
 
     @classmethod
-    def from_wire(cls, data: dict[str, Any]) -> StreamDecisionEvent:
+    def from_wire(cls, data: dict[str, Any]) -> "StreamDecisionEvent":
         permitted = data.get("permitted", True)
         return cls(
             decision="ALLOW" if permitted else "DENY",

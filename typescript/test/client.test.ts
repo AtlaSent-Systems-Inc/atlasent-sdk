@@ -115,10 +115,9 @@ describe("evaluate()", () => {
     expect(init!.method).toBe("POST");
     const body = JSON.parse(init!.body as string);
     expect(body).toEqual({
-      action: "act",
-      agent: "agent-X",
+      action_type: "act",
+      actor_id: "agent-X",
       context: { u: "v" },
-      api_key: "ask_live_test",
     });
   });
 
@@ -161,7 +160,7 @@ describe("verifyPermit()", () => {
     expect(result.verified).toBe(true);
   });
 
-  it("sends the wire-format body with permit_id → decision_id", async () => {
+  it("sends the wire-format body with permit_id → permit_token (canonical)", async () => {
     const fetchImpl = mockFetch(() => jsonResponse(VERIFY_OK_WIRE));
     const client = makeClient(fetchImpl);
     await client.verifyPermit({
@@ -173,12 +172,12 @@ describe("verifyPermit()", () => {
     const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toBe("https://api.atlasent.io/v1-verify-permit");
     const body = JSON.parse(init!.body as string);
+    // Canonical wire — no `context`, no `api_key`. Verify handler reads
+    // only permit_token / action_type / actor_id.
     expect(body).toEqual({
-      decision_id: "dec_alpha",
-      action: "read_phi",
-      agent: "agent-1",
-      context: { patientId: "PT-001" },
-      api_key: "ask_live_test",
+      permit_token: "dec_alpha",
+      action_type: "read_phi",
+      actor_id: "agent-1",
     });
   });
 });

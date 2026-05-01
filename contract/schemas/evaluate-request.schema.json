@@ -2,31 +2,43 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://atlasent.io/contract/v1/evaluate-request.schema.json",
   "title": "EvaluateRequest",
-  "description": "Wire payload sent to POST /v1-evaluate. SDKs translate their camelCase surface into this snake_case body.",
+  "description": "Wire payload sent to POST /v1-evaluate. Read by atlasent-api/supabase/functions/v1-evaluate/handler.ts. Top-level fields are flat; `context` is an opaque record passed verbatim to the rule engine. The legacy {action, agent, api_key} shape is no longer canonical — SDKs may accept it as input for backward-compat with a deprecation warning, but MUST always serialize to the wire shape described here.",
   "type": "object",
-  "additionalProperties": false,
-  "required": ["action", "agent", "context", "api_key"],
+  "additionalProperties": true,
+  "required": ["action_type", "actor_id"],
   "properties": {
-    "action": {
+    "action_type": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "description": "Action being authorized (e.g. 'modify_patient_record'). Stable identifier, snake_case recommended."
+      "description": "Action being authorized (e.g. 'modify_patient_record'). Stable identifier."
     },
-    "agent": {
+    "actor_id": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "description": "Identifier of the calling agent or actor (e.g. 'clinical-data-agent')."
+      "description": "Identifier of the calling actor / agent (e.g. 'clinical-data-agent')."
     },
     "context": {
       "type": "object",
-      "description": "Arbitrary policy context (user, environment, resource IDs). Values MUST be JSON-serializable.",
+      "description": "Arbitrary policy context (environment, approvals, change_window, resource IDs). Values MUST be JSON-serializable. Defaults to {} if omitted.",
       "additionalProperties": true
     },
-    "api_key": {
+    "request_id": {
       "type": "string",
-      "description": "API key echoed in the body. Also sent as Authorization: Bearer <key>; both MUST be present for wire parity."
+      "description": "Idempotency key. Repeat calls with the same request_id replay the original decision."
+    },
+    "shadow": {
+      "type": "boolean",
+      "description": "When true, evaluation runs but no permit is issued (mode='shadow'). Used for policy testing."
+    },
+    "explain": {
+      "type": "boolean",
+      "description": "When true, the response includes the rule-engine trace under `decisionObject.explanation`."
+    },
+    "traceparent": {
+      "type": "string",
+      "description": "W3C Trace Context fallback when the SDK can't add the header through a signing layer."
     }
   }
 }
