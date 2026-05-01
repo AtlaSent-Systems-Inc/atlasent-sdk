@@ -75,7 +75,7 @@ class TestAsyncEvaluate:
         )
         result = await async_client.evaluate("read_data", "agent-1")
         assert isinstance(result, EvaluateResult)
-        assert result.decision is True
+        assert result.permitted is True  # legacy attr (canonical: result.decision)
         assert result.permit_token == "dec_100"
 
     @pytest.mark.asyncio
@@ -767,6 +767,7 @@ class TestAsyncRevokePermit:
         )
         await async_client.revoke_permit("dec_to_revoke", reason="audit")
         payload = mock_post.call_args[1]["json"]
+        # /v1-revoke-permit is out of scope for this PR.
         assert payload["decision_id"] == "dec_to_revoke"
         assert payload["reason"] == "audit"
 

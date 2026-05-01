@@ -73,7 +73,7 @@ class TestCacheIntegrationWithClient:
 
         # Pre-populate cache
         cached_result = EvaluateResult(
-            decision=True,
+            decision="allow",
             permit_token="dec_cached",
             reason="cached",
             audit_hash="h",

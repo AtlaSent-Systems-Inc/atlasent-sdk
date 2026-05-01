@@ -246,10 +246,11 @@ describe("atlasent.protect (default export API)", () => {
 
     const [, verifyInit] = fetchImpl.mock.calls[1]!;
     const verifyBody = JSON.parse(verifyInit!.body as string);
-    expect(verifyBody.context).toEqual(ctx);
-    expect(verifyBody.decision_id).toBe("dec_alpha");
-    expect(verifyBody.agent).toBe("deploy-bot");
-    expect(verifyBody.action).toBe("deploy");
+    // Canonical wire: no `context`, action_type / actor_id / permit_token.
+    expect(verifyBody.context).toBeUndefined();
+    expect(verifyBody.permit_token).toBe("dec_alpha");
+    expect(verifyBody.actor_id).toBe("deploy-bot");
+    expect(verifyBody.action_type).toBe("deploy");
   });
 
   it("omits context when caller omits it", async () => {
