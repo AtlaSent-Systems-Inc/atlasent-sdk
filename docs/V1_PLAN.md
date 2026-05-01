@@ -42,7 +42,7 @@ a pilot API key.
 - [x] Offline audit verifier: both SDKs ship a `verify_bundle(path)`
       that validates an Ed25519-signed export without hitting the API.
       Python: `atlasent.verify_bundle()` / `verify_audit_bundle()` (cryptography in `[verify]` extra).
-      TypeScript: `@atlasent/verify` zero-dep Node CLI + library (in PR #128).
+      TypeScript: `@atlasent/verify` zero-dep Node CLI + library.
 
 ### Type source of truth
 
@@ -128,8 +128,8 @@ a pilot API key.
 
 ## Out of scope for V1
 
-- Go, Ruby, Java, Rust SDKs (Go ships in a separate repo; others
-  wait for customer pull).
+- Go, Ruby, Java, Rust SDKs (deferred — will be added when there is
+  actual customer demand).
 - Browser SDK (the console already has its own thin client).
 - Synchronous Python (async-only is fine; 3.11+ minimum).
 
