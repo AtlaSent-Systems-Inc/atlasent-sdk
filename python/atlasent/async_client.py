@@ -15,7 +15,7 @@ import httpx
 
 from ._version import __version__
 from .audit import AuditEventsResult, AuditExportResult
-from .client import _parse_rate_limit_headers
+from .client import _enforce_tls, _parse_rate_limit_headers, _redact_token
 from .exceptions import (
     AtlaSentDenied,
     AtlaSentDeniedError,
@@ -83,7 +83,7 @@ class AsyncAtlaSentClient:
     ) -> None:
         self._api_key = api_key
         self._anon_key = anon_key
-        self._base_url = base_url.rstrip("/")
+        self._base_url = _enforce_tls(base_url).rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries
         self._retry_backoff = retry_backoff
@@ -176,7 +176,7 @@ class AsyncAtlaSentClient:
             "evaluate permitted action=%r actor=%r token=%s",
             action_type,
             actor_id,
-            result.permit_token,
+            _redact_token(result.permit_token),
         )
 
         # Store in cache
@@ -202,7 +202,7 @@ class AsyncAtlaSentClient:
             action_type=action_type,
             actor_id=actor_id,
         )
-        logger.debug("verify token=%s (async)", permit_token)
+        logger.debug("verify token=%s (async)", _redact_token(permit_token))
         data, rate_limit, request_id = await self._post(
             "/v1-verify-permit", req.model_dump(by_alias=True, exclude_none=True)
         )
@@ -218,7 +218,9 @@ class AsyncAtlaSentClient:
             )
         result = VerifyResult.model_validate(data)
         result.rate_limit = rate_limit
-        logger.info("verify token=%s valid=%s", permit_token, result.valid)
+        logger.info(
+            "verify token=%s valid=%s", _redact_token(permit_token), result.valid
+        )
         return result
 
     async def protect(
@@ -470,7 +472,7 @@ class AsyncAtlaSentClient:
             "reason": reason or "",
             "api_key": self._api_key,
         }
-        logger.debug("revoke_permit permit_id=%r (async)", permit_id)
+        logger.debug("revoke_permit permit_id=%s (async)", _redact_token(permit_id))
         data, rate_limit, request_id = await self._post("/v1-revoke-permit", payload)
 
         if not isinstance(data.get("revoked"), bool) or not isinstance(

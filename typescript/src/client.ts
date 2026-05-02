@@ -51,6 +51,57 @@ function _buildUserAgent(): string {
     : `@atlasent/sdk/${SDK_VERSION} browser`;
 }
 
+// Soft cap on top-level context properties. Mirrors the Python SDK
+// (atlasent.models._CONTEXT_PROPERTIES_SOFT_CAP) and the OpenAPI
+// `maxProperties: 64` declaration. The hosted API is the canonical
+// enforcer; this helper warns the developer in dev rather than
+// raising, so production traffic isn't broken on the day this ships.
+const CONTEXT_PROPERTIES_SOFT_CAP = 64;
+
+function _warnOversizeContext(context: Record<string, unknown> | undefined): void {
+  if (context && Object.keys(context).length > CONTEXT_PROPERTIES_SOFT_CAP) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[atlasent] context has ${Object.keys(context).length} top-level keys ` +
+        `(soft cap ${CONTEXT_PROPERTIES_SOFT_CAP}); the server may reject this. ` +
+        "Pack richer payloads under a single top-level key.",
+    );
+  }
+}
+
+/**
+ * Reject non-TLS base URLs unless the dev escape hatch is set.
+ *
+ * `ATLASENT_ALLOW_INSECURE_HTTP=1` (Node) or
+ * `globalThis.ATLASENT_ALLOW_INSECURE_HTTP === "1"` (browser dev) permits
+ * `http://` for local fixtures — production callers never set this.
+ * Non-`http(s)` schemes (data:, file:, ...) are rejected unconditionally.
+ */
+function _enforceTls(baseUrl: string): string {
+  const allow =
+    (typeof process !== "undefined" &&
+      process?.env?.ATLASENT_ALLOW_INSECURE_HTTP === "1") ||
+    (globalThis as { ATLASENT_ALLOW_INSECURE_HTTP?: string })
+      .ATLASENT_ALLOW_INSECURE_HTTP === "1";
+  if (allow) return baseUrl;
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new AtlaSentError(`Invalid baseUrl: ${baseUrl}`, {
+      code: "bad_request",
+    });
+  }
+  if (parsed.protocol !== "https:") {
+    throw new AtlaSentError(
+      `AtlaSent baseUrl must use https:// (got ${parsed.protocol}). ` +
+        `For local development, set ATLASENT_ALLOW_INSECURE_HTTP=1.`,
+      { code: "bad_request" },
+    );
+  }
+  return baseUrl;
+}
+
 /**
  * True when running in Node.js (or a Node-compatible server runtime that
  * exposes `process.versions.node`). False in browsers and browser-like
@@ -151,7 +202,10 @@ export class AtlaSentClient {
       );
     }
     this.apiKey = options.apiKey;
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    this.baseUrl = _enforceTls(options.baseUrl ?? DEFAULT_BASE_URL).replace(
+      /\/+$/,
+      "",
+    );
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.userAgent = _buildUserAgent();
@@ -166,6 +220,7 @@ export class AtlaSentClient {
    * {@link AtlaSentError}.
    */
   async evaluate(input: EvaluateRequest): Promise<EvaluateResponse> {
+    _warnOversizeContext(input.context);
     // Canonical wire shape per handler.ts: flat top-level fields, no
     // `api_key` body (server reads it from the Authorization header).
     // PR2 will add a deprecation-warning bridge for legacy `action=`/
@@ -217,6 +272,7 @@ export class AtlaSentClient {
   async verifyPermit(
     input: VerifyPermitRequest,
   ): Promise<VerifyPermitResponse> {
+    _warnOversizeContext(input.context);
     // Canonical wire shape per handler.ts: only permit_token is required.
     // action_type / actor_id are optional cross-checks; context / api_key
     // are NOT consulted by the verify handler.

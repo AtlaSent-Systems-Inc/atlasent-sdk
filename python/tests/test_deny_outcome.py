@@ -131,7 +131,7 @@ class TestProtectPropagatesOutcomeSync:
         expected_outcome: str,
         expected_predicate: str,
     ) -> None:
-        client = AtlaSentClient(api_key="ask_test_x", base_url="http://x")
+        client = AtlaSentClient(api_key="ask_test_x", base_url="https://x")
         post = mocker.patch.object(client._client, "post")
         post.side_effect = [
             _resp(mocker, json_data=EVALUATE_ALLOW),
@@ -145,7 +145,7 @@ class TestProtectPropagatesOutcomeSync:
         assert getattr(excinfo.value, expected_predicate) is True
 
     def test_unknown_wire_outcome_normalizes_to_none(self, mocker: Any) -> None:
-        client = AtlaSentClient(api_key="ask_test_x", base_url="http://x")
+        client = AtlaSentClient(api_key="ask_test_x", base_url="https://x")
         post = mocker.patch.object(client._client, "post")
         post.side_effect = [
             _resp(mocker, json_data=EVALUATE_ALLOW),
@@ -165,7 +165,7 @@ class TestProtectPropagatesOutcomeSync:
 class TestProtectPropagatesOutcomeAsync:
     @pytest.mark.asyncio
     async def test_async_protect_surfaces_revoked(self, mocker: Any) -> None:
-        client = AsyncAtlaSentClient(api_key="ask_test_x", base_url="http://x")
+        client = AsyncAtlaSentClient(api_key="ask_test_x", base_url="https://x")
         post = mocker.patch.object(client._client, "post")
         post.side_effect = [
             _resp(mocker, json_data=EVALUATE_ALLOW),

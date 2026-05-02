@@ -73,6 +73,24 @@ describe("AtlaSentClient constructor", () => {
       expect(url).toBe("https://staging.atlasent.io/v1-evaluate");
     });
   });
+
+  it("rejects http:// baseUrl", () => {
+    expect(
+      () => new AtlaSentClient({ apiKey: "k", baseUrl: "http://api.atlasent.io" }),
+    ).toThrow(/https/);
+  });
+
+  it("allows http:// when ATLASENT_ALLOW_INSECURE_HTTP=1", () => {
+    const prev = process.env.ATLASENT_ALLOW_INSECURE_HTTP;
+    process.env.ATLASENT_ALLOW_INSECURE_HTTP = "1";
+    try {
+      const c = new AtlaSentClient({ apiKey: "k", baseUrl: "http://localhost:8000" });
+      expect(c).toBeDefined();
+    } finally {
+      if (prev === undefined) delete process.env.ATLASENT_ALLOW_INSECURE_HTTP;
+      else process.env.ATLASENT_ALLOW_INSECURE_HTTP = prev;
+    }
+  });
 });
 
 describe("evaluate()", () => {

@@ -76,6 +76,15 @@ class TestInit:
         assert c._base_url == "https://staging.atlasent.io"
         assert c._timeout == 30
 
+    def test_rejects_http_base_url(self):
+        with pytest.raises(ValueError, match="https"):
+            AtlaSentClient(api_key="k", base_url="http://api.atlasent.io")
+
+    def test_dev_escape_hatch_allows_http(self, monkeypatch):
+        monkeypatch.setenv("ATLASENT_ALLOW_INSECURE_HTTP", "1")
+        c = AtlaSentClient(api_key="k", base_url="http://localhost:8000")
+        assert c._base_url == "http://localhost:8000"
+
     def test_user_agent(self):
         c = AtlaSentClient(api_key="k")
         assert "atlasent-python/" in c._client.headers["user-agent"]
@@ -1184,3 +1193,41 @@ class TestCreateAuditExport:
         assert result.signed_at == ""
         assert result.event_count == 0  # len(events) fallback when count missing
         assert result.chain_integrity_ok is False
+
+
+class TestContextSizeWarning:
+    """Phase B.3 — soft cap on context properties surfaces as a warning,
+    not a hard error. The hosted API enforces the hard cap in
+    contract/openapi.yaml; the SDK adds a developer-visible nudge
+    without breaking production traffic on the day this ships.
+    """
+
+    def test_oversize_context_logs_warning(self, caplog):
+        import logging
+
+        from atlasent.models import EvaluateRequest
+
+        oversize = {f"k{i}": i for i in range(70)}
+        with caplog.at_level(logging.WARNING, logger="atlasent"):
+            req = EvaluateRequest(
+                action="a", agent="b", context=oversize
+            )
+
+        assert req.context == oversize
+        assert any(
+            "soft cap" in record.message and "70 top-level" in record.message
+            for record in caplog.records
+        )
+
+    def test_in_bounds_context_does_not_warn(self, caplog):
+        import logging
+
+        from atlasent.models import EvaluateRequest
+
+        ctx = {f"k{i}": i for i in range(10)}
+        with caplog.at_level(logging.WARNING, logger="atlasent"):
+            EvaluateRequest(action="a", agent="b", context=ctx)
+
+        assert not any(
+            "soft cap" in record.message for record in caplog.records
+        )

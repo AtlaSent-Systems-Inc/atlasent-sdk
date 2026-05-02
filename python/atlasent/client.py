@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 import uuid
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -43,6 +45,37 @@ DEFAULT_BASE_URL = "https://api.atlasent.io"
 DEFAULT_TIMEOUT = 10
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BACKOFF = 0.5
+
+
+def _redact_token(token: str) -> str:
+    """Render a permit/decision token safe to log.
+
+    Returns ``"…<last 6>"`` so log lines correlate against the
+    server-side audit trail without leaking enough material to replay
+    a permit. ``""`` and short strings render as ``"…"``.
+    """
+    if not token:
+        return "…"
+    return "…" + token[-6:]
+
+
+def _enforce_tls(base_url: str) -> str:
+    """Reject non-TLS base URLs unless the dev escape hatch is set.
+
+    `ATLASENT_ALLOW_INSECURE_HTTP=1` permits ``http://`` for local
+    fixtures and unit tests that mock httpx — production callers never
+    set this. Returns the URL unchanged on accept; raises ``ValueError``
+    on reject.
+    """
+    if os.getenv("ATLASENT_ALLOW_INSECURE_HTTP") == "1":
+        return base_url
+    parsed = urlparse(base_url)
+    if parsed.scheme and parsed.scheme != "https":
+        raise ValueError(
+            f"AtlaSent base_url must use https:// (got scheme={parsed.scheme!r}). "
+            "For local development, set ATLASENT_ALLOW_INSECURE_HTTP=1."
+        )
+    return base_url
 
 
 class AtlaSentClient:
@@ -90,7 +123,7 @@ class AtlaSentClient:
     ) -> None:
         self._api_key = api_key
         self._anon_key = anon_key
-        self._base_url = base_url.rstrip("/")
+        self._base_url = _enforce_tls(base_url).rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries
         self._retry_backoff = retry_backoff
@@ -197,7 +230,7 @@ class AtlaSentClient:
             "evaluate permitted action=%r actor=%r token=%s",
             action_type,
             actor_id,
-            result.permit_token,
+            _redact_token(result.permit_token),
         )
 
         # Store in cache
@@ -237,7 +270,7 @@ class AtlaSentClient:
             action_type=action_type,
             actor_id=actor_id,
         )
-        logger.debug("verify token=%s", permit_token)
+        logger.debug("verify token=%s", _redact_token(permit_token))
         data, rate_limit, request_id = self._post(
             "/v1-verify-permit", req.model_dump(by_alias=True, exclude_none=True)
         )
@@ -254,7 +287,9 @@ class AtlaSentClient:
             )
         result = VerifyResult.model_validate(data)
         result.rate_limit = rate_limit
-        logger.info("verify token=%s valid=%s", permit_token, result.valid)
+        logger.info(
+            "verify token=%s valid=%s", _redact_token(permit_token), result.valid
+        )
         return result
 
     def protect(
@@ -504,7 +539,7 @@ class AtlaSentClient:
             "reason": reason or "",
             "api_key": self._api_key,
         }
-        logger.debug("revoke_permit permit_id=%r", permit_id)
+        logger.debug("revoke_permit permit_id=%s", _redact_token(permit_id))
         data, rate_limit, request_id = self._post("/v1-revoke-permit", payload)
 
         if not isinstance(data.get("revoked"), bool) or not isinstance(
