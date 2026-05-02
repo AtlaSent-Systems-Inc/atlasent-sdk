@@ -67,10 +67,29 @@ const isNode =
  */
 const NODE_VERSION: string | null = isNode ? process.version : null;
 
-/** Raw JSON shape received from `POST /v1-evaluate`. */
+/**
+ * Raw JSON shape received from `POST /v1-evaluate`.
+ *
+ * Canonical fields (per `atlasent-api/.../v1-evaluate/handler.ts`):
+ *   decision: "allow" | "deny" | "hold" | "escalate"
+ *   permit_token: string  (present iff decision === "allow")
+ *   request_id: string
+ *   expires_at?: string
+ *   denial?: { reason, code }
+ *
+ * Legacy fields kept on the type so older atlasent-api deployments
+ * (pre-handler.ts entry swap) still parse cleanly. The client below
+ * checks canonical first and falls back to legacy.
+ */
 interface EvaluateWire {
-  permitted: boolean;
-  decision_id: string;
+  decision: "allow" | "deny" | "hold" | "escalate";
+  permit_token?: string;
+  request_id?: string;
+  expires_at?: string;
+  denial?: { reason?: string; code?: string };
+  // Legacy passthrough.
+  permitted?: boolean;
+  decision_id?: string;
   reason?: string;
   audit_hash?: string;
   timestamp?: string;
@@ -88,10 +107,24 @@ interface ApiKeySelfWire {
   expires_at?: string | null;
 }
 
-/** Raw JSON shape received from `POST /v1-verify-permit`. */
+/**
+ * Raw JSON shape received from `POST /v1-verify-permit`.
+ *
+ * Canonical fields:
+ *   valid: boolean
+ *   outcome: "allow" | "deny"
+ *   verify_error_code?: string  (populated on outcome === "deny")
+ *   reason?: string
+ *
+ * Legacy `verified` kept for backward-compat with older deployments.
+ */
 interface VerifyPermitWire {
-  verified: boolean;
-  outcome?: string;
+  valid: boolean;
+  outcome: "allow" | "deny";
+  verify_error_code?: string;
+  reason?: string;
+  // Legacy passthrough.
+  verified?: boolean;
   permit_hash?: string;
   timestamp?: string;
 }
@@ -133,25 +166,42 @@ export class AtlaSentClient {
    * {@link AtlaSentError}.
    */
   async evaluate(input: EvaluateRequest): Promise<EvaluateResponse> {
+    // Canonical wire shape per handler.ts: flat top-level fields, no
+    // `api_key` body (server reads it from the Authorization header).
+    // PR2 will add a deprecation-warning bridge for legacy `action=`/
+    // `agent=` keyword input.
     const body = {
-      action: input.action,
-      agent: input.agent,
+      action_type: input.action,
+      actor_id: input.agent,
       context: input.context ?? {},
-      api_key: this.apiKey,
     };
     const { body: wire, rateLimit } = await this.post<EvaluateWire>("/v1-evaluate", body);
 
-    if (typeof wire.permitted !== "boolean" || typeof wire.decision_id !== "string") {
+    // Tolerate both canonical {decision, permit_token} and legacy
+    // {permitted, decision_id} server responses.
+    let decision = wire.decision;
+    if (decision === undefined && typeof wire.permitted === "boolean") {
+      decision = wire.permitted ? "allow" : "deny";
+    }
+    const permitToken = wire.permit_token ?? wire.decision_id;
+
+    if (decision !== "allow" && decision !== "deny" && decision !== "hold" && decision !== "escalate") {
       throw new AtlaSentError(
-        "Malformed response from /v1-evaluate: missing `permitted` or `decision_id`",
+        "Malformed response from /v1-evaluate: missing `decision` (or legacy `permitted`)",
+        { code: "bad_response" },
+      );
+    }
+    if (decision === "allow" && (typeof permitToken !== "string" || permitToken.length === 0)) {
+      throw new AtlaSentError(
+        "Malformed response from /v1-evaluate: decision='allow' but no `permit_token` (or legacy `decision_id`)",
         { code: "bad_response" },
       );
     }
 
     return {
-      decision: wire.permitted ? "ALLOW" : "DENY",
-      permitId: wire.decision_id,
-      reason: wire.reason ?? "",
+      decision: decision === "allow" ? "ALLOW" : "DENY",
+      permitId: permitToken ?? "",
+      reason: wire.denial?.reason ?? wire.reason ?? "",
       auditHash: wire.audit_hash ?? "",
       timestamp: wire.timestamp ?? "",
       rateLimit,
@@ -167,27 +217,31 @@ export class AtlaSentClient {
   async verifyPermit(
     input: VerifyPermitRequest,
   ): Promise<VerifyPermitResponse> {
+    // Canonical wire shape per handler.ts: only permit_token is required.
+    // action_type / actor_id are optional cross-checks; context / api_key
+    // are NOT consulted by the verify handler.
     const body = {
-      decision_id: input.permitId,
-      action: input.action ?? "",
-      agent: input.agent ?? "",
-      context: input.context ?? {},
-      api_key: this.apiKey,
+      permit_token: input.permitId,
+      action_type: input.action ?? "",
+      actor_id: input.agent ?? "",
     };
     const { body: wire, rateLimit } = await this.post<VerifyPermitWire>(
       "/v1-verify-permit",
       body,
     );
 
-    if (typeof wire.verified !== "boolean") {
+    // Tolerate both canonical {valid, outcome} and legacy {verified} server
+    // responses.
+    const valid = typeof wire.valid === "boolean" ? wire.valid : wire.verified;
+    if (typeof valid !== "boolean") {
       throw new AtlaSentError(
-        "Malformed response from /v1-verify-permit: missing `verified`",
+        "Malformed response from /v1-verify-permit: missing `valid` (or legacy `verified`)",
         { code: "bad_response" },
       );
     }
 
     return {
-      verified: wire.verified,
+      verified: valid,
       outcome: wire.outcome ?? "",
       permitHash: wire.permit_hash ?? "",
       timestamp: wire.timestamp ?? "",

@@ -230,12 +230,12 @@ class TestClientAuthorize:
         verify_call = mock_post.call_args_list[1]
 
         assert evaluate_call[0][0].endswith("/v1-evaluate")
-        assert evaluate_call[1]["json"]["action"] == "act"
-        assert evaluate_call[1]["json"]["agent"] == "agent-X"
+        assert evaluate_call[1]["json"]["action_type"] == "act"
+        assert evaluate_call[1]["json"]["actor_id"] == "agent-X"
         assert evaluate_call[1]["json"]["context"] == {"u": "v"}
 
         assert verify_call[0][0].endswith("/v1-verify-permit")
-        assert verify_call[1]["json"]["decision_id"] == "dec_alpha"
+        assert verify_call[1]["json"]["permit_token"] == "dec_alpha"
 
 
 # ── Top-level authorize() function ───────────────────────────────────

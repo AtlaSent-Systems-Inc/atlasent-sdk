@@ -57,7 +57,7 @@ def _mock_resp(mocker, status_code=200, json_data=None):
     return resp
 
 
-# ── Sync: AtlaSentClient.protect ───────────────────────────────────────
+# ── Sync: AtlaSentClient.protect ────────────────────────────────────
 
 
 class TestSyncProtect:
@@ -170,16 +170,17 @@ class TestSyncProtect:
 
         # evaluate call (first)
         evaluate_payload = mock_post.call_args_list[0][1]["json"]
-        assert evaluate_payload["agent"] == "deploy-bot"
-        assert evaluate_payload["action"] == "deploy"
+        assert evaluate_payload["actor_id"] == "deploy-bot"
+        assert evaluate_payload["action_type"] == "deploy"
         assert evaluate_payload["context"] == {"commit": "abc123"}
 
         # verifyPermit call (second) — server cross-check
         verify_payload = mock_post.call_args_list[1][1]["json"]
-        assert verify_payload["decision_id"] == "dec_alpha"
-        assert verify_payload["agent"] == "deploy-bot"
-        assert verify_payload["action"] == "deploy"
-        assert verify_payload["context"] == {"commit": "abc123"}
+        assert verify_payload["permit_token"] == "dec_alpha"
+        assert verify_payload["actor_id"] == "deploy-bot"
+        assert verify_payload["action_type"] == "deploy"
+        # The verify handler does not consult `context`; SDK omits it.
+        assert "context" not in verify_payload
 
     def test_default_empty_context(self, mocker):
         client = AtlaSentClient(api_key="k", max_retries=0)
@@ -223,7 +224,7 @@ class TestSyncProtect:
         assert exc_info.value.audit_hash == ""
 
 
-# ── Async: AsyncAtlaSentClient.protect ─────────────────────────────────
+# ── Async: AsyncAtlaSentClient.protect ─────────────────────────────
 
 
 class TestAsyncProtect:
@@ -322,7 +323,7 @@ class TestAsyncProtect:
         assert mock_post.call_count == 1
 
 
-# ── Module-level: atlasent.protect ─────────────────────────────────────
+# ── Module-level: atlasent.protect ───────────────────────────────
 
 
 class TestModuleLevelProtect:
@@ -366,7 +367,7 @@ class TestModuleLevelProtect:
             protect(agent="a", action="b")
 
 
-# ── AtlaSentDeniedError shape ──────────────────────────────────────────
+# ── AtlaSentDeniedError shape ────────────────────────────────────
 
 
 class TestAtlaSentDeniedErrorShape:
