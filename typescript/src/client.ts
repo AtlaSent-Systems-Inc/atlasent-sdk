@@ -68,6 +68,64 @@ const isNode =
 const NODE_VERSION: string | null = isNode ? process.version : null;
 
 /**
+ * Dual-shape input resolver. Picks the canonical name when present,
+ * falls back to the legacy name with a deprecation warning, and (when
+ * `required`) raises if neither is supplied or if the two disagree.
+ *
+ * Used by {@link AtlaSentClient.evaluate} and
+ * {@link AtlaSentClient.verifyPermit} to accept both the new
+ * actorId/actionType/permitToken naming and the legacy
+ * agent/action/permitId naming during the deprecation window.
+ */
+function resolveDualField(
+  canonicalName: string,
+  canonicalValue: string | undefined,
+  legacyName: string,
+  legacyValue: string | undefined,
+  required = true,
+): string | undefined {
+  if (canonicalValue !== undefined && legacyValue !== undefined) {
+    if (canonicalValue !== legacyValue) {
+      throw new AtlaSentError(
+        `Both ${canonicalName} and ${legacyName} were provided with different values. Pass only ${canonicalName}.`,
+        { code: "bad_request" },
+      );
+    }
+    // Equal values — accept the canonical, still warn about legacy.
+    warnDeprecated(`${legacyName} -> ${canonicalName}`);
+    return canonicalValue;
+  }
+  if (canonicalValue !== undefined) return canonicalValue;
+  if (legacyValue !== undefined) {
+    warnDeprecated(`${legacyName} -> ${canonicalName}`);
+    return legacyValue;
+  }
+  if (required) {
+    throw new AtlaSentError(
+      `Missing required field: pass ${canonicalName} (or legacy ${legacyName}).`,
+      { code: "bad_request" },
+    );
+  }
+  return undefined;
+}
+
+/**
+ * Emit a one-time-per-process deprecation warning. Cross-runtime
+ * (browser + Node) — uses console.warn rather than
+ * `process.emitWarning` so SDK consumers in Cloudflare Workers,
+ * Deno, browsers, etc. all see it.
+ */
+const _warnedKeys = new Set<string>();
+function warnDeprecated(mapping: string): void {
+  if (_warnedKeys.has(mapping)) return;
+  _warnedKeys.add(mapping);
+  // eslint-disable-next-line no-console
+  console.warn(
+    `@atlasent/sdk: legacy ${mapping} is deprecated and will be removed in a future major release.`,
+  );
+}
+
+/**
  * Raw JSON shape received from `POST /v1-evaluate`.
  *
  * Canonical fields (per `atlasent-api/.../v1-evaluate/handler.ts`):
@@ -166,13 +224,28 @@ export class AtlaSentClient {
    * {@link AtlaSentError}.
    */
   async evaluate(input: EvaluateRequest): Promise<EvaluateResponse> {
+    // Dual-shape input: accept canonical (actorId/actionType) and
+    // legacy (agent/action). Legacy emits a one-time deprecation
+    // warning so existing callers see no break, but new code can
+    // adopt the wire-aligned names.
+    const actorId = resolveDualField(
+      "actorId",
+      input.actorId,
+      "agent",
+      input.agent,
+    );
+    const actionType = resolveDualField(
+      "actionType",
+      input.actionType,
+      "action",
+      input.action,
+    );
+
     // Canonical wire shape per handler.ts: flat top-level fields, no
     // `api_key` body (server reads it from the Authorization header).
-    // PR2 will add a deprecation-warning bridge for legacy `action=`/
-    // `agent=` keyword input.
     const body = {
-      action_type: input.action,
-      actor_id: input.agent,
+      action_type: actionType,
+      actor_id: actorId,
       context: input.context ?? {},
     };
     const { body: wire, rateLimit } = await this.post<EvaluateWire>("/v1-evaluate", body);
@@ -217,13 +290,45 @@ export class AtlaSentClient {
   async verifyPermit(
     input: VerifyPermitRequest,
   ): Promise<VerifyPermitResponse> {
+    // Dual-shape input: accept canonical (permitToken/actorId/actionType)
+    // and legacy (permitId/agent/action). Legacy fields emit a
+    // deprecation warning. context= is also legacy — the verify handler
+    // doesn't consult it; warn if non-empty.
+    const permitToken = resolveDualField(
+      "permitToken",
+      input.permitToken,
+      "permitId",
+      input.permitId,
+    );
+    const actorId =
+      resolveDualField(
+        "actorId",
+        input.actorId,
+        "agent",
+        input.agent,
+        /* required */ false,
+      ) ?? "";
+    const actionType =
+      resolveDualField(
+        "actionType",
+        input.actionType,
+        "action",
+        input.action,
+        /* required */ false,
+      ) ?? "";
+    if (input.context && Object.keys(input.context).length > 0) {
+      warnDeprecated(
+        "VerifyPermitRequest.context — the verify handler does not consult context; field is ignored",
+      );
+    }
+
     // Canonical wire shape per handler.ts: only permit_token is required.
     // action_type / actor_id are optional cross-checks; context / api_key
     // are NOT consulted by the verify handler.
     const body = {
-      permit_token: input.permitId,
-      action_type: input.action ?? "",
-      actor_id: input.agent ?? "",
+      permit_token: permitToken,
+      action_type: actionType,
+      actor_id: actorId,
     };
     const { body: wire, rateLimit } = await this.post<VerifyPermitWire>(
       "/v1-verify-permit",

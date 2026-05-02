@@ -4,6 +4,12 @@
  * These shapes are deliberately minimal and 1:1 with the AtlaSent
  * authorization API. Request / response fields are camelCase on the
  * SDK side; the client handles snake_case translation on the wire.
+ *
+ * Wire shape is canonical (handler.ts) since 2.0.0. Construction with
+ * legacy field names (`agent`, `action`, `permitId`) keeps working but
+ * emits a deprecation warning in 2.1.0+; the canonical names
+ * (`actorId`, `actionType`, `permitToken`) line up with the wire and
+ * with the Python SDK.
  */
 
 import type { AuditEventsPage, AuditExport } from "./audit.js";
@@ -34,12 +40,33 @@ export interface RateLimitState {
   resetAt: Date;
 }
 
-/** Input to {@link AtlaSentClient.evaluate}. */
+/**
+ * Input to {@link AtlaSentClient.evaluate}.
+ *
+ * Provide `actorId` + `actionType` (canonical, line up with wire and
+ * with the Python SDK). The legacy `agent` + `action` are still
+ * accepted for backward-compat but emit a deprecation warning at
+ * runtime.
+ *
+ * Either each pair must be provided exactly once. Providing both
+ * canonical and legacy for the same concept is accepted only if they
+ * agree; disagreement is an error.
+ */
 export interface EvaluateRequest {
-  /** Identifier of the calling agent (e.g. "clinical-data-agent"). */
-  agent: string;
+  /** Identifier of the calling actor / agent (e.g. "clinical-data-agent"). */
+  actorId?: string;
   /** The action being authorized (e.g. "modify_patient_record"). */
-  action: string;
+  actionType?: string;
+  /**
+   * @deprecated Use `actorId` instead. Accepted for backward-compat;
+   * emits a one-time-per-call deprecation warning on the console.
+   */
+  agent?: string;
+  /**
+   * @deprecated Use `actionType` instead. Accepted for backward-compat;
+   * emits a one-time-per-call deprecation warning on the console.
+   */
+  action?: string;
   /** Arbitrary policy context (user, environment, resource IDs). */
   context?: Record<string, unknown>;
 }
@@ -63,15 +90,41 @@ export interface EvaluateResponse {
   rateLimit: RateLimitState | null;
 }
 
-/** Input to {@link AtlaSentClient.verifyPermit}. */
+/**
+ * Input to {@link AtlaSentClient.verifyPermit}.
+ *
+ * Provide `permitToken` + (optionally) `actorId` / `actionType`. The
+ * legacy `permitId` / `agent` / `action` are still accepted for
+ * backward-compat but emit a deprecation warning.
+ */
 export interface VerifyPermitRequest {
-  /** The permit ID returned by a prior evaluate() call. */
-  permitId: string;
+  /** The permit token returned by a prior evaluate() call. */
+  permitToken?: string;
+  /** Optional: re-state the actor for cross-check with the server. */
+  actorId?: string;
   /** Optional: re-state the action for cross-check with the server. */
-  action?: string;
-  /** Optional: re-state the agent for cross-check with the server. */
+  actionType?: string;
+  /**
+   * @deprecated Use `permitToken` instead. Accepted for backward-compat;
+   * emits a deprecation warning.
+   */
+  permitId?: string;
+  /**
+   * @deprecated Use `actorId` instead. Accepted for backward-compat;
+   * emits a deprecation warning.
+   */
   agent?: string;
-  /** Optional: re-state the context for cross-check with the server. */
+  /**
+   * @deprecated Use `actionType` instead. Accepted for backward-compat;
+   * emits a deprecation warning.
+   */
+  action?: string;
+  /**
+   * @deprecated The verify handler does not consult `context`; this
+   * field is no longer sent on the wire. Accepted on input for
+   * backward-compat but ignored. Emits a deprecation warning when
+   * non-empty.
+   */
   context?: Record<string, unknown>;
 }
 
@@ -131,12 +184,14 @@ export interface ApiKeySelfResponse {
   rateLimit: RateLimitState | null;
 }
 
+// Re-export audit types so the flat `import { … } from "@atlasent/sdk"`
+// surface keeps including them.
+export type { AuditEventsPage, AuditExport };
+
 /**
  * Result of {@link AtlaSentClient.listAuditEvents}. Extends the raw
  * wire page with a camelCase `rateLimit` alongside the snake_case
- * wire fields — the wire shape (`events`, `total`, `next_cursor`) is
- * untouched so callers that pass it to the offline verifier get
- * byte-identical behaviour.
+ * wire fields.
  */
 export interface AuditEventsResult extends AuditEventsPage {
   /**
@@ -164,11 +219,7 @@ export interface AuditExportRequest {
 
 /**
  * Result of {@link AtlaSentClient.createAuditExport}. Extends the
- * signed bundle shape with a camelCase `rateLimit`. The signed
- * envelope fields (`export_id`, `org_id`, `chain_head_hash`,
- * `event_count`, `signed_at`, `events`, `signature`) are preserved
- * byte-for-byte so the object can be handed straight to
- * `verifyAuditBundle(bundle, keys)`.
+ * signed bundle shape with a camelCase `rateLimit`.
  */
 export interface AuditExportResult extends AuditExport {
   /**
@@ -193,9 +244,9 @@ export interface AtlaSentClientOptions {
   fetch?: typeof fetch;
 }
 
-// ── Revoke permit ─────────────────────────────────────────────────────────────
+// ── Revoke permit ────────────────────────────────────────────────────────────
 
-/** Input for {@link AtlaSentClient.revokePermit}. */
+/** Input to {@link AtlaSentClient.revokePermit}. */
 export interface RevokePermitRequest {
   /** The permit ID returned by a prior evaluate() call. */
   permitId: string;

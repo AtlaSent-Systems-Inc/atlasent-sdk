@@ -6,6 +6,57 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+## 2.1.0 — 2026-04-30 — dual-shape input bridge (additive)
+
+PR2 of the contract reconciliation. **No breaking change for callers
+that already use the documented `evaluate({ agent, action, context })` /
+`verifyPermit({ permitId, action, agent, context })` surface.** Adds
+canonical input names alongside the legacy ones and a one-time-per-process
+deprecation warning when callers pass legacy fields.
+
+### Added — canonical input field names
+
+`EvaluateRequest`:
+- `actorId` — canonical alias for legacy `agent`.
+- `actionType` — canonical alias for legacy `action`.
+
+`VerifyPermitRequest`:
+- `permitToken` — canonical alias for legacy `permitId`.
+- `actorId` — canonical alias for legacy `agent`.
+- `actionType` — canonical alias for legacy `action`.
+
+Both names are accepted at runtime. Mixing canonical + legacy with
+the same value is fine; with different values throws an
+`AtlaSentError({ code: "bad_request" })`. Missing both throws the
+same.
+
+### Deprecations
+
+- `EvaluateRequest.agent` → use `actorId`.
+- `EvaluateRequest.action` → use `actionType`.
+- `VerifyPermitRequest.permitId` → use `permitToken`.
+- `VerifyPermitRequest.agent` → use `actorId`.
+- `VerifyPermitRequest.action` → use `actionType`.
+- `VerifyPermitRequest.context` — the verify handler does not consult
+  context; the field is now **ignored** on the wire. Passing a
+  non-empty context emits a deprecation warning so callers notice the
+  silent drop.
+
+Each deprecation fires `console.warn` once per process per legacy
+mapping (no console spam from a tight loop). All TypeScript-side
+deprecations have `@deprecated` JSDoc tags so editors light them up.
+
+### Wire format
+
+Unchanged from 2.0.0. This release is purely additive on the SDK
+surface.
+
+### Stacked
+
+This is PR2; PR1 (2.0.0) shipped the canonical wire + Python full
+bridge. PR3 (atlasent-api) will drop the in-repo `packages/sdk` and
+`packages/sdk-py` once 2.1.0 is published.
+
 ## 2.0.0 — 2026-04-30 — wire-format reconciliation (BREAKING)
 
 PR1 of the contract reconciliation. Wire shape moves to canonical
