@@ -176,6 +176,155 @@ describe("evaluate()", () => {
   });
 });
 
+const CONSTRAINT_TRACE_WIRE = {
+  rules_evaluated: [
+    {
+      policy_id: "pol_close_window_v3",
+      decision: "deny",
+      fingerprint: "fp_abc123",
+      stages: [
+        {
+          stage: "role_check",
+          rule: "preparer_required",
+          matched: true,
+          order: 0,
+        },
+        {
+          stage: "context",
+          rule: "change_reason_required",
+          matched: false,
+          detail: "context.change_reason missing",
+          order: 1,
+        },
+      ],
+    },
+  ],
+  matching_policy_id: "pol_close_window_v3",
+};
+
+const EVALUATE_PREFLIGHT_DENY_WITH_TRACE = {
+  decision: "deny",
+  permit_token: "",
+  denial: { reason: "preflight: change_reason missing", code: "MISSING_FIELD" },
+  constraint_trace: CONSTRAINT_TRACE_WIRE,
+};
+
+const EVALUATE_PREFLIGHT_ALLOW_NO_TRACE = {
+  // Older atlasent-api version that does not echo `constraint_trace`
+  // — the helper must degrade gracefully (constraintTrace=null).
+  decision: "allow" as const,
+  permit_token: "dec_pf_42",
+  request_id: "req_pf",
+};
+
+describe("evaluatePreflight()", () => {
+  it("appends ?include=constraint_trace to the URL", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse(EVALUATE_PREFLIGHT_DENY_WITH_TRACE),
+    );
+    const client = makeClient(fetchImpl);
+    await client.evaluatePreflight({
+      agent: "agent-1",
+      action: "close_period",
+      context: { period: "2025-12" },
+    });
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    // Whole point of the helper: always set the include query param.
+    expect(url).toBe(
+      "https://api.atlasent.io/v1-evaluate?include=constraint_trace",
+    );
+    expect(init!.method).toBe("POST");
+    // Body shape is identical to evaluate() — trace is requested via
+    // the URL, not the body.
+    const body = JSON.parse(init!.body as string);
+    expect(body).toEqual({
+      action_type: "close_period",
+      actor_id: "agent-1",
+      context: { period: "2025-12" },
+    });
+  });
+
+  it("parses the typed preflight response with constraint_trace populated", async () => {
+    const client = makeClient(
+      mockFetch(() => jsonResponse(EVALUATE_PREFLIGHT_DENY_WITH_TRACE)),
+    );
+    const result = await client.evaluatePreflight({
+      agent: "agent-1",
+      action: "close_period",
+    });
+    // Does NOT throw on a deny — preflight returns the outcome so the
+    // caller can branch on it and render the trace.
+    expect(result.evaluation.decision).toBe("DENY");
+    expect(result.evaluation.reason).toBe(
+      "preflight: change_reason missing",
+    );
+    expect(result.constraintTrace).not.toBeNull();
+    expect(result.constraintTrace!.matching_policy_id).toBe(
+      "pol_close_window_v3",
+    );
+    expect(result.constraintTrace!.rules_evaluated).toHaveLength(1);
+    const policy = result.constraintTrace!.rules_evaluated[0]!;
+    expect(policy.policy_id).toBe("pol_close_window_v3");
+    expect(policy.decision).toBe("deny");
+    expect(policy.stages).toHaveLength(2);
+    expect(policy.stages[0]!.matched).toBe(true);
+    expect(policy.stages[1]!.matched).toBe(false);
+    expect(policy.stages[1]!.detail).toBe("context.change_reason missing");
+    expect(policy.stages[1]!.order).toBe(1);
+  });
+
+  it("returns constraintTrace=null when the server omits the trace", async () => {
+    // Forward-compat: an older atlasent-api version that does not
+    // populate `constraint_trace` in the response must not break
+    // the helper. The method returns the response with trace=null.
+    const client = makeClient(
+      mockFetch(() => jsonResponse(EVALUATE_PREFLIGHT_ALLOW_NO_TRACE)),
+    );
+    const result = await client.evaluatePreflight({
+      agent: "agent-1",
+      action: "close_period",
+    });
+    expect(result.evaluation.decision).toBe("ALLOW");
+    expect(result.evaluation.permitId).toBe("dec_pf_42");
+    expect(result.constraintTrace).toBeNull();
+  });
+
+  it("tolerates unknown engine-side keys inside the trace", async () => {
+    const wire = {
+      decision: "allow",
+      permit_token: "dec_x",
+      constraint_trace: {
+        rules_evaluated: [
+          {
+            policy_id: "p1",
+            decision: "allow",
+            fingerprint: "fp_1",
+            stages: [
+              {
+                stage: "s1",
+                matched: true,
+                order: 0,
+                future_field: "yo",
+              },
+            ],
+            next_field_we_haven_t_seen: 42,
+          },
+        ],
+        future_top_level_field: true,
+      },
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluatePreflight({
+      agent: "actor",
+      action: "act",
+    });
+    expect(result.constraintTrace).not.toBeNull();
+    expect(
+      result.constraintTrace!.rules_evaluated[0]!.stages[0]!.matched,
+    ).toBe(true);
+  });
+});
+
 describe("verifyPermit()", () => {
   it("returns the verified payload, no throw when verified: false", async () => {
     const client = makeClient(

@@ -6,7 +6,14 @@ import pytest
 from atlasent.audit import AuditEventsResult, AuditExportResult
 from atlasent.client import AtlaSentClient
 from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
-from atlasent.models import ApiKeySelfResult, EvaluateResult, GateResult, VerifyResult
+from atlasent.models import (
+    ApiKeySelfResult,
+    ConstraintTrace,
+    EvaluatePreflightResult,
+    EvaluateResult,
+    GateResult,
+    VerifyResult,
+)
 
 
 @pytest.fixture
@@ -190,6 +197,152 @@ class TestEvaluate:
         mocker.patch.object(client._client, "post", return_value=resp)
         with pytest.raises(AtlaSentError, match="API error 500"):
             client.evaluate("a", "b")
+
+
+# ── Evaluate preflight (?include=constraint_trace) ───────────
+
+
+CONSTRAINT_TRACE_WIRE = {
+    "rules_evaluated": [
+        {
+            "policy_id": "pol_close_window_v3",
+            "decision": "deny",
+            "fingerprint": "fp_abc123",
+            "stages": [
+                {
+                    "stage": "role_check",
+                    "rule": "preparer_required",
+                    "matched": True,
+                    "order": 0,
+                },
+                {
+                    "stage": "context",
+                    "rule": "change_reason_required",
+                    "matched": False,
+                    "detail": "context.change_reason missing",
+                    "order": 1,
+                },
+            ],
+        },
+    ],
+    "matching_policy_id": "pol_close_window_v3",
+}
+
+EVALUATE_PREFLIGHT_DENY_WITH_TRACE = {
+    "decision": "deny",
+    "permit_token": "",
+    "denial": {"reason": "preflight: change_reason missing", "code": "MISSING_FIELD"},
+    "constraint_trace": CONSTRAINT_TRACE_WIRE,
+}
+
+EVALUATE_PREFLIGHT_ALLOW_NO_TRACE = {
+    # Older atlasent-api version that does not echo `constraint_trace`
+    # — the helper must degrade gracefully (trace=None).
+    "decision": "allow",
+    "permit_token": "dec_pf_42",
+    "request_id": "req_pf",
+}
+
+
+class TestEvaluatePreflight:
+    def test_appends_include_constraint_trace_query(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_DENY_WITH_TRACE)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+
+        client.evaluate_preflight("close_period", "agent-1", {"period": "2025-12"})
+
+        # The whole point of the helper is that it always sets the
+        # `?include=constraint_trace` query — never optional, never
+        # silently dropped.
+        assert mock_post.call_args.kwargs["params"] == {
+            "include": "constraint_trace"
+        }
+        # The request body shape is identical to evaluate(): the trace
+        # is requested via the URL, not the body.
+        body = mock_post.call_args.kwargs["json"]
+        assert body == {
+            "action_type": "close_period",
+            "actor_id": "agent-1",
+            "context": {"period": "2025-12"},
+        }
+
+    def test_parses_constraint_trace_into_typed_shape(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_DENY_WITH_TRACE)
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        result = client.evaluate_preflight("close_period", "agent-1")
+
+        assert isinstance(result, EvaluatePreflightResult)
+        # Does NOT raise on deny — preflight returns the outcome so
+        # callers can inspect the trace alongside it.
+        assert isinstance(result.evaluation, EvaluateResult)
+        assert result.evaluation.decision == "deny"
+        assert isinstance(result.constraint_trace, ConstraintTrace)
+        assert result.constraint_trace.matching_policy_id == "pol_close_window_v3"
+        assert len(result.constraint_trace.rules_evaluated) == 1
+        policy = result.constraint_trace.rules_evaluated[0]
+        assert policy.policy_id == "pol_close_window_v3"
+        assert policy.decision == "deny"
+        assert len(policy.stages) == 2
+        assert policy.stages[0].matched is True
+        assert policy.stages[1].matched is False
+        assert policy.stages[1].detail == "context.change_reason missing"
+        assert policy.stages[1].order == 1
+
+    def test_missing_trace_is_none_not_raises(self, client, mocker):
+        # Forward-compat: an older atlasent-api version that does not
+        # populate `constraint_trace` in the response must not break
+        # the helper. The method returns the result with trace=None.
+        resp = _mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_ALLOW_NO_TRACE)
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        result = client.evaluate_preflight("close_period", "agent-1")
+
+        assert isinstance(result, EvaluatePreflightResult)
+        assert result.evaluation.decision == "allow"
+        assert result.evaluation.permit_token == "dec_pf_42"
+        assert result.constraint_trace is None
+
+    def test_unknown_trace_keys_do_not_crash(self, client, mocker):
+        # The trace types are forward-compatible: an unknown engine-
+        # side key on a stage / policy / envelope must not raise.
+        wire = {
+            "decision": "allow",
+            "permit_token": "dec_x",
+            "constraint_trace": {
+                "rules_evaluated": [
+                    {
+                        "policy_id": "p1",
+                        "decision": "allow",
+                        "fingerprint": "fp_1",
+                        "stages": [
+                            {
+                                "stage": "s1",
+                                "matched": True,
+                                "order": 0,
+                                "future_field": "yo",  # unknown
+                            },
+                        ],
+                        "next_field_we_haven_t_seen": 42,  # unknown
+                    },
+                ],
+                "future_top_level_field": True,  # unknown
+            },
+        }
+        resp = _mock_resp(mocker, json_data=wire)
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        result = client.evaluate_preflight("act", "actor")
+        assert result.constraint_trace is not None
+        assert result.constraint_trace.rules_evaluated[0].stages[0].matched is True
+
+    def test_malformed_response_raises(self, client, mocker):
+        # Same fail-closed contract as evaluate(): if the response has
+        # neither canonical `decision` nor legacy `permitted`, raise.
+        resp = _mock_resp(mocker, json_data={"unrelated": True})
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError, match="Malformed"):
+            client.evaluate_preflight("a", "b")
 
 
 # ── Verify ──────────────────────────────────────────────────
