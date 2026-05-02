@@ -15,7 +15,12 @@ import httpx
 
 from ._version import __version__
 from .audit import AuditEventsResult, AuditExportResult
-from .client import _enforce_tls, _parse_rate_limit_headers, _redact_token
+from .client import (
+    _enforce_tls,
+    _parse_rate_limit_headers,
+    _redact_token,
+    _validate_api_key,
+)
 from .exceptions import (
     AtlaSentDenied,
     AtlaSentDeniedError,
@@ -27,6 +32,8 @@ from .exceptions import (
 from .models import (
     ApiKeySelfResult,
     AuthorizationResult,
+    ConstraintTrace,
+    EvaluatePreflightResult,
     EvaluateRequest,
     EvaluateResult,
     GateResult,
@@ -81,7 +88,7 @@ class AsyncAtlaSentClient:
         retry_backoff: float = DEFAULT_RETRY_BACKOFF,
         cache: TTLCache | None = None,
     ) -> None:
-        self._api_key = api_key
+        self._api_key = _validate_api_key(api_key)
         self._anon_key = anon_key
         self._base_url = _enforce_tls(base_url).rstrip("/")
         self._timeout = timeout
@@ -184,6 +191,80 @@ class AsyncAtlaSentClient:
             self._cache.put(cache_key, result)
 
         return result
+
+    async def evaluate_preflight(
+        self,
+        action_type: str,
+        actor_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> EvaluatePreflightResult:
+        """Pre-flight evaluation that always returns the constraint trace.
+
+        Async mirror of :meth:`AtlaSentClient.evaluate_preflight`. Wraps
+        ``POST /v1-evaluate?include=constraint_trace`` so a workflow's
+        submission step can surface trivial defects (missing fields,
+        wrong roles) BEFORE pushing the request to an approval queue.
+
+        Returns an :class:`EvaluatePreflightResult` carrying the
+        regular :class:`EvaluateResult` plus the
+        :class:`ConstraintTrace`. Does NOT raise on a non-allow
+        decision: the caller branches on
+        ``result.evaluation.decision`` and renders failing stages from
+        ``result.constraint_trace``.
+
+        On older atlasent-api deployments that omit the trace,
+        ``constraint_trace`` is ``None`` rather than raising —
+        forward-compatible degradation.
+
+        Performance: one extra round-trip on submission, latency
+        comparable to :meth:`evaluate` with a fuller response body.
+        Prefer :meth:`evaluate` if the caller does not need the trace.
+        """
+        ctx = context or {}
+        req = EvaluateRequest(
+            action_type=action_type,
+            actor_id=actor_id,
+            context=ctx,
+        )
+        logger.debug(
+            "evaluate_preflight action=%r actor=%r (async)", action_type, actor_id
+        )
+        data, rate_limit, request_id = await self._post(
+            "/v1-evaluate",
+            req.model_dump(by_alias=True, exclude_none=True),
+            params={"include": "constraint_trace"},
+        )
+
+        decision = data.get("decision")
+        if decision is None and isinstance(data.get("permitted"), bool):
+            decision = "allow" if data["permitted"] else "deny"
+        if decision not in ("allow", "deny", "hold", "escalate"):
+            raise AtlaSentError(
+                "Malformed /v1-evaluate response: missing or invalid "
+                "`decision` (or legacy `permitted`)",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        evaluation = EvaluateResult.model_validate(data)
+        evaluation.rate_limit = rate_limit
+
+        trace_raw = data.get("constraint_trace")
+        constraint_trace: ConstraintTrace | None = None
+        if isinstance(trace_raw, dict):
+            constraint_trace = ConstraintTrace.model_validate(trace_raw)
+
+        logger.info(
+            "evaluate_preflight decision=%s action=%r actor=%r trace=%s",
+            evaluation.decision,
+            action_type,
+            actor_id,
+            "present" if constraint_trace is not None else "absent",
+        )
+        return EvaluatePreflightResult(
+            evaluation=evaluation, constraint_trace=constraint_trace
+        )
 
     async def verify(
         self,
@@ -581,7 +662,11 @@ class AsyncAtlaSentClient:
     # ── internals ─────────────────────────────────────────────────
 
     async def _post(
-        self, path: str, payload: dict[str, Any]
+        self,
+        path: str,
+        payload: dict[str, Any],
+        *,
+        params: dict[str, str] | None = None,
     ) -> tuple[dict[str, Any], RateLimitState | None, str]:
         """POST with retry on transient failures.
 
@@ -594,8 +679,12 @@ class AsyncAtlaSentClient:
         at transport / HTTP status time (raised inside ``_post``) or
         at body-shape time (raised by the caller after ``_post``
         returns).
+
+        ``params`` is appended as a URL query string (e.g.
+        ``?include=constraint_trace`` for the preflight helper). The
+        request body is unchanged.
         """
-        return await self._request("POST", path, payload)
+        return await self._request("POST", path, payload, params=params)
 
     async def _get(
         self, path: str
@@ -628,7 +717,7 @@ class AsyncAtlaSentClient:
             try:
                 if method == "POST":
                     response = await self._client.post(
-                        url, json=payload, headers=headers
+                        url, json=payload, headers=headers, params=params
                     )
                 else:
                     response = await self._client.get(

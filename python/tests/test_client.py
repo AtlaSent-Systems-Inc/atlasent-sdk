@@ -6,17 +6,26 @@ import pytest
 from atlasent.audit import AuditEventsResult, AuditExportResult
 from atlasent.client import AtlaSentClient
 from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
-from atlasent.models import ApiKeySelfResult, EvaluateResult, GateResult, VerifyResult
+from atlasent.models import (
+    ApiKeySelfResult,
+    ConstraintTrace,
+    EvaluatePreflightResult,
+    EvaluateResult,
+    GateResult,
+    VerifyResult,
+)
 
 
 @pytest.fixture
 def client():
-    return AtlaSentClient(api_key="test_key", max_retries=0)
+    return AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
 
 
 @pytest.fixture
 def client_retry():
-    return AtlaSentClient(api_key="test_key", max_retries=2, retry_backoff=0.01)
+    return AtlaSentClient(
+        api_key="ask_test_xxxxxxxx", max_retries=2, retry_backoff=0.01
+    )
 
 
 EVALUATE_PERMIT = {
@@ -57,8 +66,8 @@ def _mock_resp(mocker, status_code=200, json_data=None, headers=None):
 
 class TestInit:
     def test_defaults(self):
-        c = AtlaSentClient(api_key="k")
-        assert c._api_key == "k"
+        c = AtlaSentClient(api_key="ask_test_xxxxxxxx")
+        assert c._api_key == "ask_test_xxxxxxxx"
         assert c._anon_key == ""
         assert c._base_url == "https://api.atlasent.io"
         assert c._timeout == 10
@@ -66,7 +75,7 @@ class TestInit:
 
     def test_custom(self):
         c = AtlaSentClient(
-            api_key="k",
+            api_key="ask_test_xxxxxxxx",
             anon_key="anon",
             base_url="https://staging.atlasent.io/",
             timeout=30,
@@ -78,15 +87,36 @@ class TestInit:
 
     def test_rejects_http_base_url(self):
         with pytest.raises(ValueError, match="https"):
-            AtlaSentClient(api_key="k", base_url="http://api.atlasent.io")
+            AtlaSentClient(
+                api_key="ask_test_xxxxxxxx", base_url="http://api.atlasent.io"
+            )
 
     def test_dev_escape_hatch_allows_http(self, monkeypatch):
         monkeypatch.setenv("ATLASENT_ALLOW_INSECURE_HTTP", "1")
-        c = AtlaSentClient(api_key="k", base_url="http://localhost:8000")
+        c = AtlaSentClient(
+            api_key="ask_test_xxxxxxxx", base_url="http://localhost:8000"
+        )
         assert c._base_url == "http://localhost:8000"
 
+    def test_rejects_malformed_api_key(self):
+        with pytest.raises(ValueError, match="ask_"):
+            AtlaSentClient(api_key="not_a_real_key")
+
+    def test_rejects_whitespace_padded_api_key(self):
+        # Common paste accident — wrapping whitespace.
+        with pytest.raises(ValueError, match="ask_"):
+            AtlaSentClient(api_key=" ask_test_xxxxxxxx ")
+
+    def test_rejects_empty_api_key(self):
+        with pytest.raises(ValueError, match="required"):
+            AtlaSentClient(api_key="")
+
+    def test_accepts_live_and_test_prefixes(self):
+        AtlaSentClient(api_key="ask_live_abc123")
+        AtlaSentClient(api_key="ask_test_abc123")
+
     def test_user_agent(self):
-        c = AtlaSentClient(api_key="k")
+        c = AtlaSentClient(api_key="ask_test_xxxxxxxx")
         assert "atlasent-python/" in c._client.headers["user-agent"]
 
     def test_authorization_header(self):
@@ -94,7 +124,7 @@ class TestInit:
         assert c._client.headers["authorization"] == "Bearer ask_live_xyz"
 
     def test_accept_header(self):
-        c = AtlaSentClient(api_key="k")
+        c = AtlaSentClient(api_key="ask_test_xxxxxxxx")
         assert c._client.headers["accept"] == "application/json"
 
 
@@ -167,6 +197,152 @@ class TestEvaluate:
         mocker.patch.object(client._client, "post", return_value=resp)
         with pytest.raises(AtlaSentError, match="API error 500"):
             client.evaluate("a", "b")
+
+
+# ── Evaluate preflight (?include=constraint_trace) ───────────
+
+
+CONSTRAINT_TRACE_WIRE = {
+    "rules_evaluated": [
+        {
+            "policy_id": "pol_close_window_v3",
+            "decision": "deny",
+            "fingerprint": "fp_abc123",
+            "stages": [
+                {
+                    "stage": "role_check",
+                    "rule": "preparer_required",
+                    "matched": True,
+                    "order": 0,
+                },
+                {
+                    "stage": "context",
+                    "rule": "change_reason_required",
+                    "matched": False,
+                    "detail": "context.change_reason missing",
+                    "order": 1,
+                },
+            ],
+        },
+    ],
+    "matching_policy_id": "pol_close_window_v3",
+}
+
+EVALUATE_PREFLIGHT_DENY_WITH_TRACE = {
+    "decision": "deny",
+    "permit_token": "",
+    "denial": {"reason": "preflight: change_reason missing", "code": "MISSING_FIELD"},
+    "constraint_trace": CONSTRAINT_TRACE_WIRE,
+}
+
+EVALUATE_PREFLIGHT_ALLOW_NO_TRACE = {
+    # Older atlasent-api version that does not echo `constraint_trace`
+    # — the helper must degrade gracefully (trace=None).
+    "decision": "allow",
+    "permit_token": "dec_pf_42",
+    "request_id": "req_pf",
+}
+
+
+class TestEvaluatePreflight:
+    def test_appends_include_constraint_trace_query(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_DENY_WITH_TRACE)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+
+        client.evaluate_preflight("close_period", "agent-1", {"period": "2025-12"})
+
+        # The whole point of the helper is that it always sets the
+        # `?include=constraint_trace` query — never optional, never
+        # silently dropped.
+        assert mock_post.call_args.kwargs["params"] == {
+            "include": "constraint_trace"
+        }
+        # The request body shape is identical to evaluate(): the trace
+        # is requested via the URL, not the body.
+        body = mock_post.call_args.kwargs["json"]
+        assert body == {
+            "action_type": "close_period",
+            "actor_id": "agent-1",
+            "context": {"period": "2025-12"},
+        }
+
+    def test_parses_constraint_trace_into_typed_shape(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_DENY_WITH_TRACE)
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        result = client.evaluate_preflight("close_period", "agent-1")
+
+        assert isinstance(result, EvaluatePreflightResult)
+        # Does NOT raise on deny — preflight returns the outcome so
+        # callers can inspect the trace alongside it.
+        assert isinstance(result.evaluation, EvaluateResult)
+        assert result.evaluation.decision == "deny"
+        assert isinstance(result.constraint_trace, ConstraintTrace)
+        assert result.constraint_trace.matching_policy_id == "pol_close_window_v3"
+        assert len(result.constraint_trace.rules_evaluated) == 1
+        policy = result.constraint_trace.rules_evaluated[0]
+        assert policy.policy_id == "pol_close_window_v3"
+        assert policy.decision == "deny"
+        assert len(policy.stages) == 2
+        assert policy.stages[0].matched is True
+        assert policy.stages[1].matched is False
+        assert policy.stages[1].detail == "context.change_reason missing"
+        assert policy.stages[1].order == 1
+
+    def test_missing_trace_is_none_not_raises(self, client, mocker):
+        # Forward-compat: an older atlasent-api version that does not
+        # populate `constraint_trace` in the response must not break
+        # the helper. The method returns the result with trace=None.
+        resp = _mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_ALLOW_NO_TRACE)
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        result = client.evaluate_preflight("close_period", "agent-1")
+
+        assert isinstance(result, EvaluatePreflightResult)
+        assert result.evaluation.decision == "allow"
+        assert result.evaluation.permit_token == "dec_pf_42"
+        assert result.constraint_trace is None
+
+    def test_unknown_trace_keys_do_not_crash(self, client, mocker):
+        # The trace types are forward-compatible: an unknown engine-
+        # side key on a stage / policy / envelope must not raise.
+        wire = {
+            "decision": "allow",
+            "permit_token": "dec_x",
+            "constraint_trace": {
+                "rules_evaluated": [
+                    {
+                        "policy_id": "p1",
+                        "decision": "allow",
+                        "fingerprint": "fp_1",
+                        "stages": [
+                            {
+                                "stage": "s1",
+                                "matched": True,
+                                "order": 0,
+                                "future_field": "yo",  # unknown
+                            },
+                        ],
+                        "next_field_we_haven_t_seen": 42,  # unknown
+                    },
+                ],
+                "future_top_level_field": True,  # unknown
+            },
+        }
+        resp = _mock_resp(mocker, json_data=wire)
+        mocker.patch.object(client._client, "post", return_value=resp)
+
+        result = client.evaluate_preflight("act", "actor")
+        assert result.constraint_trace is not None
+        assert result.constraint_trace.rules_evaluated[0].stages[0].matched is True
+
+    def test_malformed_response_raises(self, client, mocker):
+        # Same fail-closed contract as evaluate(): if the response has
+        # neither canonical `decision` nor legacy `permitted`, raise.
+        resp = _mock_resp(mocker, json_data={"unrelated": True})
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError, match="Malformed"):
+            client.evaluate_preflight("a", "b")
 
 
 # ── Verify ──────────────────────────────────────────────────
@@ -383,7 +559,7 @@ class TestLifecycle:
         mock_close.assert_called_once()
 
     def test_context_manager(self, mocker):
-        with AtlaSentClient(api_key="k", max_retries=0) as c:
+        with AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0) as c:
             mock_close = mocker.patch.object(c._client, "close")
         mock_close.assert_called_once()
 
@@ -970,7 +1146,7 @@ class TestRevokePermit:
         # legacy decision_id / api_key body fields.
         assert payload["decision_id"] == "dec_to_revoke"
         assert payload["reason"] == "audit"
-        assert payload["api_key"] == "test_key"
+        assert payload["api_key"] == "ask_test_xxxxxxxx"
 
     def test_revoke_defaults_reason_to_empty_string(self, client, mocker):
         resp = _mock_resp(mocker, json_data=self.REVOKE_OK)
@@ -1209,9 +1385,7 @@ class TestContextSizeWarning:
 
         oversize = {f"k{i}": i for i in range(70)}
         with caplog.at_level(logging.WARNING, logger="atlasent"):
-            req = EvaluateRequest(
-                action="a", agent="b", context=oversize
-            )
+            req = EvaluateRequest(action="a", agent="b", context=oversize)
 
         assert req.context == oversize
         assert any(
@@ -1228,6 +1402,4 @@ class TestContextSizeWarning:
         with caplog.at_level(logging.WARNING, logger="atlasent"):
             EvaluateRequest(action="a", agent="b", context=ctx)
 
-        assert not any(
-            "soft cap" in record.message for record in caplog.records
-        )
+        assert not any("soft cap" in record.message for record in caplog.records)

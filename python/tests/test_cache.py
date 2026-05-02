@@ -69,7 +69,7 @@ class TestCacheIntegrationWithClient:
         from atlasent.models import EvaluateResult
 
         cache = TTLCache(ttl=60)
-        client = AtlaSentClient(api_key="k", max_retries=0, cache=cache)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0, cache=cache)
 
         # Pre-populate cache
         cached_result = EvaluateResult(
@@ -96,7 +96,7 @@ class TestCacheIntegrationWithClient:
         from atlasent.client import AtlaSentClient
 
         cache = TTLCache(ttl=60)
-        client = AtlaSentClient(api_key="k", max_retries=0, cache=cache)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0, cache=cache)
 
         resp = mocker.Mock(spec=httpx.Response)
         resp.status_code = 200

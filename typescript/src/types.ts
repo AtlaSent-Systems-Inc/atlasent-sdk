@@ -217,6 +217,106 @@ export interface RevokePermitResponse {
   rateLimit: RateLimitState | null;
 }
 
+// ── Constraint trace (preflight) ──────────────────────────────────────────────
+
+/**
+ * One stage of a single policy's constraint evaluation.
+ *
+ * Mirrors `ConstraintTraceStage` in
+ * `atlasent-api/packages/types/src/index.ts`. Emitted by the rule
+ * engine when the request URL carries `?include=constraint_trace`.
+ *
+ * Forward-compat: extra engine-side keys are tolerated; readers
+ * should not assume this is a closed shape.
+ */
+export interface ConstraintTraceStage {
+  /** Engine stage name (e.g. `"role_check"`, `"context"`). */
+  readonly stage: string;
+  /** Optional rule identifier; absent for wrapper stages. */
+  readonly rule?: string;
+  /** True iff this stage's predicate fired. */
+  readonly matched: boolean;
+  /** Optional human-readable note from the engine. */
+  readonly detail?: string;
+  /** Zero-based position within the policy's `stages` array. */
+  readonly order: number;
+  /** Forward-compat: tolerate unknown engine-side keys without crashing. */
+  readonly [key: string]: unknown;
+}
+
+/**
+ * Per-policy block of a constraint trace.
+ *
+ * Mirrors `ConstraintTracePolicy` in
+ * `atlasent-api/packages/types/src/index.ts`. The handler iterates
+ * active policies in order until first non-allow; the policy that
+ * produced the outer decision has `decision !== "allow"`.
+ */
+export interface ConstraintTracePolicy {
+  /** Stable identifier of the evaluated policy. */
+  readonly policy_id: string;
+  /** Policy-level decision (`"allow"|"deny"|"hold"|"escalate"`). */
+  readonly decision: string;
+  /** Engine-side fingerprint of the bundle row. */
+  readonly fingerprint: string;
+  /**
+   * Optional engine-computed risk score from a `risk` rule clause.
+   * Distinct from the heuristic risk score on the outer envelope.
+   */
+  readonly risk_score?: number;
+  /** Ordered stages produced while evaluating this policy. */
+  readonly stages: ReadonlyArray<ConstraintTraceStage>;
+  /** Forward-compat: tolerate unknown engine-side keys. */
+  readonly [key: string]: unknown;
+}
+
+/**
+ * Top-level constraint trace returned by
+ * `/v1-evaluate?include=constraint_trace`.
+ *
+ * Mirrors `ConstraintTraceResponse` in
+ * `atlasent-api/packages/types/src/index.ts`. Present iff the
+ * caller requested the trace; the SDK's preflight helper always
+ * requests it.
+ */
+export interface ConstraintTrace {
+  /** Per-policy blocks in evaluation order. */
+  readonly rules_evaluated: ReadonlyArray<ConstraintTracePolicy>;
+  /**
+   * Policy id whose evaluation produced the outer decision. Equals
+   * the outer `matched_policy_id` on non-allow paths; `undefined` on
+   * a clean allow (all policies passed).
+   */
+  readonly matching_policy_id?: string;
+  /** Forward-compat: tolerate unknown engine-side keys. */
+  readonly [key: string]: unknown;
+}
+
+/**
+ * Result of {@link AtlaSentClient.evaluatePreflight}.
+ *
+ * Wraps the regular {@link EvaluateResponse} plus the
+ * {@link ConstraintTrace} returned when the request URL carries
+ * `?include=constraint_trace`. The whole point of preflight is to
+ * surface which stages / policies WOULD fire BEFORE pushing the
+ * request onto an approval queue, so workflows can reject trivially
+ * defective requests at submission time and only forward viable
+ * requests to a human reviewer.
+ *
+ * `constraintTrace` is `null` on responses from older atlasent-api
+ * deployments that do not echo the trace — forward-compatible
+ * degradation.
+ */
+export interface EvaluatePreflightResponse {
+  /** The regular evaluate response (decision, permitId, ...). */
+  readonly evaluation: EvaluateResponse;
+  /**
+   * The constraint trace, or `null` when the server omitted it
+   * (older atlasent-api version).
+   */
+  readonly constraintTrace: ConstraintTrace | null;
+}
+
 // ── Streaming evaluate ────────────────────────────────────────────────────────
 
 /** A policy decision emitted mid-stream. */

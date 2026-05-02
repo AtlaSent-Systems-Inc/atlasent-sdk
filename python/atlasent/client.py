@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -26,6 +27,8 @@ from .exceptions import (
 from .models import (
     ApiKeySelfResult,
     AuthorizationResult,
+    ConstraintTrace,
+    EvaluatePreflightResult,
     EvaluateRequest,
     EvaluateResult,
     GateResult,
@@ -45,6 +48,36 @@ DEFAULT_BASE_URL = "https://api.atlasent.io"
 DEFAULT_TIMEOUT = 10
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BACKOFF = 0.5
+
+# API-key prefix contract per atlasent-api/supabase/functions/_shared/auth.ts:
+#   "ask_live_<entropy>" — production keys
+#   "ask_test_<entropy>" — non-production keys
+# Validated client-side so a mis-pasted key (with whitespace, quotes,
+# or a leftover wrapping char) trips loudly at construction rather
+# than yielding a 401 mid-conversation. The character class matches
+# what atlasent-api accepts; widen here only if the server widens
+# first.
+_API_KEY_PATTERN = re.compile(r"^ask_(?:live|test)_[A-Za-z0-9_-]+$")
+
+
+def _validate_api_key(api_key: str) -> str:
+    """Reject obviously-malformed API keys at client init.
+
+    Returns the trimmed key on accept; raises ``ValueError`` on
+    reject. Never echoes the key into the error message — only the
+    first 8 characters of any non-matching value, so a paste accident
+    that copies the right side of the key doesn't surface in stderr.
+    """
+    if not isinstance(api_key, str) or not api_key:
+        raise ValueError("AtlaSent api_key is required")
+    if not _API_KEY_PATTERN.match(api_key):
+        head = api_key[:8] if api_key else ""
+        raise ValueError(
+            f"AtlaSent api_key does not match expected shape "
+            f"`ask_(live|test)_<entropy>` (got prefix={head!r}). "
+            "Check for whitespace, quotes, or trailing characters."
+        )
+    return api_key
 
 
 def _redact_token(token: str) -> str:
@@ -121,7 +154,7 @@ class AtlaSentClient:
         retry_backoff: float = DEFAULT_RETRY_BACKOFF,
         cache: TTLCache | None = None,
     ) -> None:
-        self._api_key = api_key
+        self._api_key = _validate_api_key(api_key)
         self._anon_key = anon_key
         self._base_url = _enforce_tls(base_url).rstrip("/")
         self._timeout = timeout
@@ -238,6 +271,94 @@ class AtlaSentClient:
             self._cache.put(cache_key, result)
 
         return result
+
+    def evaluate_preflight(
+        self,
+        action_type: str,
+        actor_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> EvaluatePreflightResult:
+        """Pre-flight evaluation that always returns the constraint trace.
+
+        Wraps ``POST /v1-evaluate?include=constraint_trace``. Use this
+        from a workflow's submission step to surface trivial defects
+        (missing fields, wrong roles, mis-set context) BEFORE pushing
+        the request onto an approval queue — only requests that would
+        actually pass make it through to a human reviewer.
+
+        Returns an :class:`EvaluatePreflightResult` carrying the
+        regular :class:`EvaluateResult` plus the
+        :class:`ConstraintTrace`. Unlike :meth:`evaluate`, this method
+        does NOT raise on a non-allow decision: the whole point is to
+        inspect both the outcome AND the per-policy trace, so the
+        caller branches on ``result.evaluation.decision`` and reads
+        ``result.constraint_trace`` to render the failing stages.
+
+        The constraint-trace shape mirrors
+        ``ConstraintTraceResponse`` in atlasent-api
+        (``packages/types/src/index.ts``). On older atlasent-api
+        deployments that omit the trace, ``constraint_trace`` is
+        ``None`` rather than raising — forward-compatible degradation.
+
+        Performance: one extra round-trip on submission. Latency is
+        comparable to :meth:`evaluate`; the response body is fuller
+        (includes the per-stage trace) so the wire payload is larger.
+        If the caller does not need the trace, prefer :meth:`evaluate`.
+
+        Args:
+            action_type: The action being authorized.
+            actor_id: Identifier of the actor.
+            context: Arbitrary policy context.
+
+        Raises:
+            AtlaSentError: Network / server / malformed-response errors.
+            RateLimitError: HTTP 429.
+        """
+        ctx = context or {}
+        req = EvaluateRequest(
+            action_type=action_type,
+            actor_id=actor_id,
+            context=ctx,
+        )
+        logger.debug(
+            "evaluate_preflight action=%r actor=%r", action_type, actor_id
+        )
+        data, rate_limit, request_id = self._post(
+            "/v1-evaluate",
+            req.model_dump(by_alias=True, exclude_none=True),
+            params={"include": "constraint_trace"},
+        )
+
+        decision = data.get("decision")
+        if decision is None and isinstance(data.get("permitted"), bool):
+            decision = "allow" if data["permitted"] else "deny"
+        if decision not in ("allow", "deny", "hold", "escalate"):
+            raise AtlaSentError(
+                "Malformed /v1-evaluate response: missing or invalid "
+                "`decision` (or legacy `permitted`)",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        evaluation = EvaluateResult.model_validate(data)
+        evaluation.rate_limit = rate_limit
+
+        trace_raw = data.get("constraint_trace")
+        constraint_trace: ConstraintTrace | None = None
+        if isinstance(trace_raw, dict):
+            constraint_trace = ConstraintTrace.model_validate(trace_raw)
+
+        logger.info(
+            "evaluate_preflight decision=%s action=%r actor=%r trace=%s",
+            evaluation.decision,
+            action_type,
+            actor_id,
+            "present" if constraint_trace is not None else "absent",
+        )
+        return EvaluatePreflightResult(
+            evaluation=evaluation, constraint_trace=constraint_trace
+        )
 
     def verify(
         self,
@@ -687,15 +808,23 @@ class AtlaSentClient:
     # ── internals ─────────────────────────────────────────────────
 
     def _post(
-        self, path: str, payload: dict[str, Any]
+        self,
+        path: str,
+        payload: dict[str, Any],
+        *,
+        params: dict[str, str] | None = None,
     ) -> tuple[dict[str, Any], RateLimitState | None, str]:
         """POST with retry on transient failures (5xx, timeouts).
 
         Returns ``(body, rate_limit, request_id)`` — rate_limit is parsed
         from ``X-RateLimit-*`` headers on the response, or ``None`` when
         the server doesn't emit them.
+
+        ``params`` is appended as a URL query string (e.g.
+        ``?include=constraint_trace`` for the preflight helper). The
+        request body is unchanged.
         """
-        return self._request("POST", path, payload)
+        return self._request("POST", path, payload, params=params)
 
     def _get(self, path: str) -> tuple[dict[str, Any], RateLimitState | None, str]:
         """GET with retry on transient failures (5xx, timeouts).
@@ -726,7 +855,9 @@ class AtlaSentClient:
         for attempt in range(1 + self._max_retries):
             try:
                 if method == "POST":
-                    response = self._client.post(url, json=payload, headers=headers)
+                    response = self._client.post(
+                        url, json=payload, headers=headers, params=params
+                    )
                 else:
                     response = self._client.get(url, headers=headers, params=params)
             except httpx.TimeoutException as exc:

@@ -62,7 +62,7 @@ def _mock_resp(mocker, status_code=200, json_data=None):
 
 class TestSyncProtect:
     def test_returns_verified_permit_on_allow(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -84,7 +84,7 @@ class TestSyncProtect:
         assert permit.timestamp == "2026-04-23T10:00:01Z"
 
     def test_raises_denied_on_policy_deny(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -103,7 +103,7 @@ class TestSyncProtect:
 
     def test_deny_is_also_catchable_as_parent_class(self, mocker):
         """Single exception family: `except AtlaSentDenied` still works."""
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -113,7 +113,7 @@ class TestSyncProtect:
             client.protect(agent="bot", action="deploy")
 
     def test_raises_denied_on_verify_revoked(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -132,7 +132,7 @@ class TestSyncProtect:
         assert err.audit_hash == "hash_alpha"
 
     def test_transport_error_propagates_as_atlasent_error_not_denied(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -144,7 +144,7 @@ class TestSyncProtect:
         assert not isinstance(exc_info.value, AtlaSentDeniedError)
 
     def test_http_500_propagates_as_atlasent_error(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         resp = _mock_resp(mocker, status_code=500)
         resp.text = "boom"
         mocker.patch.object(client._client, "post", return_value=resp)
@@ -153,7 +153,7 @@ class TestSyncProtect:
         assert exc_info.value.code == "server_error"
 
     def test_payload_passes_agent_action_context_to_both_endpoints(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mock_post = mocker.patch.object(
             client._client,
             "post",
@@ -183,7 +183,7 @@ class TestSyncProtect:
         assert "context" not in verify_payload
 
     def test_default_empty_context(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mock_post = mocker.patch.object(
             client._client,
             "post",
@@ -196,7 +196,7 @@ class TestSyncProtect:
         assert mock_post.call_args_list[0][1]["json"]["context"] == {}
 
     def test_deny_with_none_response_body_uses_empty_audit_hash(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client,
             "evaluate",
@@ -209,7 +209,7 @@ class TestSyncProtect:
         assert exc_info.value.audit_hash == ""
 
     def test_deny_with_non_string_audit_hash_uses_empty_audit_hash(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client,
             "evaluate",
@@ -230,7 +230,7 @@ class TestSyncProtect:
 class TestAsyncProtect:
     @pytest.mark.asyncio
     async def test_returns_verified_permit_on_allow(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -249,7 +249,7 @@ class TestAsyncProtect:
 
     @pytest.mark.asyncio
     async def test_raises_denied_on_deny(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -262,7 +262,7 @@ class TestAsyncProtect:
 
     @pytest.mark.asyncio
     async def test_raises_denied_on_verify_revoked(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -278,7 +278,7 @@ class TestAsyncProtect:
 
     @pytest.mark.asyncio
     async def test_deny_with_none_response_body_uses_empty_audit_hash(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client,
             "evaluate",
@@ -292,7 +292,7 @@ class TestAsyncProtect:
 
     @pytest.mark.asyncio
     async def test_deny_with_non_string_audit_hash_uses_empty_audit_hash(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client,
             "evaluate",
@@ -308,7 +308,7 @@ class TestAsyncProtect:
 
     @pytest.mark.asyncio
     async def test_authorize_verify_false_skips_verify_call(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mock_post = mocker.patch.object(
             client._client,
             "post",
@@ -334,7 +334,7 @@ class TestModuleLevelProtect:
         _reset_default_client()
 
     def test_uses_configured_global_client(self, mocker):
-        configure(api_key="ask_test")
+        configure(api_key="ask_test_xxxxxxxx")
         # Patch on whichever singleton the module reaches for.
         from atlasent.authorize import _get_default_client
 
@@ -353,7 +353,7 @@ class TestModuleLevelProtect:
         assert permit.permit_id == "dec_alpha"
 
     def test_module_level_raises_denied_on_deny(self, mocker):
-        configure(api_key="ask_test")
+        configure(api_key="ask_test_xxxxxxxx")
         from atlasent.authorize import _get_default_client
 
         client = _get_default_client()
