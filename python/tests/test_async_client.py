@@ -33,12 +33,14 @@ VERIFY_OK = {
 
 @pytest.fixture
 def async_client():
-    return AsyncAtlaSentClient(api_key="test_key", max_retries=0)
+    return AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
 
 
 @pytest.fixture
 def async_client_retry():
-    return AsyncAtlaSentClient(api_key="test_key", max_retries=2, retry_backoff=0.01)
+    return AsyncAtlaSentClient(
+        api_key="ask_test_xxxxxxxx", max_retries=2, retry_backoff=0.01
+    )
 
 
 def _mock_resp(mocker, status_code=200, json_data=None, headers=None):
@@ -57,11 +59,11 @@ class TestAsyncInit:
         assert c._client.headers["authorization"] == "Bearer ask_live_xyz"
 
     def test_accept_header(self):
-        c = AsyncAtlaSentClient(api_key="k")
+        c = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx")
         assert c._client.headers["accept"] == "application/json"
 
     def test_user_agent_header(self):
-        c = AsyncAtlaSentClient(api_key="k")
+        c = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx")
         assert "atlasent-python/" in c._client.headers["user-agent"]
 
 
@@ -243,7 +245,7 @@ class TestAsyncErrorCodes:
 class TestAsyncLifecycle:
     @pytest.mark.asyncio
     async def test_context_manager(self, mocker):
-        async with AsyncAtlaSentClient(api_key="k", max_retries=0) as c:
+        async with AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0) as c:
             mock_close = mocker.patch.object(c._client, "aclose")
         mock_close.assert_called_once()
 
@@ -260,7 +262,9 @@ class TestAsyncCache:
         from atlasent.cache import TTLCache
 
         cache = TTLCache(ttl=60.0)
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0, cache=cache)
+        client = AsyncAtlaSentClient(
+            api_key="ask_test_xxxxxxxx", max_retries=0, cache=cache
+        )
         post = mocker.patch.object(
             client._client,
             "post",

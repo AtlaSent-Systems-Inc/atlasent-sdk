@@ -102,6 +102,30 @@ function _enforceTls(baseUrl: string): string {
   return baseUrl;
 }
 
+// API-key prefix contract per atlasent-api/_shared/auth.ts:
+//   "ask_live_<entropy>" — production
+//   "ask_test_<entropy>" — non-production
+// Validated client-side so a mis-pasted key (with whitespace, quotes,
+// or a leftover wrapping char) trips loudly at construction rather
+// than yielding a 401 mid-conversation.
+const API_KEY_PATTERN = /^ask_(?:live|test)_[A-Za-z0-9_-]+$/;
+
+function _validateApiKey(apiKey: string): string {
+  if (typeof apiKey !== "string" || apiKey.length === 0) {
+    throw new AtlaSentError("apiKey is required", { code: "invalid_api_key" });
+  }
+  if (!API_KEY_PATTERN.test(apiKey)) {
+    const head = apiKey.slice(0, 8);
+    throw new AtlaSentError(
+      `AtlaSent apiKey does not match expected shape ` +
+        `\`ask_(live|test)_<entropy>\` (got prefix=${JSON.stringify(head)}). ` +
+        "Check for whitespace, quotes, or trailing characters.",
+      { code: "invalid_api_key" },
+    );
+  }
+  return apiKey;
+}
+
 /**
  * True when running in Node.js (or a Node-compatible server runtime that
  * exposes `process.versions.node`). False in browsers and browser-like
@@ -201,7 +225,7 @@ export class AtlaSentClient {
         { code: "network" },
       );
     }
-    this.apiKey = options.apiKey;
+    this.apiKey = _validateApiKey(options.apiKey);
     this.baseUrl = _enforceTls(options.baseUrl ?? DEFAULT_BASE_URL).replace(
       /\/+$/,
       "",

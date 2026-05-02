@@ -44,7 +44,7 @@ def _mock_resp(mocker, status_code=200, json_data=None):
 
 class TestAtlaSentGuard:
     def test_permit_passes_gate_result(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -63,7 +63,7 @@ class TestAtlaSentGuard:
         assert result.evaluation.permit_token == "dec_100"
 
     def test_deny_raises(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -78,7 +78,7 @@ class TestAtlaSentGuard:
             my_func()
 
     def test_dynamic_actor_id(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mock_post = mocker.patch.object(
             client._client,
             "post",
@@ -97,7 +97,7 @@ class TestAtlaSentGuard:
         assert payload["actor_id"] == "dynamic-agent"
 
     def test_dynamic_context_merges_with_static(self, mocker):
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mock_post = mocker.patch.object(
             client._client,
             "post",
@@ -125,7 +125,7 @@ class TestAtlaSentGuard:
         # If the caller passed a non-dict value for the context kwarg
         # (bad usage), silently fall back to the static context rather
         # than crashing the request.
-        client = AtlaSentClient(api_key="k", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mock_post = mocker.patch.object(
             client._client,
             "post",
@@ -153,7 +153,7 @@ class TestAtlaSentGuard:
 class TestAsyncAtlaSentGuard:
     @pytest.mark.asyncio
     async def test_permit_passes_gate_result(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -173,7 +173,7 @@ class TestAsyncAtlaSentGuard:
 
     @pytest.mark.asyncio
     async def test_deny_raises(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             client._client,
             "post",
@@ -189,7 +189,7 @@ class TestAsyncAtlaSentGuard:
 
     @pytest.mark.asyncio
     async def test_dynamic_actor_id(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mock_post = mocker.patch.object(
             client._client,
             "post",
@@ -209,7 +209,7 @@ class TestAsyncAtlaSentGuard:
 
     @pytest.mark.asyncio
     async def test_dynamic_context_merges_with_static(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mock_post = mocker.patch.object(
             client._client,
             "post",

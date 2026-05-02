@@ -204,12 +204,12 @@ describe("atlasent.protect (default export API)", () => {
       jsonResponse(VERIFY_OK_WIRE),
     ]);
 
-    configure({ apiKey: "ask_1", fetch: first });
+    configure({ apiKey: "ask_test_1", fetch: first });
     await atlasent.protect({ agent: "a", action: "b" });
     expect(first).toHaveBeenCalledTimes(2);
     expect(second).toHaveBeenCalledTimes(0);
 
-    configure({ apiKey: "ask_2", fetch: second });
+    configure({ apiKey: "ask_test_2", fetch: second });
     await atlasent.protect({ agent: "a", action: "b" });
     // First mock must not get further calls after configure() replaces it.
     expect(first).toHaveBeenCalledTimes(2);

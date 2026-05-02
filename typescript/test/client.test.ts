@@ -65,6 +65,21 @@ describe("AtlaSentClient constructor", () => {
     expect(() => new AtlaSentClient({})).toThrow(AtlaSentError);
   });
 
+  it("rejects malformed apiKey", () => {
+    expect(() => new AtlaSentClient({ apiKey: "not_a_real_key" })).toThrow(/ask_/);
+  });
+
+  it("rejects whitespace-padded apiKey", () => {
+    expect(
+      () => new AtlaSentClient({ apiKey: " ask_test_xxxxxxxx " }),
+    ).toThrow(/ask_/);
+  });
+
+  it("accepts ask_live_ and ask_test_ prefixes", () => {
+    expect(() => new AtlaSentClient({ apiKey: "ask_live_abc123" })).not.toThrow();
+    expect(() => new AtlaSentClient({ apiKey: "ask_test_abc123" })).not.toThrow();
+  });
+
   it("strips trailing slashes from baseUrl", () => {
     const fetchImpl = mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE));
     const client = makeClient(fetchImpl, { baseUrl: "https://staging.atlasent.io///" });
@@ -76,7 +91,7 @@ describe("AtlaSentClient constructor", () => {
 
   it("rejects http:// baseUrl", () => {
     expect(
-      () => new AtlaSentClient({ apiKey: "k", baseUrl: "http://api.atlasent.io" }),
+      () => new AtlaSentClient({ apiKey: "ask_test_xxxxxxxx", baseUrl: "http://api.atlasent.io" }),
     ).toThrow(/https/);
   });
 
@@ -84,7 +99,7 @@ describe("AtlaSentClient constructor", () => {
     const prev = process.env.ATLASENT_ALLOW_INSECURE_HTTP;
     process.env.ATLASENT_ALLOW_INSECURE_HTTP = "1";
     try {
-      const c = new AtlaSentClient({ apiKey: "k", baseUrl: "http://localhost:8000" });
+      const c = new AtlaSentClient({ apiKey: "ask_test_xxxxxxxx", baseUrl: "http://localhost:8000" });
       expect(c).toBeDefined();
     } finally {
       if (prev === undefined) delete process.env.ATLASENT_ALLOW_INSECURE_HTTP;

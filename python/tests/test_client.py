@@ -11,12 +11,14 @@ from atlasent.models import ApiKeySelfResult, EvaluateResult, GateResult, Verify
 
 @pytest.fixture
 def client():
-    return AtlaSentClient(api_key="test_key", max_retries=0)
+    return AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
 
 
 @pytest.fixture
 def client_retry():
-    return AtlaSentClient(api_key="test_key", max_retries=2, retry_backoff=0.01)
+    return AtlaSentClient(
+        api_key="ask_test_xxxxxxxx", max_retries=2, retry_backoff=0.01
+    )
 
 
 EVALUATE_PERMIT = {
@@ -57,8 +59,8 @@ def _mock_resp(mocker, status_code=200, json_data=None, headers=None):
 
 class TestInit:
     def test_defaults(self):
-        c = AtlaSentClient(api_key="k")
-        assert c._api_key == "k"
+        c = AtlaSentClient(api_key="ask_test_xxxxxxxx")
+        assert c._api_key == "ask_test_xxxxxxxx"
         assert c._anon_key == ""
         assert c._base_url == "https://api.atlasent.io"
         assert c._timeout == 10
@@ -66,7 +68,7 @@ class TestInit:
 
     def test_custom(self):
         c = AtlaSentClient(
-            api_key="k",
+            api_key="ask_test_xxxxxxxx",
             anon_key="anon",
             base_url="https://staging.atlasent.io/",
             timeout=30,
@@ -78,15 +80,36 @@ class TestInit:
 
     def test_rejects_http_base_url(self):
         with pytest.raises(ValueError, match="https"):
-            AtlaSentClient(api_key="k", base_url="http://api.atlasent.io")
+            AtlaSentClient(
+                api_key="ask_test_xxxxxxxx", base_url="http://api.atlasent.io"
+            )
 
     def test_dev_escape_hatch_allows_http(self, monkeypatch):
         monkeypatch.setenv("ATLASENT_ALLOW_INSECURE_HTTP", "1")
-        c = AtlaSentClient(api_key="k", base_url="http://localhost:8000")
+        c = AtlaSentClient(
+            api_key="ask_test_xxxxxxxx", base_url="http://localhost:8000"
+        )
         assert c._base_url == "http://localhost:8000"
 
+    def test_rejects_malformed_api_key(self):
+        with pytest.raises(ValueError, match="ask_"):
+            AtlaSentClient(api_key="not_a_real_key")
+
+    def test_rejects_whitespace_padded_api_key(self):
+        # Common paste accident — wrapping whitespace.
+        with pytest.raises(ValueError, match="ask_"):
+            AtlaSentClient(api_key=" ask_test_xxxxxxxx ")
+
+    def test_rejects_empty_api_key(self):
+        with pytest.raises(ValueError, match="required"):
+            AtlaSentClient(api_key="")
+
+    def test_accepts_live_and_test_prefixes(self):
+        AtlaSentClient(api_key="ask_live_abc123")
+        AtlaSentClient(api_key="ask_test_abc123")
+
     def test_user_agent(self):
-        c = AtlaSentClient(api_key="k")
+        c = AtlaSentClient(api_key="ask_test_xxxxxxxx")
         assert "atlasent-python/" in c._client.headers["user-agent"]
 
     def test_authorization_header(self):
@@ -94,7 +117,7 @@ class TestInit:
         assert c._client.headers["authorization"] == "Bearer ask_live_xyz"
 
     def test_accept_header(self):
-        c = AtlaSentClient(api_key="k")
+        c = AtlaSentClient(api_key="ask_test_xxxxxxxx")
         assert c._client.headers["accept"] == "application/json"
 
 
@@ -383,7 +406,7 @@ class TestLifecycle:
         mock_close.assert_called_once()
 
     def test_context_manager(self, mocker):
-        with AtlaSentClient(api_key="k", max_retries=0) as c:
+        with AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0) as c:
             mock_close = mocker.patch.object(c._client, "close")
         mock_close.assert_called_once()
 
@@ -970,7 +993,7 @@ class TestRevokePermit:
         # legacy decision_id / api_key body fields.
         assert payload["decision_id"] == "dec_to_revoke"
         assert payload["reason"] == "audit"
-        assert payload["api_key"] == "test_key"
+        assert payload["api_key"] == "ask_test_xxxxxxxx"
 
     def test_revoke_defaults_reason_to_empty_string(self, client, mocker):
         resp = _mock_resp(mocker, json_data=self.REVOKE_OK)
@@ -1209,9 +1232,7 @@ class TestContextSizeWarning:
 
         oversize = {f"k{i}": i for i in range(70)}
         with caplog.at_level(logging.WARNING, logger="atlasent"):
-            req = EvaluateRequest(
-                action="a", agent="b", context=oversize
-            )
+            req = EvaluateRequest(action="a", agent="b", context=oversize)
 
         assert req.context == oversize
         assert any(
@@ -1228,6 +1249,4 @@ class TestContextSizeWarning:
         with caplog.at_level(logging.WARNING, logger="atlasent"):
             EvaluateRequest(action="a", agent="b", context=ctx)
 
-        assert not any(
-            "soft cap" in record.message for record in caplog.records
-        )
+        assert not any("soft cap" in record.message for record in caplog.records)

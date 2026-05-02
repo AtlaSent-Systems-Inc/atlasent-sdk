@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -45,6 +46,36 @@ DEFAULT_BASE_URL = "https://api.atlasent.io"
 DEFAULT_TIMEOUT = 10
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BACKOFF = 0.5
+
+# API-key prefix contract per atlasent-api/supabase/functions/_shared/auth.ts:
+#   "ask_live_<entropy>" — production keys
+#   "ask_test_<entropy>" — non-production keys
+# Validated client-side so a mis-pasted key (with whitespace, quotes,
+# or a leftover wrapping char) trips loudly at construction rather
+# than yielding a 401 mid-conversation. The character class matches
+# what atlasent-api accepts; widen here only if the server widens
+# first.
+_API_KEY_PATTERN = re.compile(r"^ask_(?:live|test)_[A-Za-z0-9_-]+$")
+
+
+def _validate_api_key(api_key: str) -> str:
+    """Reject obviously-malformed API keys at client init.
+
+    Returns the trimmed key on accept; raises ``ValueError`` on
+    reject. Never echoes the key into the error message — only the
+    first 8 characters of any non-matching value, so a paste accident
+    that copies the right side of the key doesn't surface in stderr.
+    """
+    if not isinstance(api_key, str) or not api_key:
+        raise ValueError("AtlaSent api_key is required")
+    if not _API_KEY_PATTERN.match(api_key):
+        head = api_key[:8] if api_key else ""
+        raise ValueError(
+            f"AtlaSent api_key does not match expected shape "
+            f"`ask_(live|test)_<entropy>` (got prefix={head!r}). "
+            "Check for whitespace, quotes, or trailing characters."
+        )
+    return api_key
 
 
 def _redact_token(token: str) -> str:
@@ -121,7 +152,7 @@ class AtlaSentClient:
         retry_backoff: float = DEFAULT_RETRY_BACKOFF,
         cache: TTLCache | None = None,
     ) -> None:
-        self._api_key = api_key
+        self._api_key = _validate_api_key(api_key)
         self._anon_key = anon_key
         self._base_url = _enforce_tls(base_url).rstrip("/")
         self._timeout = timeout
