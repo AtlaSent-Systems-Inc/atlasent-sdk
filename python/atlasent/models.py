@@ -271,6 +271,120 @@ class EvaluateResult(BaseModel):
         return out
 
 
+# ── Constraint trace (preflight) ──────────────────────────────────────
+
+
+class ConstraintTraceStage(BaseModel):
+    """One stage of a single policy's constraint evaluation.
+
+    Mirrors ``ConstraintTraceStage`` in
+    ``atlasent-api/packages/types/src/index.ts``. The trace is emitted
+    by the rule engine when the request URL carries
+    ``?include=constraint_trace``; consumers (approval-queue UIs,
+    workflow pre-flight checks) read it to surface which stages /
+    rules fired.
+
+    Attributes:
+        stage: Engine stage name (e.g. ``"role_check"``, ``"context"``).
+        rule: Optional rule identifier; absent for wrapper stages
+            that don't carry a single rule id.
+        matched: ``True`` when this stage's predicate fired (matched
+            input). Read in conjunction with ``detail``.
+        detail: Optional human-readable note from the engine.
+        order: Zero-based position of this stage within its policy's
+            ``stages`` array. Stable across server restarts so UIs can
+            sort without re-sorting.
+    """
+
+    stage: str
+    rule: str | None = None
+    matched: bool
+    detail: str | None = None
+    order: int
+
+    # Forward-compat: tolerate unknown engine-side keys without raising.
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+
+class ConstraintTracePolicy(BaseModel):
+    """Per-policy block of a constraint trace.
+
+    Mirrors ``ConstraintTracePolicy`` in
+    ``atlasent-api/packages/types/src/index.ts``. The handler iterates
+    active policies in order until first non-allow; the policy that
+    produced the outer decision has ``decision != "allow"``.
+
+    Attributes:
+        policy_id: Stable identifier of the evaluated policy.
+        decision: Policy-level decision
+            (``"allow"|"deny"|"hold"|"escalate"``).
+        fingerprint: Engine-side fingerprint of the bundle row used to
+            evaluate this policy. Useful for caching and replay.
+        risk_score: Optional engine-computed risk score from a
+            ``risk`` rule clause. Distinct from the heuristic score on
+            the outer envelope.
+        stages: Ordered list of :class:`ConstraintTraceStage` produced
+            while evaluating this policy.
+    """
+
+    policy_id: str
+    decision: str
+    fingerprint: str
+    risk_score: float | None = None
+    stages: list[ConstraintTraceStage] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+
+class ConstraintTrace(BaseModel):
+    """Top-level constraint trace returned by ``/v1-evaluate?include=constraint_trace``.
+
+    Mirrors ``ConstraintTraceResponse`` in
+    ``atlasent-api/packages/types/src/index.ts``. Present iff the
+    caller requested the trace; the SDK's preflight helper always
+    requests it.
+
+    Attributes:
+        rules_evaluated: Per-policy blocks in the order the engine
+            evaluated them.
+        matching_policy_id: Policy id whose evaluation produced the
+            outer decision. Equals the outer ``matched_policy_id`` on
+            non-allow paths; ``None`` on a clean allow (all policies
+            passed).
+    """
+
+    rules_evaluated: list[ConstraintTracePolicy] = Field(default_factory=list)
+    matching_policy_id: str | None = None
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+
+@dataclass
+class EvaluatePreflightResult:
+    """Result of :meth:`AtlaSentClient.evaluate_preflight`.
+
+    Wraps the regular :class:`EvaluateResult` plus the
+    :class:`ConstraintTrace` returned when the request URL carries
+    ``?include=constraint_trace``. The whole point of preflight is to
+    surface which stages / policies WOULD fire BEFORE submitting an
+    action for approval, so workflows can reject trivially defective
+    requests at submission time and only forward viable requests to
+    the approval queue.
+
+    Attributes:
+        evaluation: The regular :class:`EvaluateResult` (decision,
+            permit_token, denial, ...).
+        constraint_trace: The trace, populated on responses from
+            atlasent-api versions that include the constraint-trace
+            sub-object. ``None`` on older deployments — callers should
+            handle the missing-trace case as "no trace available"
+            rather than treat the response as malformed.
+    """
+
+    evaluation: EvaluateResult
+    constraint_trace: ConstraintTrace | None = None
+
+
 # ── Verify ────────────────────────────────────────────────────────────
 
 
