@@ -16,6 +16,9 @@ on:
       - "contract/schemas/**"
       - ".github/workflows/python-ci.yml"
 
+permissions:
+  contents: read
+
 defaults:
   run:
     working-directory: python
