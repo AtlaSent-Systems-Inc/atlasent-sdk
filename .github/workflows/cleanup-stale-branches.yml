@@ -1,0 +1,104 @@
+name: Cleanup stale ephemeral branches
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List branches that would be deleted without deleting"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      stale_days:
+        description: "Delete ephemeral branches with no commits in N days"
+        required: false
+        default: "14"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete merged or stale ephemeral branches
+        uses: actions/github-script@v7
+        env:
+          DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry_run }}
+          STALE_DAYS: ${{ github.event_name == 'schedule' && '14' || inputs.stale_days }}
+        with:
+          script: |
+            const dryRun = process.env.DRY_RUN !== 'false';
+            const staleDays = parseInt(process.env.STALE_DAYS, 10);
+            const cutoff = Date.now() - staleDays * 24 * 60 * 60 * 1000;
+
+            const PREFIXES = ['claude/', 'copilot/', 'lovable-sync-', 'cursor/'];
+
+            const { owner, repo } = context.repo;
+            const defaultBranch = (await github.rest.repos.get({ owner, repo })).data.default_branch;
+
+            const branches = await github.paginate(github.rest.repos.listBranches, {
+              owner, repo, per_page: 100,
+            });
+            const ephemeral = branches.filter(b => PREFIXES.some(p => b.name.startsWith(p)));
+            core.info(`Found ${ephemeral.length} ephemeral branches across prefixes: ${PREFIXES.join(', ')}`);
+
+            const openPRs = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', per_page: 100,
+            });
+            const branchesWithOpenPRs = new Set(openPRs.map(pr => pr.head.ref));
+            core.info(`Branches with open PRs (skipped): ${branchesWithOpenPRs.size}`);
+
+            const toDelete = [];
+            for (const b of ephemeral) {
+              if (b.protected) continue;
+              if (branchesWithOpenPRs.has(b.name)) continue;
+
+              const commit = (await github.rest.repos.getCommit({
+                owner, repo, ref: b.commit.sha,
+              })).data;
+              const committedAt = new Date(
+                commit.commit.committer?.date || commit.commit.author?.date
+              ).getTime();
+
+              const compare = (await github.rest.repos.compareCommitsWithBasehead({
+                owner, repo, basehead: `${defaultBranch}...${b.name}`,
+              })).data;
+              const isMerged = compare.ahead_by === 0;
+              const isStale = committedAt < cutoff;
+
+              if (isMerged) {
+                toDelete.push({ name: b.name, reason: 'merged into default branch' });
+              } else if (isStale) {
+                const days = Math.round((Date.now() - committedAt) / 86400000);
+                toDelete.push({ name: b.name, reason: `no commits in ${days}d` });
+              }
+            }
+
+            core.info(`Eligible for deletion: ${toDelete.length}`);
+            for (const { name, reason } of toDelete) {
+              if (dryRun) {
+                core.info(`[dry-run] would delete ${name} (${reason})`);
+              } else {
+                core.info(`deleting ${name} (${reason})`);
+                await github.rest.git.deleteRef({
+                  owner, repo, ref: `heads/${name}`,
+                });
+              }
+            }
+
+            await core.summary
+              .addHeading(`Ephemeral branch cleanup (${dryRun ? 'dry-run' : 'live'})`)
+              .addRaw(`Stale threshold: ${staleDays} days\n\n`)
+              .addRaw(`Prefixes: ${PREFIXES.join(', ')}\n\n`)
+              .addTable([
+                [{ data: 'Branch', header: true }, { data: 'Reason', header: true }],
+                ...toDelete.map(b => [b.name, b.reason]),
+              ])
+              .write();
