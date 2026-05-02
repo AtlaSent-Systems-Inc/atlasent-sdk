@@ -2,24 +2,31 @@
 
 Wire format (post 2026-04-30 contract reconciliation): every model
 serializes to the canonical wire shape read by
-``atlasent-api/supabase/functions/v1-{evaluate,verify-permit}/handler.ts``:
+``atlasent-api/supabase/functions/v1-{evaluate,verify-permit}/handler.ts``.
 
-  POST /v1-evaluate request:
-      { action_type, actor_id, context }                                     (canonical)
-      { action, agent, context, api_key }                                    (legacy, accepted with DeprecationWarning)
+POST /v1-evaluate request:
+    canonical: ``{ action_type, actor_id, context }``
+    legacy:    ``{ action, agent, context, api_key }``
+               (accepted with DeprecationWarning)
 
-  POST /v1-evaluate response:
-      { decision: "allow"|"deny"|"hold"|"escalate", permit_token?,
-        request_id?, expires_at?, denial?: {reason, code}, ... }             (canonical)
-      { permitted: bool, decision_id, reason?, audit_hash?, timestamp? }     (legacy server, transparently translated)
+POST /v1-evaluate response:
+    canonical: ``{ decision: "allow"|"deny"|"hold"|"escalate",
+                   permit_token?, request_id?, expires_at?,
+                   denial?: {reason, code}, ... }``
+    legacy:    ``{ permitted: bool, decision_id, reason?, audit_hash?,
+                   timestamp? }``
+               (legacy server, transparently translated)
 
-  POST /v1-verify-permit request:
-      { permit_token, action_type?, actor_id? }                              (canonical)
-      { decision_id, action, agent, context, api_key }                       (legacy, accepted with DeprecationWarning)
+POST /v1-verify-permit request:
+    canonical: ``{ permit_token, action_type?, actor_id? }``
+    legacy:    ``{ decision_id, action, agent, context, api_key }``
+               (accepted with DeprecationWarning)
 
-  POST /v1-verify-permit response:
-      { valid, outcome: "allow"|"deny", verify_error_code?, reason? }        (canonical)
-      { verified, outcome, permit_hash, timestamp }                          (legacy, transparently translated)
+POST /v1-verify-permit response:
+    canonical: ``{ valid, outcome: "allow"|"deny",
+                   verify_error_code?, reason? }``
+    legacy:    ``{ verified, outcome, permit_hash, timestamp }``
+               (legacy, transparently translated)
 
 Construction with legacy keyword names (``action=``, ``agent=``,
 ``decision_id=``, ``api_key=``) keeps working but emits
@@ -208,7 +215,11 @@ class EvaluateResult(BaseModel):
             out["decision"] = "allow" if out["permitted"] else "deny"
         if "permit_token" not in out and "decision_id" in out:
             out["permit_token"] = out["decision_id"]
-        if "denial" not in out and out.get("decision") not in (None, "allow") and out.get("reason"):
+        if (
+            "denial" not in out
+            and out.get("decision") not in (None, "allow")
+            and out.get("reason")
+        ):
             out["denial"] = {"reason": out["reason"]}
 
         # Now mirror canonical → legacy so consumers reading either shape see
@@ -493,7 +504,7 @@ class StreamDecisionEvent(BaseModel):
     is_final: bool = False
 
     @classmethod
-    def from_wire(cls, data: dict[str, Any]) -> "StreamDecisionEvent":
+    def from_wire(cls, data: dict[str, Any]) -> StreamDecisionEvent:  # noqa: D401
         permitted = data.get("permitted", True)
         return cls(
             decision="ALLOW" if permitted else "DENY",

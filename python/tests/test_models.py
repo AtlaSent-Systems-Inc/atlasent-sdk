@@ -48,8 +48,7 @@ class TestEvaluateRequest:
         assert "agent" not in data
         assert "api_key" not in data
         kinds = [
-            str(w.message) for w in caught
-            if issubclass(w.category, DeprecationWarning)
+            str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
         ]
         assert any("action= -> action_type=" in m for m in kinds)
         assert any("agent= -> actor_id=" in m for m in kinds)
@@ -143,8 +142,7 @@ class TestVerifyRequest:
         assert "decision_id" not in data
         assert "api_key" not in data
         kinds = [
-            str(w.message) for w in caught
-            if issubclass(w.category, DeprecationWarning)
+            str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
         ]
         assert any("decision_id= -> permit_token=" in m for m in kinds)
 

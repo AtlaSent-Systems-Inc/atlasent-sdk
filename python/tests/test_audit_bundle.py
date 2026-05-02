@@ -34,7 +34,10 @@ except BaseException:
 
 pytestmark = pytest.mark.skipif(
     not FIXTURES.exists() or not _CRYPTO_OK,
-    reason="contract/vectors/audit-bundles/ not present, or cryptography package unavailable/broken",
+    reason=(
+        "contract/vectors/audit-bundles/ not present, "
+        "or cryptography package unavailable/broken"
+    ),
 )
 
 
