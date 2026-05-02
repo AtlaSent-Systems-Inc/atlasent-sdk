@@ -1,0 +1,42 @@
+# Tag convention: go/vX.Y.Z (e.g. go/v1.0.0)
+#
+# Go sub-modules in a mono-repo MUST be tagged with the directory prefix.
+# pkg.go.dev will index this module at:
+#   https://pkg.go.dev/github.com/atlasent-systems-inc/atlasent-sdk/go
+#
+# To release:
+#   git tag go/v1.0.0
+#   git push origin go/v1.0.0
+
+name: Publish Go SDK
+
+on:
+  push:
+    tags:
+      - 'go/v*'   # MUST be go/vX.Y.Z format — required for pkg.go.dev sub-module indexing
+
+jobs:
+  test-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run Go tests
+        working-directory: go
+        run: go test ./...
+
+      - name: Verify module is accessible via proxy
+        run: |
+          TAG="${GITHUB_REF_NAME}"           # e.g. go/v1.0.0
+          VERSION="${TAG#go/}"               # strips prefix → v1.0.0
+          echo "Tag: $TAG  Version: $VERSION"
+          # Prod the proxy so pkg.go.dev indexes immediately
+          GOPROXY=https://proxy.golang.org \
+            go list -m "github.com/atlasent-systems-inc/atlasent-sdk/go@${VERSION}" || \
+            echo "Proxy indexing in progress — pkg.go.dev will index within minutes"
