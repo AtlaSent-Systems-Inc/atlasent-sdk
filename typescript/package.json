@@ -38,6 +38,16 @@
         "default": "./dist/behavior.cjs"
       }
     },
+    "./state": {
+      "import": {
+        "types": "./dist/state.d.ts",
+        "default": "./dist/state.js"
+      },
+      "require": {
+        "types": "./dist/state.d.cts",
+        "default": "./dist/state.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
