@@ -76,6 +76,15 @@ class TestInit:
         assert c._base_url == "https://staging.atlasent.io"
         assert c._timeout == 30
 
+    def test_rejects_http_base_url(self):
+        with pytest.raises(ValueError, match="https"):
+            AtlaSentClient(api_key="k", base_url="http://api.atlasent.io")
+
+    def test_dev_escape_hatch_allows_http(self, monkeypatch):
+        monkeypatch.setenv("ATLASENT_ALLOW_INSECURE_HTTP", "1")
+        c = AtlaSentClient(api_key="k", base_url="http://localhost:8000")
+        assert c._base_url == "http://localhost:8000"
+
     def test_user_agent(self):
         c = AtlaSentClient(api_key="k")
         assert "atlasent-python/" in c._client.headers["user-agent"]

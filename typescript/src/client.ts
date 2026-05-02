@@ -52,6 +52,39 @@ function _buildUserAgent(): string {
 }
 
 /**
+ * Reject non-TLS base URLs unless the dev escape hatch is set.
+ *
+ * `ATLASENT_ALLOW_INSECURE_HTTP=1` (Node) or
+ * `globalThis.ATLASENT_ALLOW_INSECURE_HTTP === "1"` (browser dev) permits
+ * `http://` for local fixtures — production callers never set this.
+ * Non-`http(s)` schemes (data:, file:, ...) are rejected unconditionally.
+ */
+function _enforceTls(baseUrl: string): string {
+  const allow =
+    (typeof process !== "undefined" &&
+      process?.env?.ATLASENT_ALLOW_INSECURE_HTTP === "1") ||
+    (globalThis as { ATLASENT_ALLOW_INSECURE_HTTP?: string })
+      .ATLASENT_ALLOW_INSECURE_HTTP === "1";
+  if (allow) return baseUrl;
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new AtlaSentError(`Invalid baseUrl: ${baseUrl}`, {
+      code: "bad_request",
+    });
+  }
+  if (parsed.protocol !== "https:") {
+    throw new AtlaSentError(
+      `AtlaSent baseUrl must use https:// (got ${parsed.protocol}). ` +
+        `For local development, set ATLASENT_ALLOW_INSECURE_HTTP=1.`,
+      { code: "bad_request" },
+    );
+  }
+  return baseUrl;
+}
+
+/**
  * True when running in Node.js (or a Node-compatible server runtime that
  * exposes `process.versions.node`). False in browsers and browser-like
  * environments such as jsdom / Cloudflare Workers.
@@ -118,7 +151,10 @@ export class AtlaSentClient {
       );
     }
     this.apiKey = options.apiKey;
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    this.baseUrl = _enforceTls(options.baseUrl ?? DEFAULT_BASE_URL).replace(
+      /\/+$/,
+      "",
+    );
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.userAgent = _buildUserAgent();
