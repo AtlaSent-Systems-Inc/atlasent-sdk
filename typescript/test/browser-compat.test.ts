@@ -35,7 +35,7 @@ describe("browser-compat — process stubbed to undefined", () => {
     expect(
       () =>
         new AtlaSentClient({
-          apiKey: "ask_browser_test",
+          apiKey: "ask_test_browser",
           fetch: vi.fn(),
         }),
     ).not.toThrow();
@@ -51,7 +51,7 @@ describe("browser-compat — process stubbed to undefined", () => {
     });
 
     const client = new AtlaSentClient({
-      apiKey: "ask_browser_test",
+      apiKey: "ask_test_browser",
       fetch: fetchMock,
     });
 
@@ -70,7 +70,7 @@ describe("browser-compat — process stubbed to undefined", () => {
     });
 
     const client = new AtlaSentClient({
-      apiKey: "ask_node_test",
+      apiKey: "ask_test_node",
       fetch: fetchMock,
     });
 

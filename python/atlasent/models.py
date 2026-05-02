@@ -75,6 +75,7 @@ def _warn_oversize_context(value: dict[str, Any]) -> dict[str, Any]:
         )
     return value
 
+
 # ── Rate-limit state (shared by evaluate + verify) ───────────────────
 
 

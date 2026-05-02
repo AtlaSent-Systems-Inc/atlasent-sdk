@@ -15,7 +15,12 @@ import httpx
 
 from ._version import __version__
 from .audit import AuditEventsResult, AuditExportResult
-from .client import _enforce_tls, _parse_rate_limit_headers, _redact_token
+from .client import (
+    _enforce_tls,
+    _parse_rate_limit_headers,
+    _redact_token,
+    _validate_api_key,
+)
 from .exceptions import (
     AtlaSentDenied,
     AtlaSentDeniedError,
@@ -81,7 +86,7 @@ class AsyncAtlaSentClient:
         retry_backoff: float = DEFAULT_RETRY_BACKOFF,
         cache: TTLCache | None = None,
     ) -> None:
-        self._api_key = api_key
+        self._api_key = _validate_api_key(api_key)
         self._anon_key = anon_key
         self._base_url = _enforce_tls(base_url).rstrip("/")
         self._timeout = timeout

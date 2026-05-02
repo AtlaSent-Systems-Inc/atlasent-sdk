@@ -33,7 +33,7 @@ def _clean():
 
 class TestEvaluate:
     def test_with_global_config(self, mocker):
-        configure(api_key="global_key")
+        configure(api_key="ask_test_global")
         mock_post = mocker.patch("atlasent.client.httpx.Client.post")
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = EVALUATE_PERMIT
@@ -50,7 +50,7 @@ class TestEvaluate:
 
 class TestVerify:
     def test_with_global_config(self, mocker):
-        configure(api_key="key")
+        configure(api_key="ask_test_xxxxxxxx")
         mock_post = mocker.patch("atlasent.client.httpx.Client.post")
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = VERIFY_OK
@@ -62,7 +62,7 @@ class TestVerify:
 
 class TestGate:
     def test_with_global_config(self, mocker):
-        configure(api_key="key")
+        configure(api_key="ask_test_xxxxxxxx")
         mock_post = mocker.patch("atlasent.client.httpx.Client.post")
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.side_effect = [EVALUATE_PERMIT, VERIFY_OK]
@@ -75,7 +75,7 @@ class TestGate:
 
 class TestSingleton:
     def test_reuses_client(self, mocker):
-        configure(api_key="key")
+        configure(api_key="ask_test_xxxxxxxx")
         mock_post = mocker.patch("atlasent.client.httpx.Client.post")
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = EVALUATE_PERMIT
