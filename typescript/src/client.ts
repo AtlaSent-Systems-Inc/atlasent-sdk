@@ -26,6 +26,8 @@ import type {
   AuditEventsResult,
   AuditExportRequest,
   AuditExportResult,
+  ConstraintTrace,
+  EvaluatePreflightResponse,
   EvaluateRequest,
   EvaluateResponse,
   RateLimitState,
@@ -102,6 +104,30 @@ function _enforceTls(baseUrl: string): string {
   return baseUrl;
 }
 
+// API-key prefix contract per atlasent-api/_shared/auth.ts:
+//   "ask_live_<entropy>" — production
+//   "ask_test_<entropy>" — non-production
+// Validated client-side so a mis-pasted key (with whitespace, quotes,
+// or a leftover wrapping char) trips loudly at construction rather
+// than yielding a 401 mid-conversation.
+const API_KEY_PATTERN = /^ask_(?:live|test)_[A-Za-z0-9_-]+$/;
+
+function _validateApiKey(apiKey: string): string {
+  if (typeof apiKey !== "string" || apiKey.length === 0) {
+    throw new AtlaSentError("apiKey is required", { code: "invalid_api_key" });
+  }
+  if (!API_KEY_PATTERN.test(apiKey)) {
+    const head = apiKey.slice(0, 8);
+    throw new AtlaSentError(
+      `AtlaSent apiKey does not match expected shape ` +
+        `\`ask_(live|test)_<entropy>\` (got prefix=${JSON.stringify(head)}). ` +
+        "Check for whitespace, quotes, or trailing characters.",
+      { code: "invalid_api_key" },
+    );
+  }
+  return apiKey;
+}
+
 /**
  * True when running in Node.js (or a Node-compatible server runtime that
  * exposes `process.versions.node`). False in browsers and browser-like
@@ -138,6 +164,13 @@ interface EvaluateWire {
   request_id?: string;
   expires_at?: string;
   denial?: { reason?: string; code?: string };
+  /**
+   * Optional sub-object — present iff the request URL carried
+   * `?include=constraint_trace`. Older atlasent-api deployments
+   * omit this even when `include` was requested; the preflight
+   * helper degrades to `null` in that case.
+   */
+  constraint_trace?: unknown;
   // Legacy passthrough.
   permitted?: boolean;
   decision_id?: string;
@@ -201,7 +234,7 @@ export class AtlaSentClient {
         { code: "network" },
       );
     }
-    this.apiKey = options.apiKey;
+    this.apiKey = _validateApiKey(options.apiKey);
     this.baseUrl = _enforceTls(options.baseUrl ?? DEFAULT_BASE_URL).replace(
       /\/+$/,
       "",
@@ -261,6 +294,91 @@ export class AtlaSentClient {
       timestamp: wire.timestamp ?? "",
       rateLimit,
     };
+  }
+
+  /**
+   * Pre-flight evaluation that always returns the constraint trace.
+   *
+   * Wraps `POST /v1-evaluate?include=constraint_trace`. Use this from
+   * a workflow's submission step to surface trivial defects (missing
+   * fields, wrong roles, mis-set context) BEFORE pushing the request
+   * onto an approval queue — only requests that would actually pass
+   * make it through to a human reviewer.
+   *
+   * Returns an {@link EvaluatePreflightResponse} carrying the regular
+   * {@link EvaluateResponse} plus the {@link ConstraintTrace}. Unlike
+   * {@link evaluate}, this method does NOT mark a non-allow as a
+   * thrown condition — the whole point is to inspect both the outcome
+   * AND the per-policy trace, so the caller branches on
+   * `result.evaluation.decision` and reads `result.constraintTrace`
+   * to render the failing stages.
+   *
+   * The constraint-trace shape mirrors `ConstraintTraceResponse` in
+   * atlasent-api (`packages/types/src/index.ts`). On older
+   * atlasent-api deployments that omit the trace, `constraintTrace`
+   * is `null` rather than throwing — forward-compatible degradation.
+   *
+   * Performance: one extra round-trip on submission. Latency is
+   * comparable to {@link evaluate}; the response body is fuller
+   * (includes the per-stage trace) so the wire payload is larger.
+   * If the caller does not need the trace, prefer {@link evaluate}.
+   */
+  async evaluatePreflight(
+    input: EvaluateRequest,
+  ): Promise<EvaluatePreflightResponse> {
+    _warnOversizeContext(input.context);
+    const body = {
+      action_type: input.action,
+      actor_id: input.agent,
+      context: input.context ?? {},
+    };
+    const query = new URLSearchParams({ include: "constraint_trace" });
+    const { body: wire, rateLimit } = await this.post<EvaluateWire>(
+      "/v1-evaluate",
+      body,
+      query,
+    );
+
+    let decision = wire.decision;
+    if (decision === undefined && typeof wire.permitted === "boolean") {
+      decision = wire.permitted ? "allow" : "deny";
+    }
+    if (
+      decision !== "allow" &&
+      decision !== "deny" &&
+      decision !== "hold" &&
+      decision !== "escalate"
+    ) {
+      throw new AtlaSentError(
+        "Malformed response from /v1-evaluate: missing `decision` (or legacy `permitted`)",
+        { code: "bad_response" },
+      );
+    }
+    const permitToken = wire.permit_token ?? wire.decision_id;
+
+    const evaluation: EvaluateResponse = {
+      decision: decision === "allow" ? "ALLOW" : "DENY",
+      permitId: permitToken ?? "",
+      reason: wire.denial?.reason ?? wire.reason ?? "",
+      auditHash: wire.audit_hash ?? "",
+      timestamp: wire.timestamp ?? "",
+      rateLimit,
+    };
+
+    // Forward-compat: if the server omits `constraint_trace` (older
+    // atlasent-api version), surface trace=null rather than throwing.
+    // Unknown engine-side keys inside the trace are tolerated by the
+    // ConstraintTrace interface's index signature.
+    let constraintTrace: ConstraintTrace | null = null;
+    if (
+      wire.constraint_trace !== undefined &&
+      wire.constraint_trace !== null &&
+      typeof wire.constraint_trace === "object"
+    ) {
+      constraintTrace = wire.constraint_trace as ConstraintTrace;
+    }
+
+    return { evaluation, constraintTrace };
   }
 
   /**
@@ -530,8 +648,9 @@ export class AtlaSentClient {
   private async post<T>(
     path: string,
     body: unknown,
+    query?: URLSearchParams,
   ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
-    return this.request<T>(path, "POST", body, undefined);
+    return this.request<T>(path, "POST", body, query);
   }
 
   private async get<T>(

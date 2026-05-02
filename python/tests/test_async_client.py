@@ -6,7 +6,14 @@ import pytest
 from atlasent.async_client import AsyncAtlaSentClient
 from atlasent.audit import AuditEventsResult, AuditExportResult
 from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
-from atlasent.models import ApiKeySelfResult, EvaluateResult, GateResult, VerifyResult
+from atlasent.models import (
+    ApiKeySelfResult,
+    ConstraintTrace,
+    EvaluatePreflightResult,
+    EvaluateResult,
+    GateResult,
+    VerifyResult,
+)
 
 EVALUATE_PERMIT = {
     "permitted": True,
@@ -33,12 +40,14 @@ VERIFY_OK = {
 
 @pytest.fixture
 def async_client():
-    return AsyncAtlaSentClient(api_key="test_key", max_retries=0)
+    return AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
 
 
 @pytest.fixture
 def async_client_retry():
-    return AsyncAtlaSentClient(api_key="test_key", max_retries=2, retry_backoff=0.01)
+    return AsyncAtlaSentClient(
+        api_key="ask_test_xxxxxxxx", max_retries=2, retry_backoff=0.01
+    )
 
 
 def _mock_resp(mocker, status_code=200, json_data=None, headers=None):
@@ -57,11 +66,11 @@ class TestAsyncInit:
         assert c._client.headers["authorization"] == "Bearer ask_live_xyz"
 
     def test_accept_header(self):
-        c = AsyncAtlaSentClient(api_key="k")
+        c = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx")
         assert c._client.headers["accept"] == "application/json"
 
     def test_user_agent_header(self):
-        c = AsyncAtlaSentClient(api_key="k")
+        c = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx")
         assert "atlasent-python/" in c._client.headers["user-agent"]
 
 
@@ -108,6 +117,91 @@ class TestAsyncEvaluate:
         )
         with pytest.raises(AtlaSentError, match="Failed to connect"):
             await async_client.evaluate("a", "b")
+
+
+CONSTRAINT_TRACE_WIRE = {
+    "rules_evaluated": [
+        {
+            "policy_id": "pol_close_window_v3",
+            "decision": "deny",
+            "fingerprint": "fp_abc123",
+            "stages": [
+                {
+                    "stage": "context",
+                    "rule": "change_reason_required",
+                    "matched": False,
+                    "detail": "context.change_reason missing",
+                    "order": 0,
+                },
+            ],
+        },
+    ],
+    "matching_policy_id": "pol_close_window_v3",
+}
+
+EVALUATE_PREFLIGHT_DENY_WITH_TRACE = {
+    "decision": "deny",
+    "permit_token": "",
+    "denial": {"reason": "preflight: change_reason missing", "code": "MISSING_FIELD"},
+    "constraint_trace": CONSTRAINT_TRACE_WIRE,
+}
+
+EVALUATE_PREFLIGHT_ALLOW_NO_TRACE = {
+    # Older atlasent-api version that does not echo `constraint_trace`.
+    "decision": "allow",
+    "permit_token": "dec_pf_42",
+    "request_id": "req_pf",
+}
+
+
+class TestAsyncEvaluatePreflight:
+    @pytest.mark.asyncio
+    async def test_appends_include_constraint_trace_query(
+        self, async_client, mocker
+    ):
+        mock_post = mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_DENY_WITH_TRACE),
+        )
+        await async_client.evaluate_preflight(
+            "close_period", "agent-1", {"period": "2025-12"}
+        )
+        assert mock_post.call_args.kwargs["params"] == {
+            "include": "constraint_trace"
+        }
+        body = mock_post.call_args.kwargs["json"]
+        assert body == {
+            "action_type": "close_period",
+            "actor_id": "agent-1",
+            "context": {"period": "2025-12"},
+        }
+
+    @pytest.mark.asyncio
+    async def test_parses_typed_preflight_response(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_DENY_WITH_TRACE),
+        )
+        result = await async_client.evaluate_preflight("close_period", "agent-1")
+        assert isinstance(result, EvaluatePreflightResult)
+        assert result.evaluation.decision == "deny"
+        assert isinstance(result.constraint_trace, ConstraintTrace)
+        assert result.constraint_trace.matching_policy_id == "pol_close_window_v3"
+        assert result.constraint_trace.rules_evaluated[0].stages[0].matched is False
+
+    @pytest.mark.asyncio
+    async def test_missing_trace_is_none_not_raises(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_ALLOW_NO_TRACE),
+        )
+        result = await async_client.evaluate_preflight("close_period", "agent-1")
+        assert result.evaluation.decision == "allow"
+        assert result.evaluation.permit_token == "dec_pf_42"
+        assert result.constraint_trace is None
 
 
 class TestAsyncVerify:
@@ -243,7 +337,7 @@ class TestAsyncErrorCodes:
 class TestAsyncLifecycle:
     @pytest.mark.asyncio
     async def test_context_manager(self, mocker):
-        async with AsyncAtlaSentClient(api_key="k", max_retries=0) as c:
+        async with AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0) as c:
             mock_close = mocker.patch.object(c._client, "aclose")
         mock_close.assert_called_once()
 
@@ -260,7 +354,9 @@ class TestAsyncCache:
         from atlasent.cache import TTLCache
 
         cache = TTLCache(ttl=60.0)
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0, cache=cache)
+        client = AsyncAtlaSentClient(
+            api_key="ask_test_xxxxxxxx", max_retries=0, cache=cache
+        )
         post = mocker.patch.object(
             client._client,
             "post",

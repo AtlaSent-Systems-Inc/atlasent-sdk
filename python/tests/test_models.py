@@ -37,7 +37,9 @@ class TestEvaluateRequest:
     def test_legacy_input_translates_with_deprecation(self):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            req = EvaluateRequest(action="read_data", agent="agent-1", api_key="k")
+            req = EvaluateRequest(
+                action="read_data", agent="agent-1", api_key="ask_test_xxxxxxxx"
+            )
         assert req.action_type == "read_data"
         assert req.actor_id == "agent-1"
         # Wire is still canonical.
@@ -132,7 +134,7 @@ class TestVerifyRequest:
                 decision_id="pt_100",
                 action="read_data",
                 agent="agent-1",
-                api_key="k",
+                api_key="ask_test_xxxxxxxx",
             )
         assert req.permit_token == "pt_100"
         assert req.action_type == "read_data"

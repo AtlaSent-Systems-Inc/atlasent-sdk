@@ -113,7 +113,7 @@ class TestAuthorizationResult:
 class TestClientAuthorize:
     @pytest.fixture
     def client(self):
-        return AtlaSentClient(api_key="test_key", max_retries=0)
+        return AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
 
     def test_permit_with_verify(self, client, mocker):
         mocker.patch.object(
@@ -243,7 +243,7 @@ class TestClientAuthorize:
 
 class TestTopLevelAuthorize:
     def test_uses_global_config(self, mocker):
-        configure(api_key="global_key")
+        configure(api_key="ask_test_global")
         mock_post = mocker.patch("atlasent.client.httpx.Client.post")
         mock_post.side_effect = [
             _mock_resp(mocker, json_data=EVALUATE_PERMIT),
@@ -259,7 +259,7 @@ class TestTopLevelAuthorize:
         assert result.agent == "clinical-data-agent"
 
     def test_deny_returns_not_permitted(self, mocker):
-        configure(api_key="k")
+        configure(api_key="ask_test_xxxxxxxx")
         mock_post = mocker.patch("atlasent.client.httpx.Client.post")
         mock_post.return_value = _mock_resp(mocker, json_data=EVALUATE_DENY)
         result = authorize(agent="a", action="b")
@@ -267,7 +267,7 @@ class TestTopLevelAuthorize:
         assert result.reason == "Missing change_reason for critical field"
 
     def test_deny_raises_when_requested(self, mocker):
-        configure(api_key="k")
+        configure(api_key="ask_test_xxxxxxxx")
         mock_post = mocker.patch("atlasent.client.httpx.Client.post")
         mock_post.return_value = _mock_resp(mocker, json_data=EVALUATE_DENY)
         with pytest.raises(PermissionDeniedError):
@@ -281,7 +281,7 @@ class TestTopLevelAuthorize:
             authorize(agent="a", action="b")
 
     def test_reuses_singleton_client(self, mocker):
-        configure(api_key="k")
+        configure(api_key="ask_test_xxxxxxxx")
         mock_post = mocker.patch("atlasent.client.httpx.Client.post")
         mock_post.side_effect = [
             _mock_resp(mocker, json_data=EVALUATE_PERMIT),
@@ -296,7 +296,7 @@ class TestTopLevelAuthorize:
 
     def test_if_result_permitted_idiom(self, mocker):
         """Exercise the documented quickstart idiom end-to-end."""
-        configure(api_key="k")
+        configure(api_key="ask_test_xxxxxxxx")
         mock_post = mocker.patch("atlasent.client.httpx.Client.post")
         mock_post.side_effect = [
             _mock_resp(mocker, json_data=EVALUATE_PERMIT),
@@ -319,7 +319,7 @@ class TestTopLevelAuthorize:
 class TestAsyncClientAuthorize:
     @pytest.mark.asyncio
     async def test_permit_with_verify(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         try:
             mocker.patch.object(
                 client._client,
@@ -340,7 +340,7 @@ class TestAsyncClientAuthorize:
 
     @pytest.mark.asyncio
     async def test_deny_returns_not_permitted(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         try:
             deny_resp = _mock_resp(mocker, json_data=EVALUATE_DENY)
             mocker.patch.object(
@@ -356,7 +356,7 @@ class TestAsyncClientAuthorize:
 
     @pytest.mark.asyncio
     async def test_deny_raises_when_requested(self, mocker):
-        client = AsyncAtlaSentClient(api_key="k", max_retries=0)
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         try:
             deny_resp = _mock_resp(mocker, json_data=EVALUATE_DENY)
             mocker.patch.object(

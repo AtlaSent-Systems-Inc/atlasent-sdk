@@ -76,13 +76,13 @@ def _mock_resp(mocker, status_code: int = 200, json_data: dict | None = None):
 class TestSyncWithPermit:
     def setup_method(self) -> None:
         _reset_default_client()
-        configure(api_key="ask_test")
+        configure(api_key="ask_test_xxxxxxxx")
 
     def teardown_method(self) -> None:
         _reset_default_client()
 
     def test_invokes_fn_with_verified_permit(self, mocker) -> None:
-        client = AtlaSentClient(api_key="ask_test", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             authorize_module, "_get_default_client", return_value=client
         )
@@ -111,7 +111,7 @@ class TestSyncWithPermit:
         assert seen[0].permit_hash == "permit_alpha"
 
     def test_raises_denied_on_policy_deny_fn_never_called(self, mocker) -> None:
-        client = AtlaSentClient(api_key="ask_test", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             authorize_module, "_get_default_client", return_value=client
         )
@@ -136,7 +136,7 @@ class TestSyncWithPermit:
         """v1 replay protection: server reports verified=false /
         outcome=permit_consumed on a re-verify. with_permit MUST raise
         AtlaSentDeniedError and MUST NOT invoke fn."""
-        client = AtlaSentClient(api_key="ask_test", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             authorize_module, "_get_default_client", return_value=client
         )
@@ -164,7 +164,7 @@ class TestSyncWithPermit:
         )
 
     def test_fn_exception_propagates_verbatim(self, mocker) -> None:
-        client = AtlaSentClient(api_key="ask_test", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             authorize_module, "_get_default_client", return_value=client
         )
@@ -189,7 +189,7 @@ class TestSyncWithPermit:
     def test_5xx_on_evaluate_raises_atlasent_error_fn_never_called(
         self, mocker
     ) -> None:
-        client = AtlaSentClient(api_key="ask_test", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             authorize_module, "_get_default_client", return_value=client
         )
@@ -209,7 +209,7 @@ class TestSyncWithPermit:
         assert called is False
 
     def test_returns_arbitrary_fn_return_value(self, mocker) -> None:
-        client = AtlaSentClient(api_key="ask_test", max_retries=0)
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
         mocker.patch.object(
             authorize_module, "_get_default_client", return_value=client
         )
@@ -242,7 +242,7 @@ class TestSyncWithPermit:
 
 @pytest.fixture
 def async_client() -> AsyncAtlaSentClient:
-    return AsyncAtlaSentClient(api_key="ask_test", max_retries=0)
+    return AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
 
 
 class TestAsyncWithPermit:

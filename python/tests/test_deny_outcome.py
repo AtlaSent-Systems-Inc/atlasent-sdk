@@ -163,17 +163,32 @@ class TestProtectPropagatesOutcomeSync:
 
 
 class TestProtectPropagatesOutcomeAsync:
+    @pytest.mark.parametrize(
+        "wire_outcome, expected_outcome, expected_predicate",
+        [
+            ("permit_consumed", "permit_consumed", "is_consumed"),
+            ("permit_expired", "permit_expired", "is_expired"),
+            ("permit_revoked", "permit_revoked", "is_revoked"),
+            ("permit_not_found", "permit_not_found", "is_not_found"),
+        ],
+    )
     @pytest.mark.asyncio
-    async def test_async_protect_surfaces_revoked(self, mocker: Any) -> None:
+    async def test_async_protect_surfaces_outcome(
+        self,
+        mocker: Any,
+        wire_outcome: str,
+        expected_outcome: str,
+        expected_predicate: str,
+    ) -> None:
         client = AsyncAtlaSentClient(api_key="ask_test_x", base_url="https://x")
         post = mocker.patch.object(client._client, "post")
         post.side_effect = [
             _resp(mocker, json_data=EVALUATE_ALLOW),
-            _resp(mocker, json_data=_verify("permit_revoked")),
+            _resp(mocker, json_data=_verify(wire_outcome)),
         ]
 
         with pytest.raises(AtlaSentDeniedError) as excinfo:
             await client.protect(agent="a", action="b")
 
-        assert excinfo.value.outcome == "permit_revoked"
-        assert excinfo.value.is_revoked is True
+        assert excinfo.value.outcome == expected_outcome
+        assert getattr(excinfo.value, expected_predicate) is True
