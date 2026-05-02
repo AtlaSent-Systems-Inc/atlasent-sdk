@@ -77,7 +77,7 @@ describe("evaluate() dual-shape input", () => {
       actor_id: "agent-1",
       context: { env: "prod" },
     });
-    const deprecations = warnSpy.mock.calls.filter((c) =>
+    const deprecations = warnSpy.mock.calls.filter((c: unknown[]) =>
       String(c[0]).includes("deprecated"),
     );
     expect(deprecations).toEqual([]);
