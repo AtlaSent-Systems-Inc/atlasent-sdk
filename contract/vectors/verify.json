@@ -1,5 +1,5 @@
 {
-  "description": "Round-trip vectors for POST /v1-verify-permit.",
+  "description": "Round-trip vectors for POST /v1-verify-permit. Wire shape is canonical (handler.ts) — only `permit_token` is required server-side; `action_type` and `actor_id` are optional cross-checks. SDKs accept legacy `wire_response` shapes with `verified` for backward-compat.",
   "vectors": [
     {
       "name": "verify_permit_happy",
@@ -17,96 +17,83 @@
       },
       "api_key": "ask_live_test_key",
       "wire_request": {
-        "decision_id": "dec_ctx_allow_002",
-        "action": "modify_patient_record",
-        "agent": "clinical-data-agent",
-        "context": {
-          "user": "dr_smith",
-          "environment": "production",
-          "patient_id": "PT-001",
-          "change_reason": "Correct date-of-birth"
-        },
-        "api_key": "ask_live_test_key"
+        "permit_token": "dec_ctx_allow_002",
+        "action_type": "modify_patient_record",
+        "actor_id": "clinical-data-agent"
       },
       "wire_response": {
-        "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_002_hash",
-        "timestamp": "2026-04-17T10:01:05Z"
+        "valid": true,
+        "outcome": "allow",
+        "decision": "allow",
+        "reason": "Permit verified and consumed"
       },
       "sdk_output": {
         "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_002_hash",
-        "timestamp": "2026-04-17T10:01:05Z"
+        "outcome": "allow",
+        "permit_hash": "",
+        "timestamp": ""
       }
     },
     {
       "name": "verify_permit_minimum_payload",
-      "description": "Verification when the caller only supplies permit_id. SDK MUST default action/agent to '' and context to {}.",
+      "description": "Verification when the caller only supplies permit_id. SDK MUST default action/agent to '' and omit context from the wire.",
       "sdk_input": { "permit_id": "dec_minimal_allow_001" },
       "api_key": "ask_live_test_key",
       "wire_request": {
-        "decision_id": "dec_minimal_allow_001",
-        "action": "",
-        "agent": "",
-        "context": {},
-        "api_key": "ask_live_test_key"
+        "permit_token": "dec_minimal_allow_001",
+        "action_type": "",
+        "actor_id": ""
       },
       "wire_response": {
-        "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_001_hash",
-        "timestamp": "2026-04-17T10:00:05Z"
+        "valid": true,
+        "outcome": "allow",
+        "decision": "allow",
+        "reason": "Permit verified and consumed"
       },
       "sdk_output": {
         "verified": true,
-        "outcome": "verified",
-        "permit_hash": "permit_001_hash",
-        "timestamp": "2026-04-17T10:00:05Z"
+        "outcome": "allow",
+        "permit_hash": "",
+        "timestamp": ""
       }
     },
     {
       "name": "verify_permit_not_verified",
-      "description": "verified=false is NOT a transport error; SDKs MUST return the body, not throw.",
+      "description": "valid=false is NOT a transport error; SDKs MUST return the body, not throw. The verify_error_code surfaces the specific reason (PERMIT_EXPIRED here).",
       "sdk_input": { "permit_id": "dec_expired" },
       "api_key": "ask_live_test_key",
       "wire_request": {
-        "decision_id": "dec_expired",
-        "action": "",
-        "agent": "",
-        "context": {},
-        "api_key": "ask_live_test_key"
+        "permit_token": "dec_expired",
+        "action_type": "",
+        "actor_id": ""
       },
       "wire_response": {
-        "verified": false,
-        "outcome": "expired",
-        "permit_hash": "",
-        "timestamp": "2026-04-17T10:03:00Z"
+        "valid": false,
+        "outcome": "deny",
+        "verify_error_code": "PERMIT_EXPIRED",
+        "reason": "Permit expired at 2026-04-17T10:00:05Z"
       },
       "sdk_output": {
         "verified": false,
-        "outcome": "expired",
+        "outcome": "deny",
         "permit_hash": "",
-        "timestamp": "2026-04-17T10:03:00Z"
+        "timestamp": ""
       }
     },
     {
       "name": "verify_response_missing_verified",
-      "description": "Malformed response: missing `verified`. SDKs MUST raise a bad-response error.",
+      "description": "Malformed response: missing both canonical `valid` and legacy `verified`. SDKs MUST raise a bad-response error.",
       "sdk_input": { "permit_id": "dec_x" },
       "api_key": "ask_live_test_key",
       "wire_request": {
-        "decision_id": "dec_x",
-        "action": "",
-        "agent": "",
-        "context": {},
-        "api_key": "ask_live_test_key"
+        "permit_token": "dec_x",
+        "action_type": "",
+        "actor_id": ""
       },
       "wire_response": { "outcome": "ok" },
       "sdk_error": {
         "kind": "bad_response",
-        "message_contains": "verified"
+        "message_contains": "valid"
       }
     }
   ]

@@ -2,32 +2,23 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://atlasent.io/contract/v1/verify-permit-request.schema.json",
   "title": "VerifyPermitRequest",
-  "description": "Wire payload sent to POST /v1-verify-permit.",
+  "description": "Wire payload sent to POST /v1-verify-permit. Read by atlasent-api/supabase/functions/v1-verify-permit/handler.ts. Only `permit_token` is required server-side; `action_type` and `actor_id` are cross-checked when present and yield ACTION_TYPE_MISMATCH / ACTOR_MISMATCH on disagreement. The legacy {decision_id, action, agent, api_key} shape is no longer canonical — SDKs may accept legacy fields as input with a deprecation warning, but MUST always serialize to the wire shape described here.",
   "type": "object",
-  "additionalProperties": false,
-  "required": ["decision_id", "action", "agent", "context", "api_key"],
+  "additionalProperties": true,
+  "required": ["permit_token"],
   "properties": {
-    "decision_id": {
+    "permit_token": {
       "type": "string",
       "minLength": 1,
-      "description": "The decision_id returned by a prior /v1-evaluate call."
+      "description": "The permit_token returned by a prior /v1-evaluate call."
     },
-    "action": {
+    "action_type": {
       "type": "string",
-      "description": "Optional cross-check — re-state the action. May be empty."
+      "description": "Optional cross-check — re-state the action_type. ACTION_TYPE_MISMATCH if it disagrees with the original evaluation."
     },
-    "agent": {
+    "actor_id": {
       "type": "string",
-      "description": "Optional cross-check — re-state the agent. May be empty."
-    },
-    "context": {
-      "type": "object",
-      "description": "Optional cross-check — re-state the context. May be empty.",
-      "additionalProperties": true
-    },
-    "api_key": {
-      "type": "string",
-      "description": "API key echoed in the body. Also sent as Authorization: Bearer <key>."
+      "description": "Optional cross-check — re-state the actor_id. ACTOR_MISMATCH if it disagrees with the original evaluation."
     }
   }
 }

@@ -52,7 +52,7 @@ def _mock_resp(mocker, status_code=200, json_data=None, headers=None):
     return resp
 
 
-# ── Init ──────────────────────────────────────────────────────────────
+# ── Init ──────────────────────────────────────────────────────
 
 
 class TestInit:
@@ -98,7 +98,7 @@ class TestInit:
         assert c._client.headers["accept"] == "application/json"
 
 
-# ── Evaluate ──────────────────────────────────────────────────────────
+# ── Evaluate ─────────────────────────────────────────────────
 
 
 class TestEvaluate:
@@ -108,7 +108,7 @@ class TestEvaluate:
         result = client.evaluate("read_data", "agent-1", {"study": "S001"})
 
         assert isinstance(result, EvaluateResult)
-        assert result.decision is True
+        assert result.permitted is True  # legacy attr (canonical: result.decision)
         assert result.permit_token == "dec_100"
         assert result.reason == "Action complies with policy"
 
@@ -119,7 +119,8 @@ class TestEvaluate:
             client.evaluate("write_data", "agent-1")
 
         err = exc_info.value
-        assert err.decision == "False"
+        # Canonical four-value enum (was "False" when decision was bool-stringified).
+        assert err.decision == "deny"
         assert err.permit_token == "dec_101"
         assert err.reason == "Missing required context"
         assert err.response_body == EVALUATE_DENY
@@ -132,10 +133,11 @@ class TestEvaluate:
 
         call_kwargs = mock_post.call_args
         payload = call_kwargs[1]["json"]
-        assert payload["action"] == "action"
-        assert payload["agent"] == "actor"
+        assert payload["action_type"] == "action"
+        assert payload["actor_id"] == "actor"
         assert payload["context"] == {"k": "v"}
-        assert payload["api_key"] == "test_key"
+        # api_key is sent via Authorization header, never echoed in the body.
+        assert "api_key" not in payload
 
     def test_timeout_raises(self, client, mocker):
         mocker.patch.object(
@@ -167,7 +169,7 @@ class TestEvaluate:
             client.evaluate("a", "b")
 
 
-# ── Verify ────────────────────────────────────────────────────────────
+# ── Verify ──────────────────────────────────────────────────
 
 
 class TestVerify:
@@ -188,13 +190,16 @@ class TestVerify:
         client.verify("dec_100", "read_data", "agent-1", {"k": "v"})
 
         payload = mock_post.call_args[1]["json"]
-        assert payload["decision_id"] == "dec_100"
-        assert payload["action"] == "read_data"
-        assert payload["agent"] == "agent-1"
-        assert payload["context"] == {"k": "v"}
+        assert payload["permit_token"] == "dec_100"
+        assert payload["action_type"] == "read_data"
+        assert payload["actor_id"] == "agent-1"
+        # The verify handler does not consult context; SDK omits it from
+        # the wire to avoid round-tripping unread fields.
+        assert "context" not in payload
+        assert "api_key" not in payload
 
 
-# ── Gate ──────────────────────────────────────────────────────────────
+# ── Gate ────────────────────────────────────────────────────
 
 
 class TestGate:
@@ -227,7 +232,7 @@ class TestGate:
         assert client._client.post.call_count == 1
 
 
-# ── Retry ─────────────────────────────────────────────────────────────
+# ── Retry ───────────────────────────────────────────────────
 
 
 class TestRetry:
@@ -269,7 +274,7 @@ class TestRetry:
         assert client_retry._client.post.call_count == 1
 
 
-# ── Rate Limiting ─────────────────────────────────────────────────────
+# ── Rate Limiting ─────────────────────────────────────────────
 
 
 class TestRateLimit:
@@ -288,7 +293,7 @@ class TestRateLimit:
         assert exc_info.value.retry_after is None
 
 
-# ── Error codes (SDK-PY-002 / SDK-PY-003) ────────────────────────────
+# ── Error codes (SDK-PY-002 / SDK-PY-003) ────────────────────
 
 
 class TestErrorCodes:
@@ -368,7 +373,7 @@ class TestErrorCodes:
         assert exc_info.value.code == "bad_response"
 
 
-# ── Resource Management ───────────────────────────────────────────────
+# ── Resource Management ─────────────────────────────────────────
 
 
 class TestLifecycle:
@@ -383,7 +388,7 @@ class TestLifecycle:
         mock_close.assert_called_once()
 
 
-# ── Edge Cases ────────────────────────────────────────────────────────
+# ── Edge Cases ────────────────────────────────────────────────
 
 
 class TestEdgeCases:
@@ -398,12 +403,22 @@ class TestEdgeCases:
             client.evaluate("a", "b")
 
     def test_partial_evaluate_response(self, client, mocker):
-        """Server returns 200 but missing required fields."""
+        """Server returns 200 but missing required fields.
+
+        Both shapes covered: legacy ``{permitted: True}`` without a
+        ``decision_id`` and canonical ``{decision: "allow"}`` without
+        a ``permit_token`` are fail-closed by the client.
+        """
+        # Legacy shape, no decision_id.
         resp = _mock_resp(mocker, json_data={"permitted": True})
         mocker.patch.object(client._client, "post", return_value=resp)
-
         with pytest.raises(Exception):
-            # Pydantic validation fails on missing decision_id
+            client.evaluate("a", "b")
+
+        # Canonical shape, no permit_token.
+        resp = _mock_resp(mocker, json_data={"decision": "allow"})
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(Exception):
             client.evaluate("a", "b")
 
     def test_none_context_treated_as_empty(self, client, mocker):
@@ -471,9 +486,9 @@ class TestEdgeCases:
 
         assert result.valid is True
         payload = mock_post.call_args[1]["json"]
-        assert payload["decision_id"] == "dec_100"
-        assert payload["action"] == ""
-        assert payload["agent"] == ""
+        assert payload["permit_token"] == "dec_100"
+        assert payload["action_type"] == ""
+        assert payload["actor_id"] == ""
 
 
 class TestSyncRetryPaths:
@@ -635,7 +650,7 @@ class TestSyncRequestIdOnExceptions:
         assert exc_info.value.request_id == sent
 
 
-# ── Rate-limit header parsing ────────────────────────────────────────
+# ── Rate-limit header parsing ────────────────────────────────────
 
 
 class TestRateLimitHeaders:
@@ -781,7 +796,7 @@ class TestRateLimitHeaders:
         assert result.rate_limit is None
 
 
-# ── key_self ──────────────────────────────────────────────────────────
+# ── key_self ──────────────────────────────────────────────────
 
 
 KEY_SELF_PAYLOAD = {
@@ -887,7 +902,7 @@ class TestKeySelf:
             client.key_self()
 
 
-# ── list_audit_events / create_audit_export ──────────────────────────
+# ── list_audit_events / create_audit_export ──────────────────────
 
 
 AUDIT_EVENT_ALPHA = {
@@ -950,6 +965,9 @@ class TestRevokePermit:
         mock_post = mocker.patch.object(client._client, "post", return_value=resp)
         client.revoke_permit("dec_to_revoke", reason="audit")
         payload = mock_post.call_args[1]["json"]
+        # /v1-revoke-permit is out of scope for the v1-evaluate /
+        # v1-verify-permit contract reconciliation — it still uses the
+        # legacy decision_id / api_key body fields.
         assert payload["decision_id"] == "dec_to_revoke"
         assert payload["reason"] == "audit"
         assert payload["api_key"] == "test_key"

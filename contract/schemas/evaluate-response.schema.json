@@ -2,32 +2,60 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://atlasent.io/contract/v1/evaluate-response.schema.json",
   "title": "EvaluateResponse",
-  "description": "Wire response returned by POST /v1-evaluate. A DENY is NOT an HTTP error; it is a permitted=false body.",
+  "description": "Wire response returned by POST /v1-evaluate. Emitted by atlasent-api/supabase/functions/v1-evaluate/handler.ts. A non-allow decision is NOT an HTTP error; it is a 200 response with decision != 'allow' and (typically) a populated `denial` block.",
   "type": "object",
   "additionalProperties": true,
-  "required": ["permitted", "decision_id"],
+  "required": ["decision"],
   "properties": {
-    "permitted": {
-      "type": "boolean",
-      "description": "true iff the policy engine allowed the action. SDKs map this to decision = ALLOW | DENY."
+    "decision": {
+      "type": "string",
+      "enum": ["allow", "deny", "hold", "escalate"],
+      "description": "Canonical four-value decision. SDKs MUST handle all four (legacy SDKs that only branched on allow|deny may surface hold/escalate as an error to the caller until they're updated)."
     },
-    "decision_id": {
+    "permit_token": {
       "type": "string",
       "minLength": 1,
-      "description": "Opaque permit identifier. Passed back in POST /v1-verify-permit as decision_id."
+      "description": "Opaque permit identifier (raw UUID). Present iff decision == 'allow'. Passed back to POST /v1-verify-permit as `permit_token`."
     },
-    "reason": {
+    "request_id": {
       "type": "string",
-      "description": "Human-readable explanation from the policy engine. May be empty on ALLOW."
+      "description": "Server-side request identifier. Used as audit deep-link and idempotency key for replays."
     },
-    "audit_hash": {
+    "expires_at": {
       "type": "string",
-      "description": "Hash-chained audit-trail entry (21 CFR Part 11 / GxP)."
+      "description": "ISO 8601 timestamp at which the permit expires. Default TTL: 1 hour."
     },
-    "timestamp": {
+    "denial": {
+      "type": "object",
+      "description": "Populated on non-allow decisions. Contains the policy-engine reason and a stable code.",
+      "properties": {
+        "reason": { "type": "string" },
+        "code": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "mode": {
       "type": "string",
-      "description": "ISO 8601 timestamp of the decision. Format: YYYY-MM-DDTHH:MM:SSZ.",
-      "pattern": "^$|^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
-    }
+      "enum": ["live", "shadow"],
+      "description": "Evaluation mode. 'shadow' indicates no permit was minted (request had `shadow: true`)."
+    },
+    "cache_hit": { "type": "boolean" },
+    "evaluation_ms": { "type": "number" },
+    "decisionObject": {
+      "type": "object",
+      "description": "Canonical Decision Object (CDO) — full structured decision record. Optional; absent on shorter responses.",
+      "additionalProperties": true
+    },
+    "outcome_kind": {
+      "type": "string",
+      "enum": ["final", "requires_confirmation", "requires_override"]
+    },
+    "intent_match": {
+      "type": "string",
+      "enum": ["match", "mismatch", "unknown"]
+    },
+    "audit_entry_hash": { "type": "string" },
+    "fingerprint": { "type": "string" },
+    "risk_score": { "type": "number" }
   }
 }

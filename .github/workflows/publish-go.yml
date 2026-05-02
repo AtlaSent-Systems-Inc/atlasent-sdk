@@ -1,0 +1,67 @@
+# Tag convention: go/vX.Y.Z (e.g. go/v1.0.0)
+#
+# Go sub-modules in a mono-repo MUST be tagged with the directory prefix.
+# pkg.go.dev indexes this module at:
+#   https://pkg.go.dev/github.com/atlasent-systems-inc/atlasent-sdk/go
+#
+# To release:
+#   git tag go/v1.0.0
+#   git push origin go/v1.0.0
+#
+# The version after stripping the prefix (v1.0.0) is what consumers specify:
+#   go get github.com/atlasent-systems-inc/atlasent-sdk/go@v1.0.0
+
+name: Publish Go SDK
+
+on:
+  push:
+    tags:
+      - 'go/v*'   # MUST use go/vX.Y.Z — required for pkg.go.dev sub-module indexing
+
+jobs:
+  test-and-publish:
+    name: Test and publish Go SDK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run tests
+        working-directory: go
+        run: go test ./...
+
+      - name: Extract version
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"        # e.g. go/v1.0.0
+          VERSION="${TAG#go/}"            # strips prefix → v1.0.0
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Tag: $TAG  →  Version: $VERSION"
+
+      - name: Prod the module proxy
+        run: |
+          # Requesting the module from the proxy causes pkg.go.dev to index it
+          # within minutes. The || true prevents failure if the proxy hasn't
+          # crawled the tag yet — it will catch up on its own.
+          GOPROXY=https://proxy.golang.org \
+            go list -m \
+            "github.com/atlasent-systems-inc/atlasent-sdk/go@${{ steps.version.outputs.version }}" \
+            || echo "Proxy indexing in progress — pkg.go.dev will index within minutes"
+
+      - name: Summary
+        run: |
+          echo "## Go SDK Published" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tag | \`${{ steps.version.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version | \`${{ steps.version.outputs.version }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Module | \`github.com/atlasent-systems-inc/atlasent-sdk/go\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| pkg.go.dev | https://pkg.go.dev/github.com/atlasent-systems-inc/atlasent-sdk/go@${{ steps.version.outputs.version }} |" >> "$GITHUB_STEP_SUMMARY"

@@ -125,11 +125,11 @@ describe("atlaSentGuard (Hono middleware)", () => {
     });
     expect(res.status).toBe(200);
 
-    // First call → /v1-evaluate with resolved agent/action/context.
+    // First call → /v1-evaluate with resolved actor_id/action_type/context (canonical wire).
     const [, evalInit] = fetchImpl.mock.calls[0]!;
     const evalBody = JSON.parse(evalInit!.body as string);
-    expect(evalBody.agent).toBe("ci-runner-42");
-    expect(evalBody.action).toBe("deploy_billing-api");
+    expect(evalBody.actor_id).toBe("ci-runner-42");
+    expect(evalBody.action_type).toBe("deploy_billing-api");
     expect(evalBody.context).toEqual({ commit: "abc123", approver: "alice" });
   });
 

@@ -94,7 +94,7 @@ class TestAtlaSentGuard:
 
         my_func(agent_id="dynamic-agent")
         payload = mock_post.call_args_list[0][1]["json"]
-        assert payload["agent"] == "dynamic-agent"
+        assert payload["actor_id"] == "dynamic-agent"
 
     def test_dynamic_context_merges_with_static(self, mocker):
         client = AtlaSentClient(api_key="k", max_retries=0)
@@ -205,7 +205,7 @@ class TestAsyncAtlaSentGuard:
 
         await my_func(agent_id="dynamic-agent")
         payload = mock_post.call_args_list[0][1]["json"]
-        assert payload["agent"] == "dynamic-agent"
+        assert payload["actor_id"] == "dynamic-agent"
 
     @pytest.mark.asyncio
     async def test_dynamic_context_merges_with_static(self, mocker):

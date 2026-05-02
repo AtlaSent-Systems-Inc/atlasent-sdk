@@ -177,30 +177,49 @@ class AtlaSentClient:
             action_type=action_type,
             actor_id=actor_id,
             context=ctx,
-            api_key=self._api_key,
         )
         logger.debug("evaluate action=%r actor=%r", action_type, actor_id)
         data, rate_limit, request_id = self._post(
-            "/v1-evaluate", req.model_dump(by_alias=True)
+            "/v1-evaluate", req.model_dump(by_alias=True, exclude_none=True)
         )
 
-        if not isinstance(data.get("permitted"), bool) or not isinstance(
-            data.get("decision_id"), str
+        # Tolerate both canonical {decision, permit_token} and legacy
+        # {permitted, decision_id}. The model_validator on EvaluateResult
+        # also normalizes — this guard is just to fail-fast with a useful
+        # error if neither shape is present.
+        decision = data.get("decision")
+        if decision is None and isinstance(data.get("permitted"), bool):
+            decision = "allow" if data["permitted"] else "deny"
+        permit_token_raw = data.get("permit_token") or data.get("decision_id")
+        if decision not in ("allow", "deny", "hold", "escalate") or not isinstance(
+            permit_token_raw, (str, type(None))
         ):
             raise AtlaSentError(
-                "Malformed /v1-evaluate response: missing or non-scalar "
-                "`permitted` or `decision_id`",
+                "Malformed /v1-evaluate response: missing or invalid "
+                "`decision` (or legacy `permitted`/`decision_id`)",
                 code="bad_response",
                 request_id=request_id,
                 response_body=data,
             )
 
-        permitted = data["permitted"]
-        if not permitted:
+        if decision != "allow":
+            denial = data.get("denial") if isinstance(data.get("denial"), dict) else {}
+            reason = denial.get("reason") if denial else data.get("reason", "")
             raise AtlaSentDenied(
-                decision=str(permitted),
-                permit_token=data.get("decision_id", ""),
-                reason=data.get("reason", ""),
+                decision=decision,
+                permit_token=permit_token_raw or "",
+                reason=reason or "",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        # Fail-closed: server allowed but didn't issue a permit identifier
+        # we can verify later. Treat the whole response as malformed.
+        if not permit_token_raw:
+            raise AtlaSentError(
+                "Malformed /v1-evaluate response: decision='allow' "
+                "but no permit_token (or legacy decision_id)",
+                code="bad_response",
                 request_id=request_id,
                 response_body=data,
             )
@@ -242,20 +261,26 @@ class AtlaSentClient:
             AtlaSentError: Network error, timeout, or unexpected response.
             RateLimitError: HTTP 429.
         """
+        # `context` arg is preserved on the public method signature for
+        # backward-compat but no longer sent on the wire — handler.ts
+        # cross-checks via action_type / actor_id only.
+        del context  # explicitly mark unused
         req = VerifyRequest(
             permit_token=permit_token,
             action_type=action_type,
             actor_id=actor_id,
-            context=context or {},
-            api_key=self._api_key,
         )
         logger.debug("verify token=%s", _redact_token(permit_token))
         data, rate_limit, request_id = self._post(
-            "/v1-verify-permit", req.model_dump(by_alias=True)
+            "/v1-verify-permit", req.model_dump(by_alias=True, exclude_none=True)
         )
-        if not isinstance(data.get("verified"), bool):
+        # Tolerate both canonical {valid, outcome} and legacy {verified, outcome}.
+        if not isinstance(data.get("valid"), bool) and not isinstance(
+            data.get("verified"), bool
+        ):
             raise AtlaSentError(
-                "Malformed /v1-verify-permit response: missing `verified`",
+                "Malformed /v1-verify-permit response: missing `valid` "
+                "(or legacy `verified`)",
                 code="bad_response",
                 request_id=request_id,
                 response_body=data,
