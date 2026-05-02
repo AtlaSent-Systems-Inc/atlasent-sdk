@@ -41,7 +41,7 @@ jobs:
   python:
     name: Python integration (staging)
     needs: gate
-    if: needs.gate.outputs.has_key == 'true'
+    if: needs.gate.outputs.has_key == 'true' && github.repository == 'AtlaSent-Systems-Inc/atlasent-sdk'
     runs-on: ubuntu-latest
     environment: staging
     defaults:
@@ -68,7 +68,7 @@ jobs:
   typescript:
     name: TypeScript integration (staging)
     needs: gate
-    if: needs.gate.outputs.has_key == 'true'
+    if: needs.gate.outputs.has_key == 'true' && github.repository == 'AtlaSent-Systems-Inc/atlasent-sdk'
     runs-on: ubuntu-latest
     environment: staging
     defaults:

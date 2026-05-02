@@ -16,6 +16,9 @@ on:
       - "contract/schemas/**"
       - ".github/workflows/typescript-ci.yml"
 
+permissions:
+  contents: read
+
 defaults:
   run:
     working-directory: typescript
