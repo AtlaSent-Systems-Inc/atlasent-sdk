@@ -753,7 +753,8 @@ REVOKE_OK_WIRE = {
 class TestAsyncRevokePermit:
     async def test_revoke_returns_result(self, async_client, mocker):
         mocker.patch.object(
-            async_client._client, "post",
+            async_client._client,
+            "post",
             return_value=_mock_resp(mocker, json_data=REVOKE_OK_WIRE),
         )
         result = await async_client.revoke_permit("dec_to_revoke", reason="policy")
@@ -762,7 +763,8 @@ class TestAsyncRevokePermit:
 
     async def test_revoke_sends_correct_payload(self, async_client, mocker):
         mock_post = mocker.patch.object(
-            async_client._client, "post",
+            async_client._client,
+            "post",
             return_value=_mock_resp(mocker, json_data=REVOKE_OK_WIRE),
         )
         await async_client.revoke_permit("dec_to_revoke", reason="audit")
@@ -772,7 +774,8 @@ class TestAsyncRevokePermit:
 
     async def test_revoke_defaults_reason_to_empty_string(self, async_client, mocker):
         mock_post = mocker.patch.object(
-            async_client._client, "post",
+            async_client._client,
+            "post",
             return_value=_mock_resp(mocker, json_data=REVOKE_OK_WIRE),
         )
         await async_client.revoke_permit("dec_to_revoke")
@@ -780,7 +783,8 @@ class TestAsyncRevokePermit:
 
     async def test_revoke_bad_response_missing_revoked(self, async_client, mocker):
         mocker.patch.object(
-            async_client._client, "post",
+            async_client._client,
+            "post",
             return_value=_mock_resp(mocker, json_data={"decision_id": "dec_x"}),
         )
         with pytest.raises(AtlaSentError) as exc_info:
@@ -789,7 +793,8 @@ class TestAsyncRevokePermit:
 
     async def test_revoke_bad_response_missing_decision_id(self, async_client, mocker):
         mocker.patch.object(
-            async_client._client, "post",
+            async_client._client,
+            "post",
             return_value=_mock_resp(mocker, json_data={"revoked": True}),
         )
         with pytest.raises(AtlaSentError) as exc_info:
@@ -813,9 +818,7 @@ class TestAsyncRetryExhaustionNetwork:
 
 
 class TestAsyncServerMessageEdgeCases:
-    async def test_403_body_with_no_message_or_reason_key(
-        self, async_client, mocker
-    ):
+    async def test_403_body_with_no_message_or_reason_key(self, async_client, mocker):
         resp = _mock_resp(mocker, status_code=403)
         resp.json.return_value = {"error": "forbidden"}
         mocker.patch.object(async_client._client, "post", return_value=resp)
@@ -851,15 +854,15 @@ class TestParseSseEdgeCases:
         from atlasent.async_client import _parse_sse
 
         async def lines():
-            yield ""   # blank line with no prior data
+            yield ""  # blank line with no prior data
             yield "event: decision"
             yield (
                 'data: {"permitted":true,"decision_id":"d1","reason":"ok",'
                 '"audit_hash":"h","timestamp":"2026-01-01T00:00:00Z","is_final":true}'
             )
-            yield ""   # dispatch decision
+            yield ""  # dispatch decision
             yield "data: {}"
-            yield ""   # dispatch done → return
+            yield ""  # dispatch done → return
 
         events = [e async for e in _parse_sse(lines(), "rid_test")]
         assert len(events) == 1
@@ -896,7 +899,7 @@ class TestParseSseEdgeCases:
         from atlasent.async_client import _parse_sse
 
         async def lines():
-            yield ": this is a comment"   # SSE comment, matches none of the conditions
+            yield ": this is a comment"  # SSE comment, matches none of the conditions
             yield "event: decision"
             yield (
                 'data: {"permitted":true,"decision_id":"d2","reason":"ok",'
