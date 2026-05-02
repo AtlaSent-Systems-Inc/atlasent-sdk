@@ -24,6 +24,9 @@ on:
       - "typescript/packages/v2-alpha/src/types.ts"
       - ".github/workflows/contract-ci.yml"
 
+permissions:
+  contents: read
+
 jobs:
   contract:
     runs-on: ubuntu-latest

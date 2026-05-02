@@ -24,6 +24,9 @@ jobs:
   gate:
     name: Check if staging key is configured
     runs-on: ubuntu-latest
+    # Block fork PRs from probing for the staging secret; only run the
+    # gate (and downstream jobs) when the workflow is on the trunk repo.
+    if: github.repository == 'AtlaSent-Systems-Inc/atlasent-sdk'
     outputs:
       has_key: ${{ steps.check.outputs.has_key }}
     steps:
