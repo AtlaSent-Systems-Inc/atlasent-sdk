@@ -2,11 +2,34 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# Soft cap on top-level context properties. The hosted API hard-rejects
+# above 64 (see contract/openapi.yaml) and applies its own size limits;
+# the SDK warns but does not raise so a slightly-oversize context still
+# reaches the server, where the failure mode is a typed error rather
+# than a silent client-side truncation. Mis-use surfaces loudly in dev
+# without breaking production traffic on the day this SDK ships.
+_CONTEXT_PROPERTIES_SOFT_CAP = 64
+
+_logger = logging.getLogger("atlasent")
+
+
+def _warn_oversize_context(value: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(value, dict) and len(value) > _CONTEXT_PROPERTIES_SOFT_CAP:
+        _logger.warning(
+            "context has %d top-level keys (soft cap %d); the server "
+            "may reject this. Pack richer payloads under a single "
+            "top-level key.",
+            len(value),
+            _CONTEXT_PROPERTIES_SOFT_CAP,
+        )
+    return value
 
 # ── Rate-limit state (shared by evaluate + verify) ───────────────────
 
@@ -57,6 +80,11 @@ class EvaluateRequest(BaseModel):
 
     model_config = {"populate_by_name": True}
 
+    @field_validator("context", mode="after")
+    @classmethod
+    def _check_context_size(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return _warn_oversize_context(value)
+
 
 class EvaluateResult(BaseModel):
     """Successful response from ``POST /v1-evaluate``.
@@ -98,6 +126,11 @@ class VerifyRequest(BaseModel):
     api_key: str = ""
 
     model_config = {"populate_by_name": True}
+
+    @field_validator("context", mode="after")
+    @classmethod
+    def _check_context_size(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return _warn_oversize_context(value)
 
 
 class VerifyResult(BaseModel):

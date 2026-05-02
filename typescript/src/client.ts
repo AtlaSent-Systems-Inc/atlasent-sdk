@@ -51,6 +51,24 @@ function _buildUserAgent(): string {
     : `@atlasent/sdk/${SDK_VERSION} browser`;
 }
 
+// Soft cap on top-level context properties. Mirrors the Python SDK
+// (atlasent.models._CONTEXT_PROPERTIES_SOFT_CAP) and the OpenAPI
+// `maxProperties: 64` declaration. The hosted API is the canonical
+// enforcer; this helper warns the developer in dev rather than
+// raising, so production traffic isn't broken on the day this ships.
+const CONTEXT_PROPERTIES_SOFT_CAP = 64;
+
+function _warnOversizeContext(context: Record<string, unknown> | undefined): void {
+  if (context && Object.keys(context).length > CONTEXT_PROPERTIES_SOFT_CAP) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[atlasent] context has ${Object.keys(context).length} top-level keys ` +
+        `(soft cap ${CONTEXT_PROPERTIES_SOFT_CAP}); the server may reject this. ` +
+        "Pack richer payloads under a single top-level key.",
+    );
+  }
+}
+
 /**
  * Reject non-TLS base URLs unless the dev escape hatch is set.
  *
@@ -169,6 +187,7 @@ export class AtlaSentClient {
    * {@link AtlaSentError}.
    */
   async evaluate(input: EvaluateRequest): Promise<EvaluateResponse> {
+    _warnOversizeContext(input.context);
     const body = {
       action: input.action,
       agent: input.agent,
@@ -203,6 +222,7 @@ export class AtlaSentClient {
   async verifyPermit(
     input: VerifyPermitRequest,
   ): Promise<VerifyPermitResponse> {
+    _warnOversizeContext(input.context);
     const body = {
       decision_id: input.permitId,
       action: input.action ?? "",
