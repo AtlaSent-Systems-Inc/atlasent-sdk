@@ -151,6 +151,43 @@ describe("atlasent.protect (default export API)", () => {
     expect(denied.reason).toMatch(/revoked/);
   });
 
+  // Phase B.6 — parametrize the four PermitOutcome values so a future
+  // outcome added to PermitOutcome but missed in protect's deny-path
+  // is caught by the test suite, not by a customer's audit log.
+  it.each([
+    ["permit_consumed", "isConsumed"] as const,
+    ["permit_expired", "isExpired"] as const,
+    ["permit_revoked", "isRevoked"] as const,
+    ["permit_not_found", "isNotFound"] as const,
+  ])(
+    "surfaces %s outcome and lights the matching predicate",
+    async (wireOutcome, predicate) => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(EVALUATE_ALLOW_WIRE),
+        jsonResponse({
+          verified: false,
+          outcome: wireOutcome,
+          permit_hash: "permit_alpha",
+          timestamp: "2026-04-22T10:00:01Z",
+        }),
+      ]);
+      configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+      let caught: unknown;
+      try {
+        await atlasent.protect({ agent: "a", action: "b" });
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.outcome).toBe(wireOutcome);
+      expect(
+        (denied as unknown as Record<string, boolean>)[predicate],
+      ).toBe(true);
+    },
+  );
+
   it("lets transport errors propagate as AtlaSentError (not AtlaSentDeniedError)", async () => {
     const fetchImpl = mockFetchSequence([
       new Response("server boom", { status: 500 }),
