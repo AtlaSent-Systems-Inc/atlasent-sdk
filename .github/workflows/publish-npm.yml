@@ -8,6 +8,10 @@ on:
     tags:
       - "typescript-v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 2.0.0)'
+        required: true
 
 permissions:
   contents: read
@@ -87,6 +91,19 @@ jobs:
             exit 1
           fi
           echo "Tag and package version agree: $PKG_VERSION"
+
+      - name: Verify manual version matches package version
+        # For workflow_dispatch runs, verify the supplied version matches
+        # package.json so the caller doesn't accidentally publish a stale version.
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$INPUT_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Input version ($INPUT_VERSION) does not match package.json version ($PKG_VERSION)."
+            exit 1
+          fi
+          echo "Input and package version agree: $PKG_VERSION"
 
       - name: Build
         run: npm run build

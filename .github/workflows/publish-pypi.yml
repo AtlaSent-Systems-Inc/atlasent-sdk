@@ -7,6 +7,11 @@ on:
   push:
     tags:
       - "python-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 2.0.0)'
+        required: true
 
 permissions:
   contents: read
@@ -69,6 +74,9 @@ jobs:
         # compare against atlasent._version.__version__. Refuses to
         # publish if they disagree — protects against tagging a commit
         # that forgot the version bump.
+        #
+        # Skipped for workflow_dispatch runs (no tag ref).
+        if: github.event_name == 'push'
         run: |
           TAG_VERSION="${GITHUB_REF#refs/tags/python-v}"
           # Read _version.py directly without importing the full package
@@ -79,6 +87,20 @@ jobs:
             exit 1
           fi
           echo "Tag and package version agree: $PKG_VERSION"
+
+      - name: Verify manual version matches package version
+        # For workflow_dispatch runs, verify the supplied version matches
+        # the package's _version.py so the caller doesn't accidentally
+        # publish a stale version.
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          PKG_VERSION="$(python -c 'import runpy; print(runpy.run_path("atlasent/_version.py")["__version__"])')"
+          if [ "$INPUT_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Input version ($INPUT_VERSION) does not match atlasent._version.__version__ ($PKG_VERSION)."
+            exit 1
+          fi
+          echo "Input and package version agree: $PKG_VERSION"
 
       - name: Build distribution packages
         run: python -m build
@@ -95,7 +117,11 @@ jobs:
           /tmp/smoke/bin/pip install --upgrade pip
           /tmp/smoke/bin/pip install dist/*.whl
           SMOKE_VERSION="$(/tmp/smoke/bin/python -c 'import atlasent; print(atlasent.__version__)')"
-          EXPECTED="${GITHUB_REF#refs/tags/python-v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            EXPECTED="${{ github.event.inputs.version }}"
+          else
+            EXPECTED="${GITHUB_REF#refs/tags/python-v}"
+          fi
           if [ "$SMOKE_VERSION" != "$EXPECTED" ]; then
             echo "::error::Installed wheel reports $SMOKE_VERSION, expected $EXPECTED."
             exit 1
