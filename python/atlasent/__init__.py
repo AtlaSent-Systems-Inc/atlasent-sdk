@@ -69,6 +69,7 @@ from .models import (
     StreamProgressEvent,
     VerifyResult,
 )
+from .require_permit import ProtectedAction, classify_command, require_permit
 from .with_permit import with_permit
 
 __all__ = [
@@ -78,6 +79,9 @@ __all__ = [
     "configure",
     "protect",
     "with_permit",
+    "require_permit",
+    "classify_command",
+    "ProtectedAction",
     "authorize",
     "evaluate",
     "verify",

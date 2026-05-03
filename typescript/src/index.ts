@@ -13,6 +13,18 @@
  * });
  * ```
  *
+ * For dangerous operations use `requirePermit` — the executor only
+ * runs when AtlaSent authorizes it end-to-end:
+ *
+ * ```ts
+ * await atlasent.requirePermit(
+ *   { action_type: "database.table.drop", actor_id: "agent:code-agent",
+ *     resource_id: "prod-db.users", environment: "production",
+ *     context: { reversibility: "irreversible" } },
+ *   async () => { await db.raw("DROP TABLE users"); },
+ * );
+ * ```
+ *
  * Named exports remain available for the lower-level
  * {@link AtlaSentClient} and the error taxonomy.
  */
@@ -21,6 +33,7 @@ import { AtlaSentClient } from "./client.js";
 import { verifyBundle } from "./auditBundle.js";
 import { AtlaSentDeniedError, AtlaSentError } from "./errors.js";
 import { configure, protect } from "./protect.js";
+import { requirePermit, classifyCommand } from "./requirePermit.js";
 
 export { AtlaSentClient } from "./client.js";
 export {
@@ -40,6 +53,11 @@ export {
   type Permit,
   type ProtectRequest,
 } from "./protect.js";
+export {
+  requirePermit,
+  classifyCommand,
+  type ProtectedAction,
+} from "./requirePermit.js";
 export type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
@@ -95,11 +113,14 @@ export {
  * ```ts
  * import atlasent from "@atlasent/sdk";
  * await atlasent.protect({ ... });
+ * await atlasent.requirePermit({ ... }, executor);
  * ```
  */
 const atlasent = {
   protect,
   configure,
+  requirePermit,
+  classifyCommand,
   verifyBundle,
   AtlaSentClient,
   AtlaSentError,
