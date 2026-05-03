@@ -106,6 +106,14 @@ export {
   mergePolicy,
   type RetryPolicy,
 } from "./retry.js";
+export {
+  normalizeEvaluateRequest,
+  normalizeEvaluateResponse,
+  type LegacyEvaluateRequest,
+  type LegacyEvaluateResponse,
+  type V2EvaluateRequest,
+  type V2EvaluateResponse,
+} from "./compat.js";
 
 /**
  * Default export. The opinionated, category-defining entry point:

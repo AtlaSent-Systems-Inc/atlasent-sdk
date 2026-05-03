@@ -39,6 +39,11 @@ import type {
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "./types.js";
+import {
+  normalizeEvaluateRequest,
+  type LegacyEvaluateRequest,
+  type V2EvaluateRequest,
+} from "./compat.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -247,21 +252,33 @@ export class AtlaSentClient {
   /**
    * Ask the policy engine whether an agent action is permitted.
    *
+   * Accepts either the current v2.0 shape (`action_type` / `actor_id`)
+   * or the legacy v1.x shape (`action` / `agent`). Legacy callers
+   * receive a deprecation warning via `console.warn`; the shim is
+   * handled by {@link normalizeEvaluateRequest} and will be removed
+   * in v3.0.0.
+   *
    * A "DENY" is **not** thrown — it is returned in
    * `response.decision`. Network errors, invalid API key, rate
    * limits, timeouts, and malformed responses throw
    * {@link AtlaSentError}.
    */
-  async evaluate(input: EvaluateRequest): Promise<EvaluateResponse> {
+  async evaluate(
+    input: EvaluateRequest | LegacyEvaluateRequest,
+  ): Promise<EvaluateResponse> {
     _warnOversizeContext(input.context);
-    // Canonical wire shape per handler.ts: flat top-level fields, no
-    // `api_key` body (server reads it from the Authorization header).
-    // PR2 will add a deprecation-warning bridge for legacy `action=`/
-    // `agent=` keyword input.
+
+    // Run the dual-shape bridge: legacy {action, agent} → {action_type, actor_id}.
+    // For callers already on the current EvaluateRequest shape the bridge is a
+    // transparent pass-through (no warn, no allocation).
+    const normalized = normalizeEvaluateRequest(
+      input as LegacyEvaluateRequest | V2EvaluateRequest,
+    );
+
     const body = {
-      action_type: input.action,
-      actor_id: input.agent,
-      context: input.context ?? {},
+      action_type: normalized.action_type,
+      actor_id: normalized.actor_id,
+      context: normalized.context ?? {},
     };
     const { body: wire, rateLimit } = await this.post<EvaluateWire>("/v1-evaluate", body);
 
