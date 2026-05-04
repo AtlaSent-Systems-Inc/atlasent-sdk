@@ -53,11 +53,14 @@ export function normalizeEvaluateRequest(
         'Use action_type/actor_id instead. This compatibility shim will be removed in v3.0.0.',
     );
     const legacy = input as LegacyEvaluateRequest;
-    return {
+    const normalized: V2EvaluateRequest = {
       action_type: legacy.action!,
       actor_id: legacy.agent!,
-      context: legacy.context,
     };
+    if (legacy.context !== undefined) {
+      normalized.context = legacy.context;
+    }
+    return normalized;
   }
   return input as V2EvaluateRequest;
 }
@@ -97,14 +100,16 @@ export function normalizeEvaluateResponse(
   if (!('decision' in wire) && 'permitted' in wire) {
     // Legacy server — map `permitted` boolean → canonical `decision`.
     const legacy = wire as LegacyEvaluateResponse;
-    return {
+    const normalized: V2EvaluateResponse = {
       decision: legacy.permitted ? 'allow' : 'deny',
-      permit_token: legacy.decision_id,
-      denial:
-        !legacy.permitted && legacy.reason
-          ? { reason: legacy.reason }
-          : undefined,
     };
+    if (legacy.decision_id !== undefined) {
+      normalized.permit_token = legacy.decision_id;
+    }
+    if (!legacy.permitted && legacy.reason) {
+      normalized.denial = { reason: legacy.reason };
+    }
+    return normalized;
   }
   return wire as V2EvaluateResponse;
 }

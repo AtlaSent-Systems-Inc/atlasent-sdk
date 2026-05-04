@@ -6,7 +6,15 @@ from typing import TypeVar
 
 import pytest
 
+import sys
+
+import atlasent.require_permit  # noqa: F401  (ensure submodule registered in sys.modules)
 from atlasent.require_permit import ProtectedAction, classify_command, require_permit
+
+# The package re-exports the `require_permit` function under the same name as
+# the submodule, which shadows attribute access. Resolve the submodule via
+# sys.modules so monkeypatch can target it.
+_require_permit_module = sys.modules["atlasent.require_permit"]
 
 _T = TypeVar("_T")
 
@@ -74,7 +82,8 @@ async def _resolve(value: _T) -> _T:
 async def test_require_permit_allow_runs_executor(monkeypatch: pytest.MonkeyPatch) -> None:
     """When protect() resolves, the executor runs and its return value is propagated."""
     monkeypatch.setattr(
-        "atlasent.require_permit.protect",
+        _require_permit_module,
+        "protect",
         lambda **_: _resolve(None),
     )
 
@@ -91,9 +100,9 @@ async def test_require_permit_deny_never_calls_executor(monkeypatch: pytest.Monk
     called = False
 
     async def _raise(**_: object) -> None:
-        raise AtlaSentDeniedError("denied")
+        raise AtlaSentDeniedError(evaluation_id="evt-1", reason="denied")
 
-    monkeypatch.setattr("atlasent.require_permit.protect", _raise)
+    monkeypatch.setattr(_require_permit_module, "protect", _raise)
 
     async def _executor() -> None:
         nonlocal called
@@ -117,7 +126,7 @@ async def test_require_permit_transport_error_never_calls_executor(
     async def _raise(**_: object) -> None:
         raise AtlaSentError("network down")
 
-    monkeypatch.setattr("atlasent.require_permit.protect", _raise)
+    monkeypatch.setattr(_require_permit_module, "protect", _raise)
 
     async def _executor() -> None:
         nonlocal called
@@ -137,7 +146,7 @@ async def test_require_permit_context_forwarding(monkeypatch: pytest.MonkeyPatch
     async def _capture(**kwargs: object) -> None:
         captured.update(kwargs)
 
-    monkeypatch.setattr("atlasent.require_permit.protect", _capture)
+    monkeypatch.setattr(_require_permit_module, "protect", _capture)
 
     await require_permit(
         _action(
@@ -159,7 +168,8 @@ async def test_require_permit_context_forwarding(monkeypatch: pytest.MonkeyPatch
 async def test_require_permit_generic_return_type(monkeypatch: pytest.MonkeyPatch) -> None:
     """Return type follows the executor."""
     monkeypatch.setattr(
-        "atlasent.require_permit.protect",
+        _require_permit_module,
+        "protect",
         lambda **_: _resolve(None),
     )
 
