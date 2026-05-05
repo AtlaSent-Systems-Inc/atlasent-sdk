@@ -114,6 +114,13 @@ export {
   type V2EvaluateRequest,
   type V2EvaluateResponse,
 } from "./compat.js";
+export type {
+  ApprovalArtifactV1,
+  ApprovalIssuer,
+  ApprovalReference,
+  ApprovalReviewer,
+  PrincipalKind,
+} from "./approvalArtifact.js";
 
 /**
  * Default export. The opinionated, category-defining entry point:
