@@ -24,6 +24,7 @@ from .exceptions import (
     RateLimitError,
     _normalize_permit_outcome,
 )
+from .approval_artifact import ApprovalReference
 from .models import (
     ApiKeySelfResult,
     AuthorizationResult,
@@ -178,6 +179,11 @@ class AtlaSentClient:
         action_type: str,
         actor_id: str,
         context: dict[str, Any] | None = None,
+        *,
+        resource_id: str | None = None,
+        amount: float | None = None,
+        approval: ApprovalReference | dict[str, Any] | None = None,
+        require_approval: bool | None = None,
     ) -> EvaluateResult:
         """Evaluate whether an action is authorized.
 
@@ -188,6 +194,21 @@ class AtlaSentClient:
             action_type: The action to authorize (e.g. ``"modify_patient_record"``).
             actor_id: Identifier of the actor (agent or user).
             context: Arbitrary context dict for policy evaluation.
+            resource_id: Resource the action targets. Bound into the
+                canonical action hash that approval artifacts cover.
+            amount: Optional monetary / quantity bound. Bound into the
+                canonical action hash.
+            approval: Optional signed approval — either an
+                :class:`~atlasent.ApprovalReference` (with ``approval_id``
+                and/or ``artifact``) or a plain dict matching that
+                shape. The server verifies it before issuing a permit
+                when the action requires human approval.
+            require_approval: When ``True``, asserts that this action
+                requires verified human approval even if the
+                action_type heuristic doesn't match. Carried server-
+                side; consumers can re-assert on
+                :meth:`AtlaSentClient.verify` to enforce the linkage
+                on consume.
 
         Raises:
             AtlaSentDenied: The action was explicitly denied.
@@ -195,6 +216,9 @@ class AtlaSentClient:
             RateLimitError: HTTP 429.
         """
         ctx = context or {}
+        # Accept dicts for ergonomics; the model normalizes shape.
+        if isinstance(approval, dict):
+            approval = ApprovalReference.model_validate(approval)
 
         # Check cache
         if self._cache is not None:
@@ -210,6 +234,10 @@ class AtlaSentClient:
             action_type=action_type,
             actor_id=actor_id,
             context=ctx,
+            resource_id=resource_id,
+            amount=amount,
+            approval=approval,
+            require_approval=require_approval,
         )
         logger.debug("evaluate action=%r actor=%r", action_type, actor_id)
         data, rate_limit, request_id = self._post(
@@ -366,6 +394,8 @@ class AtlaSentClient:
         action_type: str = "",
         actor_id: str = "",
         context: dict[str, Any] | None = None,
+        *,
+        require_approval: bool | None = None,
     ) -> VerifyResult:
         """Verify a previously issued permit token.
 
@@ -374,9 +404,19 @@ class AtlaSentClient:
             action_type: Optionally re-state the action for cross-check.
             actor_id: Optionally re-state the actor for cross-check.
             context: Optionally re-state context for cross-check.
+            require_approval: When ``True``, asserts the consume must
+                produce a permit row with a populated approval
+                binding. If the row carries no binding, the server
+                returns ``APPROVAL_LINKAGE_MISSING`` (``valid=False``,
+                ``consumed=True``). Use this when the server-side
+                heuristic doesn't match this action.
 
         Returns:
-            A :class:`VerifyResult`.
+            A :class:`VerifyResult`. On success ``valid=True`` and
+            ``approval`` carries the persisted binding (if any).
+            ``consumed`` is ``True`` even on
+            ``APPROVAL_LINKAGE_MISSING`` — the permit is burned, do
+            not retry.
 
         Raises:
             AtlaSentError: Network error, timeout, or unexpected response.
@@ -390,6 +430,7 @@ class AtlaSentClient:
             permit_token=permit_token,
             action_type=action_type,
             actor_id=actor_id,
+            require_approval=require_approval,
         )
         logger.debug("verify token=%s", _redact_token(permit_token))
         data, rate_limit, request_id = self._post(
