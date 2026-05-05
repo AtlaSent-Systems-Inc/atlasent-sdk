@@ -1,16 +1,10 @@
 {
-  "name": "replay",
-  "description": "Same artifact as valid — used twice in sequence. First verify must succeed; second must return reason='approval replay detected'. Test exercises the nonce ledger; this fixture is the *artifact*, not the outcome.",
+  "name": "id-valid",
+  "description": "Approval artifact + verifiable identity assertion. Verifier requires identity assertion; both signatures + all bindings pass.",
   "expected_outcome": {
-    "first": {
-      "ok": true,
-      "approval_id": "apr_fixture_replay",
-      "reviewer_id": "okta|00u_test_alice"
-    },
-    "second": {
-      "ok": false,
-      "reason": "approval replay detected"
-    }
+    "ok": true,
+    "approval_id": "apr_fixture_id_valid",
+    "reviewer_id": "okta|00u_test_alice"
   },
   "inputs": {
     "trusted_issuers": {
@@ -35,11 +29,12 @@
     "expected_environment": "production",
     "now_iso": "2026-04-16T12:00:00.000Z",
     "hs256_test_key_hex": "5555555555555555555555555555555555555555555555555555555555555555",
-    "hs256_identity_test_key_hex": "9999999999999999999999999999999999999999999999999999999999999999"
+    "hs256_identity_test_key_hex": "9999999999999999999999999999999999999999999999999999999999999999",
+    "require_identity_assertion": true
   },
   "artifact": {
     "version": "approval_artifact.v1",
-    "approval_id": "apr_fixture_replay",
+    "approval_id": "apr_fixture_id_valid",
     "tenant_id": "tnt_test",
     "action_type": "deployment.production.deploy",
     "resource_id": "release:abc123",
@@ -59,7 +54,29 @@
     },
     "issued_at": "2026-04-16T11:59:00.000Z",
     "expires_at": "2026-04-16T13:00:00.000Z",
-    "nonce": "n_fixture_replay",
-    "signature": "097dda397839dbcbb20ff63ade485089383886ce3be00caa0b08431bc7862695"
+    "nonce": "n_fixture_id_valid",
+    "signature": "f8554bd63cd7931eb68ea90b931684c43a6cd237f9d5c9344575e5a242bb0d51",
+    "identity_assertion": {
+      "version": "identity_assertion.v1",
+      "subject": {
+        "principal_id": "okta|00u_test_alice",
+        "principal_kind": "human"
+      },
+      "role": "qa_reviewer",
+      "binding": {
+        "approval_id": "apr_fixture_id_valid",
+        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "tenant_id": "tnt_test",
+        "environment": "production"
+      },
+      "issuer": {
+        "type": "oidc",
+        "issuer_id": "idp.test",
+        "kid": "kid-id-1"
+      },
+      "issued_at": "2026-04-16T11:59:30.000Z",
+      "expires_at": "2026-04-16T12:30:00.000Z",
+      "signature": "fc5d6adb83ffc55de3c9317440b8a683788b6b4b851e17525c8d13cb3cd3c71a"
+    }
   }
 }

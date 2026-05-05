@@ -32,11 +32,23 @@ export interface ApprovalIssuer {
   kid: string;
 }
 
+// Re-exported here so the artifact's optional identity_assertion
+// field type-checks at SDK boundaries without consumers having to
+// know about a second module.
+import type { IdentityAssertionV1 } from "./identityAssertion.js";
+
 /**
  * The full signed approval artifact. Producers (approval services)
  * compute `action_hash` over the canonical action payload and sign
  * the artifact with the `signature` field stripped; the SDK does not
  * sign or verify, it only carries the artifact to the server.
+ *
+ * `identity_assertion` is REQUIRED on the wire whenever
+ * `/v1-evaluate` calls the verifier with `requireIdentityAssertion:
+ * true` — i.e. when human approval is required. Without it, the
+ * server returns deny:`missing identity assertion`. The SDK type
+ * keeps the field optional to support shadow / preflight flows that
+ * inspect an artifact without verifying.
  */
 export interface ApprovalArtifactV1 {
   version: "approval_artifact.v1";
@@ -51,6 +63,7 @@ export interface ApprovalArtifactV1 {
   expires_at: string;
   nonce: string;
   signature: string;
+  identity_assertion?: IdentityAssertionV1;
 }
 
 /**

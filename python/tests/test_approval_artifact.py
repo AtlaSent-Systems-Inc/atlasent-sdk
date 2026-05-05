@@ -347,3 +347,136 @@ def test_approval_issuer_types() -> None:
         ApprovalIssuer(type=t, issuer_id="i", kid="k")
     with pytest.raises(ValidationError):
         ApprovalIssuer(type="other", issuer_id="i", kid="k")  # type: ignore[arg-type]
+
+
+# ── 8. Identity attestation ───────────────────────────────────────────
+
+
+from atlasent import (  # noqa: E402
+    IdentityAssertionBinding,
+    IdentityAssertionV1,
+    IdentityIssuer,
+    IdentityIssuerKey,
+    IdentitySubject,
+    IdentityTrustedIssuersConfig,
+)
+
+
+# Identity-assertion fixtures generated alongside the artifact ones.
+ID_VECTOR_NAMES = [
+    "id-valid",
+    "id-missing",
+    "id-expired",
+    "id-wrong-reviewer",
+    "id-wrong-role",
+    "id-wrong-environment",
+    "id-wrong-action-hash",
+    "id-untrusted-issuer",
+]
+
+
+@pytest.mark.parametrize("name", ID_VECTOR_NAMES)
+def test_identity_vector_artifact_parses(name: str) -> None:
+    """Every identity-attested fixture parses into ApprovalArtifactV1.
+
+    For ``id-missing`` the artifact has no identity_assertion (that's
+    the failure mode the fixture is exercising); every other id-*
+    fixture must have one.
+    """
+    vector = _load_vector(name)
+    artifact = ApprovalArtifactV1.model_validate(vector["artifact"])
+    if name == "id-missing":
+        assert artifact.identity_assertion is None
+    else:
+        assert artifact.identity_assertion is not None
+        assert artifact.identity_assertion.version == "identity_assertion.v1"
+
+
+def test_identity_assertion_round_trip() -> None:
+    """Constructing + serializing an IdentityAssertionV1 preserves
+    every field with extra='forbid'."""
+    a = IdentityAssertionV1(
+        subject=IdentitySubject(principal_id="okta|u1", principal_kind="human"),
+        role="qa_reviewer",
+        binding=IdentityAssertionBinding(
+            approval_id="apr_1",
+            action_hash="f" * 64,
+            tenant_id="tnt_1",
+            environment="production",
+        ),
+        issuer=IdentityIssuer(type="oidc", issuer_id="idp.test", kid="kid-1"),
+        issued_at="2026-04-16T12:00:00Z",
+        expires_at="2026-04-16T13:00:00Z",
+        signature="deadbeef",
+    )
+    out = a.model_dump(exclude_none=True)
+    assert out["version"] == "identity_assertion.v1"
+    assert out["subject"]["principal_kind"] == "human"
+    assert out["binding"]["action_hash"] == "f" * 64
+
+    # Round-trip
+    a2 = IdentityAssertionV1.model_validate(out)
+    assert a2 == a
+
+
+def test_identity_assertion_extra_field_rejected() -> None:
+    with pytest.raises(ValidationError):
+        IdentityAssertionV1.model_validate({
+            "version": "identity_assertion.v1",
+            "subject": {"principal_id": "u", "principal_kind": "human"},
+            "role": "r",
+            "binding": {"approval_id": "a", "action_hash": "f" * 64, "tenant_id": "t", "environment": "e"},
+            "issuer": {"type": "oidc", "issuer_id": "i", "kid": "k"},
+            "issued_at": "2026-01-01T00:00:00Z",
+            "expires_at": "2026-01-02T00:00:00Z",
+            "signature": "x",
+            "extra_field": "oops",
+        })
+
+
+def test_identity_assertion_only_oidc_issuer_type() -> None:
+    with pytest.raises(ValidationError):
+        IdentityAssertionV1.model_validate({
+            "version": "identity_assertion.v1",
+            "subject": {"principal_id": "u", "principal_kind": "human"},
+            "role": "r",
+            "binding": {"approval_id": "a", "action_hash": "f" * 64, "tenant_id": "t", "environment": "e"},
+            "issuer": {"type": "approval_service", "issuer_id": "i", "kid": "k"},  # wrong
+            "issued_at": "2026-01-01T00:00:00Z",
+            "expires_at": "2026-01-02T00:00:00Z",
+            "signature": "x",
+        })
+
+
+def test_identity_trusted_issuers_config_round_trips() -> None:
+    raw = {
+        "idp.test": {
+            "kid-id-1": {
+                "alg": "HS256",
+                "key": "9" * 64,
+                "allowed_roles": ["qa_reviewer", "security_lead"],
+                "allowed_environments": ["production"],
+            },
+        },
+    }
+    cfg = IdentityTrustedIssuersConfig.from_env_dict(raw)
+    assert cfg.to_env_dict() == raw
+
+    entry = cfg.root["idp.test"]["kid-id-1"]
+    assert isinstance(entry, IdentityIssuerKey)
+    assert entry.alg == "HS256"
+    assert "qa_reviewer" in (entry.allowed_roles or [])
+
+
+def test_artifact_with_identity_assertion_round_trip() -> None:
+    """The artifact carries the assertion and round-trips through
+    canonical wire dump + reparse, both directions, with extra=forbid."""
+    valid = _load_vector("id-valid")
+    artifact = ApprovalArtifactV1.model_validate(valid["artifact"])
+    assert artifact.identity_assertion is not None
+    dumped = artifact.model_dump(exclude_none=True)
+    assert "identity_assertion" in dumped
+    assert dumped["identity_assertion"]["subject"]["principal_kind"] == "human"
+    # Re-parse — same object, no drift.
+    reparsed = ApprovalArtifactV1.model_validate(dumped)
+    assert reparsed == artifact

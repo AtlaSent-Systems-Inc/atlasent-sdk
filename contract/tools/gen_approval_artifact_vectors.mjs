@@ -47,6 +47,14 @@ const TRUSTED_ISSUERS = {
   },
 };
 
+// Independent trust root for the identity-assertion verifier.
+const ID_HEX_KEY = "9".repeat(64);
+const TRUSTED_IDENTITY_ISSUERS = {
+  "idp.test": {
+    "kid-id-1": { alg: "HS256", key: ID_HEX_KEY },
+  },
+};
+
 // ── Canonical stringify (must match the verifier byte-for-byte) ──────
 function canonicalStringify(obj) {
   if (obj === null || obj === undefined) return "null";
@@ -92,6 +100,35 @@ const VALID_ACTION_HASH = actionHash({
   policy_version: POLICY_VERSION,
 });
 
+function makeIdentityAssertion(artifact, overrides = {}) {
+  const a = {
+    version: "identity_assertion.v1",
+    subject: {
+      principal_id: artifact.reviewer.principal_id,
+      principal_kind: "human",
+    },
+    role: REQUIRED_ROLE,
+    binding: {
+      approval_id: artifact.approval_id,
+      action_hash: artifact.action_hash,
+      tenant_id: artifact.tenant_id,
+      environment: ENVIRONMENT,
+    },
+    issuer: { type: "oidc", issuer_id: "idp.test", kid: "kid-id-1" },
+    issued_at: new Date(NOW_MS - 30_000).toISOString(),
+    expires_at: new Date(NOW_MS + 30 * 60_000).toISOString(),
+    signature: "",
+    ...overrides,
+  };
+  if (overrides.signature !== undefined) {
+    a.signature = overrides.signature;
+  } else {
+    const { signature: _omit, ...rest } = a;
+    a.signature = hmacHex(canonicalStringify(rest), ID_HEX_KEY);
+  }
+  return a;
+}
+
 function makeArtifact(overrides = {}) {
   const issuedAt = new Date(NOW_MS - 60_000).toISOString();
   const expiresAt = new Date(NOW_MS + 60 * 60_000).toISOString();
@@ -129,13 +166,24 @@ function makeArtifact(overrides = {}) {
 
 const baseVerifierInputs = () => ({
   trusted_issuers: TRUSTED_ISSUERS,
+  trusted_identity_issuers: TRUSTED_IDENTITY_ISSUERS,
   expected_action_hash: VALID_ACTION_HASH,
   expected_tenant_id: TENANT_ID,
   required_role: REQUIRED_ROLE,
   expected_environment: ENVIRONMENT,
   now_iso: NOW_ISO,
   hs256_test_key_hex: HEX_KEY,
+  hs256_identity_test_key_hex: ID_HEX_KEY,
 });
+
+function attachIdentityAssertion(artifact, identityOverrides = {}) {
+  // Build the assertion against the artifact's identity, then resign
+  // the artifact so the canonical bytes include identity_assertion.
+  artifact.identity_assertion = makeIdentityAssertion(artifact, identityOverrides);
+  const { signature: _omit, ...rest } = artifact;
+  artifact.signature = hmacHex(canonicalStringify(rest), HEX_KEY);
+  return artifact;
+}
 
 const VECTORS = [
   {
@@ -226,6 +274,134 @@ const VECTORS = [
       },
     }),
   },
+
+  // ── Identity-assertion fixtures ─────────────────────────────────
+  //
+  // These fixtures all carry require_identity_assertion=true on the
+  // verifier inputs. The "id-valid" case adds a correctly-signed
+  // assertion; every "id-*" failure case is the same artifact +
+  // assertion mutated to fire exactly one identity-side check.
+
+  (() => {
+    const a = makeArtifact({ approval_id: "apr_fixture_id_valid", nonce: "n_fixture_id_valid" });
+    attachIdentityAssertion(a);
+    return {
+      name: "id-valid",
+      description: "Approval artifact + verifiable identity assertion. Verifier requires identity assertion; both signatures + all bindings pass.",
+      expected_outcome: {
+        ok: true,
+        approval_id: "apr_fixture_id_valid",
+        reviewer_id: "okta|00u_test_alice",
+      },
+      inputs: { ...baseVerifierInputs(), require_identity_assertion: true },
+      artifact: a,
+    };
+  })(),
+
+  (() => {
+    // Identity required, none attached.
+    const a = makeArtifact({ approval_id: "apr_fixture_id_missing", nonce: "n_fixture_id_missing" });
+    return {
+      name: "id-missing",
+      description: "Verifier requires identity assertion but the artifact carries none; reason='missing identity assertion'.",
+      expected_outcome: { ok: false, reason: "missing identity assertion" },
+      inputs: { ...baseVerifierInputs(), require_identity_assertion: true },
+      artifact: a,
+    };
+  })(),
+
+  (() => {
+    const a = makeArtifact({ approval_id: "apr_fixture_id_expired", nonce: "n_fixture_id_expired" });
+    attachIdentityAssertion(a, {
+      issued_at: new Date(NOW_MS - 10 * 60_000).toISOString(),
+      expires_at: new Date(NOW_MS - 1_000).toISOString(),
+    });
+    return {
+      name: "id-expired",
+      description: "Identity assertion expires_at is in the past; reason='identity assertion expired'.",
+      expected_outcome: { ok: false, reason: "identity assertion expired" },
+      inputs: { ...baseVerifierInputs(), require_identity_assertion: true },
+      artifact: a,
+    };
+  })(),
+
+  (() => {
+    const a = makeArtifact({ approval_id: "apr_fixture_id_wrong_reviewer", nonce: "n_fixture_id_wrong_reviewer" });
+    attachIdentityAssertion(a, {
+      subject: { principal_id: "okta|someone_else", principal_kind: "human" },
+    });
+    return {
+      name: "id-wrong-reviewer",
+      description: "Identity assertion subject does not match artifact.reviewer.principal_id; reason='identity assertion subject does not match reviewer'.",
+      expected_outcome: { ok: false, reason: "identity assertion subject does not match reviewer" },
+      inputs: { ...baseVerifierInputs(), require_identity_assertion: true },
+      artifact: a,
+    };
+  })(),
+
+  (() => {
+    const a = makeArtifact({ approval_id: "apr_fixture_id_wrong_role", nonce: "n_fixture_id_wrong_role" });
+    attachIdentityAssertion(a, { role: "security_lead" });
+    return {
+      name: "id-wrong-role",
+      description: "Identity assertion role differs from required_role; reason='identity assertion role does not match required role'.",
+      expected_outcome: { ok: false, reason: "identity assertion role does not match required role" },
+      inputs: { ...baseVerifierInputs(), require_identity_assertion: true },
+      artifact: a,
+    };
+  })(),
+
+  (() => {
+    const a = makeArtifact({ approval_id: "apr_fixture_id_wrong_env", nonce: "n_fixture_id_wrong_env" });
+    attachIdentityAssertion(a, {
+      binding: {
+        approval_id: a.approval_id,
+        action_hash: a.action_hash,
+        tenant_id: a.tenant_id,
+        environment: "staging", // mismatch
+      },
+    });
+    return {
+      name: "id-wrong-environment",
+      description: "Identity assertion binding.environment differs from expected_environment; reason='identity assertion environment mismatch'.",
+      expected_outcome: { ok: false, reason: "identity assertion environment mismatch" },
+      inputs: { ...baseVerifierInputs(), require_identity_assertion: true },
+      artifact: a,
+    };
+  })(),
+
+  (() => {
+    const a = makeArtifact({ approval_id: "apr_fixture_id_wrong_hash", nonce: "n_fixture_id_wrong_hash" });
+    attachIdentityAssertion(a, {
+      binding: {
+        approval_id: a.approval_id,
+        action_hash: "0".repeat(64), // mismatch
+        tenant_id: a.tenant_id,
+        environment: ENVIRONMENT,
+      },
+    });
+    return {
+      name: "id-wrong-action-hash",
+      description: "Identity assertion binding.action_hash differs from expected_action_hash; reason='identity assertion does not match this action'.",
+      expected_outcome: { ok: false, reason: "identity assertion does not match this action" },
+      inputs: { ...baseVerifierInputs(), require_identity_assertion: true },
+      artifact: a,
+    };
+  })(),
+
+  (() => {
+    const a = makeArtifact({ approval_id: "apr_fixture_id_untrusted", nonce: "n_fixture_id_untrusted" });
+    attachIdentityAssertion(a, {
+      issuer: { type: "oidc", issuer_id: "idp.unknown", kid: "kid-x" },
+    });
+    return {
+      name: "id-untrusted-issuer",
+      description: "Identity assertion issuer not in IDENTITY_TRUSTED_ISSUERS; reason='untrusted identity issuer'.",
+      expected_outcome: { ok: false, reason: "untrusted identity issuer" },
+      inputs: { ...baseVerifierInputs(), require_identity_assertion: true },
+      artifact: a,
+    };
+  })(),
 ];
 
 // ── Write fixtures ───────────────────────────────────────────────────
@@ -240,4 +416,19 @@ if (typeof process !== "undefined" && process.argv[1] && process.argv[1].endsWit
   process.stdout.write(`generated ${VECTORS.length} vectors\n`);
 }
 
-export { VECTORS, canonicalStringify, sha256Hex, hmacHex, actionHash, makeArtifact, NOW_ISO, NOW_MS, HEX_KEY, TRUSTED_ISSUERS };
+export {
+  VECTORS,
+  canonicalStringify,
+  sha256Hex,
+  hmacHex,
+  actionHash,
+  makeArtifact,
+  makeIdentityAssertion,
+  attachIdentityAssertion,
+  NOW_ISO,
+  NOW_MS,
+  HEX_KEY,
+  ID_HEX_KEY,
+  TRUSTED_ISSUERS,
+  TRUSTED_IDENTITY_ISSUERS,
+};

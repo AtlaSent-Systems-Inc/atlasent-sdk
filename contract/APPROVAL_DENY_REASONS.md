@@ -6,6 +6,8 @@ Stable strings returned by `verifyApprovalArtifact()` (atlasent-console + atlase
 
 The verifier runs the checks in this order and returns the **first** failing reason. Tests in `atlasent-sdk/typescript/test/approval-artifact-vectors.test.ts` lock this order; drift fails the suite.
 
+### Approval-artifact checks
+
 | # | Check                                       | Reason on failure                                |
 |---|---------------------------------------------|--------------------------------------------------|
 | 1 | artifact present + object-shaped            | `missing approval artifact`                      |
@@ -20,7 +22,34 @@ The verifier runs the checks in this order and returns the **first** failing rea
 | 10| `expires_at > now`                          | `approval expired`                               |
 | 11| `issued_at <= now + 5min`                   | `approval issued in the future`                  |
 | 12| HS256 / Ed25519 signature valid             | `invalid approval signature`                     |
-| 13| `nonce` not previously consumed             | `approval replay detected`                       |
+
+### Identity-assertion checks (between #12 and #13)
+
+When `/v1-evaluate` calls the verifier with `requireIdentityAssertion: true` (i.e. the action requires human approval), the artifact MUST carry an `identity_assertion` signed by a trusted **identity** issuer (separate trust root from the approval issuer). The IdP independently vouches that the reviewer is a real human with the required role; the approval-issuer's self-claim alone is not sufficient.
+
+| #   | Check                                                | Reason on failure                                          |
+|-----|------------------------------------------------------|------------------------------------------------------------|
+| 12.1 | assertion present (when required)                   | `missing identity assertion`                               |
+| 12.2 | `version === "identity_assertion.v1"`               | `invalid identity assertion version`                       |
+| 12.3 | `binding.tenant_id` matches expected                | `identity assertion tenant mismatch`                       |
+| 12.4 | `binding.action_hash` matches expected              | `identity assertion does not match this action`            |
+| 12.5 | `subject.principal_kind === "human"`                | `identity assertion subject must be human`                 |
+| 12.6 | `subject.principal_id === reviewer.principal_id`    | `identity assertion subject does not match reviewer`       |
+| 12.7 | `binding.approval_id === artifact.approval_id`      | `identity assertion does not match this approval`          |
+| 12.8 | `role` matches effective required role              | `identity assertion role does not match required role`     |
+| 12.9 | `binding.environment` matches expected environment  | `identity assertion environment mismatch`                  |
+| 12.10| identity issuer (`issuer_id`, `kid`) in trust cfg   | `untrusted identity issuer`                                |
+| 12.11| identity issuer's `allowed_roles` satisfied         | `identity issuer not authorized for this role`             |
+| 12.12| identity issuer's `allowed_environments` satisfied  | `identity issuer not authorized for this environment`      |
+| 12.13| `expires_at > now`                                  | `identity assertion expired`                               |
+| 12.14| `issued_at <= now + 5min`                           | `identity assertion issued in the future`                  |
+| 12.15| HS256 / Ed25519 signature valid                     | `invalid identity assertion signature`                     |
+
+### Replay protection (last)
+
+| #  | Check                                       | Reason on failure                                |
+|----|---------------------------------------------|--------------------------------------------------|
+| 13 | `nonce` not previously consumed             | `approval replay detected`                       |
 
 A pass through all 13 returns:
 

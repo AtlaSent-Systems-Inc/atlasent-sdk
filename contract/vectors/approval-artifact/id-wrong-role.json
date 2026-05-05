@@ -1,16 +1,9 @@
 {
-  "name": "replay",
-  "description": "Same artifact as valid — used twice in sequence. First verify must succeed; second must return reason='approval replay detected'. Test exercises the nonce ledger; this fixture is the *artifact*, not the outcome.",
+  "name": "id-wrong-role",
+  "description": "Identity assertion role differs from required_role; reason='identity assertion role does not match required role'.",
   "expected_outcome": {
-    "first": {
-      "ok": true,
-      "approval_id": "apr_fixture_replay",
-      "reviewer_id": "okta|00u_test_alice"
-    },
-    "second": {
-      "ok": false,
-      "reason": "approval replay detected"
-    }
+    "ok": false,
+    "reason": "identity assertion role does not match required role"
   },
   "inputs": {
     "trusted_issuers": {
@@ -35,11 +28,12 @@
     "expected_environment": "production",
     "now_iso": "2026-04-16T12:00:00.000Z",
     "hs256_test_key_hex": "5555555555555555555555555555555555555555555555555555555555555555",
-    "hs256_identity_test_key_hex": "9999999999999999999999999999999999999999999999999999999999999999"
+    "hs256_identity_test_key_hex": "9999999999999999999999999999999999999999999999999999999999999999",
+    "require_identity_assertion": true
   },
   "artifact": {
     "version": "approval_artifact.v1",
-    "approval_id": "apr_fixture_replay",
+    "approval_id": "apr_fixture_id_wrong_role",
     "tenant_id": "tnt_test",
     "action_type": "deployment.production.deploy",
     "resource_id": "release:abc123",
@@ -59,7 +53,29 @@
     },
     "issued_at": "2026-04-16T11:59:00.000Z",
     "expires_at": "2026-04-16T13:00:00.000Z",
-    "nonce": "n_fixture_replay",
-    "signature": "097dda397839dbcbb20ff63ade485089383886ce3be00caa0b08431bc7862695"
+    "nonce": "n_fixture_id_wrong_role",
+    "signature": "1f9398e4dbdb76db1facb622c95fad1952ca44feac87acc98a113db2b986dbe5",
+    "identity_assertion": {
+      "version": "identity_assertion.v1",
+      "subject": {
+        "principal_id": "okta|00u_test_alice",
+        "principal_kind": "human"
+      },
+      "role": "security_lead",
+      "binding": {
+        "approval_id": "apr_fixture_id_wrong_role",
+        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "tenant_id": "tnt_test",
+        "environment": "production"
+      },
+      "issuer": {
+        "type": "oidc",
+        "issuer_id": "idp.test",
+        "kid": "kid-id-1"
+      },
+      "issued_at": "2026-04-16T11:59:30.000Z",
+      "expires_at": "2026-04-16T12:30:00.000Z",
+      "signature": "cb5a9ca76dc36aefc5ce4d555f86cbde1a4a46afe515410e77a3c491e187371f"
+    }
   }
 }

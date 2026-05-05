@@ -121,6 +121,14 @@ export type {
   ApprovalReviewer,
   PrincipalKind,
 } from "./approvalArtifact.js";
+export type {
+  IdentityAssertionBinding,
+  IdentityAssertionV1,
+  IdentityIssuer,
+  IdentityIssuerKey,
+  IdentitySubject,
+  IdentityTrustedIssuersConfig,
+} from "./identityAssertion.js";
 
 /**
  * Default export. The opinionated, category-defining entry point:

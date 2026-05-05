@@ -50,6 +50,116 @@ class ApprovalIssuer(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class IdentitySubject(BaseModel):
+    """Identity-attested subject of the assertion. Verifier requires
+    ``principal_kind == "human"``; the other variants are present so
+    the schema can structurally describe denied / declined assertions.
+    """
+
+    principal_id: str = Field(min_length=1)
+    principal_kind: PrincipalKind
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IdentityAssertionBinding(BaseModel):
+    """Cryptographic binding tying the assertion to a specific approval."""
+
+    approval_id: str = Field(min_length=1)
+    """Must equal artifact.approval_id."""
+    action_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    """Must equal the canonical action hash."""
+    tenant_id: str = Field(min_length=1)
+    """Must equal the request's tenant_id."""
+    environment: str
+    """Must equal the request's environment. Empty string allowed
+    when the verifier was not given one (explicit equality, no
+    implicit broadening)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IdentityIssuer(BaseModel):
+    """Identity issuer (the IdP). Always OIDC-shaped."""
+
+    type: Literal["oidc"]
+    issuer_id: str = Field(min_length=1)
+    kid: str = Field(min_length=1)
+    """Key id for rotation; looked up in IDENTITY_TRUSTED_ISSUERS."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IdentityAssertionV1(BaseModel):
+    """A complete signed identity assertion.
+
+    Wire-stable as ``identity_assertion.v1``. Verified server-side
+    inside ``/v1-evaluate``; the SDK only carries it. Schema lives in
+    ``contract/schemas/identity-assertion.schema.json``.
+    """
+
+    version: Literal["identity_assertion.v1"] = "identity_assertion.v1"
+    subject: IdentitySubject
+    role: str = Field(min_length=1)
+    """Required role attested by the IdP (e.g. "qa_reviewer"). The
+    verifier checks this equals the effective_required_role used to
+    gate the action."""
+    binding: IdentityAssertionBinding
+    issuer: IdentityIssuer
+    issued_at: str
+    expires_at: str
+    nonce: Optional[str] = Field(default=None, min_length=8)
+    """Optional anti-replay nonce. The approval-artifact nonce is
+    the primary defence; deployments that want assertion-level
+    replay protection ledger this separately."""
+    signature: str = Field(min_length=1)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IdentityIssuerKey(BaseModel):
+    """One entry in ``IDENTITY_TRUSTED_ISSUERS[issuer_id][kid]``.
+
+    Server-side config only; the SDK exposes the model so operators
+    can lint the JSON in CI. Independent trust root from
+    ``APPROVAL_TRUSTED_ISSUERS`` — by design.
+    """
+
+    alg: Literal["HS256", "Ed25519"]
+    key: str = Field(min_length=1)
+    """Hex-encoded HS256 secret or Ed25519 raw public key (32
+    bytes / 64 hex chars). Ed25519 signatures may be hex or
+    base64url; HS256 signatures are hex."""
+    allowed_roles: Optional[list[str]] = None
+    """Per-issuer scope: roles this kid may attest. Empty/missing = unscoped."""
+    allowed_environments: Optional[list[str]] = None
+    """Per-issuer scope: environments this kid may attest in. Empty/missing = unscoped."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IdentityTrustedIssuersConfig(BaseModel):
+    """JSON shape of the ``IDENTITY_TRUSTED_ISSUERS`` env var. Keyed
+    by ``issuer_id`` then ``kid``."""
+
+    root: dict[str, dict[str, IdentityIssuerKey]]
+
+    model_config = ConfigDict(extra="forbid")
+
+    def to_env_dict(self) -> dict[str, Any]:
+        return {
+            issuer_id: {
+                kid: entry.model_dump(exclude_none=True)
+                for kid, entry in kids.items()
+            }
+            for issuer_id, kids in self.root.items()
+        }
+
+    @classmethod
+    def from_env_dict(cls, data: dict[str, Any]) -> IdentityTrustedIssuersConfig:
+        return cls(root=data)  # type: ignore[arg-type]
+
+
 class ApprovalArtifactV1(BaseModel):
     """The full signed approval artifact.
 
@@ -59,6 +169,14 @@ class ApprovalArtifactV1(BaseModel):
     only carries the artifact to the server. Field order matches the
     JSON Schema; ``extra="forbid"`` so an unexpected key fails fast
     at SDK boundaries instead of silently propagating to the wire.
+
+    ``identity_assertion`` is REQUIRED on the wire whenever
+    ``/v1-evaluate`` calls the verifier with
+    ``requireIdentityAssertion: true`` (i.e. when human approval is
+    required). Without it the server returns deny: ``missing
+    identity assertion``. The SDK keeps the field optional so shadow
+    / preflight flows that don't verify can still construct
+    artifacts.
     """
 
     version: Literal["approval_artifact.v1"] = "approval_artifact.v1"
@@ -73,6 +191,7 @@ class ApprovalArtifactV1(BaseModel):
     expires_at: str
     nonce: str = Field(min_length=8)
     signature: str = Field(min_length=1)
+    identity_assertion: Optional[IdentityAssertionV1] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -210,6 +329,12 @@ __all__ = [
     "ApprovalReference",
     "ApprovalReviewer",
     "ApprovalTrustedIssuersConfig",
+    "IdentityAssertionBinding",
+    "IdentityAssertionV1",
+    "IdentityIssuer",
+    "IdentityIssuerKey",
+    "IdentitySubject",
+    "IdentityTrustedIssuersConfig",
     "PermitApprovalBinding",
     "PrincipalKind",
     "TrustedIssuerKey",

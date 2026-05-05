@@ -1,16 +1,9 @@
 {
-  "name": "replay",
-  "description": "Same artifact as valid — used twice in sequence. First verify must succeed; second must return reason='approval replay detected'. Test exercises the nonce ledger; this fixture is the *artifact*, not the outcome.",
+  "name": "id-missing",
+  "description": "Verifier requires identity assertion but the artifact carries none; reason='missing identity assertion'.",
   "expected_outcome": {
-    "first": {
-      "ok": true,
-      "approval_id": "apr_fixture_replay",
-      "reviewer_id": "okta|00u_test_alice"
-    },
-    "second": {
-      "ok": false,
-      "reason": "approval replay detected"
-    }
+    "ok": false,
+    "reason": "missing identity assertion"
   },
   "inputs": {
     "trusted_issuers": {
@@ -35,11 +28,12 @@
     "expected_environment": "production",
     "now_iso": "2026-04-16T12:00:00.000Z",
     "hs256_test_key_hex": "5555555555555555555555555555555555555555555555555555555555555555",
-    "hs256_identity_test_key_hex": "9999999999999999999999999999999999999999999999999999999999999999"
+    "hs256_identity_test_key_hex": "9999999999999999999999999999999999999999999999999999999999999999",
+    "require_identity_assertion": true
   },
   "artifact": {
     "version": "approval_artifact.v1",
-    "approval_id": "apr_fixture_replay",
+    "approval_id": "apr_fixture_id_missing",
     "tenant_id": "tnt_test",
     "action_type": "deployment.production.deploy",
     "resource_id": "release:abc123",
@@ -59,7 +53,7 @@
     },
     "issued_at": "2026-04-16T11:59:00.000Z",
     "expires_at": "2026-04-16T13:00:00.000Z",
-    "nonce": "n_fixture_replay",
-    "signature": "097dda397839dbcbb20ff63ade485089383886ce3be00caa0b08431bc7862695"
+    "nonce": "n_fixture_id_missing",
+    "signature": "f01c585eeee27f03fe91e1aa60fb5c32f33833ad759ead685774771a9737f763"
   }
 }

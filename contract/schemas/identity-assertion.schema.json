@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/identity-assertion.schema.json",
+  "title": "IdentityAssertionV1",
+  "description": "Signed assertion from a trusted identity provider (OIDC issuer / SSO) vouching that the reviewer named in an approval_artifact.v1 is a real human with a specific role. Independent trust root from the approval issuer; both signatures must verify before /v1-evaluate issues a permit for an approval-required action. Wire-stable as `identity_assertion.v1`. The artifact carries the assertion under `identity_assertion`; the verifier rejects when `requireIdentityAssertion=true` and the field is absent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "subject",
+    "role",
+    "binding",
+    "issuer",
+    "issued_at",
+    "expires_at",
+    "signature"
+  ],
+  "properties": {
+    "version": { "type": "string", "const": "identity_assertion.v1" },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_kind"],
+      "properties": {
+        "principal_id":   { "type": "string", "minLength": 1 },
+        "principal_kind": {
+          "type": "string",
+          "enum": ["human", "agent", "service_account"],
+          "description": "Verifier requires 'human'. The other variants are present so the schema can describe denied / declined assertions structurally."
+        }
+      }
+    },
+    "role": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Required role attested by the IdP (e.g. 'qa_reviewer'). The verifier checks this equals the effective_required_role used to gate the action."
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approval_id", "action_hash", "tenant_id", "environment"],
+      "properties": {
+        "approval_id": { "type": "string", "minLength": 1, "description": "Must equal artifact.approval_id." },
+        "action_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Must equal expected_action_hash and artifact.action_hash." },
+        "tenant_id":   { "type": "string", "minLength": 1, "description": "Must equal expected_tenant_id and artifact.tenant_id." },
+        "environment": { "type": "string", "description": "Must equal expected_environment. Empty string allowed when the verifier was not given one (explicit equality, no implicit broadening)." }
+      }
+    },
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "issuer_id", "kid"],
+      "properties": {
+        "type":      { "type": "string", "const": "oidc" },
+        "issuer_id": { "type": "string", "minLength": 1 },
+        "kid":       { "type": "string", "minLength": 1, "description": "Key id within the issuer (for rotation). Looked up in IDENTITY_TRUSTED_ISSUERS." }
+      }
+    },
+    "issued_at":  { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "nonce": {
+      "type": "string",
+      "minLength": 8,
+      "description": "Optional anti-replay nonce. The approval-artifact nonce is the primary defence; a deployment that wants assertion-level replay protection adds a separate ledger keyed on this field."
+    },
+    "signature": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Detached signature over the canonical assertion bytes with the `signature` field stripped. Algorithm is identified by issuer.kid in IDENTITY_TRUSTED_ISSUERS (HS256 hex or Ed25519 hex/base64url)."
+    }
+  }
+}

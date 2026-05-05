@@ -26,9 +26,12 @@ import {
   canonicalStringify,
   hmacHex,
   HEX_KEY,
+  ID_HEX_KEY,
   NOW_MS,
   TRUSTED_ISSUERS,
+  TRUSTED_IDENTITY_ISSUERS,
   type ApprovalArtifactV1,
+  type IdentityAssertionV1,
   type SingleOutcomeVector,
   type ReplayOutcomeVector,
   type Vector,
@@ -141,6 +144,117 @@ describe("approval-artifact vectors: schema drift", () => {
 // reason in all three implementations.
 
 type Artifact = ApprovalArtifactV1;
+
+type IdentityIssuerEntry = {
+  alg: "HS256" | "Ed25519";
+  key: string;
+  allowed_roles?: string[];
+  allowed_environments?: string[];
+};
+
+function lookupIdentityIssuer(
+  cfg: Record<string, Record<string, IdentityIssuerEntry>>,
+  issuerId: string,
+  kid: string,
+): IdentityIssuerEntry | null {
+  return cfg[issuerId]?.[kid] ?? null;
+}
+
+function canonicalAssertionPayload(a: IdentityAssertionV1): string {
+  const { signature: _omit, ...rest } = a;
+  return canonicalStringify(rest);
+}
+
+function verifyIdentityHmac(
+  payload: string,
+  signature: string,
+  hexKey: string,
+): boolean {
+  const expected = createHmac("sha256", Buffer.from(hexKey, "hex"))
+    .update(payload, "utf8")
+    .digest("hex");
+  if (expected.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) {
+    diff |= expected.charCodeAt(i) ^ signature.toLowerCase().charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+type IdentityVerifyInputs = {
+  required: boolean;
+  expectedReviewerId: string;
+  expectedTenantId: string;
+  expectedActionHash: string;
+  expectedApprovalId: string;
+  expectedRole: string;
+  expectedEnvironment: string;
+};
+
+function mirrorVerifyIdentity(
+  assertion: IdentityAssertionV1 | undefined,
+  expected: IdentityVerifyInputs,
+  trusted: Record<string, Record<string, IdentityIssuerEntry>>,
+  nowMs: number,
+): { ok: true; identity_issuer_id: string; identity_kid: string } | { ok: false; reason: string } {
+  if (!assertion) {
+    if (expected.required) return { ok: false, reason: "missing identity assertion" };
+    return { ok: true, identity_issuer_id: "", identity_kid: "" };
+  }
+  if (assertion.version !== "identity_assertion.v1") {
+    return { ok: false, reason: "invalid identity assertion version" };
+  }
+  if (assertion.binding?.tenant_id !== expected.expectedTenantId) {
+    return { ok: false, reason: "identity assertion tenant mismatch" };
+  }
+  if (assertion.binding?.action_hash !== expected.expectedActionHash) {
+    return { ok: false, reason: "identity assertion does not match this action" };
+  }
+  if (assertion.subject?.principal_kind !== "human") {
+    return { ok: false, reason: "identity assertion subject must be human" };
+  }
+  if (assertion.subject?.principal_id !== expected.expectedReviewerId) {
+    return { ok: false, reason: "identity assertion subject does not match reviewer" };
+  }
+  if (assertion.binding?.approval_id !== expected.expectedApprovalId) {
+    return { ok: false, reason: "identity assertion does not match this approval" };
+  }
+  if (assertion.role !== expected.expectedRole) {
+    return { ok: false, reason: "identity assertion role does not match required role" };
+  }
+  if (assertion.binding?.environment !== expected.expectedEnvironment) {
+    return { ok: false, reason: "identity assertion environment mismatch" };
+  }
+  const entry = lookupIdentityIssuer(trusted, assertion.issuer.issuer_id, assertion.issuer.kid);
+  if (!entry) return { ok: false, reason: "untrusted identity issuer" };
+  if (entry.allowed_roles && entry.allowed_roles.length > 0 && !entry.allowed_roles.includes(assertion.role)) {
+    return { ok: false, reason: "identity issuer not authorized for this role" };
+  }
+  if (
+    entry.allowed_environments &&
+    entry.allowed_environments.length > 0 &&
+    !entry.allowed_environments.includes(assertion.binding.environment)
+  ) {
+    return { ok: false, reason: "identity issuer not authorized for this environment" };
+  }
+  const expiresAt = Date.parse(assertion.expires_at);
+  if (!Number.isFinite(expiresAt) || expiresAt <= nowMs) {
+    return { ok: false, reason: "identity assertion expired" };
+  }
+  const issuedAt = Date.parse(assertion.issued_at);
+  if (!Number.isFinite(issuedAt) || issuedAt > nowMs + 5 * 60_000) {
+    return { ok: false, reason: "identity assertion issued in the future" };
+  }
+  if (entry.alg !== "HS256") return { ok: false, reason: "invalid identity assertion signature" };
+  if (!verifyIdentityHmac(canonicalAssertionPayload(assertion), assertion.signature, entry.key)) {
+    return { ok: false, reason: "invalid identity assertion signature" };
+  }
+  return {
+    ok: true,
+    identity_issuer_id: assertion.issuer.issuer_id,
+    identity_kid: assertion.issuer.kid,
+  };
+}
 type IssuerEntry = {
   alg: "HS256" | "Ed25519";
   key: string;
@@ -153,6 +267,7 @@ type VerifyInputs = {
   expectedTenantId: string;
   requiredRole: string;
   expectedEnvironment?: string;
+  requireIdentityAssertion?: boolean;
 };
 
 function lookupIssuer(
@@ -225,6 +340,23 @@ function mirrorVerify(
   if (issuerEntry.alg !== "HS256") return { ok: false, reason: "invalid approval signature" };
   const signatureValid = verifyHmac(canonicalSigningPayload(artifact), artifact.signature, issuerEntry.key);
   if (!signatureValid) return { ok: false, reason: "invalid approval signature" };
+  // Identity attestation runs BEFORE nonce consumption — a deny here
+  // must not burn the artifact's replay protection.
+  const idResult = mirrorVerifyIdentity(
+    artifact.identity_assertion,
+    {
+      required: !!expected.requireIdentityAssertion,
+      expectedReviewerId: artifact.reviewer.principal_id,
+      expectedTenantId: expected.expectedTenantId,
+      expectedActionHash: expected.expectedActionHash,
+      expectedApprovalId: artifact.approval_id,
+      expectedRole: effectiveRole,
+      expectedEnvironment: expected.expectedEnvironment ?? "",
+    },
+    TRUSTED_IDENTITY_ISSUERS as Record<string, Record<string, IdentityIssuerEntry>>,
+    nowMs,
+  );
+  if (!idResult.ok) return { ok: false, reason: idResult.reason };
   if (usedNonces.has(artifact.nonce)) return { ok: false, reason: "approval replay detected" };
   usedNonces.add(artifact.nonce);
   return { ok: true, approval_id: artifact.approval_id, reviewer_id: artifact.reviewer.principal_id };
@@ -245,6 +377,7 @@ describe("approval-artifact vectors: verifier drift", () => {
           expectedTenantId: single.inputs.expected_tenant_id,
           requiredRole: single.inputs.required_role,
           expectedEnvironment: single.inputs.expected_environment,
+          requireIdentityAssertion: single.inputs.require_identity_assertion ?? false,
         },
         TRUSTED_ISSUERS as Record<string, Record<string, IssuerEntry>>,
         NOW_MS,
