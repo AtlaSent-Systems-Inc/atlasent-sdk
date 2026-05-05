@@ -2,6 +2,16 @@
 
 ## 2.3.0 — Unreleased — approval quorum contract parity
 
+> **Production-enforcement caveat (2.1.0 / 2.2.0 / 2.3.0).** Identity-
+> attested approvals and quorum verification are implemented on the
+> canonical evaluate path, but not yet enforced on the deployed
+> legacy evaluate entrypoint in `atlasent-api`. Production
+> enforcement requires v1.9.0 evaluate-path reconciliation. See
+> `atlasent-api/docs/adr/ADR-evaluate-path.md` for the design record
+> and acceptance criteria. The Pydantic models and wire types in
+> these SDK releases are correct contract surface; what differs is
+> *what the deployed server enforces*, not what the wire describes.
+
 ### Added
 
 - `ApprovalQuorumV1`, `QuorumPolicy`, `QuorumRoleRequirement`,
