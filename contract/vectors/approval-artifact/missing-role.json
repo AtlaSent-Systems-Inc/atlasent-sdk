@@ -1,0 +1,48 @@
+{
+  "name": "missing-role",
+  "description": "Reviewer is human but lacks the required role; reason='reviewer lacks required role'.",
+  "expected_outcome": {
+    "ok": false,
+    "reason": "reviewer lacks required role"
+  },
+  "inputs": {
+    "trusted_issuers": {
+      "issuer.qa": {
+        "kid-1": {
+          "alg": "HS256",
+          "key": "5555555555555555555555555555555555555555555555555555555555555555"
+        }
+      }
+    },
+    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_tenant_id": "tnt_test",
+    "required_role": "qa_reviewer",
+    "expected_environment": "production",
+    "now_iso": "2026-04-16T12:00:00.000Z",
+    "hs256_test_key_hex": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "artifact": {
+    "version": "approval_artifact.v1",
+    "approval_id": "apr_fixture_missing_role",
+    "tenant_id": "tnt_test",
+    "action_type": "deployment.production.deploy",
+    "resource_id": "release:abc123",
+    "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "reviewer": {
+      "principal_id": "okta|00u_test_bob",
+      "principal_kind": "human",
+      "roles": [
+        "viewer"
+      ]
+    },
+    "issuer": {
+      "type": "approval_service",
+      "issuer_id": "issuer.qa",
+      "kid": "kid-1"
+    },
+    "issued_at": "2026-04-16T11:59:00.000Z",
+    "expires_at": "2026-04-16T13:00:00.000Z",
+    "nonce": "n_fixture_missing_role",
+    "signature": "614eadd9584c6e8d16647129ae7d884f3b007fa379102704670457a4d6ba98a2"
+  }
+}

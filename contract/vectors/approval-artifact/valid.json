@@ -1,0 +1,50 @@
+{
+  "name": "valid",
+  "description": "All checks pass: human reviewer, trusted issuer, correct action hash, in-window expiry, fresh nonce, valid HMAC signature.",
+  "expected_outcome": {
+    "ok": true,
+    "approval_id": "apr_fixture_1",
+    "reviewer_id": "okta|00u_test_alice"
+  },
+  "inputs": {
+    "trusted_issuers": {
+      "issuer.qa": {
+        "kid-1": {
+          "alg": "HS256",
+          "key": "5555555555555555555555555555555555555555555555555555555555555555"
+        }
+      }
+    },
+    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_tenant_id": "tnt_test",
+    "required_role": "qa_reviewer",
+    "expected_environment": "production",
+    "now_iso": "2026-04-16T12:00:00.000Z",
+    "hs256_test_key_hex": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "artifact": {
+    "version": "approval_artifact.v1",
+    "approval_id": "apr_fixture_1",
+    "tenant_id": "tnt_test",
+    "action_type": "deployment.production.deploy",
+    "resource_id": "release:abc123",
+    "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "reviewer": {
+      "principal_id": "okta|00u_test_alice",
+      "principal_kind": "human",
+      "email": "alice@example.com",
+      "roles": [
+        "qa_reviewer"
+      ]
+    },
+    "issuer": {
+      "type": "approval_service",
+      "issuer_id": "issuer.qa",
+      "kid": "kid-1"
+    },
+    "issued_at": "2026-04-16T11:59:00.000Z",
+    "expires_at": "2026-04-16T13:00:00.000Z",
+    "nonce": "n_fixture_valid",
+    "signature": "181a05520835321217292fab55b8d3c1591f1e78ebc892e67bd8b8cd8152f95e"
+  }
+}
