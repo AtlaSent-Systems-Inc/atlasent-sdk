@@ -21,8 +21,9 @@ Usage::
 from __future__ import annotations
 
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
 from .authorize import protect
 
@@ -43,7 +44,7 @@ class ProtectedAction:
     actor_id: str
     resource_id: str
     environment: Environment
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
 
 
 async def require_permit(

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+import sys
 from typing import TypeVar
 
 import pytest
-
-import sys
 
 import atlasent.require_permit  # noqa: F401  (ensure submodule registered in sys.modules)
 from atlasent.require_permit import ProtectedAction, classify_command, require_permit
@@ -79,7 +78,9 @@ async def _resolve(value: _T) -> _T:
 
 
 @pytest.mark.asyncio
-async def test_require_permit_allow_runs_executor(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_require_permit_allow_runs_executor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """When protect() resolves, the executor runs and its return value is propagated."""
     monkeypatch.setattr(
         _require_permit_module,
@@ -93,7 +94,9 @@ async def test_require_permit_allow_runs_executor(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_require_permit_deny_never_calls_executor(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_require_permit_deny_never_calls_executor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """When protect() raises AtlaSentDeniedError, the executor must NOT be called."""
     from atlasent.exceptions import AtlaSentDeniedError
 
@@ -139,7 +142,9 @@ async def test_require_permit_transport_error_never_calls_executor(
 
 
 @pytest.mark.asyncio
-async def test_require_permit_context_forwarding(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_require_permit_context_forwarding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """resource_id, environment, and custom context keys must reach protect()."""
     captured: dict[str, object] = {}
 
@@ -165,7 +170,9 @@ async def test_require_permit_context_forwarding(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
-async def test_require_permit_generic_return_type(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_require_permit_generic_return_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Return type follows the executor."""
     monkeypatch.setattr(
         _require_permit_module,
