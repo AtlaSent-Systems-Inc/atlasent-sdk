@@ -31,9 +31,10 @@
         "INVALID_API_KEY",
         "INSUFFICIENT_SCOPE",
         "RATE_LIMITED",
+        "APPROVAL_LINKAGE_MISSING",
         "INTERNAL_ERROR"
       ],
-      "description": "Stable code populated when outcome='deny'. SDKs map these onto a higher-level verified|expired|invalid|error envelope; unknown codes MUST fail-closed to invalid."
+      "description": "Stable code populated when outcome='deny'. SDKs map these onto a higher-level verified|expired|invalid|error envelope; unknown codes MUST fail-closed to invalid. APPROVAL_LINKAGE_MISSING is special: the atomic consume succeeded (the permit is burned) but the action requires a verified human approval and the permit row carries no approval binding — the executor must NOT proceed."
     },
     "reason": {
       "type": "string",
@@ -42,6 +43,28 @@
     "decision": {
       "type": "string",
       "description": "Echo of the decision the permit's evaluation produced. Always 'allow' on outcome='allow'."
+    },
+    "consumed": {
+      "type": "boolean",
+      "description": "True iff the atomic verify-and-consume burned the permit row. APPROVAL_LINKAGE_MISSING returns valid=false BUT consumed=true — the permit cannot be reused; do not retry."
+    },
+    "approval": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["approval_id", "artifact_hash", "reviewer_id", "issuer_id", "kid"],
+          "properties": {
+            "approval_id":   { "type": "string" },
+            "artifact_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "reviewer_id":   { "type": "string" },
+            "issuer_id":     { "type": "string" },
+            "kid":           { "type": "string" }
+          }
+        }
+      ],
+      "description": "Permit ↔ approval-artifact binding persisted at issuance. NULL when the permit was minted without an approval requirement. Mirrors PermitV2.approval; surfaced here so executors can prove which signed approval authorized this consume."
     }
   }
 }

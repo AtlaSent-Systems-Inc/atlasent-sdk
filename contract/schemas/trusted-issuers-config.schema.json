@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/trusted-issuers-config.schema.json",
+  "title": "ApprovalTrustedIssuersConfig",
+  "description": "JSON shape of the APPROVAL_TRUSTED_ISSUERS environment variable read by the verify path inside /v1-evaluate. Keyed by issuer_id, then by kid (key id, for rotation). Each entry MUST specify the algorithm + key bytes; OPTIONAL scope fields narrow the issuer's authority to specific action types, environments, or required reviewer roles. An empty / missing scope list means 'any' for that dimension. Never wire-side: this object lives only in server config, the artifact carries only the (issuer_id, kid) tuple.",
+  "type": "object",
+  "additionalProperties": {
+    "description": "Map of kid → key entry. The verify path looks up artifact.issuer.kid here.",
+    "type": "object",
+    "additionalProperties": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alg", "key"],
+      "properties": {
+        "alg": {
+          "type": "string",
+          "enum": ["HS256", "Ed25519"],
+          "description": "Signature algorithm. HS256 = HMAC-SHA-256 with a hex-encoded shared secret. Ed25519 = detached signature with a hex-encoded 32-byte raw public key."
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hex-encoded HS256 secret (any byte length) or Ed25519 raw public key (32 bytes / 64 hex chars). Ed25519 signatures may be hex or base64url; HS256 signatures are hex only."
+        },
+        "allowed_action_types": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Per-issuer scope: action_types this kid may approve. Entries match exactly OR with a trailing `.*` wildcard (e.g. `deployment.production.*` matches `deployment.production.deploy`). Empty / missing = unscoped on action types."
+        },
+        "allowed_environments": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Per-issuer scope: environments this kid may approve in (e.g. ['production']). Empty / missing = unscoped."
+        },
+        "required_role": {
+          "type": "string",
+          "minLength": 1,
+          "description": "When set, the issuer's required_role wins over the caller's requiredRole. A misconfigured caller cannot broaden this issuer's authority."
+        }
+      }
+    }
+  }
+}

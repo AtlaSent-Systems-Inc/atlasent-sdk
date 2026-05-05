@@ -56,6 +56,42 @@
     },
     "audit_entry_hash": { "type": "string" },
     "fingerprint": { "type": "string" },
-    "risk_score": { "type": "number" }
+    "risk_score": { "type": "number" },
+    "permit": {
+      "type": "object",
+      "description": "Wire-format PermitV2 body. Returned alongside `permit_token` when the legacy v1 surface is upgraded to V2. The `approval` sub-block is the cryptographic linkage to the approval artifact verified at evaluate time.",
+      "additionalProperties": true,
+      "properties": {
+        "approval": {
+          "type": "object",
+          "description": "Permit ↔ approval-artifact binding. Present iff /v1-evaluate verified an approval_artifact.v1 for this issuance. /v1-verify-permit re-surfaces this on consume so executors can prove which signed approval authorized the action.",
+          "additionalProperties": false,
+          "required": ["approval_id", "artifact_hash", "reviewer_id", "issuer_id", "kid"],
+          "properties": {
+            "approval_id": {
+              "type": "string",
+              "description": "approval_artifact.approval_id from the verified artifact."
+            },
+            "artifact_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "SHA-256 over the artifact's canonical signing payload (i.e. the artifact with the `signature` field stripped). Lets a stored permit row prove which artifact authorized it without retaining the full artifact body."
+            },
+            "reviewer_id": {
+              "type": "string",
+              "description": "reviewer.principal_id from the verified artifact."
+            },
+            "issuer_id": {
+              "type": "string",
+              "description": "issuer.issuer_id from the verified artifact."
+            },
+            "kid": {
+              "type": "string",
+              "description": "issuer.kid used to verify the signature (key id, for rotation)."
+            }
+          }
+        }
+      }
+    }
   }
 }

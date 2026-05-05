@@ -19,6 +19,10 @@
     "actor_id": {
       "type": "string",
       "description": "Optional cross-check — re-state the actor_id. ACTOR_MISMATCH if it disagrees with the original evaluation."
+    },
+    "require_approval": {
+      "type": "boolean",
+      "description": "Caller assertion that this consume must produce a permit row with a populated approval binding. When true and the row carries no binding, the verifier returns APPROVAL_LINKAGE_MISSING (valid=false, consumed=true). Use this when calling on behalf of an action whose human-approval requirement isn't covered by the action_type-prefix heuristic on the server."
     }
   }
 }
