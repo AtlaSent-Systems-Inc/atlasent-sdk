@@ -39,6 +39,33 @@
     "traceparent": {
       "type": "string",
       "description": "W3C Trace Context fallback when the SDK can't add the header through a signing layer."
+    },
+    "resource_id": {
+      "type": "string",
+      "maxLength": 512,
+      "description": "Resource the action targets (e.g. 'release:abc123'). Bound into the canonical action hash that approval artifacts cover, so an approval issued for one resource cannot authorize another."
+    },
+    "amount": {
+      "type": "number",
+      "description": "Optional monetary or quantity bound. Bound into the canonical action hash."
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional signed approval. When the action requires human approval (rule-driven OR action-type prefix per requiresHumanApproval), /v1-evaluate verifies this artifact before issuing a permit; failure denies. Schema for the artifact lives in approval-artifact.schema.json.",
+      "properties": {
+        "approval_id": {
+          "type": "string",
+          "description": "Reference to an artifact stored server-side. Either this or `artifact` must be present."
+        },
+        "artifact": {
+          "$ref": "approval-artifact.schema.json"
+        }
+      }
+    },
+    "require_approval": {
+      "type": "boolean",
+      "description": "Caller assertion that this action requires verified human approval, even when the action_type heuristic does not match. Echoed onto /v1-verify-permit so the consumer can hard-deny when the permit's persisted `approval` block is missing."
     }
   }
 }
