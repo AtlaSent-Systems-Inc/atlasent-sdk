@@ -2,6 +2,22 @@
 
 Project-level instructions for Claude Code working on `atlasent-sdk`.
 
+## Architecture baseline
+
+> Canonical cross-repo reference: [`atlasent-docs/architecture/ARCHITECTURE-BASELINE.md`](https://github.com/AtlaSent-Systems-Inc/atlasent-docs/blob/main/architecture/ARCHITECTURE-BASELINE.md)
+
+This repo's role: **SDK layer** — thin wrappers around atlasent-api. Python (`atlasent` on PyPI) and TypeScript (`@atlasent/sdk` on npm), plus framework guards for LangChain, LlamaIndex, and Cursor.
+
+Cross-repo invariants for this repo:
+- Wire types source of truth is `atlasent-api/packages/types/`. SDK re-exports; never redefines independently.
+- Any `/v1-evaluate` or `/v1-verify-permit` wire-shape change must go through `contract/schemas/` before SDK code changes.
+- `contract/tools/drift.py` (drift detector) blocks CI if SDK types drift from API types.
+- `packages/sdk/src/rules.ts` must stay byte-identical to `supabase/functions/_shared/rules.ts`. `rules-sync` CI enforces this.
+- SDKs do NOT cache authorization decisions or re-implement policy logic.
+- Publish mechanics: `@atlasent/sdk` and related packages release on `sdk-v*` tags; type-only changes on `types-v*` tags.
+
+---
+
 ## Auto-open PRs when work reaches a natural stopping point
 
 When a feature branch's work is **complete** (code committed, pushed to
