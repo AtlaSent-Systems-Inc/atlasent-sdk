@@ -53,6 +53,17 @@ from pydantic import (
     model_validator,
 )
 
+from .approval_artifact import (
+    ApprovalArtifactV1,
+    ApprovalIssuer,
+    ApprovalReference,
+    ApprovalReviewer,
+    ApprovalTrustedIssuersConfig,
+    PermitApprovalBinding,
+    PrincipalKind,
+    TrustedIssuerKey,
+)
+
 # Soft cap on top-level context properties. The hosted API hard-rejects
 # above 64 (see contract/openapi.yaml) and applies its own size limits;
 # the SDK warns but does not raise so a slightly-oversize context still
@@ -152,6 +163,22 @@ class EvaluateRequest(BaseModel):
         description="Identifier of the calling actor / agent.",
     )
     context: dict[str, Any] = Field(default_factory=dict)
+    # Optional canonical-action-hash inputs. The server binds these
+    # into the action_hash that approval artifacts cover, so passing
+    # them lets producers compute a matching hash off-line.
+    resource_id: str | None = Field(default=None, max_length=512)
+    amount: float | None = Field(default=None)
+    # Optional signed approval. When the action requires human
+    # approval (rule-driven OR action-type prefix per
+    # ``requiresHumanApproval``), the server verifies this artifact
+    # before issuing a permit; failure denies. Either a full
+    # ``ApprovalArtifactV1`` or an ``approval_id`` reference.
+    approval: ApprovalReference | None = Field(default=None)
+    # Caller assertion that this action requires verified human
+    # approval, even when the action_type heuristic doesn't match.
+    # Carried server-side onto the audit row and echoed onto
+    # /v1-verify-permit's require_approval gate.
+    require_approval: bool | None = Field(default=None)
     # Kept for backward-compat with code that constructs the request
     # directly. Excluded from wire serialization — the server reads the
     # API key from the Authorization header, never from the body.
@@ -220,6 +247,10 @@ class EvaluateResult(BaseModel):
     request_id: str = ""
     expires_at: str = ""
     denial: dict[str, Any] | None = None
+    # Permit ↔ approval-artifact binding. Present iff /v1-evaluate
+    # verified an ApprovalArtifactV1 for this issuance — the cryptographic
+    # proof of which signed approval authorized this permit.
+    permit_approval: PermitApprovalBinding | None = None
     rate_limit: RateLimitState | None = None
 
     # Legacy fields. Populated by the model_validator (from canonical
@@ -267,6 +298,18 @@ class EvaluateResult(BaseModel):
             out["decision_id"] = out["permit_token"]
         if "reason" not in out and isinstance(out.get("denial"), dict):
             out["reason"] = str(out["denial"].get("reason", ""))
+
+        # Permit-approval binding. The atlasent-console wire shape
+        # nests it under ``permit.approval`` (PermitV2.approval); the
+        # atlasent-api wire shape exposes it under top-level
+        # ``permit_approval``. Accept either; surface as
+        # ``permit_approval`` on the model.
+        if "permit_approval" not in out:
+            permit_block = out.get("permit")
+            if isinstance(permit_block, dict) and isinstance(
+                permit_block.get("approval"), dict
+            ):
+                out["permit_approval"] = permit_block["approval"]
 
         return out
 
@@ -414,6 +457,13 @@ class VerifyRequest(BaseModel):
         validation_alias=AliasChoices("actor_id", "agent"),
         description="Optional cross-check — re-state the actor.",
     )
+    # Caller assertion that this consume MUST produce a permit row
+    # with a populated approval binding. When True and the row carries
+    # no binding, the verifier returns ``APPROVAL_LINKAGE_MISSING``
+    # (valid=false, consumed=true). Use this when the action's
+    # human-approval requirement isn't covered by the server-side
+    # action_type-prefix heuristic.
+    require_approval: bool | None = Field(default=None)
     # Legacy fields, excluded from wire serialization.
     context: dict[str, Any] = Field(default_factory=dict, exclude=True)
     api_key: str = Field(default="", exclude=True)
@@ -477,6 +527,15 @@ class VerifyResult(BaseModel):
     outcome: str = ""
     verify_error_code: str | None = None
     reason: str = ""
+    consumed: bool | None = None
+    """``True`` iff the atomic verify-and-consume burned the permit
+    row. Critically, ``APPROVAL_LINKAGE_MISSING`` returns
+    ``valid=False`` BUT ``consumed=True`` — the permit cannot be
+    reused; do not retry."""
+    approval: PermitApprovalBinding | None = None
+    """Persisted permit ↔ approval-artifact binding. ``None`` when the
+    permit was minted without an approval requirement. Lets executors
+    prove which signed approval authorized this consume."""
     rate_limit: RateLimitState | None = None
 
     # Legacy passthrough.

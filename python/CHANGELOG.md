@@ -1,6 +1,62 @@
 # Changelog
 
-## Unreleased
+## 2.1.0 — Unreleased — approval artifact contract parity
+
+### Added
+
+- `ApprovalArtifactV1`, `ApprovalReviewer`, `ApprovalIssuer`,
+  `ApprovalReference`, `PermitApprovalBinding`, `PrincipalKind` —
+  Pydantic mirrors of the wire-stable types published in
+  `contract/schemas/approval-artifact.schema.json` and the TS SDK
+  (`approvalArtifact.ts`). Re-exported from `atlasent.*`.
+- `ApprovalTrustedIssuersConfig` + `TrustedIssuerKey` — Pydantic
+  shape of the `APPROVAL_TRUSTED_ISSUERS` env var read server-side
+  by `/v1-evaluate`. Server config only; the SDK exposes the model
+  so operators can construct / lint / round-trip the JSON in CI.
+  Includes the `allowed_action_types`, `allowed_environments`, and
+  `required_role` issuer-scope fields.
+- `EvaluateRequest.approval` (`ApprovalReference`) and
+  `EvaluateRequest.require_approval` — carried on
+  `POST /v1-evaluate` so callers can submit a signed approval and
+  hard-assert the gate even when the action_type-prefix heuristic
+  doesn't match server-side.
+- `EvaluateRequest.resource_id` and `EvaluateRequest.amount` —
+  documented inputs to the canonical action hash that approval
+  artifacts cover.
+- `EvaluateResult.permit_approval` (`PermitApprovalBinding`) —
+  surfaces the cryptographic linkage minted at issuance. Populates
+  from BOTH wire shapes the server may emit: `permit.approval`
+  nested per PermitV2 (atlasent-console) and top-level
+  `permit_approval` (atlasent-api).
+- `VerifyRequest.require_approval` — caller assertion that the
+  consume must produce a permit row with a populated approval
+  binding; missing binding triggers `APPROVAL_LINKAGE_MISSING`.
+- `VerifyResult.consumed` and `VerifyResult.approval` — surface
+  whether the atomic consume burned the permit (critically `True`
+  on `APPROVAL_LINKAGE_MISSING` — the permit is gone, do not retry)
+  and the persisted approval binding.
+- `AtlaSentClient.evaluate(...)` and `AsyncAtlaSentClient.evaluate(...)`
+  gained `resource_id`, `amount`, `approval`, `require_approval`
+  kwargs.
+- `AtlaSentClient.verify(...)` and `AsyncAtlaSentClient.verify(...)`
+  gained `require_approval` kwarg.
+- 28 new tests in `tests/test_approval_artifact.py` mirror the
+  TS-SDK vector suite — all eight contract fixtures
+  (`valid`, `expired`, `wrong-hash`, `agent-reviewer`,
+  `missing-role`, `untrusted-issuer`, `wrong-signature`, `replay`)
+  load via `ApprovalArtifactV1`; wire-shape parity checks for
+  `EvaluateRequest`, `VerifyRequest`, `EvaluateResult`,
+  `VerifyResult`; trusted-issuer config round-trip.
+
+### No new behavior
+
+This release is contract parity only — no server-side semantics or
+client-side enforcement was added. The verifier remains in the Deno
+edge functions; the Python SDK only carries the artifact and surfaces
+the binding on responses. Identity attestation and quorum are
+explicitly out of scope here and tracked separately.
+
+## 2.0.0 — 2026-04-30 — wire-format reconciliation (BREAKING)
 
 ## 2.0.0 — 2026-04-30 — wire-format reconciliation (BREAKING)
 

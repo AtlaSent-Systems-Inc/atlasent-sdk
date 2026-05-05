@@ -29,6 +29,7 @@ from .exceptions import (
     RateLimitError,
     _normalize_permit_outcome,
 )
+from .approval_artifact import ApprovalReference
 from .models import (
     ApiKeySelfResult,
     AuthorizationResult,
@@ -112,13 +113,22 @@ class AsyncAtlaSentClient:
         action_type: str,
         actor_id: str,
         context: dict[str, Any] | None = None,
+        *,
+        resource_id: str | None = None,
+        amount: float | None = None,
+        approval: ApprovalReference | dict[str, Any] | None = None,
+        require_approval: bool | None = None,
     ) -> EvaluateResult:
         """Evaluate whether an action is authorized.
 
         Returns an :class:`EvaluateResult` on permit.
         Raises :class:`AtlaSentDenied` on deny (fail-closed).
+
+        See :meth:`AtlaSentClient.evaluate` for full kwarg semantics.
         """
         ctx = context or {}
+        if isinstance(approval, dict):
+            approval = ApprovalReference.model_validate(approval)
 
         # Check cache
         if self._cache is not None:
@@ -134,6 +144,10 @@ class AsyncAtlaSentClient:
             action_type=action_type,
             actor_id=actor_id,
             context=ctx,
+            resource_id=resource_id,
+            amount=amount,
+            approval=approval,
+            require_approval=require_approval,
         )
         logger.debug("evaluate action=%r actor=%r (async)", action_type, actor_id)
         data, rate_limit, request_id = await self._post(
@@ -272,8 +286,13 @@ class AsyncAtlaSentClient:
         action_type: str = "",
         actor_id: str = "",
         context: dict[str, Any] | None = None,
+        *,
+        require_approval: bool | None = None,
     ) -> VerifyResult:
-        """Verify a previously issued permit token."""
+        """Verify a previously issued permit token.
+
+        See :meth:`AtlaSentClient.verify` for full kwarg semantics.
+        """
         # `context` arg preserved on the public method signature for
         # backward-compat but no longer sent on the wire — handler.ts
         # cross-checks via action_type / actor_id only.
@@ -282,6 +301,7 @@ class AsyncAtlaSentClient:
             permit_token=permit_token,
             action_type=action_type,
             actor_id=actor_id,
+            require_approval=require_approval,
         )
         logger.debug("verify token=%s (async)", _redact_token(permit_token))
         data, rate_limit, request_id = await self._post(

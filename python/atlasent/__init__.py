@@ -22,6 +22,16 @@ older data-not-exception idiom if you prefer to branch on
 """
 
 from ._version import __version__
+from .approval_artifact import (
+    ApprovalArtifactV1,
+    ApprovalIssuer,
+    ApprovalReference,
+    ApprovalReviewer,
+    ApprovalTrustedIssuersConfig,
+    PermitApprovalBinding,
+    PrincipalKind,
+    TrustedIssuerKey,
+)
 from .async_client import AsyncAtlaSentClient
 from .audit import (
     AuditDecision,
@@ -122,4 +132,13 @@ __all__ = [
     "StreamDecisionEvent",
     "StreamProgressEvent",
     "StreamEvent",
+    # Approval artifact contract surface (parity with the TS SDK).
+    "ApprovalArtifactV1",
+    "ApprovalIssuer",
+    "ApprovalReference",
+    "ApprovalReviewer",
+    "ApprovalTrustedIssuersConfig",
+    "PermitApprovalBinding",
+    "PrincipalKind",
+    "TrustedIssuerKey",
 ]
