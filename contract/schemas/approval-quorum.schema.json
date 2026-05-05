@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/approval-quorum.schema.json",
+  "title": "ApprovalQuorumV1",
+  "description": "Multi-approval quorum package. Additive layer ABOVE individually-trustworthy approvals: every entry MUST first pass the locked single-approval verifier (artifact signature + identity assertion + every binding) before quorum-level policy is evaluated. Wire-stable as `approval_quorum.v1`. The quorum_hash returned by the verifier is canonical proof material binding the policy to the set of approval artifact_hashes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "tenant_id",
+    "action_hash",
+    "environment",
+    "issued_at",
+    "policy",
+    "approvals"
+  ],
+  "properties": {
+    "version": { "type": "string", "const": "approval_quorum.v1" },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Must equal every approval's tenant_id and the verifier's expected tenant. Mismatch denies the whole package with `approval quorum tenant mismatch`."
+    },
+    "action_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Canonical action hash. Must equal every approval's action_hash and the verifier's expected_action_hash."
+    },
+    "environment": {
+      "type": "string",
+      "description": "Must equal the verifier's expected environment and every approval's identity_assertion.binding.environment."
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the quorum package was assembled (operator timestamp). Used with policy.max_age_seconds for package-level staleness."
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_count"],
+      "properties": {
+        "required_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum total approvals required, regardless of role."
+        },
+        "required_role_mix": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["role", "min"],
+            "properties": {
+              "role": { "type": "string", "minLength": 1 },
+              "min":  { "type": "integer", "minimum": 1 }
+            }
+          },
+          "description": "Optional role-mix requirements. Each requirement is checked independently; an approval carrying multiple roles can satisfy multiple requirements."
+        },
+        "independence": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "distinct_approval_issuers":  { "type": "boolean" },
+            "distinct_identity_issuers":  { "type": "boolean" }
+          },
+          "description": "Independence constraints. Duplicate principal_id is ALWAYS rejected; these flags additionally require distinct approval / identity issuers."
+        },
+        "max_age_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Optional package-level staleness window. Layered on top of each artifact's own expires_at — both must be in the future."
+        }
+      }
+    },
+    "approvals": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "approval-artifact.schema.json" },
+      "description": "The approvals being counted. Each is a full approval_artifact.v1 carrying its own identity_assertion."
+    }
+  }
+}

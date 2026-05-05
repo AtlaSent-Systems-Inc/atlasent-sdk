@@ -23,6 +23,7 @@ import { resolve } from "node:path";
 import { createHash, createHmac } from "node:crypto";
 import {
   VECTORS,
+  QUORUM_VECTORS,
   canonicalStringify,
   hmacHex,
   HEX_KEY,
@@ -31,7 +32,9 @@ import {
   TRUSTED_ISSUERS,
   TRUSTED_IDENTITY_ISSUERS,
   type ApprovalArtifactV1,
+  type ApprovalQuorumV1,
   type IdentityAssertionV1,
+  type QuorumVector,
   type SingleOutcomeVector,
   type ReplayOutcomeVector,
   type Vector,
@@ -413,4 +416,146 @@ describe("approval-artifact vectors: signature integrity sanity check", () => {
     expect(signature).toBe(expected);
     expect(createHash("sha256").digest("hex")).toHaveLength(64); // sanity that the runtime hash works
   });
+});
+
+// ── Quorum vectors ───────────────────────────────────────────────────
+//
+// Mirror of the Deno verifier's quorum logic. Every counted approval
+// passes the existing single-approval mirror first; quorum-level
+// policy is then evaluated. Drift in any layer (single-approval
+// algorithm, quorum policy ordering, fixture generator, schema)
+// fails the corresponding vector here.
+
+const QUORUM_VECTORS_DIR = resolve(__dirname, "..", "..", "contract", "vectors", "approval-quorum");
+
+describe("approval-quorum vectors: generator drift", () => {
+  it("on-disk quorum fixtures match generator output byte-for-byte", () => {
+    const onDisk = readdirSync(QUORUM_VECTORS_DIR).filter((f) => f.endsWith(".json")).sort();
+    const inMem = QUORUM_VECTORS.map((v) => `${v.name}.json`).sort();
+    expect(onDisk).toEqual(inMem);
+    for (const v of QUORUM_VECTORS) {
+      const path = resolve(QUORUM_VECTORS_DIR, `${v.name}.json`);
+      const stored = readFileSync(path, "utf8");
+      const regenerated = JSON.stringify(v, null, 2) + "\n";
+      expect(stored).toBe(regenerated);
+    }
+  });
+});
+
+function mirrorVerifyQuorum(
+  q: ApprovalQuorumV1,
+  expected: { expectedActionHash: string; expectedTenantId: string; requiredRole: string; expectedEnvironment: string },
+  trusted: Record<string, Record<string, IssuerEntry>>,
+  trustedIdentity: Record<string, Record<string, IdentityIssuerEntry>>,
+  nowMs: number,
+): { ok: true; count: number; verified: Array<{ approval_id: string; reviewer_id: string; reviewer_roles: string[]; approval_issuer_id: string; identity_issuer_id: string; }> } | { ok: false; reason: string } {
+  if (!q || typeof q !== "object") return { ok: false, reason: "missing approval quorum" };
+  if (q.version !== "approval_quorum.v1") return { ok: false, reason: "invalid approval quorum version" };
+  if (q.tenant_id !== expected.expectedTenantId) return { ok: false, reason: "approval quorum tenant mismatch" };
+  if (q.action_hash !== expected.expectedActionHash) return { ok: false, reason: "approval quorum action mismatch" };
+  if (q.environment !== expected.expectedEnvironment) return { ok: false, reason: "approval quorum environment mismatch" };
+  if (q.policy.max_age_seconds && q.policy.max_age_seconds > 0) {
+    const issuedAt = Date.parse(q.issued_at);
+    if (!Number.isFinite(issuedAt) || issuedAt + q.policy.max_age_seconds * 1000 <= nowMs) {
+      return { ok: false, reason: "approval quorum expired" };
+    }
+  }
+  const approvals = Array.isArray(q.approvals) ? q.approvals : [];
+  if (approvals.length === 0) return { ok: false, reason: "approval quorum empty" };
+  if (approvals.length < q.policy.required_count) {
+    return { ok: false, reason: "approval quorum required count not met" };
+  }
+  const verified: Array<{ approval_id: string; reviewer_id: string; reviewer_roles: string[]; approval_issuer_id: string; identity_issuer_id: string }> = [];
+  for (let i = 0; i < approvals.length; i++) {
+    const a = approvals[i] as ApprovalArtifactV1;
+    if (a.tenant_id !== q.tenant_id) {
+      return { ok: false, reason: `approval quorum entry ${i}: tenant mismatch within package` };
+    }
+    if (a.action_hash !== q.action_hash) {
+      return { ok: false, reason: `approval quorum entry ${i}: action_hash mismatch within package` };
+    }
+    const used = new Set<string>();
+    const r = mirrorVerify(a, {
+      expectedActionHash: expected.expectedActionHash,
+      expectedTenantId: expected.expectedTenantId,
+      requiredRole: expected.requiredRole,
+      expectedEnvironment: expected.expectedEnvironment,
+      requireIdentityAssertion: true,
+    }, trusted, nowMs, used);
+    if (!r.ok) {
+      return { ok: false, reason: `approval quorum entry ${i}: ${r.reason}` };
+    }
+    verified.push({
+      approval_id: r.approval_id,
+      reviewer_id: r.reviewer_id,
+      reviewer_roles: a.reviewer.roles ?? [],
+      approval_issuer_id: a.issuer.issuer_id,
+      identity_issuer_id: a.identity_assertion?.issuer.issuer_id ?? "",
+    });
+  }
+  // Duplicate principal_id is always rejected.
+  const seenPrincipals = new Set<string>();
+  for (const v of verified) {
+    if (seenPrincipals.has(v.reviewer_id)) {
+      return { ok: false, reason: "approval quorum duplicate reviewer" };
+    }
+    seenPrincipals.add(v.reviewer_id);
+  }
+  const indep = q.policy.independence ?? {};
+  if (indep.distinct_approval_issuers) {
+    const seen = new Set<string>();
+    for (const v of verified) {
+      if (seen.has(v.approval_issuer_id)) {
+        return { ok: false, reason: "approval quorum independence violated: duplicate approval issuer" };
+      }
+      seen.add(v.approval_issuer_id);
+    }
+  }
+  if (indep.distinct_identity_issuers) {
+    const seen = new Set<string>();
+    for (const v of verified) {
+      if (seen.has(v.identity_issuer_id)) {
+        return { ok: false, reason: "approval quorum independence violated: duplicate identity issuer" };
+      }
+      seen.add(v.identity_issuer_id);
+    }
+  }
+  for (const req of q.policy.required_role_mix ?? []) {
+    let count = 0;
+    for (const v of verified) {
+      if (v.reviewer_roles.includes(req.role)) count++;
+    }
+    if (count < req.min) {
+      return {
+        ok: false,
+        reason: `approval quorum role mix not satisfied: need ${req.min} of role '${req.role}', got ${count}`,
+      };
+    }
+  }
+  return { ok: true, count: verified.length, verified };
+}
+
+describe("approval-quorum vectors: verifier drift", () => {
+  for (const v of QUORUM_VECTORS as QuorumVector[]) {
+    it(`fixture "${v.name}" → ${JSON.stringify(v.expected_outcome)}`, () => {
+      const result = mirrorVerifyQuorum(
+        v.package,
+        {
+          expectedActionHash: v.inputs.expected_action_hash,
+          expectedTenantId: v.inputs.expected_tenant_id,
+          requiredRole: v.inputs.required_role,
+          expectedEnvironment: v.inputs.expected_environment,
+        },
+        TRUSTED_ISSUERS as Record<string, Record<string, IssuerEntry>>,
+        TRUSTED_IDENTITY_ISSUERS as Record<string, Record<string, IdentityIssuerEntry>>,
+        NOW_MS,
+      );
+      if (v.expected_outcome.ok) {
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.count).toBe(v.expected_outcome.count);
+      } else {
+        expect(result).toEqual(v.expected_outcome);
+      }
+    });
+  }
 });
