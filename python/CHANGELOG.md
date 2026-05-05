@@ -2,15 +2,18 @@
 
 ## 2.3.0 — Unreleased — approval quorum contract parity
 
-> **Production-enforcement caveat (2.1.0 / 2.2.0 / 2.3.0).** Identity-
-> attested approvals and quorum verification are implemented on the
-> canonical evaluate path, but not yet enforced on the deployed
-> legacy evaluate entrypoint in `atlasent-api`. Production
-> enforcement requires v1.9.0 evaluate-path reconciliation. See
-> `atlasent-api/docs/adr/ADR-evaluate-path.md` for the design record
-> and acceptance criteria. The Pydantic models and wire types in
-> these SDK releases are correct contract surface; what differs is
-> *what the deployed server enforces*, not what the wire describes.
+> **Correction (2026-05-05).** A caveat added earlier today claimed
+> identity-attested approvals and quorum verification were not yet
+> enforced on the deployed legacy evaluate entrypoint in
+> `atlasent-api`. **That caveat was wrong.** The deployed entry is a
+> thin shim that delegates to `handleEvaluate`, where the new gates
+> were wired (atlasent-api PRs #291 / #294 / #296). The split was
+> already collapsed by `4e502ae` on 2026-05-03 — before the
+> approval-artifact phase started — so the new gates are enforced
+> on the deployed entry today. See
+> `atlasent-api/docs/adr/ADR-evaluate-path.md` (Status: **Resolved**)
+> for the design record and the regression test that locks the shim
+> form in place.
 
 ### Added
 
