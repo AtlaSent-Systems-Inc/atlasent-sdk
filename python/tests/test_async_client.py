@@ -162,7 +162,9 @@ class TestAsyncEvaluatePreflight:
         mock_post = mocker.patch.object(
             async_client._client,
             "post",
-            return_value=_mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_DENY_WITH_TRACE),
+            return_value=_mock_resp(
+                mocker, json_data=EVALUATE_PREFLIGHT_DENY_WITH_TRACE
+            ),
         )
         await async_client.evaluate_preflight(
             "close_period", "agent-1", {"period": "2025-12"}
@@ -182,7 +184,9 @@ class TestAsyncEvaluatePreflight:
         mocker.patch.object(
             async_client._client,
             "post",
-            return_value=_mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_DENY_WITH_TRACE),
+            return_value=_mock_resp(
+                mocker, json_data=EVALUATE_PREFLIGHT_DENY_WITH_TRACE
+            ),
         )
         result = await async_client.evaluate_preflight("close_period", "agent-1")
         assert isinstance(result, EvaluatePreflightResult)
@@ -196,7 +200,9 @@ class TestAsyncEvaluatePreflight:
         mocker.patch.object(
             async_client._client,
             "post",
-            return_value=_mock_resp(mocker, json_data=EVALUATE_PREFLIGHT_ALLOW_NO_TRACE),
+            return_value=_mock_resp(
+                mocker, json_data=EVALUATE_PREFLIGHT_ALLOW_NO_TRACE
+            ),
         )
         result = await async_client.evaluate_preflight("close_period", "agent-1")
         assert result.evaluation.decision == "allow"
