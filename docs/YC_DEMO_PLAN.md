@@ -18,9 +18,32 @@ policy reflects that change without any code change in the agent.
 
 Arc 2 is the punchline: an LLM agent cannot self-approve a high-risk
 action by setting a string, because the policy gates on
-`qa_reviewer_kind`. In production the reviewer identity is bound by an
-OIDC claim / signed attestation upstream of the SDK call, not the
-agent's own context — worth a one-liner on stage.
+`qa_reviewer_kind` **and** on `qa_reviewer_id != agent_id`. The
+combination is what makes the assertion non-spoofable in the demo
+context.
+
+### The trust-anchor line (do not skip on stage)
+
+Right after Attempt 2 denies, the presenter says, verbatim:
+
+> "In production, the reviewer identity isn't coming from the agent —
+> it's verified from a signed approval. The agent can't spoof this."
+
+This closes the obvious investor objection ("what stops the agent from
+just setting `qa_reviewer_kind='human'`?") and redirects the audience
+from "agent-controlled string" to "verifiable upstream attestation."
+The optional `approval_source: "signed_record"` field in Arc 3
+(below) is the on-screen handle for that line.
+
+### What each arc tells the audience
+
+- **Attempt 1 → "There's a rule."** Policy enforcement exists.
+- **Attempt 2 → "You can't fake satisfying the rule."** Self-asserted
+  authority is rejected. ← **the AtlaSent thesis**
+- **Attempt 3 → "Only real authority unlocks execution."** Decision
+  becomes a permit, permit becomes the gate on downstream effect.
+
+That's the whole product in ~15 seconds.
 
 ## Prerequisites
 
@@ -55,16 +78,21 @@ In the AtlaSent console for the org behind
 
 1. Create action `modify_patient_record` (resource_type:
    `patient_record`).
-2. Attach a policy roughly equivalent to:
+2. Attach a policy equivalent to:
    ```
    allow if context.qa_signed == true
       and context.qa_reviewer_kind == "human"
-   deny  with reason "QA reviewer must be human"
+      and context.qa_reviewer_id != actor_id     ← blocks self-approval
+   deny  with reason "QA reviewer must be human, not the requesting agent"
         if context.qa_signed == true
-       and context.qa_reviewer_kind != "human"
+       and (context.qa_reviewer_kind != "human"
+            or context.qa_reviewer_id == actor_id)
    deny  with reason "Missing QA approval"
         otherwise
    ```
+   The `qa_reviewer_id != actor_id` clause is what makes the agent
+   physically unable to satisfy the rule by self-attestation, even if
+   it sets `qa_reviewer_kind="human"`.
 3. Confirm `enforcement_mode: enforce` (not `shadow` — shadow keys
    evaluate but skip `event_written: true`, so nothing lands in the
    console feed).
@@ -109,10 +137,14 @@ def show(r) -> None:
     print(f"  decision: [bold {color}]{decision}[/]")
     print(f"  reason:   {r.reason}")
     token = (r.permit_token or "")[:60]
-    print(f"  permit:   {token + '...' if token else '—'}\n")
+    print(f"  permit:   {token + '...' if token else '—'}")
+    if r.permitted:
+        print("  enforcement: [green]permit issued (required for execution)[/]\n")
+    else:
+        print("  enforcement: [red]execution blocked pre-flight[/]\n")
 
 
-# Arc 1 — no QA signoff
+# Arc 1 — no QA signoff: "there's a rule"
 print("[bold cyan]→ Attempt 1: agent requests modify_patient_record (no QA signoff)[/]")
 r1 = authorize(
     agent=AGENT, action=ACTION,
@@ -120,7 +152,9 @@ r1 = authorize(
 )
 show(r1)
 
-# Arc 2 — agent self-attests (the AtlaSent moment)
+
+# Arc 2 — agent self-attests: "you can't fake satisfying the rule"
+print("[dim]Agent attempts to satisfy the policy by asserting reviewer identity...[/]")
 print("[bold cyan]→ Attempt 2: agent self-attests as the QA reviewer[/]")
 r2 = authorize(
     agent=AGENT, action=ACTION,
@@ -133,8 +167,10 @@ r2 = authorize(
     },
 )
 show(r2)
+print("[bold yellow]→ AtlaSent rejects untrusted self-asserted authority[/]\n")
 
-# Arc 3 — real human signoff
+
+# Arc 3 — real human signoff: "only real authority unlocks execution"
 print("[bold cyan]→ Attempt 3: human QA reviewer signs off, agent retries[/]")
 r3 = authorize(
     agent=AGENT, action=ACTION,
@@ -144,22 +180,37 @@ r3 = authorize(
         "qa_reviewer_id": "qa_jane_doe",
         "qa_reviewer_kind": "human",
         "qa_signed_at": "2026-05-05T14:35:00Z",
+        "approval_source": "signed_record",
     },
 )
 show(r3)
+if r3.permitted:
+    print("[bold green]→ Execution is now authorized — downstream system can proceed[/]")
 ```
+
+The `approval_source: "signed_record"` field in Arc 3 is the visible
+hook for the trust-anchor line: *"in production this is a signed
+approval artifact bound to the action."* It's not enforced by the demo
+policy — it's there to telegraph the production direction without
+requiring the signed-attestation pipeline to be live for the
+recording.
 
 ## Recording sequence
 
 1. Open the console **Audit → Events** tab side-by-side with the
    terminal.
-2. Run `python demo.py`. Three blocks print, two red, one green.
-3. Switch to console, refresh feed. Three new rows visible:
+2. Run `python demo.py`. Three blocks print, two red, one green; the
+   yellow "AtlaSent rejects untrusted self-asserted authority" line
+   lands between Attempt 2 and Attempt 3, and the green "Execution
+   is now authorized" line lands after Attempt 3.
+3. Deliver the trust-anchor line aloud the moment Attempt 2 denies
+   (see Narrative §). Do not skip it.
+4. Switch to console, refresh feed. Three new rows visible:
    - Two `evaluate.deny` rows with policy reasons.
    - One `evaluate.allow` row with the permit token from arc 3.
-4. Click into the arc-3 row to show the full payload (context with
-   `qa_reviewer_kind: human`) and the chained `hash` /
-   `previous_hash` for tamper-evidence.
+5. Click into the arc-3 row to show the full payload (context with
+   `qa_reviewer_kind: human`, `approval_source: signed_record`) and
+   the chained `hash` / `previous_hash` for tamper-evidence.
 
 ## Risks / what could go wrong on stage
 
