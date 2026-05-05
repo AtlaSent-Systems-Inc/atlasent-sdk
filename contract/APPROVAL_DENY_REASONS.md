@@ -51,6 +51,33 @@ When `/v1-evaluate` calls the verifier with `requireIdentityAssertion: true` (i.
 |----|---------------------------------------------|--------------------------------------------------|
 | 13 | `nonce` not previously consumed             | `approval replay detected`                       |
 
+## Quorum verifier
+
+Quorum is **additive** on top of the locked single-approval verifier. Every counted approval first passes all 13 + 15 checks above (artifact + identity assertion). Quorum-level policy is then evaluated; denials never consume nonces — atomic claim happens only when the full package passes.
+
+### Order of checks
+
+| Check                                                                | Reason on failure                                                                  |
+|----------------------------------------------------------------------|------------------------------------------------------------------------------------|
+| package present                                                      | `missing approval quorum`                                                          |
+| `version === "approval_quorum.v1"`                                   | `invalid approval quorum version`                                                  |
+| `tenant_id` matches expected                                         | `approval quorum tenant mismatch`                                                  |
+| `action_hash` matches expected                                       | `approval quorum action mismatch`                                                  |
+| `environment` matches expected                                       | `approval quorum environment mismatch`                                             |
+| `issued_at + max_age_seconds > now` (when set)                       | `approval quorum expired`                                                          |
+| `approvals` non-empty                                                | `approval quorum empty`                                                            |
+| `approvals.length >= policy.required_count`                          | `approval quorum required count not met`                                           |
+| each entry: `tenant_id` matches package                              | `approval quorum entry <i>: tenant mismatch within package`                        |
+| each entry: `action_hash` matches package                            | `approval quorum entry <i>: action_hash mismatch within package`                   |
+| each entry: passes single-approval verifier (with identity required) | `approval quorum entry <i>: <underlying single-approval reason>`                   |
+| no duplicate `reviewer.principal_id` (always on)                     | `approval quorum duplicate reviewer`                                               |
+| `policy.independence.distinct_approval_issuers` satisfied            | `approval quorum independence violated: duplicate approval issuer`                 |
+| `policy.independence.distinct_identity_issuers` satisfied            | `approval quorum independence violated: duplicate identity issuer`                 |
+| `policy.required_role_mix` satisfied                                 | `approval quorum role mix not satisfied: need <N> of role '<role>', got <M>`      |
+| atomic nonce claim succeeds (single transaction across all nonces)   | `approval quorum replay detected`                                                  |
+
+The `quorum_hash` returned on success is `sha256(canonical({ version, tenant_id, action_hash, environment, issued_at, policy, sorted approval_hashes }))`. Sorted so the hash is stable across approval ordering.
+
 A pass through all 13 returns:
 
 ```json

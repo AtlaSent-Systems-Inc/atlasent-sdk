@@ -79,12 +79,55 @@ export interface ReplayOutcomeVector extends VectorBase {
 export type Vector = SingleOutcomeVector | ReplayOutcomeVector;
 
 export const VECTORS: Vector[];
+export const QUORUM_VECTORS: QuorumVector[];
 export const NOW_ISO: string;
 export const NOW_MS: number;
 export const HEX_KEY: string;
 export const ID_HEX_KEY: string;
 export const TRUSTED_ISSUERS: VerifierInputs["trusted_issuers"];
 export const TRUSTED_IDENTITY_ISSUERS: NonNullable<VerifierInputs["trusted_identity_issuers"]>;
+
+// ── Quorum types ─────────────────────────────────────────────────────
+
+export interface QuorumIndependence {
+  distinct_approval_issuers?: boolean;
+  distinct_identity_issuers?: boolean;
+}
+
+export interface QuorumRoleRequirement {
+  role: string;
+  min: number;
+}
+
+export interface QuorumPolicy {
+  required_count: number;
+  required_role_mix?: QuorumRoleRequirement[];
+  independence?: QuorumIndependence;
+  max_age_seconds?: number;
+}
+
+export interface ApprovalQuorumV1 {
+  version: "approval_quorum.v1";
+  tenant_id: string;
+  action_hash: string;
+  environment: string;
+  issued_at: string;
+  policy: QuorumPolicy;
+  approvals: ApprovalArtifactV1[];
+}
+
+export interface QuorumVerifierInputs extends VerifierInputs {}
+
+export type QuorumSuccess = { ok: true; count: number };
+export type QuorumFailure = { ok: false; reason: string };
+
+export interface QuorumVector {
+  name: string;
+  description: string;
+  inputs: QuorumVerifierInputs;
+  package: ApprovalQuorumV1;
+  expected_outcome: QuorumSuccess | QuorumFailure;
+}
 
 export function canonicalStringify(obj: unknown): string;
 export function sha256Hex(s: string): string;

@@ -25,6 +25,7 @@ from ._version import __version__
 from .approval_artifact import (
     ApprovalArtifactV1,
     ApprovalIssuer,
+    ApprovalQuorumV1,
     ApprovalReference,
     ApprovalReviewer,
     ApprovalTrustedIssuersConfig,
@@ -36,6 +37,10 @@ from .approval_artifact import (
     IdentityTrustedIssuersConfig,
     PermitApprovalBinding,
     PrincipalKind,
+    QuorumIndependence,
+    QuorumPolicy,
+    QuorumProof,
+    QuorumRoleRequirement,
     TrustedIssuerKey,
 )
 from .async_client import AsyncAtlaSentClient
@@ -141,6 +146,7 @@ __all__ = [
     # Approval artifact contract surface (parity with the TS SDK).
     "ApprovalArtifactV1",
     "ApprovalIssuer",
+    "ApprovalQuorumV1",
     "ApprovalReference",
     "ApprovalReviewer",
     "ApprovalTrustedIssuersConfig",
@@ -152,5 +158,9 @@ __all__ = [
     "IdentityTrustedIssuersConfig",
     "PermitApprovalBinding",
     "PrincipalKind",
+    "QuorumIndependence",
+    "QuorumPolicy",
+    "QuorumProof",
+    "QuorumRoleRequirement",
     "TrustedIssuerKey",
 ]

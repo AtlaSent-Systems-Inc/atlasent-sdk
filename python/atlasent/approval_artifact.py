@@ -323,9 +323,88 @@ class ApprovalTrustedIssuersConfig(BaseModel):
         return cls(root=data)  # type: ignore[arg-type]
 
 
+# ── Quorum (additive on top of single-approval) ──────────────────────
+
+
+class QuorumRoleRequirement(BaseModel):
+    """One ``role × count`` requirement in a quorum policy."""
+
+    role: str = Field(min_length=1)
+    min: int = Field(ge=1)
+    """Minimum approvals carrying this role."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QuorumIndependence(BaseModel):
+    """Independence constraints on a quorum policy. Duplicate
+    ``reviewer.principal_id`` is ALWAYS rejected regardless of
+    these flags; these strengthen the requirement further."""
+
+    distinct_approval_issuers: Optional[bool] = None
+    """When true, requires distinct approval-issuer identities."""
+    distinct_identity_issuers: Optional[bool] = None
+    """When true, requires distinct identity-issuer identities."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QuorumPolicy(BaseModel):
+    """Quorum policy describing what counts as passing."""
+
+    required_count: int = Field(ge=1)
+    required_role_mix: Optional[list[QuorumRoleRequirement]] = None
+    independence: Optional[QuorumIndependence] = None
+    max_age_seconds: Optional[int] = Field(default=None, ge=1)
+    """Optional package-level staleness window. Layered on each
+    artifact's own ``expires_at`` — both must be in the future."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ApprovalQuorumV1(BaseModel):
+    """A signed quorum package carrying multiple approvals.
+
+    Wire-stable as ``approval_quorum.v1``. Verified server-side
+    inside ``/v1-evaluate``. The SDK exposes the type so callers
+    can construct a quorum payload before submitting.
+
+    Locked invariant: quorum does NOT relax artifact verification.
+    Every approval inside MUST first pass the single-approval
+    verifier (artifact signature + identity assertion + every
+    binding). If any single approval fails, the whole package is
+    denied with that approval's exact reason — no fallthrough.
+    """
+
+    version: Literal["approval_quorum.v1"] = "approval_quorum.v1"
+    tenant_id: str = Field(min_length=1, max_length=256)
+    action_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    environment: str
+    issued_at: str
+    policy: QuorumPolicy
+    approvals: list["ApprovalArtifactV1"] = Field(min_length=1)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QuorumProof(BaseModel):
+    """Proof material returned on a passing quorum. Persisted on
+    the audit row so external auditors can reconstruct WHO
+    approved together without per-approval joins."""
+
+    quorum_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    """sha256 over the canonical (policy + tenant + action +
+    environment + issued_at + sorted approval_hashes)."""
+    approval_ids: list[str]
+    """approval_id of every counted approval, in submitted order."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
 __all__ = [
     "ApprovalArtifactV1",
     "ApprovalIssuer",
+    "ApprovalQuorumV1",
     "ApprovalReference",
     "ApprovalReviewer",
     "ApprovalTrustedIssuersConfig",
@@ -337,5 +416,9 @@ __all__ = [
     "IdentityTrustedIssuersConfig",
     "PermitApprovalBinding",
     "PrincipalKind",
+    "QuorumIndependence",
+    "QuorumPolicy",
+    "QuorumProof",
+    "QuorumRoleRequirement",
     "TrustedIssuerKey",
 ]

@@ -1,0 +1,147 @@
+{
+  "name": "q-role-mix-unsatisfied",
+  "description": "Policy requires ≥1 qa_reviewer AND ≥1 security_lead; only qa_reviewers present.",
+  "expected_outcome": {
+    "ok": false,
+    "reason": "approval quorum role mix not satisfied: need 1 of role 'security_lead', got 0"
+  },
+  "inputs": {
+    "trusted_issuers": {
+      "issuer.qa": {
+        "kid-1": {
+          "alg": "HS256",
+          "key": "5555555555555555555555555555555555555555555555555555555555555555"
+        }
+      }
+    },
+    "trusted_identity_issuers": {
+      "idp.test": {
+        "kid-id-1": {
+          "alg": "HS256",
+          "key": "9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      }
+    },
+    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_tenant_id": "tnt_test",
+    "required_role": "qa_reviewer",
+    "expected_environment": "production",
+    "now_iso": "2026-04-16T12:00:00.000Z",
+    "hs256_test_key_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+    "hs256_identity_test_key_hex": "9999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "package": {
+    "version": "approval_quorum.v1",
+    "tenant_id": "tnt_test",
+    "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "environment": "production",
+    "issued_at": "2026-04-16T11:59:55.000Z",
+    "policy": {
+      "required_count": 2,
+      "required_role_mix": [
+        {
+          "role": "qa_reviewer",
+          "min": 1
+        },
+        {
+          "role": "security_lead",
+          "min": 1
+        }
+      ]
+    },
+    "approvals": [
+      {
+        "version": "approval_artifact.v1",
+        "approval_id": "apr_q_mix1",
+        "tenant_id": "tnt_test",
+        "action_type": "deployment.production.deploy",
+        "resource_id": "release:abc123",
+        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "reviewer": {
+          "principal_id": "okta|alice",
+          "principal_kind": "human",
+          "roles": [
+            "qa_reviewer"
+          ]
+        },
+        "issuer": {
+          "type": "approval_service",
+          "issuer_id": "issuer.qa",
+          "kid": "kid-1"
+        },
+        "issued_at": "2026-04-16T11:59:00.000Z",
+        "expires_at": "2026-04-16T13:00:00.000Z",
+        "nonce": "n_apr_q_mix1",
+        "signature": "5b9bf05263b743e0e69b3028f0ec448eeb7821c6dab737c21f52f68d0fec1cfe",
+        "identity_assertion": {
+          "version": "identity_assertion.v1",
+          "subject": {
+            "principal_id": "okta|alice",
+            "principal_kind": "human"
+          },
+          "role": "qa_reviewer",
+          "binding": {
+            "approval_id": "apr_q_mix1",
+            "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+            "tenant_id": "tnt_test",
+            "environment": "production"
+          },
+          "issuer": {
+            "type": "oidc",
+            "issuer_id": "idp.test",
+            "kid": "kid-id-1"
+          },
+          "issued_at": "2026-04-16T11:59:30.000Z",
+          "expires_at": "2026-04-16T12:30:00.000Z",
+          "signature": "ca9c953b2dcc2a633d44a0bba09e75fbb933880358c4d70dd23e085cb3d3c4aa"
+        }
+      },
+      {
+        "version": "approval_artifact.v1",
+        "approval_id": "apr_q_mix2",
+        "tenant_id": "tnt_test",
+        "action_type": "deployment.production.deploy",
+        "resource_id": "release:abc123",
+        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "reviewer": {
+          "principal_id": "okta|bob",
+          "principal_kind": "human",
+          "roles": [
+            "qa_reviewer"
+          ]
+        },
+        "issuer": {
+          "type": "approval_service",
+          "issuer_id": "issuer.qa",
+          "kid": "kid-1"
+        },
+        "issued_at": "2026-04-16T11:59:00.000Z",
+        "expires_at": "2026-04-16T13:00:00.000Z",
+        "nonce": "n_apr_q_mix2",
+        "signature": "fee430cf6516c0839bacb7c53a38f9651d96b877f79b4f166be010776e034601",
+        "identity_assertion": {
+          "version": "identity_assertion.v1",
+          "subject": {
+            "principal_id": "okta|bob",
+            "principal_kind": "human"
+          },
+          "role": "qa_reviewer",
+          "binding": {
+            "approval_id": "apr_q_mix2",
+            "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+            "tenant_id": "tnt_test",
+            "environment": "production"
+          },
+          "issuer": {
+            "type": "oidc",
+            "issuer_id": "idp.test",
+            "kid": "kid-id-1"
+          },
+          "issued_at": "2026-04-16T11:59:30.000Z",
+          "expires_at": "2026-04-16T12:30:00.000Z",
+          "signature": "8b18620f0b95bca1e81d4066c8d4b9de23632380cbe214a9f8e731ec4770c055"
+        }
+      }
+    ]
+  }
+}

@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.3.0 — Unreleased — approval quorum contract parity
+
+### Added
+
+- `ApprovalQuorumV1`, `QuorumPolicy`, `QuorumRoleRequirement`,
+  `QuorumIndependence`, `QuorumProof` — Pydantic mirrors of the
+  wire-stable `approval_quorum.v1` schema published in
+  `contract/schemas/approval-quorum.schema.json` and the TS SDK.
+  Re-exported from `atlasent.*`. All `extra="forbid"`.
+- 6 new tests in `tests/test_approval_artifact.py`:
+  - parametrized over the 11 quorum fixtures in
+    `contract/vectors/approval-quorum/`
+  - policy round-trip + extra-field rejection
+  - `required_count >= 1` enforced
+  - `quorum_hash` pattern enforced
+  - per-entry artifact `extra="forbid"` propagates through the
+    quorum container
+
+### No new behavior
+
+This release is contract parity only. Quorum verification is
+server-side inside `/v1-evaluate`; the SDK exposes the wire types
+so callers can construct a quorum payload before submitting.
+
+The locked invariant: quorum does NOT relax artifact verification.
+Every approval inside a quorum package must first pass the locked
+single-approval verifier (artifact signature + identity assertion +
+every binding) before quorum-level policy is evaluated.
+
 ## 2.2.0 — Unreleased — identity attestation contract parity
 
 ### Added

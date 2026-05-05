@@ -185,6 +185,51 @@ function attachIdentityAssertion(artifact, identityOverrides = {}) {
   return artifact;
 }
 
+// ── Quorum helpers ────────────────────────────────────────────────────
+//
+// A quorum-friendly artifact: distinct approval_id, nonce, reviewer
+// principal_id per entry. Identity assertion attached, artifact
+// resigned. Everything else parametric.
+
+function makeQuorumArtifact({
+  approval_id,
+  principal_id,
+  approval_issuer = { type: "approval_service", issuer_id: "issuer.qa", kid: "kid-1" },
+  identity_overrides = {},
+  reviewer_overrides = {},
+}) {
+  const base = makeArtifact({
+    approval_id,
+    nonce: `n_${approval_id}`,
+    issuer: approval_issuer,
+    reviewer: {
+      principal_id,
+      principal_kind: "human",
+      roles: [REQUIRED_ROLE],
+      ...reviewer_overrides,
+    },
+  });
+  attachIdentityAssertion(base, identity_overrides);
+  return base;
+}
+
+function makeQuorumPackage({
+  approvals,
+  policyOverrides = {},
+  packageOverrides = {},
+} = {}) {
+  return {
+    version: "approval_quorum.v1",
+    tenant_id: TENANT_ID,
+    action_hash: VALID_ACTION_HASH,
+    environment: ENVIRONMENT,
+    issued_at: new Date(NOW_MS - 5_000).toISOString(),
+    policy: { required_count: approvals.length, ...policyOverrides },
+    approvals,
+    ...packageOverrides,
+  };
+}
+
 const VECTORS = [
   {
     name: "valid",
@@ -404,6 +449,194 @@ const VECTORS = [
   })(),
 ];
 
+// ── Quorum vectors ───────────────────────────────────────────────────
+
+const QUORUM_VECTORS_DIR = resolve(REPO_ROOT, "contract", "vectors", "approval-quorum");
+
+const baseQuorumInputs = () => ({
+  trusted_issuers: TRUSTED_ISSUERS,
+  trusted_identity_issuers: TRUSTED_IDENTITY_ISSUERS,
+  expected_action_hash: VALID_ACTION_HASH,
+  expected_tenant_id: TENANT_ID,
+  required_role: REQUIRED_ROLE,
+  expected_environment: ENVIRONMENT,
+  now_iso: NOW_ISO,
+  hs256_test_key_hex: HEX_KEY,
+  hs256_identity_test_key_hex: ID_HEX_KEY,
+});
+
+// Each quorum vector includes the verifier inputs + expected outcome
+// alongside the package, mirroring the artifact-vector layout. The
+// reasons here are the EXACT strings the locked verifier returns.
+
+const QUORUM_VECTORS = [
+  (() => ({
+    name: "q-valid-2of2",
+    description: "2-of-2 quorum: distinct human reviewers, both with qa_reviewer; happy path.",
+    expected_outcome: { ok: true, count: 2 },
+    inputs: baseQuorumInputs(),
+    package: makeQuorumPackage({
+      approvals: [
+        makeQuorumArtifact({ approval_id: "apr_q_alice", principal_id: "okta|alice" }),
+        makeQuorumArtifact({ approval_id: "apr_q_bob",   principal_id: "okta|bob" }),
+      ],
+    }),
+  }))(),
+
+  (() => ({
+    name: "q-required-count-not-met",
+    description: "Policy demands 2 but only 1 approval submitted.",
+    expected_outcome: { ok: false, reason: "approval quorum required count not met" },
+    inputs: baseQuorumInputs(),
+    package: makeQuorumPackage({
+      approvals: [makeQuorumArtifact({ approval_id: "apr_q_solo", principal_id: "okta|alice" })],
+      policyOverrides: { required_count: 2 },
+    }),
+  }))(),
+
+  (() => ({
+    name: "q-duplicate-reviewer",
+    description: "Same human approves twice (different artifact ids); always rejected regardless of independence policy.",
+    expected_outcome: { ok: false, reason: "approval quorum duplicate reviewer" },
+    inputs: baseQuorumInputs(),
+    package: makeQuorumPackage({
+      approvals: [
+        makeQuorumArtifact({ approval_id: "apr_q_dup_1", principal_id: "okta|alice" }),
+        makeQuorumArtifact({ approval_id: "apr_q_dup_2", principal_id: "okta|alice" }),
+      ],
+    }),
+  }))(),
+
+  (() => ({
+    name: "q-tenant-mismatch",
+    description: "Package tenant differs from verifier's expected tenant.",
+    expected_outcome: { ok: false, reason: "approval quorum tenant mismatch" },
+    inputs: baseQuorumInputs(),
+    package: makeQuorumPackage({
+      approvals: [makeQuorumArtifact({ approval_id: "apr_q_tn", principal_id: "okta|alice" })],
+      packageOverrides: { tenant_id: "tnt_other" },
+    }),
+  }))(),
+
+  (() => ({
+    name: "q-action-mismatch",
+    description: "Package action_hash differs from verifier's expected action_hash.",
+    expected_outcome: { ok: false, reason: "approval quorum action mismatch" },
+    inputs: baseQuorumInputs(),
+    package: makeQuorumPackage({
+      approvals: [makeQuorumArtifact({ approval_id: "apr_q_act", principal_id: "okta|alice" })],
+      packageOverrides: { action_hash: "0".repeat(64) },
+    }),
+  }))(),
+
+  (() => ({
+    name: "q-environment-mismatch",
+    description: "Package environment differs from verifier's expected environment.",
+    expected_outcome: { ok: false, reason: "approval quorum environment mismatch" },
+    inputs: baseQuorumInputs(),
+    package: makeQuorumPackage({
+      approvals: [makeQuorumArtifact({ approval_id: "apr_q_env", principal_id: "okta|alice" })],
+      packageOverrides: { environment: "staging" },
+    }),
+  }))(),
+
+  (() => ({
+    name: "q-role-mix-unsatisfied",
+    description: "Policy requires ≥1 qa_reviewer AND ≥1 security_lead; only qa_reviewers present.",
+    expected_outcome: {
+      ok: false,
+      reason: "approval quorum role mix not satisfied: need 1 of role 'security_lead', got 0",
+    },
+    inputs: baseQuorumInputs(),
+    package: makeQuorumPackage({
+      approvals: [
+        makeQuorumArtifact({ approval_id: "apr_q_mix1", principal_id: "okta|alice" }),
+        makeQuorumArtifact({ approval_id: "apr_q_mix2", principal_id: "okta|bob" }),
+      ],
+      policyOverrides: {
+        required_role_mix: [
+          { role: "qa_reviewer", min: 1 },
+          { role: "security_lead", min: 1 },
+        ],
+      },
+    }),
+  }))(),
+
+  (() => ({
+    name: "q-role-mix-satisfied",
+    description: "Two distinct reviewers; both carry the baseline qa_reviewer (required by the single-approval verifier), and one also carries security_lead so the role-mix policy is satisfied.",
+    expected_outcome: { ok: true, count: 2 },
+    inputs: baseQuorumInputs(),
+    package: makeQuorumPackage({
+      approvals: [
+        makeQuorumArtifact({ approval_id: "apr_q_mixok1", principal_id: "okta|alice" }),
+        makeQuorumArtifact({
+          approval_id: "apr_q_mixok2",
+          principal_id: "okta|bob",
+          reviewer_overrides: { roles: ["qa_reviewer", "security_lead"] },
+        }),
+      ],
+      policyOverrides: {
+        required_role_mix: [
+          { role: "qa_reviewer", min: 1 },
+          { role: "security_lead", min: 1 },
+        ],
+      },
+    }),
+  }))(),
+
+  (() => ({
+    name: "q-distinct-approval-issuers-violated",
+    description: "Policy demands distinct approval issuers; both approvals minted by issuer.qa.",
+    expected_outcome: {
+      ok: false,
+      reason: "approval quorum independence violated: duplicate approval issuer",
+    },
+    inputs: baseQuorumInputs(),
+    package: makeQuorumPackage({
+      approvals: [
+        makeQuorumArtifact({ approval_id: "apr_q_iss1", principal_id: "okta|alice" }),
+        makeQuorumArtifact({ approval_id: "apr_q_iss2", principal_id: "okta|bob" }),
+      ],
+      policyOverrides: { independence: { distinct_approval_issuers: true } },
+    }),
+  }))(),
+
+  (() => ({
+    name: "q-entry-bad-identity",
+    description: "Second entry's identity assertion is removed; quorum denies with the underlying single-approval reason.",
+    expected_outcome: { ok: false, reason: "approval quorum entry 1: missing identity assertion" },
+    inputs: baseQuorumInputs(),
+    package: (() => {
+      const a1 = makeQuorumArtifact({ approval_id: "apr_q_id1", principal_id: "okta|alice" });
+      const a2 = makeQuorumArtifact({ approval_id: "apr_q_id2", principal_id: "okta|bob" });
+      // Strip the assertion AND resign so the artifact's signature
+      // remains valid against the modified canonical bytes — the
+      // failure reason must come from the missing-identity gate,
+      // not from a stale signature.
+      delete a2.identity_assertion;
+      const { signature: _omit, ...rest } = a2;
+      a2.signature = hmacHex(canonicalStringify(rest), HEX_KEY);
+      return makeQuorumPackage({ approvals: [a1, a2] });
+    })(),
+  }))(),
+
+  (() => ({
+    name: "q-package-stale",
+    description: "Package issued_at + max_age_seconds is in the past relative to now_iso.",
+    expected_outcome: { ok: false, reason: "approval quorum expired" },
+    inputs: baseQuorumInputs(),
+    package: makeQuorumPackage({
+      approvals: [
+        makeQuorumArtifact({ approval_id: "apr_q_st1", principal_id: "okta|alice" }),
+        makeQuorumArtifact({ approval_id: "apr_q_st2", principal_id: "okta|bob" }),
+      ],
+      packageOverrides: { issued_at: new Date(NOW_MS - 10 * 60_000).toISOString() },
+      policyOverrides: { max_age_seconds: 60 },
+    }),
+  }))(),
+];
+
 // ── Write fixtures ───────────────────────────────────────────────────
 
 if (typeof process !== "undefined" && process.argv[1] && process.argv[1].endsWith("gen_approval_artifact_vectors.mjs")) {
@@ -413,11 +646,18 @@ if (typeof process !== "undefined" && process.argv[1] && process.argv[1].endsWit
     writeFileSync(path, JSON.stringify(v, null, 2) + "\n");
     process.stdout.write(`wrote ${path}\n`);
   }
-  process.stdout.write(`generated ${VECTORS.length} vectors\n`);
+  mkdirSync(QUORUM_VECTORS_DIR, { recursive: true });
+  for (const v of QUORUM_VECTORS) {
+    const path = resolve(QUORUM_VECTORS_DIR, `${v.name}.json`);
+    writeFileSync(path, JSON.stringify(v, null, 2) + "\n");
+    process.stdout.write(`wrote ${path}\n`);
+  }
+  process.stdout.write(`generated ${VECTORS.length} approval vectors + ${QUORUM_VECTORS.length} quorum vectors\n`);
 }
 
 export {
   VECTORS,
+  QUORUM_VECTORS,
   canonicalStringify,
   sha256Hex,
   hmacHex,
@@ -425,6 +665,8 @@ export {
   makeArtifact,
   makeIdentityAssertion,
   attachIdentityAssertion,
+  makeQuorumArtifact,
+  makeQuorumPackage,
   NOW_ISO,
   NOW_MS,
   HEX_KEY,

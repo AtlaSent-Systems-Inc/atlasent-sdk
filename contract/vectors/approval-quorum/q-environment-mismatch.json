@@ -1,0 +1,91 @@
+{
+  "name": "q-environment-mismatch",
+  "description": "Package environment differs from verifier's expected environment.",
+  "expected_outcome": {
+    "ok": false,
+    "reason": "approval quorum environment mismatch"
+  },
+  "inputs": {
+    "trusted_issuers": {
+      "issuer.qa": {
+        "kid-1": {
+          "alg": "HS256",
+          "key": "5555555555555555555555555555555555555555555555555555555555555555"
+        }
+      }
+    },
+    "trusted_identity_issuers": {
+      "idp.test": {
+        "kid-id-1": {
+          "alg": "HS256",
+          "key": "9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      }
+    },
+    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_tenant_id": "tnt_test",
+    "required_role": "qa_reviewer",
+    "expected_environment": "production",
+    "now_iso": "2026-04-16T12:00:00.000Z",
+    "hs256_test_key_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+    "hs256_identity_test_key_hex": "9999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "package": {
+    "version": "approval_quorum.v1",
+    "tenant_id": "tnt_test",
+    "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "environment": "staging",
+    "issued_at": "2026-04-16T11:59:55.000Z",
+    "policy": {
+      "required_count": 1
+    },
+    "approvals": [
+      {
+        "version": "approval_artifact.v1",
+        "approval_id": "apr_q_env",
+        "tenant_id": "tnt_test",
+        "action_type": "deployment.production.deploy",
+        "resource_id": "release:abc123",
+        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "reviewer": {
+          "principal_id": "okta|alice",
+          "principal_kind": "human",
+          "roles": [
+            "qa_reviewer"
+          ]
+        },
+        "issuer": {
+          "type": "approval_service",
+          "issuer_id": "issuer.qa",
+          "kid": "kid-1"
+        },
+        "issued_at": "2026-04-16T11:59:00.000Z",
+        "expires_at": "2026-04-16T13:00:00.000Z",
+        "nonce": "n_apr_q_env",
+        "signature": "4311a09ed5bf151379646bc9f2951ce2333bf9026c4196bcdc0e0fceea45626a",
+        "identity_assertion": {
+          "version": "identity_assertion.v1",
+          "subject": {
+            "principal_id": "okta|alice",
+            "principal_kind": "human"
+          },
+          "role": "qa_reviewer",
+          "binding": {
+            "approval_id": "apr_q_env",
+            "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+            "tenant_id": "tnt_test",
+            "environment": "production"
+          },
+          "issuer": {
+            "type": "oidc",
+            "issuer_id": "idp.test",
+            "kid": "kid-id-1"
+          },
+          "issued_at": "2026-04-16T11:59:30.000Z",
+          "expires_at": "2026-04-16T12:30:00.000Z",
+          "signature": "30d7e605bcceed43e2fe5e9be5c7e48ab1cd98b945dee4a5e4ffd93c497a297b"
+        }
+      }
+    ]
+  }
+}

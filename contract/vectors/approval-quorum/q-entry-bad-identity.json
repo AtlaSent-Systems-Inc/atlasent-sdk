@@ -1,0 +1,115 @@
+{
+  "name": "q-entry-bad-identity",
+  "description": "Second entry's identity assertion is removed; quorum denies with the underlying single-approval reason.",
+  "expected_outcome": {
+    "ok": false,
+    "reason": "approval quorum entry 1: missing identity assertion"
+  },
+  "inputs": {
+    "trusted_issuers": {
+      "issuer.qa": {
+        "kid-1": {
+          "alg": "HS256",
+          "key": "5555555555555555555555555555555555555555555555555555555555555555"
+        }
+      }
+    },
+    "trusted_identity_issuers": {
+      "idp.test": {
+        "kid-id-1": {
+          "alg": "HS256",
+          "key": "9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      }
+    },
+    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_tenant_id": "tnt_test",
+    "required_role": "qa_reviewer",
+    "expected_environment": "production",
+    "now_iso": "2026-04-16T12:00:00.000Z",
+    "hs256_test_key_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+    "hs256_identity_test_key_hex": "9999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "package": {
+    "version": "approval_quorum.v1",
+    "tenant_id": "tnt_test",
+    "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "environment": "production",
+    "issued_at": "2026-04-16T11:59:55.000Z",
+    "policy": {
+      "required_count": 2
+    },
+    "approvals": [
+      {
+        "version": "approval_artifact.v1",
+        "approval_id": "apr_q_id1",
+        "tenant_id": "tnt_test",
+        "action_type": "deployment.production.deploy",
+        "resource_id": "release:abc123",
+        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "reviewer": {
+          "principal_id": "okta|alice",
+          "principal_kind": "human",
+          "roles": [
+            "qa_reviewer"
+          ]
+        },
+        "issuer": {
+          "type": "approval_service",
+          "issuer_id": "issuer.qa",
+          "kid": "kid-1"
+        },
+        "issued_at": "2026-04-16T11:59:00.000Z",
+        "expires_at": "2026-04-16T13:00:00.000Z",
+        "nonce": "n_apr_q_id1",
+        "signature": "20d3b47f080d15a03a4bb978d747df46f8ff2def4a788de4309f54e5f8b7eb08",
+        "identity_assertion": {
+          "version": "identity_assertion.v1",
+          "subject": {
+            "principal_id": "okta|alice",
+            "principal_kind": "human"
+          },
+          "role": "qa_reviewer",
+          "binding": {
+            "approval_id": "apr_q_id1",
+            "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+            "tenant_id": "tnt_test",
+            "environment": "production"
+          },
+          "issuer": {
+            "type": "oidc",
+            "issuer_id": "idp.test",
+            "kid": "kid-id-1"
+          },
+          "issued_at": "2026-04-16T11:59:30.000Z",
+          "expires_at": "2026-04-16T12:30:00.000Z",
+          "signature": "393412a0c9afba9948042621af75363af31d066e459b206a98d37394570c6bf2"
+        }
+      },
+      {
+        "version": "approval_artifact.v1",
+        "approval_id": "apr_q_id2",
+        "tenant_id": "tnt_test",
+        "action_type": "deployment.production.deploy",
+        "resource_id": "release:abc123",
+        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "reviewer": {
+          "principal_id": "okta|bob",
+          "principal_kind": "human",
+          "roles": [
+            "qa_reviewer"
+          ]
+        },
+        "issuer": {
+          "type": "approval_service",
+          "issuer_id": "issuer.qa",
+          "kid": "kid-1"
+        },
+        "issued_at": "2026-04-16T11:59:00.000Z",
+        "expires_at": "2026-04-16T13:00:00.000Z",
+        "nonce": "n_apr_q_id2",
+        "signature": "a2b8944ba9147a57aa90a396a5cbd4ae5cf4b801ea13f8364e4148d39baac9e2"
+      }
+    ]
+  }
+}

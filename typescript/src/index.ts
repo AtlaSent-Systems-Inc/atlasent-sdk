@@ -129,6 +129,13 @@ export type {
   IdentitySubject,
   IdentityTrustedIssuersConfig,
 } from "./identityAssertion.js";
+export type {
+  ApprovalQuorumV1,
+  QuorumIndependence,
+  QuorumPolicy,
+  QuorumProof,
+  QuorumRoleRequirement,
+} from "./approvalQuorum.js";
 
 /**
  * Default export. The opinionated, category-defining entry point:

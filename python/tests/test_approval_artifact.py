@@ -480,3 +480,109 @@ def test_artifact_with_identity_assertion_round_trip() -> None:
     # Re-parse — same object, no drift.
     reparsed = ApprovalArtifactV1.model_validate(dumped)
     assert reparsed == artifact
+
+
+# ── 9. Quorum (additive layer above identity-attested approvals) ──────
+
+
+from atlasent import (  # noqa: E402
+    ApprovalQuorumV1,
+    QuorumIndependence,
+    QuorumPolicy,
+    QuorumProof,
+    QuorumRoleRequirement,
+)
+
+
+QUORUM_VECTORS_DIR = (
+    Path(__file__).resolve().parent.parent.parent
+    / "contract"
+    / "vectors"
+    / "approval-quorum"
+)
+
+
+def _load_quorum_vector(name: str) -> dict:
+    with (QUORUM_VECTORS_DIR / f"{name}.json").open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+QUORUM_VECTOR_NAMES = [
+    "q-valid-2of2",
+    "q-required-count-not-met",
+    "q-duplicate-reviewer",
+    "q-tenant-mismatch",
+    "q-action-mismatch",
+    "q-environment-mismatch",
+    "q-role-mix-unsatisfied",
+    "q-role-mix-satisfied",
+    "q-distinct-approval-issuers-violated",
+    "q-entry-bad-identity",
+    "q-package-stale",
+]
+
+
+@pytest.mark.skipif(
+    not QUORUM_VECTORS_DIR.exists(),
+    reason="contract/vectors/approval-quorum not available",
+)
+@pytest.mark.parametrize("name", QUORUM_VECTOR_NAMES)
+def test_quorum_vector_package_parses(name: str) -> None:
+    """Every quorum fixture parses cleanly into ApprovalQuorumV1 with
+    extra='forbid'. Drift in field names / types fails immediately."""
+    vector = _load_quorum_vector(name)
+    pkg = ApprovalQuorumV1.model_validate(vector["package"])
+    assert pkg.version == "approval_quorum.v1"
+    assert len(pkg.approvals) >= 1
+    # Round-trip preserves wire shape.
+    assert pkg.model_dump(exclude_none=True) == vector["package"]
+
+
+def test_quorum_policy_round_trip() -> None:
+    p = QuorumPolicy(
+        required_count=2,
+        required_role_mix=[
+            QuorumRoleRequirement(role="qa_reviewer", min=1),
+            QuorumRoleRequirement(role="security_lead", min=1),
+        ],
+        independence=QuorumIndependence(
+            distinct_approval_issuers=True,
+            distinct_identity_issuers=True,
+        ),
+        max_age_seconds=3600,
+    )
+    out = p.model_dump(exclude_none=True)
+    assert out["required_count"] == 2
+    assert out["independence"]["distinct_approval_issuers"] is True
+    p2 = QuorumPolicy.model_validate(out)
+    assert p2 == p
+
+
+def test_quorum_policy_extra_field_rejected() -> None:
+    with pytest.raises(ValidationError):
+        QuorumPolicy.model_validate({
+            "required_count": 1,
+            "unknown": "oops",
+        })
+
+
+def test_quorum_policy_required_count_must_be_positive() -> None:
+    with pytest.raises(ValidationError):
+        QuorumPolicy.model_validate({"required_count": 0})
+
+
+def test_quorum_proof_pattern_enforced() -> None:
+    with pytest.raises(ValidationError):
+        QuorumProof.model_validate({"quorum_hash": "not-hex", "approval_ids": []})
+
+
+def test_quorum_with_invalid_artifact_inside_rejected() -> None:
+    """Quorum.approvals items use the same ApprovalArtifactV1 model
+    with extra='forbid'. An artifact with an unknown field fails the
+    container's parse, surfacing the drift at SDK boundaries."""
+    valid = _load_quorum_vector("q-valid-2of2")
+    pkg = dict(valid["package"])
+    pkg["approvals"] = [dict(a) for a in pkg["approvals"]]
+    pkg["approvals"][0]["unknown_field"] = "oops"
+    with pytest.raises(ValidationError):
+        ApprovalQuorumV1.model_validate(pkg)
