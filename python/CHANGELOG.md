@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.2.0 — Unreleased — identity attestation contract parity
+
+### Added
+
+- `IdentityAssertionV1`, `IdentityAssertionBinding`, `IdentityIssuer`,
+  `IdentitySubject` — Pydantic mirrors of the wire-stable
+  `identity_assertion.v1` schema published in
+  `contract/schemas/identity-assertion.schema.json` and the TS SDK.
+  Re-exported from `atlasent.*`.
+- `IdentityIssuerKey` + `IdentityTrustedIssuersConfig` — Pydantic
+  shape of the `IDENTITY_TRUSTED_ISSUERS` env var, the second trust
+  root the verifier consults (independent of
+  `APPROVAL_TRUSTED_ISSUERS`). Includes `allowed_roles` and
+  `allowed_environments` issuer-scope fields.
+- `ApprovalArtifactV1.identity_assertion` (optional) — the artifact
+  may now carry an independently-signed identity assertion. Required
+  on the wire whenever `/v1-evaluate` calls the verifier with
+  `requireIdentityAssertion: true` (i.e. when human approval is
+  required); without it the server returns deny: `missing identity
+  assertion`. The SDK keeps the field optional so shadow / preflight
+  flows that don't verify can still construct artifacts.
+
+### No new behavior
+
+This release is contract parity only — no client-side enforcement
+was added. The verifier remains in the Deno edge functions; the
+Python SDK only carries the assertion. Quorum / multi-approval is
+explicitly out of scope.
+
 ## 2.1.0 — Unreleased — approval artifact contract parity
 
 ### Added

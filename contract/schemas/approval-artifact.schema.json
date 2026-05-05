@@ -88,6 +88,10 @@
       "type": "string",
       "minLength": 1,
       "description": "Detached signature over the canonical artifact bytes with the `signature` field stripped. Algorithm is identified by issuer.kid in the trusted-issuer config (HS256 hex or Ed25519 hex/base64url)."
+    },
+    "identity_assertion": {
+      "$ref": "identity-assertion.schema.json",
+      "description": "Optional independently-signed assertion from a trusted identity provider that the reviewer is a real human with the required role. Required when /v1-evaluate calls the verifier with `requireIdentityAssertion: true` (i.e. the action requires human approval) — without this, `reviewer.principal_kind: \"human\"` is a self-claim from the approval issuer alone."
     }
   }
 }
