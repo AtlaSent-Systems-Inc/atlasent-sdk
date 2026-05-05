@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/approval-artifact.schema.json",
+  "title": "ApprovalArtifactV1",
+  "description": "Signed attestation that a *human* reviewer approved a specific action. Verified by /v1-evaluate before issuing a permit_token; the calling agent cannot self-declare authority by passing reviewer flags in `context`. Wire-stable as `approval_artifact.v1` — breaking changes must bump the `version` discriminator and live alongside v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "approval_id",
+    "tenant_id",
+    "action_type",
+    "resource_id",
+    "action_hash",
+    "reviewer",
+    "issuer",
+    "issued_at",
+    "expires_at",
+    "nonce",
+    "signature"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "approval_artifact.v1"
+    },
+    "approval_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Stable identifier for this approval (e.g. 'apr_...')."
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Tenant / organization the approval applies to. Must match the request tenant."
+    },
+    "action_type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "resource_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "action_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the canonical action payload (action_type + actor_id + resource_id + amount + context). Binds the approval to *this* action — a reused approval for a different action is rejected."
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_kind"],
+      "properties": {
+        "principal_id": { "type": "string", "minLength": 1 },
+        "principal_kind": {
+          "type": "string",
+          "enum": ["human", "agent", "service_account"],
+          "description": "Verifier requires 'human'. The other variants exist so the schema can describe declined approvals (e.g. an agent attempted to self-approve)."
+        },
+        "email": { "type": "string", "format": "email" },
+        "groups": { "type": "array", "items": { "type": "string" } },
+        "roles": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "issuer_id", "kid"],
+      "properties": {
+        "type": { "type": "string", "enum": ["oidc", "approval_service"] },
+        "issuer_id": { "type": "string", "minLength": 1 },
+        "kid": { "type": "string", "minLength": 1 }
+      }
+    },
+    "issued_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "nonce": {
+      "type": "string",
+      "minLength": 8,
+      "description": "Single-use replay-protection token. The verifier records the nonce on first use and rejects any subsequent artifact carrying the same value."
+    },
+    "signature": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Detached signature over the canonical artifact bytes with the `signature` field stripped. Algorithm is identified by issuer.kid in the trusted-issuer config (HS256 hex or Ed25519 hex/base64url)."
+    }
+  }
+}
