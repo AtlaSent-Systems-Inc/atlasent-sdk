@@ -137,6 +137,135 @@ export type {
   QuorumRoleRequirement,
 } from "./approvalQuorum.js";
 
+// ── Economic Governance & Liability Attribution ───────────────────────────────
+
+export {
+  DEFAULT_RISK_TIER_THRESHOLDS,
+  classifyRiskTier,
+  withinAutonomousCeiling,
+  type CurrencyCode,
+  type FinancialActionClass,
+  type FinancialActionType,
+  type FinancialExecutionRecord,
+  type FinancialExecutionStatus,
+  type FinancialRiskTier,
+  type LiabilityClassification,
+  type RiskTierThreshold,
+} from "./financialAction.js";
+
+export {
+  buildLiabilityChain,
+  computeLiabilityWeights,
+  findPrimaryLiabilityParties,
+  validateLiabilityChain,
+  type LiabilityAttributionInput,
+  type LiabilityAttributionRecord,
+  type LiabilityChainValidation,
+  type LiabilityParty,
+  type LiabilityPartyRole,
+  type WeightDistribution,
+} from "./liabilityAttribution.js";
+
+export {
+  computeApprovalRiskScore,
+  computeExposureScore,
+  computeHHI,
+  computeOverallRiskScore,
+  computeOverrideScore,
+  detectSelfApproval,
+  hhiToConcentrationScore,
+  scoreToRiskTier,
+  type AnomalyType,
+  type ApprovalConcentrationAnalysis,
+  type ApproverBreakdown,
+  type BudgetaryDriftAnalysis,
+  type ConcentrationAlert,
+  type ExecutionAnomaly,
+  type FinancialRiskScore,
+  type RiskFactor,
+} from "./economicRisk.js";
+
+export {
+  computeEscalatedApprovalCount,
+  evaluateFinancialQuorum,
+  type AmountThreshold,
+  type EmergencyFreeze,
+  type FinancialQuorumInput,
+  type FinancialQuorumPolicy,
+  type FinancialQuorumResult,
+  type FinancialRoleRequirement,
+} from "./financialQuorum.js";
+
+export {
+  budgetUtilizationSeverity,
+  checkBudgetConstraints,
+  type BudgetConstraintCheckResult,
+  type BudgetLimit,
+  type BudgetPolicy,
+  type BudgetScope,
+  type BudgetSpendingState,
+  type BudgetViolation,
+  type SpendingConstraint,
+} from "./budgetaryGovernance.js";
+
+export {
+  checkAutonomousBounds,
+  detectAutonomousAnomaly,
+  type AutonomousExecutionBounds,
+  type AutonomousExecutionCheckResult,
+  type AutonomousExecutionRecord,
+  type ExecutionCeiling,
+} from "./autonomousFinancial.js";
+
+export {
+  DEFAULT_INCENTIVE_CONFIG,
+  computeGovernanceHealthScore,
+  detectMisalignedIncentives,
+  type GovernanceBehaviorPattern,
+  type IncentiveAlignmentConfig,
+  type IncentiveSignal,
+  type IncentiveSignalType,
+  type MisalignmentAlert,
+} from "./incentiveAlignment.js";
+
+export {
+  buildSignableContent,
+  serializeSignableContent,
+  verifyEvidenceBundleStructure,
+  type ApprovalProvenance,
+  type EconomicEvidenceBundle,
+  type EvidenceBundleSignableContent,
+  type EvidenceBundleVerificationResult,
+  type EvidencePurpose,
+} from "./economicEvidence.js";
+
+export {
+  computeRemediationUrgency,
+  isFreezeActive,
+  transitionDispute,
+  transitionReversal,
+  type ActionFreeze,
+  type DisputeOrigin,
+  type DisputeRecord,
+  type DisputeStatus,
+  type ReversalStage,
+  type ReversalWorkflow,
+} from "./disputeReversal.js";
+
+export {
+  buildLiabilityVisualization,
+  buildRiskTimeline,
+  type ActionTypeOverrideStat,
+  type ActorOverrideStat,
+  type DisputeReversalSummary,
+  type FinancialGovernanceSummary,
+  type LiabilityEdge,
+  type LiabilityNode,
+  type LiabilityVisualization,
+  type OverrideAnalytics,
+  type RiskTimelinePoint,
+} from "./financialDashboard.js";
+
 /**
  * Default export. The opinionated, category-defining entry point:
  *
