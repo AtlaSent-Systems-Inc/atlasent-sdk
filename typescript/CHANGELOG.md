@@ -8,12 +8,13 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## 2.0.0 — 2026-04-30 — wire-format reconciliation (BREAKING)
 
-PR1 of the contract reconciliation. Wire shape moves to canonical
-(handler.ts in `atlasent-api`); the public TS SDK surface
-(`AtlaSentClient.evaluate`, `AtlaSentClient.verifyPermit`) is
-unchanged for callers using the documented method signature. PR2
-adds the dual-shape *input* bridge (`DeprecationWarning` when callers
-construct request bodies with legacy field names directly).
+Wire-format reconciliation with the canonical shape in `atlasent-api/handler.ts`.
+The public TS SDK surface (`AtlaSentClient.evaluate`, `AtlaSentClient.verifyPermit`)
+is unchanged for callers using the documented method signature. The dual-shape
+bridges in `src/compat.ts` (`normalizeEvaluateRequest`, `normalizeEvaluateResponse`)
+transparently accept the legacy `{ action, agent }` request shape and the legacy
+`{ permitted, decision_id }` response shape, emitting `console.warn` on legacy
+request-field usage. Both shims will be removed in v3.0.0.
 
 ### Wire format
 
@@ -51,12 +52,6 @@ delegate to `handler.ts` (atlasent-api PR for #190). Older
 deployments serving the slim `index.ts` will return
 `400 BAD_REQUEST: missing 'action_type'` when called with the new
 wire. Coordinate the SDK upgrade with the atlasent-api deploy.
-
-### Stacked
-
-PR2 will add the dual-shape **input** bridge for TS — accept
-`{ action, agent }` plus `{ actionType, actorId }` user input, emit
-a deprecation warning on the legacy form.
 
 ## 1.6.0 — 2026-04-30
 
@@ -250,6 +245,7 @@ Closes [#103](https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues/103).
   `process` to `undefined` and verifies that `AtlaSentClient`
   constructs and round-trips an `evaluate()` call in a simulated
   browser environment without touching any Node globals.
+
 ## 1.5.0 — 2026-04-25
 
 ### Added
