@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://api.atlasent.io/schemas/budget_policy.v1.json",
+  "title": "BudgetPolicy",
+  "description": "Wire-stable schema for budget policies, limits, and spending constraints. Wire version: budget_governance.v1.",
+  "definitions": {
+    "BudgetScope": {
+      "type": "string",
+      "enum": ["org", "department", "team", "environment", "action_class", "project", "time_bounded"]
+    },
+    "BudgetEnforcement": {
+      "type": "string",
+      "enum": ["hard", "soft"]
+    },
+    "BudgetLimit": {
+      "type": "object",
+      "required": ["limit_id", "org_id", "scope_type", "scope_id", "limit_amount", "currency", "enforcement", "active", "created_by", "created_at"],
+      "properties": {
+        "limit_id":     { "type": "string" },
+        "org_id":       { "type": "string" },
+        "scope_type":   { "$ref": "#/definitions/BudgetScope" },
+        "scope_id":     { "type": "string" },
+        "limit_amount": { "type": "number", "minimum": 0 },
+        "currency":     { "type": "string" },
+        "enforcement":  { "$ref": "#/definitions/BudgetEnforcement" },
+        "period_start": { "type": ["string", "null"], "format": "date-time" },
+        "period_end":   { "type": ["string", "null"], "format": "date-time" },
+        "active":       { "type": "boolean" },
+        "created_by":   { "type": "string" },
+        "created_at":   { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "SpendingConstraint": {
+      "type": "object",
+      "required": ["constraint_id", "org_id", "action_type", "max_single_transaction", "currency", "allow_anonymous_agents", "active"],
+      "properties": {
+        "constraint_id":           { "type": "string" },
+        "org_id":                  { "type": "string" },
+        "action_type":             { "type": "string" },
+        "max_single_transaction":  { "type": "number", "minimum": 0 },
+        "max_daily_aggregate":     { "type": ["number", "null"], "minimum": 0 },
+        "max_monthly_aggregate":   { "type": ["number", "null"], "minimum": 0 },
+        "currency":                { "type": "string" },
+        "applies_to_tier_gte":     { "type": ["string", "null"] },
+        "allow_anonymous_agents":  { "type": "boolean" },
+        "active":                  { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "BudgetPolicy": {
+      "type": "object",
+      "required": ["policy_id", "org_id", "name", "limits", "constraints", "override_requires_exception", "allow_approved_escalation", "version", "effective_from"],
+      "properties": {
+        "policy_id":                   { "type": "string" },
+        "org_id":                      { "type": "string" },
+        "name":                        { "type": "string" },
+        "limits":                      { "type": "array", "items": { "$ref": "#/definitions/BudgetLimit" } },
+        "constraints":                 { "type": "array", "items": { "$ref": "#/definitions/SpendingConstraint" } },
+        "override_requires_exception": { "type": "boolean" },
+        "allow_approved_escalation":   { "type": "boolean" },
+        "version":                     { "type": "string" },
+        "effective_from":              { "type": "string", "format": "date-time" },
+        "expires_at":                  { "type": ["string", "null"], "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/definitions/BudgetPolicy"
+}

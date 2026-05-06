@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://api.atlasent.io/schemas/financial_action.v1.json",
+  "title": "FinancialAction",
+  "description": "Wire-stable schema for financial action classification and execution records.",
+  "definitions": {
+    "FinancialRiskTier": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "LiabilityClassification": {
+      "type": "string",
+      "enum": ["individual", "shared", "delegated", "supervisory", "emergency_override"]
+    },
+    "FinancialExecutionStatus": {
+      "type": "string",
+      "enum": ["pending_approval", "approved", "executing", "completed", "failed", "reversed", "disputed", "frozen"]
+    },
+    "FinancialActionClass": {
+      "type": "object",
+      "required": ["action_class_id", "name", "action_type", "risk_tier", "required_approvals", "liability_classification", "reversible", "created_at"],
+      "properties": {
+        "action_class_id":          { "type": "string" },
+        "name":                     { "type": "string" },
+        "action_type":              { "type": "string" },
+        "risk_tier":                { "$ref": "#/definitions/FinancialRiskTier" },
+        "required_approvals":       { "type": "integer", "minimum": 1 },
+        "liability_classification": { "$ref": "#/definitions/LiabilityClassification" },
+        "reversible":               { "type": "boolean" },
+        "autonomous_ceiling":       { "type": ["number", "null"] },
+        "ceiling_currency":         { "type": ["string", "null"] },
+        "created_at":               { "type": "string", "format": "date-time" },
+        "description":              { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "FinancialExecutionRecord": {
+      "type": "object",
+      "required": ["execution_id", "action_class_id", "org_id", "action_value", "currency", "risk_tier", "liability_classification", "initiator_id", "executor_id", "approver_ids", "permit_ids", "override_applied", "status", "authorized_at", "audit_hash"],
+      "properties": {
+        "execution_id":              { "type": "string" },
+        "action_class_id":           { "type": "string" },
+        "org_id":                    { "type": "string" },
+        "action_value":              { "type": "number", "minimum": 0 },
+        "currency":                  { "type": "string" },
+        "risk_tier":                 { "$ref": "#/definitions/FinancialRiskTier" },
+        "liability_classification":  { "$ref": "#/definitions/LiabilityClassification" },
+        "initiator_id":              { "type": "string" },
+        "executor_id":               { "type": "string" },
+        "approver_ids":              { "type": "array", "items": { "type": "string" } },
+        "permit_ids":                { "type": "array", "items": { "type": "string" } },
+        "override_applied":          { "type": "boolean" },
+        "override_id":               { "type": ["string", "null"] },
+        "status":                    { "$ref": "#/definitions/FinancialExecutionStatus" },
+        "authorized_at":             { "type": "string", "format": "date-time" },
+        "executed_at":               { "type": ["string", "null"], "format": "date-time" },
+        "audit_hash":                { "type": "string", "minLength": 64, "maxLength": 64 },
+        "context":                   { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/definitions/FinancialActionClass" },
+    { "$ref": "#/definitions/FinancialExecutionRecord" }
+  ]
+}
