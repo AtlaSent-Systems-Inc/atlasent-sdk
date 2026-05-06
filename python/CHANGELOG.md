@@ -14,6 +14,7 @@
 > `atlasent-api/docs/adr/ADR-evaluate-path.md` (Status: **Resolved**)
 > for the design record and the regression test that locks the shim
 > form in place.
+
 ### Added
 
 - `ApprovalQuorumV1`, `QuorumPolicy`, `QuorumRoleRequirement`,
@@ -269,7 +270,7 @@ enum or read `result.permitted`.
 
 ### Added
 
-- **`list_audit_events()` and `create_audit_export()`.**  Both
+- **`list_audit_events()` and `create_audit_export()`.** Both
   `AtlaSentClient` and `AsyncAtlaSentClient` gain two new methods
   that close the long-standing `/v1-audit` parity gap. Together with
   the offline verifier (this release) and the pydantic models added
@@ -315,6 +316,7 @@ enum or read `result.permitted`.
   wants to recompute envelope bytes out-of-band.
 - Shared test fixtures at `contract/vectors/audit-bundles/` and
   reproducible generator at `contract/tools/gen_audit_bundles.py`.
+
 
 ## 1.4.0 — 2026-04-23
 

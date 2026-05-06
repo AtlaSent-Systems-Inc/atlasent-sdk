@@ -165,6 +165,32 @@ result = client.bulk_revoke(
 # → BulkRevokeResponse(revoked_count=..., workflow_id=..., run_id=...)
 ```
 
+`revoked_count: 0` is not an error — permits may have already expired
+or been consumed before the revoke signal fires. The method is keyed
+on the Temporal `run_id` so a single call closes the entire permit set
+for that workflow execution.
+
+**Wire contract** — `POST /v2/permits:bulk-revoke`. JSON Schema files
+in `contract/schemas/v2/bulk-revoke-{request,response}.schema.json`.
+Full OpenAPI entry in `contract/openapi-v2.yaml` with `temporal` tag.
+
+**New types exported:**
+`BulkRevokeRequest`, `BulkRevokeResponse` (both languages).
+
+### Temporal workflow helpers updated (preview)
+
+`atlasent-temporal-preview` / `@atlasent/temporal-preview` (PRs #90
+/ #89) have been updated in lockstep:
+
+- `bulk_revoke_atlasent_permits` / `bulkRevokeAtlaSentPermits`
+  activities now make a real HTTP call via `AtlaSentV2Client` /
+  `V2Client` (read from `ATLASENT_API_KEY` env var on the worker).
+- New factory `make_bulk_revoke_activity(client)` /
+  `createBulkRevokeActivity(client)` for dependency-injection when
+  the worker already holds a pre-built client.
+- `BulkRevokeNotImplementedError` is preserved — now signals
+  "missing API key" rather than "missing server endpoint".
+
 ### Packages
 
 | Language   | Package                              | Version           |
@@ -185,7 +211,8 @@ npm install @atlasent/sdk-v2-alpha@2.0.0-alpha.1
 
 **Release date:** 2026-04-27
 
-The first publishable v2 surface, gated behind `-alpha` semantics.
+The first publishable v2 surface, gated behind `-alpha` semantics:
+breaking changes are still on the table between alpha releases.
 
 ### Packages
 
@@ -194,11 +221,42 @@ The first publishable v2 surface, gated behind `-alpha` semantics.
 | Python     | `atlasent-v2-alpha` `2.0.0a0`        | `pip install atlasent-v2-alpha`                        |
 | TypeScript | `@atlasent/sdk-v2-alpha` `2.0.0-alpha.0` | `npm install @atlasent/sdk-v2-alpha@alpha` |
 
+Both packages install cleanly **alongside** the v1 packages
+(`atlasent`, `@atlasent/sdk`). The v1 surface is unchanged and remains
+stable at v1.x.
+
+### What's in v2-alpha
+
+**Pillar 9 primitives** — deterministic JSON canonicalization and
+SHA-256 hashing identical with v1's `canonical_json` /
+`canonicalJSON`, plus wire-mirror types for every v2 schema in
+`contract/schemas/v2/`.
+
+**HTTP methods** on `V2Client` (TS) / `AtlaSentV2Client` (Py):
+
+- `consume(permitId, payloadHash, executionStatus, executionHash?)`
+  → `ConsumeResponse`.
+- `verifyProof(proofId)` / `verify_proof(proof_id)` →
+  `ProofVerificationResult`.
+- `evaluateBatch(requests)` / `evaluate_batch(requests)` →
+  `EvaluateBatchResponse`.
+- `subscribeDecisions({ lastEventId?, signal? })` /
+  `subscribe_decisions(*, last_event_id=None)` → async iterable
+  of `DecisionEvent`.
+
+### Cross-language parity
+
+`canonicalize_payload` / `canonicalizePayload` produces byte-identical
+output across Python and TypeScript on every test vector in
+`contract/schemas/v2/`.
+
 ---
 
 ## v1.5.0 — Audit listing, signed exports, offline verification
 
 **Release date:** 2026-04-25
+
+Closes the long-standing `/v1-audit` parity gap.
 
 ### Upgrade notes
 
