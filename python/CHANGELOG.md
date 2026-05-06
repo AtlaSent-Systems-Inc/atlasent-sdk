@@ -42,7 +42,7 @@ Every approval inside a quorum package must first pass the locked
 single-approval verifier (artifact signature + identity assertion +
 every binding) before quorum-level policy is evaluated.
 
-## 2.2.0 — Unreleased — identity attestation contract parity
+## 2.2.0 — 2026-05-05 — identity attestation contract parity
 
 ### Added
 
@@ -71,7 +71,7 @@ was added. The verifier remains in the Deno edge functions; the
 Python SDK only carries the assertion. Quorum / multi-approval is
 explicitly out of scope.
 
-## 2.1.0 — Unreleased — approval artifact contract parity
+## 2.1.0 — 2026-05-05 — approval artifact contract parity
 
 ### Added
 
