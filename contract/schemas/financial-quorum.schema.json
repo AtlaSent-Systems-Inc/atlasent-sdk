@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://api.atlasent.io/schemas/financial_quorum.v1.json",
+  "title": "FinancialQuorum",
+  "description": "Wire-stable schema for financial quorum policies and emergency freeze records. Wire version: financial_quorum.v1.",
+  "definitions": {
+    "FinancialRoleRequirement": {
+      "type": "object",
+      "required": ["role", "min"],
+      "properties": {
+        "role":             { "type": "string" },
+        "min":             { "type": "integer", "minimum": 1 },
+        "applies_above":   { "type": "number" },
+        "applies_to_tiers":{ "type": "array", "items": { "type": "string", "enum": ["low", "medium", "high", "critical"] } }
+      },
+      "additionalProperties": false
+    },
+    "AmountThreshold": {
+      "type": "object",
+      "required": ["value", "currency", "additional_approvals", "additional_roles", "senior_review_required"],
+      "properties": {
+        "value":                  { "type": "number", "minimum": 0 },
+        "currency":               { "type": "string" },
+        "additional_approvals":   { "type": "integer", "minimum": 0 },
+        "additional_roles":       { "type": "array", "items": { "$ref": "#/definitions/FinancialRoleRequirement" } },
+        "senior_review_required": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "FinancialQuorumPolicy": {
+      "type": "object",
+      "required": ["required_count", "financial_role_requirements", "amount_thresholds", "reference_currency", "emergency_freeze_active"],
+      "properties": {
+        "required_count":                { "type": "integer", "minimum": 1 },
+        "required_role_mix":             { "type": "array" },
+        "independence":                  { "type": "object" },
+        "max_age_seconds":               { "type": "integer" },
+        "financial_role_requirements":   { "type": "array", "items": { "$ref": "#/definitions/FinancialRoleRequirement" } },
+        "amount_thresholds":             { "type": "array", "items": { "$ref": "#/definitions/AmountThreshold" } },
+        "reference_currency":            { "type": "string" },
+        "emergency_freeze_active":       { "type": "boolean" },
+        "regulator_approval_threshold":  { "type": ["number", "null"] },
+        "dual_release_threshold":        { "type": ["number", "null"] }
+      }
+    },
+    "EmergencyFreeze": {
+      "type": "object",
+      "required": ["freeze_id", "scope_id", "scope_type", "triggered_by", "reason", "triggered_at", "lifted"],
+      "properties": {
+        "freeze_id":    { "type": "string" },
+        "scope_id":     { "type": "string" },
+        "scope_type":   { "type": "string", "enum": ["org", "department", "action_class"] },
+        "triggered_by": { "type": "string" },
+        "reason":       { "type": "string" },
+        "triggered_at": { "type": "string", "format": "date-time" },
+        "expires_at":   { "type": ["string", "null"], "format": "date-time" },
+        "lifted":       { "type": "boolean" },
+        "lifted_at":    { "type": ["string", "null"], "format": "date-time" },
+        "lifted_by":    { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}

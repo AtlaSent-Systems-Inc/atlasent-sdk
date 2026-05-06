@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://api.atlasent.io/schemas/liability_attribution.v1.json",
+  "title": "LiabilityAttribution",
+  "description": "Wire-stable schema for liability attribution records. Wire version: liability_attribution.v1.",
+  "definitions": {
+    "LiabilityPartyRole": {
+      "type": "string",
+      "enum": ["authorizer", "delegator", "delegate", "executor", "approver", "override_actor", "supervisor", "exception_approver"]
+    },
+    "PartyType": {
+      "type": "string",
+      "enum": ["human", "agent", "system"]
+    },
+    "LiabilityParty": {
+      "type": "object",
+      "required": ["party_id", "party_label", "party_type", "role", "liability_weight", "acted_at"],
+      "properties": {
+        "party_id":         { "type": "string" },
+        "party_label":      { "type": "string" },
+        "party_type":       { "$ref": "#/definitions/PartyType" },
+        "role":             { "$ref": "#/definitions/LiabilityPartyRole" },
+        "liability_weight": { "type": "number", "minimum": 0, "maximum": 1 },
+        "acted_at":         { "type": "string", "format": "date-time" },
+        "permit_id":        { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "LiabilityAttributionRecord": {
+      "type": "object",
+      "required": ["attribution_id", "execution_id", "org_id", "classification", "risk_tier", "liability_chain", "delegation_present", "supervisory_present", "emergency_override", "created_at", "chain_hash"],
+      "properties": {
+        "attribution_id":         { "type": "string" },
+        "execution_id":           { "type": "string" },
+        "org_id":                 { "type": "string" },
+        "classification":         { "type": "string", "enum": ["individual", "shared", "delegated", "supervisory", "emergency_override"] },
+        "risk_tier":              { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "liability_chain":        { "type": "array", "items": { "$ref": "#/definitions/LiabilityParty" }, "minItems": 1 },
+        "delegation_present":     { "type": "boolean" },
+        "supervisory_present":    { "type": "boolean" },
+        "emergency_override":     { "type": "boolean" },
+        "override_justification": { "type": ["string", "null"] },
+        "created_at":             { "type": "string", "format": "date-time" },
+        "chain_hash":             { "type": "string", "minLength": 64, "maxLength": 64 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/definitions/LiabilityAttributionRecord"
+}

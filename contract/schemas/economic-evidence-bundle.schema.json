@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://api.atlasent.io/schemas/economic_evidence_bundle.v1.json",
+  "title": "EconomicEvidenceBundle",
+  "description": "Wire-stable schema for signed economic evidence bundles. Wire version: economic_evidence.v1.",
+  "type": "object",
+  "required": ["version", "bundle_id", "org_id", "purpose", "execution_record", "liability_attribution", "quorum_result", "budget_check", "approval_provenance", "runtime_conformity", "policy_compliant", "generated_at", "requested_by", "content_hash"],
+  "properties": {
+    "version":               { "type": "string", "const": "economic_evidence.v1" },
+    "bundle_id":             { "type": "string" },
+    "org_id":               { "type": "string" },
+    "purpose": {
+      "type": "string",
+      "enum": ["regulator_review", "insurance_review", "financial_audit", "legal_discovery", "internal_review", "dispute_resolution"]
+    },
+    "execution_record":      { "type": "object" },
+    "liability_attribution": { "type": "object" },
+    "quorum_result":         { "type": "object" },
+    "budget_check":          { "type": "object" },
+    "approval_provenance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["approver_id", "approver_label", "permit_id", "approved_at", "audit_hash", "role"],
+        "properties": {
+          "approver_id":    { "type": "string" },
+          "approver_label": { "type": "string" },
+          "permit_id":      { "type": "string" },
+          "approved_at":    { "type": "string", "format": "date-time" },
+          "audit_hash":     { "type": "string" },
+          "role":           { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "runtime_conformity":       { "type": "boolean" },
+    "runtime_conformity_notes": { "type": "array", "items": { "type": "string" } },
+    "policy_compliant":         { "type": "boolean" },
+    "policy_violations":        { "type": "array", "items": { "type": "string" } },
+    "generated_at":             { "type": "string", "format": "date-time" },
+      "requested_by":           { "type": "string" },
+    "content_hash":             { "type": "string", "minLength": 64, "maxLength": 64 },
+    "signature":                { "type": ["string", "null"] },
+    "signing_key_id":           { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}
