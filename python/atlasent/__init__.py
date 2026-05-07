@@ -79,8 +79,10 @@ from .billing import (
     BillingClient,
     BillingEntitlement,
     BillingMode,
+    BillingWebhookSubscription,
     DenyReason,
     InvoiceStatus,
+    verify_billing_webhook_signature,
 )
 from .cache import TTLCache
 from .client import AtlaSentClient
@@ -277,15 +279,17 @@ __all__ = [
     "SubmitPolicySyncRequest",
     "format_policy_sync_diff",
     "is_policy_sync_terminal",
-    # Billing entitlement (enterprise grace period support).
+    # Billing entitlement + webhook management (enterprise grace period support).
     "AccessStatus",
     "AllowedAction",
     "AsyncBillingClient",
     "BillingClient",
     "BillingEntitlement",
     "BillingMode",
+    "BillingWebhookSubscription",
     "DenyReason",
     "InvoiceStatus",
     "AdminOverrideRequest",
     "AdminOverrideResponse",
+    "verify_billing_webhook_signature",
 ]

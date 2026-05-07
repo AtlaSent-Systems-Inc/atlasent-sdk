@@ -29,6 +29,8 @@ Usage (async)::
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
@@ -37,7 +39,7 @@ import httpx
 from pydantic import BaseModel, Field, model_validator
 
 
-# ─── Enumerations ────────────────────────────────────────────────────────────────────────────────────
+# ─── Enumerations ───────────────────────────────────────────────────────────────────────────────────────
 
 class AccessStatus(str, Enum):
     active     = "active"
@@ -84,7 +86,7 @@ class AllowedAction(str, Enum):
     governance_read    = "governance_read"
 
 
-# ─── Models ──────────────────────────────────────────────────────────────────────────────────
+# ─── Models ────────────────────────────────────────────────────────────────────────────────────────────
 
 class BillingEntitlement(BaseModel):
     """Billing entitlement returned by GET /v1/billing/entitlement."""
@@ -152,7 +154,42 @@ class AdminOverrideResponse(BaseModel):
     override_expires_at: Optional[datetime] = None
 
 
-# ─── Sync client ──────────────────────────────────────────────────────────────────────────
+class BillingWebhookSubscription(BaseModel):
+    """A billing webhook subscription as returned by GET/POST /v1/billing/webhooks."""
+
+    id:         str
+    org_id:     str
+    url:        str
+    events:     List[str]
+    active:     bool = True
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    secret:     Optional[str] = None  # only present on initial creation response
+
+
+# ─── Signature verification ─────────────────────────────────────────────────────────────────────────
+
+def verify_billing_webhook_signature(
+    payload: bytes,
+    signature: str,
+    secret: str,
+) -> bool:
+    """Verify the X-AtlaSent-Signature header on a billing.access_changed delivery.
+
+    :param payload:   Raw request body bytes.
+    :param signature: Value of the ``X-AtlaSent-Signature`` header (hex digest).
+    :param secret:    The webhook secret returned when the subscription was created.
+    :returns:         ``True`` if the signature is valid, ``False`` otherwise.
+    """
+    expected = hmac.new(
+        secret.encode("utf-8"),
+        payload,
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+# ─── Sync client ────────────────────────────────────────────────────────────────────────────────────────
 
 class BillingClient:
     """
@@ -194,8 +231,55 @@ class BillingClient:
             AdminOverrideRequest(org_id=org_id, status=None, reason=reason)
         )
 
+    def list_webhook_subscriptions(
+        self, org_id: Optional[str] = None
+    ) -> List[BillingWebhookSubscription]:
+        """List billing webhook subscriptions for the authenticated org."""
+        params: Dict[str, str] = {}
+        if org_id:
+            params["org_id"] = org_id
+        resp: httpx.Response = self._client._http.get(
+            f"{self._client._base_url}/v1/billing/webhooks",
+            params=params,
+        )
+        resp.raise_for_status()
+        return [
+            BillingWebhookSubscription.model_validate(s)
+            for s in resp.json().get("subscriptions", [])
+        ]
 
-# ─── Async client ────────────────────────────────────────────────────────────────────────
+    def create_webhook_subscription(
+        self,
+        url: str,
+        events: List[str],
+        org_id: Optional[str] = None,
+    ) -> BillingWebhookSubscription:
+        """Subscribe an endpoint to one or more billing events.
+
+        :param url:    HTTPS endpoint to receive deliveries.
+        :param events: List of event names, e.g. ``["billing.access_changed"]``.
+        :param org_id: Override the authenticated org (super-admin only).
+        :returns:      The created subscription, including the one-time ``secret``.
+        """
+        body: Dict[str, Any] = {"url": url, "events": events}
+        if org_id:
+            body["org_id"] = org_id
+        resp: httpx.Response = self._client._http.post(
+            f"{self._client._base_url}/v1/billing/webhooks",
+            json=body,
+        )
+        resp.raise_for_status()
+        return BillingWebhookSubscription.model_validate(resp.json())
+
+    def delete_webhook_subscription(self, subscription_id: str) -> None:
+        """Delete a billing webhook subscription by ID."""
+        resp: httpx.Response = self._client._http.delete(
+            f"{self._client._base_url}/v1/billing/webhooks/{subscription_id}",
+        )
+        resp.raise_for_status()
+
+
+# ─── Async client ────────────────────────────────────────────────────────────────────────────────────
 
 class AsyncBillingClient:
     """
@@ -248,3 +332,44 @@ class AsyncBillingClient:
         return await self.set_override(
             AdminOverrideRequest(org_id=org_id, status=None, reason=reason)
         )
+
+    async def list_webhook_subscriptions(
+        self, org_id: Optional[str] = None
+    ) -> List[BillingWebhookSubscription]:
+        """List billing webhook subscriptions (async)."""
+        params: Dict[str, str] = {}
+        if org_id:
+            params["org_id"] = org_id
+        resp: httpx.Response = await self._client._async_http.get(
+            f"{self._client._base_url}/v1/billing/webhooks",
+            params=params,
+        )
+        resp.raise_for_status()
+        return [
+            BillingWebhookSubscription.model_validate(s)
+            for s in resp.json().get("subscriptions", [])
+        ]
+
+    async def create_webhook_subscription(
+        self,
+        url: str,
+        events: List[str],
+        org_id: Optional[str] = None,
+    ) -> BillingWebhookSubscription:
+        """Subscribe an endpoint to one or more billing events (async)."""
+        body: Dict[str, Any] = {"url": url, "events": events}
+        if org_id:
+            body["org_id"] = org_id
+        resp: httpx.Response = await self._client._async_http.post(
+            f"{self._client._base_url}/v1/billing/webhooks",
+            json=body,
+        )
+        resp.raise_for_status()
+        return BillingWebhookSubscription.model_validate(resp.json())
+
+    async def delete_webhook_subscription(self, subscription_id: str) -> None:
+        """Delete a billing webhook subscription by ID (async)."""
+        resp: httpx.Response = await self._client._async_http.delete(
+            f"{self._client._base_url}/v1/billing/webhooks/{subscription_id}",
+        )
+        resp.raise_for_status()
