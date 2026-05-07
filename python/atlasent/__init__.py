@@ -108,6 +108,20 @@ from .models import (
     StreamProgressEvent,
     VerifyResult,
 )
+from .hitl import (
+    HitlApprovalRecord,
+    HitlApprovalsResult,
+    HitlChainHop,
+    HitlChainResult,
+    HitlEscalation,
+    HitlEscalationResult,
+    HitlFallbackDecision,
+    HitlQuorumProgress,
+    HitlQuorumTier,
+    HitlStatus,
+    ListHitlEscalationsResult,
+    hitl_required_approver_count,
+)
 from .require_permit import ProtectedAction, classify_command, require_permit
 from .with_permit import with_permit
 
@@ -167,6 +181,19 @@ __all__ = [
     "StreamDecisionEvent",
     "StreamProgressEvent",
     "StreamEvent",
+    # HITL orchestration surface (parity with the TS SDK).
+    "HitlApprovalRecord",
+    "HitlApprovalsResult",
+    "HitlChainHop",
+    "HitlChainResult",
+    "HitlEscalation",
+    "HitlEscalationResult",
+    "HitlFallbackDecision",
+    "HitlQuorumProgress",
+    "HitlQuorumTier",
+    "HitlStatus",
+    "ListHitlEscalationsResult",
+    "hitl_required_approver_count",
     # Approval artifact contract surface (parity with the TS SDK).
     "ApprovalArtifactV1",
     "ApprovalIssuer",

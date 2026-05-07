@@ -46,6 +46,14 @@ from .models import (
     VerifyRequest,
     VerifyResult,
 )
+from .hitl import (
+    HitlApprovalsResult,
+    HitlChainResult,
+    HitlEscalation,
+    HitlEscalationResult,
+    HitlStatus,
+    ListHitlEscalationsResult,
+)
 
 if TYPE_CHECKING:
     from .cache import TTLCache
@@ -1262,6 +1270,151 @@ class AtlaSentClient:
         delay = self._retry_backoff * (2**attempt)
         logger.debug("Retrying in %.1fs…", delay)
         time.sleep(delay)
+
+    # ── HITL orchestration (path-routed /v1/hitl/*) ─────────────────
+
+    def list_hitl_escalations(
+        self,
+        *,
+        status: HitlStatus | None = None,
+        agent_id: str | None = None,
+        assigned_to_user_id: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> ListHitlEscalationsResult:
+        """List HITL escalations (``GET /v1/hitl``).
+
+        Defaults to ``status='pending'`` server-side. Pass ``status``
+        to query other queues (``escalated``, ``approved``, etc.).
+        """
+        params: dict[str, str] = {}
+        if status:
+            params["status"] = status
+        if agent_id:
+            params["agent_id"] = agent_id
+        if assigned_to_user_id:
+            params["assigned_to_user_id"] = assigned_to_user_id
+        if limit is not None:
+            params["limit"] = str(limit)
+        if cursor:
+            params["cursor"] = cursor
+        data, rate_limit, _ = self._get("/v1/hitl", params=params or None)
+        return ListHitlEscalationsResult(**data, rate_limit=rate_limit)
+
+    def get_hitl_escalation(self, escalation_id: str) -> HitlEscalationResult:
+        """Get an escalation (``GET /v1/hitl/:id``).
+
+        Includes a live ``quorum_progress`` snapshot when still open.
+        """
+        if not escalation_id:
+            raise AtlaSentError("escalation_id is required", code="bad_request")
+        path = f"/v1/hitl/{quote(escalation_id, safe='')}"
+        data, rate_limit, _ = self._get(path)
+        return HitlEscalationResult(
+            escalation=HitlEscalation.model_validate(data),
+            rate_limit=rate_limit,
+        )
+
+    def list_hitl_approvals(self, escalation_id: str) -> HitlApprovalsResult:
+        """List per-approver vote rows (``GET /v1/hitl/:id/approvals``)."""
+        path = f"/v1/hitl/{quote(escalation_id, safe='')}/approvals"
+        data, rate_limit, _ = self._get(path)
+        return HitlApprovalsResult(**data, rate_limit=rate_limit)
+
+    def get_hitl_chain(self, escalation_id: str) -> HitlChainResult:
+        """List escalation chain hops (``GET /v1/hitl/:id/chain``)."""
+        path = f"/v1/hitl/{quote(escalation_id, safe='')}/chain"
+        data, rate_limit, _ = self._get(path)
+        return HitlChainResult(**data, rate_limit=rate_limit)
+
+    def approve_hitl_escalation(
+        self,
+        escalation_id: str,
+        *,
+        note: str | None = None,
+    ) -> HitlEscalationResult:
+        """Record an approve vote (``POST /v1/hitl/:id/approve``).
+
+        Resolves the escalation only when the server-side quorum is
+        satisfied; otherwise returns the escalation row with a
+        refreshed ``quorum_progress``.
+
+        Raises :class:`AtlaSentError` ``409 duplicate_vote`` if the
+        same principal already voted, or ``409 already_rejected`` if
+        a concurrent reject crossed the line first.
+        """
+        path = f"/v1/hitl/{quote(escalation_id, safe='')}/approve"
+        body: dict[str, Any] = {}
+        if note is not None:
+            body["note"] = note
+        data, rate_limit, _ = self._post(path, body)
+        return HitlEscalationResult(
+            escalation=HitlEscalation.model_validate(data),
+            rate_limit=rate_limit,
+        )
+
+    def reject_hitl_escalation(
+        self,
+        escalation_id: str,
+        *,
+        note: str | None = None,
+    ) -> HitlEscalationResult:
+        """Record a reject vote — short-circuit terminal
+        (``POST /v1/hitl/:id/reject``)."""
+        path = f"/v1/hitl/{quote(escalation_id, safe='')}/reject"
+        body: dict[str, Any] = {}
+        if note is not None:
+            body["note"] = note
+        data, rate_limit, _ = self._post(path, body)
+        return HitlEscalationResult(
+            escalation=HitlEscalation.model_validate(data),
+            rate_limit=rate_limit,
+        )
+
+    def escalate_hitl_escalation(
+        self,
+        escalation_id: str,
+        *,
+        to_role: str | None = None,
+        to_user_id: str | None = None,
+        reason: str | None = None,
+    ) -> HitlEscalationResult:
+        """Re-route to a higher tier (``POST /v1/hitl/:id/escalate``).
+
+        Bounded by the escalation's ``max_escalation_depth`` — the
+        server returns ``409 chain_exhausted`` and applies the
+        configured fallback when the ceiling is hit.
+        """
+        path = f"/v1/hitl/{quote(escalation_id, safe='')}/escalate"
+        body: dict[str, Any] = {}
+        if to_role is not None:
+            body["to_role"] = to_role
+        if to_user_id is not None:
+            body["to_user_id"] = to_user_id
+        if reason is not None:
+            body["reason"] = reason
+        data, rate_limit, _ = self._post(path, body)
+        return HitlEscalationResult(
+            escalation=HitlEscalation.model_validate(data),
+            rate_limit=rate_limit,
+        )
+
+    def timeout_hitl_escalation(
+        self,
+        escalation_id: str,
+    ) -> HitlEscalationResult:
+        """Manually apply the configured ``fallback_decision``
+        (``POST /v1/hitl/:id/timeout``).
+
+        Useful for admin recovery of a hung escalation when the cron
+        sweeper hasn't run yet.
+        """
+        path = f"/v1/hitl/{quote(escalation_id, safe='')}/timeout"
+        data, rate_limit, _ = self._post(path, {})
+        return HitlEscalationResult(
+            escalation=HitlEscalation.model_validate(data),
+            rate_limit=rate_limit,
+        )
 
 
 def _server_message(response: httpx.Response) -> str | None:
