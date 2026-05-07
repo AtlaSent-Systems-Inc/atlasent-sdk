@@ -6,6 +6,36 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Added (decision casing canonicalization)
+
+- **`decision_canonical`** field on `EvaluateResponse` and
+  `StreamDecisionEvent` — carries the canonical 4-value lowercase
+  decision byte-identical to the wire: `'allow' | 'deny' | 'hold' |
+  'escalate'`. `hold` and `escalate` are preserved as distinct
+  states and not collapsed.
+- New exported type `DecisionCanonical = 'allow' | 'deny' | 'hold' | 'escalate'`.
+
+### Deprecated
+
+- `decision: 'ALLOW' | 'DENY'` on `EvaluateResponse` and
+  `StreamDecisionEvent`. The 2-value field collapses `hold` and
+  `escalate` into `'DENY'`, hiding distinct authorization states.
+  **Use `decision_canonical` instead.** Will be removed/changed in
+  `@atlasent/sdk@3`.
+- Existing `Decision = 'ALLOW' | 'DENY'` type retains its current
+  shape; `@deprecated` JSDoc points callers at `DecisionCanonical`.
+
+### Notes
+
+- No version bump (`@atlasent/sdk@2.x` line). Wire contract is
+  unchanged. Callers continue to work; new code should pin to
+  `decision_canonical`.
+- 4 new tests cover all four canonical values
+  (`allow`/`deny`/`hold`/`escalate`) on `evaluate()` and verify the
+  legacy `decision` correctly collapses non-allow values to `DENY`
+  while `decision_canonical` preserves them.
+
+
 ### Added
 
 - `client.getPermit(permitId)` — calls the canonical

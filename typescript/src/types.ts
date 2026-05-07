@@ -8,8 +8,31 @@
 
 import type { AuditEventsPage, AuditExport } from "./audit.js";
 
-/** The two possible policy decisions. */
+/**
+ * Legacy 2-value decision projection.
+ *
+ * @deprecated Use `DecisionCanonical` (`'allow' | 'deny' | 'hold' | 'escalate'`)
+ * via the `decision_canonical` field on responses. The 2-value
+ * `Decision` type collapses `hold` and `escalate` into `"DENY"`,
+ * losing information operators need to route the action correctly.
+ *
+ * Removed/changed in the next major (`@atlasent/sdk@3`).
+ */
 export type Decision = "ALLOW" | "DENY";
+
+/**
+ * Canonical 4-value policy decision, byte-identical to the wire.
+ *
+ * - `allow`    — action is authorized; a Permit is issued.
+ * - `deny`     — action is blocked.
+ * - `hold`     — decision deferred (e.g. waiting on an approval signal).
+ * - `escalate` — routed to a human reviewer queue.
+ *
+ * Pin to this type on new code. Read the value from
+ * `EvaluateResponse.decision_canonical`, not from the legacy
+ * `EvaluateResponse.decision` field.
+ */
+export type DecisionCanonical = "allow" | "deny" | "hold" | "escalate";
 
 /**
  * Rate-limit state parsed from the server's `X-RateLimit-*` headers.
@@ -46,8 +69,27 @@ export interface EvaluateRequest {
 
 /** Result of {@link AtlaSentClient.evaluate}. */
 export interface EvaluateResponse {
-  /** "ALLOW" or "DENY". A "DENY" is not thrown — branch on this field. */
+  /**
+   * Legacy 2-value projection of the decision: `"ALLOW"` iff the wire
+   * was `"allow"`, otherwise `"DENY"` (for `deny`, `hold`, AND
+   * `escalate`).
+   *
+   * @deprecated Read `decision_canonical` instead — it carries the
+   * canonical 4-value decision (`allow | deny | hold | escalate`)
+   * byte-identical to the wire. The 2-value field collapses `hold`
+   * and `escalate` into `"DENY"`, hiding the distinct authorization
+   * states. Will be removed/changed in `@atlasent/sdk@3`.
+   */
   decision: Decision;
+  /**
+   * Canonical 4-value decision, byte-identical to the wire.
+   *
+   * One of `"allow"`, `"deny"`, `"hold"`, `"escalate"`. Branch on
+   * this field on new code. `hold` and `escalate` are non-terminal
+   * states that route to a human reviewer / approval signal — they
+   * are not equivalent to a `deny`.
+   */
+  decision_canonical: DecisionCanonical;
   /** Opaque permit identifier, passed to {@link AtlaSentClient.verifyPermit}. */
   permitId: string;
   /** Human-readable explanation from the policy engine. */
@@ -390,8 +432,19 @@ export interface EvaluatePreflightResponse {
 /** A policy decision emitted mid-stream. */
 export interface StreamDecisionEvent {
   type: "decision";
-  /** "ALLOW" or "DENY". A deny always has isFinal: true and ends the stream. */
+  /**
+   * Legacy 2-value projection. `"ALLOW"` iff the wire was `"allow"`,
+   * otherwise `"DENY"` (for `deny`, `hold`, AND `escalate`).
+   *
+   * @deprecated Read `decision_canonical` instead. Will be
+   * removed/changed in `@atlasent/sdk@3`.
+   */
   decision: Decision;
+  /**
+   * Canonical 4-value decision, byte-identical to the wire.
+   * One of `"allow"`, `"deny"`, `"hold"`, `"escalate"`.
+   */
+  decision_canonical: DecisionCanonical;
   /** Opaque permit identifier for a final allow. Pass to verifyPermit. */
   permitId: string;
   /** Human-readable explanation from the policy engine. */
