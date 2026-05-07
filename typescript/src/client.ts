@@ -30,6 +30,10 @@ import type {
   EvaluatePreflightResponse,
   EvaluateRequest,
   EvaluateResponse,
+  GetPermitResponse,
+  ListPermitsRequest,
+  ListPermitsResponse,
+  PermitRecord,
   RateLimitState,
   RevokePermitRequest,
   RevokePermitResponse,
@@ -477,6 +481,73 @@ export class AtlaSentClient {
       auditHash: wire.audit_hash,
       rateLimit,
     };
+  }
+
+  /**
+   * Get a single permit's full lifecycle state.
+   *
+   * Calls `GET /v1/permits/{permitId}` (the canonical REST surface).
+   * Returns `status`, all timestamps, `revoked_at` / `revoked_by` /
+   * `revoke_reason` (when applicable), and the bound `payload_hash`
+   * / `decision_id`.
+   *
+   * Operator-facing introspection — answers "what state is this permit
+   * in, and why?" without reading audit logs.
+   *
+   * Throws {@link AtlaSentError} on `404` (permit not in calling org)
+   * or `410` (expired before retrieval).
+   */
+  async getPermit(permitId: string): Promise<GetPermitResponse> {
+    if (!permitId) {
+      throw new AtlaSentError("permitId is required", { code: "bad_request" });
+    }
+    const { body: wire, rateLimit } = await this.get<PermitRecord>(
+      `/v1/permits/${encodeURIComponent(permitId)}`,
+    );
+    return { permit: wire, rateLimit };
+  }
+
+  /**
+   * List permits issued to the calling org, most-recently-issued first.
+   *
+   * Calls `GET /v1/permits` (the canonical REST surface). Cursor-paged.
+   * Filters narrow on server side; pagination uses the `created_at`
+   * timestamp opaquely (`nextCursor`).
+   *
+   * Designed for incident review, debugging, and compliance
+   * reconstruction.
+   */
+  async listPermits(
+    input: ListPermitsRequest = {},
+  ): Promise<ListPermitsResponse> {
+    const params = new URLSearchParams();
+    if (input.status) params.set("status", input.status);
+    if (input.actorId) params.set("actor_id", input.actorId);
+    if (input.actionType) params.set("action_type", input.actionType);
+    if (input.from) params.set("from", input.from);
+    if (input.to) params.set("to", input.to);
+    if (input.limit !== undefined) params.set("limit", String(input.limit));
+    if (input.cursor) params.set("cursor", input.cursor);
+
+    const { body: wire, rateLimit } = await this.get<{
+      permits?: PermitRecord[];
+      total?: number;
+      next_cursor?: string;
+    }>("/v1/permits", params);
+
+    if (!Array.isArray(wire.permits)) {
+      throw new AtlaSentError(
+        "Malformed response from /v1/permits: missing `permits` array",
+        { code: "bad_response" },
+      );
+    }
+    const result: ListPermitsResponse = {
+      permits: wire.permits,
+      total: typeof wire.total === "number" ? wire.total : wire.permits.length,
+      rateLimit,
+    };
+    if (wire.next_cursor !== undefined) result.nextCursor = wire.next_cursor;
+    return result;
   }
 
   /**
