@@ -1,0 +1,65 @@
+name: E2E critical path
+
+# Runs the evaluate → permit → audit chain against a live AtlaSent API.
+#
+# Gated on three repo-level secrets:
+#   ATLASENT_API_URL        — e.g. https://staging.atlasent.io
+#   ATLASENT_API_KEY        — staging API key (ask_test_…)
+#   ATLASENT_TEST_ORG_ID   — staging org ID for audit queries
+#
+# When any secret is absent the job exits as a no-op success so fork PRs
+# and offline CI do not fail. The test file itself also guards via
+# describe.skipIf(!haveEnv) so no live requests are made when vars are unset.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "typescript/e2e/**"
+      - "typescript/src/**"
+      - ".github/workflows/e2e.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "typescript/e2e/**"
+      - "typescript/src/**"
+      - ".github/workflows/e2e.yml"
+  schedule:
+    # Nightly at 04:07 UTC — surfaces API regressions before EU workday.
+    - cron: "7 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E — evaluate → permit → audit
+    runs-on: ubuntu-latest
+    # Skip entirely on forks that have not configured the secrets.
+    # The `secrets` context is available in `if:` expressions.
+    if: ${{ secrets.ATLASENT_API_URL != '' }}
+    environment: staging
+    defaults:
+      run:
+        working-directory: typescript
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run E2E critical path suite
+        env:
+          ATLASENT_API_URL: ${{ secrets.ATLASENT_API_URL }}
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+          ATLASENT_TEST_ORG_ID: ${{ secrets.ATLASENT_TEST_ORG_ID }}
+        run: npm run test:e2e
