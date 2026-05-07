@@ -11,3 +11,15 @@ export type {
   ReasonCode,
   VerifiedPermit,
 } from "./types.js";
+export { BillingClient, hasAction, isActive, isBlocked } from "./billing.js";
+export type {
+  AccessStatus,
+  AdminOverrideRequest,
+  AdminOverrideResponse,
+  AllowedAction,
+  BillingCompatibleClient,
+  BillingEntitlement,
+  BillingMode,
+  DenyReason,
+  InvoiceStatus,
+} from "./billing.js";
