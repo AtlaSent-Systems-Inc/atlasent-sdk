@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.3.1 — Unreleased — permit observability surface
+
+### Added
+
+- `AtlaSentClient.get_permit(permit_id)` — calls the canonical
+  `GET /v1/permits/{permit_id}` REST endpoint. Returns
+  `GetPermitResult(permit: PermitRecord, rate_limit)` with full
+  lifecycle state (status, all timestamps, `revoked_at` /
+  `revoked_by` / `revoke_reason`, bound `payload_hash` /
+  `decision_id`).
+- `AtlaSentClient.list_permits(status=, actor_id=, action_type=, from_=, to=, limit=, cursor=)`
+  — calls `GET /v1/permits` with cursor pagination.
+- New types: `PermitRecord`, `GetPermitResult`, `ListPermitsResult`.
+
+### Notes
+
+- TypeScript SDK parity for the canonical permit observability
+  surface (atlasent-sdk#176 on the TS side).
+- `revoke_permit()` continues to call the legacy
+  `/v1-revoke-permit` endpoint. Migrating it (and `verify`) to the
+  canonical REST surface is a separate follow-on with a
+  deprecation cycle.
+
 ## 2.3.0 — Unreleased — approval quorum contract parity
 
 > **Correction (2026-05-05).** A caveat added earlier today claimed

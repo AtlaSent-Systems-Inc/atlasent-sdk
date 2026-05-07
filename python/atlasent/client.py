@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -33,7 +33,10 @@ from .models import (
     EvaluateRequest,
     EvaluateResult,
     GateResult,
+    GetPermitResult,
+    ListPermitsResult,
     Permit,
+    PermitRecord,
     RateLimitState,
     RevokePermitResult,
     VerifyRequest,
@@ -719,6 +722,104 @@ class AtlaSentClient:
         result.rate_limit = rate_limit
         return result
 
+    def get_permit(self, permit_id: str) -> GetPermitResult:
+        """Get a single permit's full lifecycle state
+        (``GET /v1/permits/{permit_id}``).
+
+        Returns the canonical :class:`PermitRecord` — including
+        ``status``, all timestamps, ``revoked_at`` / ``revoked_by`` /
+        ``revoke_reason`` (when ``status == 'revoked'``), and the bound
+        ``payload_hash`` / ``decision_id``.
+
+        Operator-facing introspection — answers "what state is this
+        permit in, and why?" without reading audit logs.
+
+        Args:
+            permit_id: The permit's ``pt_…`` ID.
+
+        Raises:
+            :class:`AtlaSentError` on transport / auth failures, ``404``
+            (permit not in calling org), or ``410`` (expired before
+            retrieval).
+        """
+        if not permit_id:
+            raise AtlaSentError("permit_id is required", code="bad_request")
+        path = f"/v1/permits/{quote(permit_id, safe='')}"
+        data, rate_limit, _ = self._get(path)
+        return GetPermitResult(
+            permit=PermitRecord.model_validate(data),
+            rate_limit=rate_limit,
+        )
+
+    def list_permits(
+        self,
+        *,
+        status: str | None = None,
+        actor_id: str | None = None,
+        action_type: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> ListPermitsResult:
+        """List permits issued to the calling org, most-recently-issued
+        first (``GET /v1/permits``).
+
+        Operator observability surface. Cursor-paged. Filters narrow on
+        the server side.
+
+        Args:
+            status: Filter by lifecycle status (``issued`` / ``verified``
+                / ``consumed`` / ``expired`` / ``revoked``).
+            actor_id: Filter by actor.
+            action_type: Filter by action class.
+            from_: ISO-8601 lower bound on ``created_at``. Trailing
+                underscore avoids the Python keyword.
+            to: ISO-8601 upper bound on ``created_at``.
+            limit: Page size. Server max is 500; default 50.
+            cursor: Pass ``next_cursor`` from a prior response to page
+                forward.
+
+        Returns:
+            :class:`ListPermitsResult` with ``permits``, ``total``, and
+            an optional ``next_cursor``.
+        """
+        params: dict[str, str] = {}
+        if status is not None:
+            params["status"] = status
+        if actor_id is not None:
+            params["actor_id"] = actor_id
+        if action_type is not None:
+            params["action_type"] = action_type
+        if from_ is not None:
+            params["from"] = from_
+        if to is not None:
+            params["to"] = to
+        if limit is not None:
+            params["limit"] = str(limit)
+        if cursor is not None:
+            params["cursor"] = cursor
+
+        data, rate_limit, request_id = self._get(
+            "/v1/permits", params=params or None
+        )
+        permits_raw = data.get("permits")
+        if not isinstance(permits_raw, list):
+            raise AtlaSentError(
+                "Malformed /v1/permits response: missing `permits` array",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+        permits = [PermitRecord.model_validate(p) for p in permits_raw]
+        total = data.get("total")
+        return ListPermitsResult(
+            permits=permits,
+            total=total if isinstance(total, int) else len(permits),
+            next_cursor=data.get("next_cursor"),
+            rate_limit=rate_limit,
+        )
+
     def list_audit_events(
         self,
         *,
@@ -867,13 +968,20 @@ class AtlaSentClient:
         """
         return self._request("POST", path, payload, params=params)
 
-    def _get(self, path: str) -> tuple[dict[str, Any], RateLimitState | None, str]:
+    def _get(
+        self,
+        path: str,
+        *,
+        params: dict[str, str] | None = None,
+    ) -> tuple[dict[str, Any], RateLimitState | None, str]:
         """GET with retry on transient failures (5xx, timeouts).
 
         Returns ``(body, rate_limit, request_id)`` — same shape as
         :meth:`_post` so response-parsing code is shared.
+
+        ``params`` is appended as a URL query string when present.
         """
-        return self._request("GET", path, None)
+        return self._request("GET", path, None, params=params)
 
     def _request(
         self,
