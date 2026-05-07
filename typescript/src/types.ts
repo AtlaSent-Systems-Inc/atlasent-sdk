@@ -9,18 +9,6 @@
 import type { AuditEventsPage, AuditExport } from "./audit.js";
 
 /**
- * Legacy 2-value decision projection.
- *
- * @deprecated Use `DecisionCanonical` (`'allow' | 'deny' | 'hold' | 'escalate'`)
- * via the `decision_canonical` field on responses. The 2-value
- * `Decision` type collapses `hold` and `escalate` into `"DENY"`,
- * losing information operators need to route the action correctly.
- *
- * Removed/changed in the next major (`@atlasent/sdk@3`).
- */
-export type Decision = "ALLOW" | "DENY";
-
-/**
  * Canonical 4-value policy decision, byte-identical to the wire.
  *
  * - `allow`    — action is authorized; a Permit is issued.
@@ -28,11 +16,28 @@ export type Decision = "ALLOW" | "DENY";
  * - `hold`     — decision deferred (e.g. waiting on an approval signal).
  * - `escalate` — routed to a human reviewer queue.
  *
- * Pin to this type on new code. Read the value from
- * `EvaluateResponse.decision_canonical`, not from the legacy
- * `EvaluateResponse.decision` field.
+ * Pin to this type on new code.
  */
 export type DecisionCanonical = "allow" | "deny" | "hold" | "escalate";
+
+/**
+ * Decision type — unified with the canonical 4-value vocabulary.
+ *
+ * This type previously emitted `"ALLOW"` / `"DENY"` (uppercase, 2-value).
+ * It now reflects the canonical wire values (`"allow" | "deny" | "hold" |
+ * "escalate"`) so the `decision` and `decision_canonical` fields on
+ * {@link EvaluateResponse} carry identical values and types.
+ *
+ * Backward compatibility: the SDK normalises API response values to
+ * lowercase (`.toLowerCase()`) before returning them, so callers that
+ * previously checked `=== "ALLOW"` must update to `=== "allow"`. The
+ * canonical field `decision_canonical` is also available and was always
+ * lowercase — prefer it on new code.
+ *
+ * Legacy uppercase input accepted by the SDK is normalised to lowercase
+ * output; `"ALLOW"` in → `"allow"` out, `"DENY"` in → `"deny"` out.
+ */
+export type Decision = DecisionCanonical;
 
 /**
  * Rate-limit state parsed from the server's `X-RateLimit-*` headers.
@@ -70,15 +75,15 @@ export interface EvaluateRequest {
 /** Result of {@link AtlaSentClient.evaluate}. */
 export interface EvaluateResponse {
   /**
-   * Legacy 2-value projection of the decision: `"ALLOW"` iff the wire
-   * was `"allow"`, otherwise `"DENY"` (for `deny`, `hold`, AND
-   * `escalate`).
+   * Policy decision — canonical 4-value lowercase vocabulary:
+   * `"allow"`, `"deny"`, `"hold"`, or `"escalate"`.
    *
-   * @deprecated Read `decision_canonical` instead — it carries the
-   * canonical 4-value decision (`allow | deny | hold | escalate`)
-   * byte-identical to the wire. The 2-value field collapses `hold`
-   * and `escalate` into `"DENY"`, hiding the distinct authorization
-   * states. Will be removed/changed in `@atlasent/sdk@3`.
+   * Previously emitted `"ALLOW"` / `"DENY"` (uppercase, 2-value);
+   * the SDK now normalises all values to lowercase and passes `hold`
+   * and `escalate` through rather than collapsing them to `"DENY"`.
+   *
+   * The `decision_canonical` field carries the same value and is the
+   * recommended field for new code.
    */
   decision: Decision;
   /**
@@ -245,8 +250,9 @@ export interface AtlaSentClientOptions {
   /**
    * Retry policy for transient failures (network errors, timeouts,
    * 429 rate-limit, 5xx server errors, malformed responses).
-   * Omit to use the default: 3 total attempts, 250 ms base, 7 s cap,
-   * full-jitter exponential backoff.
+   * Omit to use the default: 4 total attempts, 2 000 ms base, 16 000 ms cap,
+   * full-jitter exponential backoff matching the Python SDK schedule
+   * (2 s → 4 s → 8 s → 16 s).
    * Pass `{ maxAttempts: 1 }` to disable retries entirely.
    */
   retryPolicy?: import("./retry.js").RetryPolicy;
@@ -514,10 +520,14 @@ export interface EvaluatePreflightResponse {
 export interface StreamDecisionEvent {
   type: "decision";
   /**
-   * Legacy 2-value projection. `"ALLOW"` iff the wire was `"allow"`,
-   * otherwise `"DENY"` (for `deny`, `hold`, AND `escalate`).
+   * Policy decision — canonical 4-value lowercase vocabulary:
+   * `"allow"`, `"deny"`, `"hold"`, or `"escalate"`.
    *
-   * @deprecated Read `decision_canonical` instead. Will be
+   * Previously emitted `"ALLOW"` / `"DENY"` (uppercase, 2-value);
+   * now unified with `decision_canonical`.
+   *
+   * @deprecated Read `decision_canonical` instead for forward-compatible
+   * branching. Both fields now carry the same value. Will be
    * removed/changed in `@atlasent/sdk@3`.
    */
   decision: Decision;

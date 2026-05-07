@@ -92,7 +92,14 @@ export function __resetSharedClientForTests(): void {
 function getClient(): AtlaSentClient {
   if (sharedClient) return sharedClient;
 
-  const apiKey = overrides.apiKey ?? process.env.ATLASENT_API_KEY;
+  // Guard process.env access so this module is safe in browser and
+  // edge-runtime environments where `process` is not defined as a global.
+  const envApiKey =
+    typeof process !== "undefined" && process.env
+      ? process.env.ATLASENT_API_KEY
+      : undefined;
+
+  const apiKey = overrides.apiKey ?? envApiKey;
   if (!apiKey) {
     throw new AtlaSentError(
       "AtlaSent is not configured. Set ATLASENT_API_KEY in the environment, or call atlasent.configure({ apiKey }).",
@@ -109,9 +116,9 @@ function getClient(): AtlaSentClient {
 }
 
 function wireDecisionToDenied(serverDecision: string): AtlaSentDecision {
-  // The current /v1-evaluate contract returns "ALLOW" | "DENY". Map
-  // "DENY" → "deny"; any future lowercase-or-new value passes through
-  // so forthcoming "hold" / "escalate" responses don't break callers.
+  // Normalise to lowercase before matching — the decision field is now
+  // always lowercase from evaluate(), but defensive lower-casing here
+  // handles any edge case where an older code path sends uppercase.
   const lower = serverDecision.toLowerCase();
   if (lower === "hold" || lower === "escalate") return lower;
   return "deny";
@@ -131,7 +138,8 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
   const client = getClient();
   const evaluation = await client.evaluate(request);
 
-  if (evaluation.decision !== "ALLOW") {
+  // decision is now canonical lowercase: "allow" | "deny" | "hold" | "escalate"
+  if (evaluation.decision !== "allow") {
     throw new AtlaSentDeniedError({
       decision: wireDecisionToDenied(evaluation.decision),
       evaluationId: evaluation.permitId,

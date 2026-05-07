@@ -107,11 +107,18 @@ function _warnOversizeContext(context: Record<string, unknown> | undefined): voi
  * `globalThis.ATLASENT_ALLOW_INSECURE_HTTP === "1"` (browser dev) permits
  * `http://` for local fixtures — production callers never set this.
  * Non-`http(s)` schemes (data:, file:, ...) are rejected unconditionally.
+ *
+ * Guards `process.env` access with an explicit `typeof` check so this
+ * function is safe in browser and edge-runtime environments where
+ * `process` is not defined as a global.
  */
 function _enforceTls(baseUrl: string): string {
+  const nodeEnvValue =
+    typeof process !== "undefined" && process.env
+      ? process.env.ATLASENT_ALLOW_INSECURE_HTTP
+      : undefined;
   const allow =
-    (typeof process !== "undefined" &&
-      process?.env?.ATLASENT_ALLOW_INSECURE_HTTP === "1") ||
+    nodeEnvValue === "1" ||
     (globalThis as { ATLASENT_ALLOW_INSECURE_HTTP?: string })
       .ATLASENT_ALLOW_INSECURE_HTTP === "1";
   if (allow) return baseUrl;
@@ -284,7 +291,7 @@ export class AtlaSentClient {
    * handled by {@link normalizeEvaluateRequest} and will be removed
    * in v3.0.0.
    *
-   * A "DENY" is **not** thrown — it is returned in
+   * A "deny" is **not** thrown — it is returned in
    * `response.decision`. Network errors, invalid API key, rate
    * limits, timeouts, and malformed responses throw
    * {@link AtlaSentError}.
@@ -308,9 +315,15 @@ export class AtlaSentClient {
     };
     const { body: wire, rateLimit } = await this.post<EvaluateWire>("/v1-evaluate", body);
 
+    // Normalise decision to lowercase canonical form. API responses may
+    // arrive as uppercase (legacy deployments) or lowercase (canonical);
+    // we always emit lowercase so callers can rely on a stable vocabulary.
+    let decision = (typeof wire.decision === "string"
+      ? wire.decision.toLowerCase()
+      : wire.decision) as EvaluateWire["decision"] | undefined;
+
     // Tolerate both canonical {decision, permit_token} and legacy
     // {permitted, decision_id} server responses.
-    let decision = wire.decision;
     if (decision === undefined && typeof wire.permitted === "boolean") {
       decision = wire.permitted ? "allow" : "deny";
     }
@@ -330,7 +343,7 @@ export class AtlaSentClient {
     }
 
     return {
-      decision: decision === "allow" ? "ALLOW" : "DENY",
+      decision,
       decision_canonical: decision,
       permitId: permitToken ?? "",
       reason: wire.denial?.reason ?? wire.reason ?? "",
@@ -383,7 +396,11 @@ export class AtlaSentClient {
       query,
     );
 
-    let decision = wire.decision;
+    // Normalise decision to lowercase canonical form.
+    let decision = (typeof wire.decision === "string"
+      ? wire.decision.toLowerCase()
+      : wire.decision) as EvaluateWire["decision"] | undefined;
+
     if (decision === undefined && typeof wire.permitted === "boolean") {
       decision = wire.permitted ? "allow" : "deny";
     }
@@ -401,7 +418,7 @@ export class AtlaSentClient {
     const permitToken = wire.permit_token ?? wire.decision_id;
 
     const evaluation: EvaluateResponse = {
-      decision: decision === "allow" ? "ALLOW" : "DENY",
+      decision,
       decision_canonical: decision,
       permitId: permitToken ?? "",
       reason: wire.denial?.reason ?? wire.reason ?? "",
@@ -1342,13 +1359,13 @@ async function* parseSseStream(
               requestId,
             });
           }
+          // Streaming wire uses legacy {permitted, decision_id} shape;
+          // normalise to canonical lowercase decision vocabulary.
+          const streamDecision = d.permitted ? "allow" : "deny";
           yield {
             type: "decision",
-            decision: d.permitted ? "ALLOW" : "DENY",
-            // Streaming wire is the legacy {permitted, decision_id} shape;
-            // canonical projection is the boolean → 'allow' | 'deny'.
-            // The 4-value shape isn't representable from the legacy boolean.
-            decision_canonical: d.permitted ? "allow" : "deny",
+            decision: streamDecision,
+            decision_canonical: streamDecision,
             permitId: d.decision_id,
             reason: d.reason ?? "",
             auditHash: d.audit_hash ?? "",
