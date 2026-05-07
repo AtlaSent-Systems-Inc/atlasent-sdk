@@ -19,7 +19,7 @@ Canonical surface — three primitives, each with a distinct
 lifecycle:
 
 - :func:`atlasent.protect` — fail-closed execution primitive.
-  Use when the caller wants “no permit, no execution.” Raises on
+  Use when the caller wants "no permit, no execution." Raises on
   ``deny``, ``hold``, ``escalate``, or verification failure.
 - :func:`atlasent.evaluate` — raw decision primitive. Use when the
   caller needs to inspect the four-value decision
@@ -70,6 +70,17 @@ from .audit_bundle import (
     verify_bundle,
 )
 from .authorize import authorize, evaluate, gate, protect, verify
+from .billing import (
+    AccessStatus,
+    AdminOverrideRequest,
+    AdminOverrideResponse,
+    AllowedAction,
+    BillingClient,
+    BillingEntitlement,
+    BillingMode,
+    DenyReason,
+    InvoiceStatus,
+)
 from .cache import TTLCache
 from .client import AtlaSentClient
 from .compliance_evidence import (
@@ -265,4 +276,14 @@ __all__ = [
     "SubmitPolicySyncRequest",
     "format_policy_sync_diff",
     "is_policy_sync_terminal",
+    # Billing entitlement (enterprise grace period support).
+    "AccessStatus",
+    "AllowedAction",
+    "BillingClient",
+    "BillingEntitlement",
+    "BillingMode",
+    "DenyReason",
+    "InvoiceStatus",
+    "AdminOverrideRequest",
+    "AdminOverrideResponse",
 ]
