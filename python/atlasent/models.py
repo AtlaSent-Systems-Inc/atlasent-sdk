@@ -703,6 +703,57 @@ class RevokePermitResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+# ── Permit lifecycle (canonical REST shapes) ──────────────────────────
+
+
+class PermitRecord(BaseModel):
+    """Wire shape of a Permit row, returned by
+    :meth:`AtlaSentClient.get_permit` and embedded in
+    :class:`ListPermitsResult`.
+
+    Mirrors the openapi `Permit` schema. Revocation fields
+    (``revoked_at``, ``revoked_by``, ``revoke_reason``) are populated
+    only when ``status == 'revoked'``.
+
+    Field names are snake_case to match the wire — no rename layer.
+    """
+
+    id: str
+    org_id: str
+    actor_id: str
+    action_id: str
+    target_id: str | None = None
+    environment: str | None = None
+    status: Literal["issued", "verified", "consumed", "expired", "revoked"]
+    issued_at: str
+    expires_at: str
+    consumed_at: str | None = None
+    revoked_at: str | None = None
+    revoked_by: str | None = None
+    revoke_reason: str | None = None
+    signature: str | None = None
+    payload_hash: str | None = None
+    decision_id: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class GetPermitResult(BaseModel):
+    """Result of :meth:`AtlaSentClient.get_permit`."""
+
+    permit: PermitRecord
+    rate_limit: RateLimitState | None = None
+
+
+class ListPermitsResult(BaseModel):
+    """Result of :meth:`AtlaSentClient.list_permits`."""
+
+    permits: list[PermitRecord]
+    total: int
+    next_cursor: str | None = None
+    rate_limit: RateLimitState | None = None
+
+
 # ── Streaming evaluate events ─────────────────────────────────────────
 
 

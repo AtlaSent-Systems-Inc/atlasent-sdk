@@ -1403,3 +1403,136 @@ class TestContextSizeWarning:
             EvaluateRequest(action="a", agent="b", context=ctx)
 
         assert not any("soft cap" in record.message for record in caplog.records)
+
+
+class TestGetPermit:
+    PERMIT = {
+        "id": "pt_alpha",
+        "org_id": "org_x",
+        "actor_id": "agent-1",
+        "action_id": "ehr.write",
+        "status": "verified",
+        "issued_at": "2026-05-07T01:00:00Z",
+        "expires_at": "2026-05-07T01:15:00Z",
+        "consumed_at": None,
+        "revoked_at": None,
+        "revoked_by": None,
+        "revoke_reason": None,
+        "payload_hash": "sha256:deadbeef",
+        "decision_id": "eval_a",
+    }
+
+    def test_returns_permit(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.PERMIT)
+        mock_get = mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.get_permit("pt_alpha")
+        assert result.permit.id == "pt_alpha"
+        assert result.permit.status == "verified"
+        url = mock_get.call_args[0][0]
+        assert url.endswith("/v1/permits/pt_alpha")
+
+    def test_url_encodes_id(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.PERMIT)
+        mock_get = mocker.patch.object(client._client, "get", return_value=resp)
+        client.get_permit("pt with spaces")
+        url = mock_get.call_args[0][0]
+        assert url.endswith("/v1/permits/pt%20with%20spaces")
+
+    def test_empty_id_raises(self, client):
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.get_permit("")
+        assert exc_info.value.code == "bad_request"
+
+    def test_surfaces_revocation(self, client, mocker):
+        revoked = dict(self.PERMIT, status="revoked",
+                       revoked_at="2026-05-07T01:10:00Z",
+                       revoked_by="user_admin",
+                       revoke_reason="approval rescinded")
+        resp = _mock_resp(mocker, json_data=revoked)
+        mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.get_permit("pt_alpha")
+        assert result.permit.status == "revoked"
+        assert result.permit.revoked_at == "2026-05-07T01:10:00Z"
+        assert result.permit.revoked_by == "user_admin"
+        assert result.permit.revoke_reason == "approval rescinded"
+
+
+class TestListPermits:
+    LIST = {
+        "permits": [
+            {
+                "id": "pt_a",
+                "org_id": "org_x",
+                "actor_id": "a",
+                "action_id": "x",
+                "status": "issued",
+                "issued_at": "2026-05-07T01:00:00Z",
+                "expires_at": "2026-05-07T01:15:00Z",
+            },
+            {
+                "id": "pt_b",
+                "org_id": "org_x",
+                "actor_id": "a",
+                "action_id": "x",
+                "status": "consumed",
+                "issued_at": "2026-05-07T00:00:00Z",
+                "expires_at": "2026-05-07T00:15:00Z",
+                "consumed_at": "2026-05-07T00:10:00Z",
+            },
+        ],
+        "total": 2,
+    }
+
+    def test_returns_list(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.LIST)
+        mock_get = mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.list_permits()
+        assert len(result.permits) == 2
+        assert result.total == 2
+        url = mock_get.call_args[0][0]
+        assert url.endswith("/v1/permits")
+        # No query params when no filters
+        assert mock_get.call_args[1].get("params") is None
+
+    def test_passes_filters_as_query_params(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.LIST)
+        mock_get = mocker.patch.object(client._client, "get", return_value=resp)
+        client.list_permits(
+            status="revoked",
+            actor_id="user_42",
+            action_type="ehr.write",
+            from_="2026-05-01T00:00:00Z",
+            to="2026-05-07T00:00:00Z",
+            limit=100,
+            cursor="2026-05-06T00:00:00Z",
+        )
+        params = mock_get.call_args[1]["params"]
+        assert params["status"] == "revoked"
+        assert params["actor_id"] == "user_42"
+        assert params["action_type"] == "ehr.write"
+        assert params["from"] == "2026-05-01T00:00:00Z"
+        assert params["to"] == "2026-05-07T00:00:00Z"
+        assert params["limit"] == "100"
+        assert params["cursor"] == "2026-05-06T00:00:00Z"
+
+    def test_surfaces_next_cursor(self, client, mocker):
+        resp = _mock_resp(
+            mocker, json_data={**self.LIST, "next_cursor": "2026-05-06T23:00:00Z"}
+        )
+        mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.list_permits(limit=2)
+        assert result.next_cursor == "2026-05-06T23:00:00Z"
+
+    def test_bad_response_missing_permits(self, client, mocker):
+        resp = _mock_resp(mocker, json_data={"total": 0})
+        mocker.patch.object(client._client, "get", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.list_permits()
+        assert exc_info.value.code == "bad_response"
+
+    def test_total_falls_back_to_permits_length(self, client, mocker):
+        without_total = {"permits": self.LIST["permits"]}
+        resp = _mock_resp(mocker, json_data=without_total)
+        mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.list_permits()
+        assert result.total == 2
