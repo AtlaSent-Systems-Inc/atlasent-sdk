@@ -4,6 +4,34 @@ All notable changes to `@atlasent/sdk` are documented here. The SDK
 follows [semver](https://semver.org/): breaking changes bump the major
 (or minor while on 0.x).
 
+## [2.2.0] — 2026-05-07
+
+### Added
+
+- **Automatic retries with full-jitter backoff** — `AtlaSentClient` now
+  retries transient failures (network errors, timeouts, HTTP 429 rate-limit,
+  HTTP 5xx server errors, malformed JSON responses) using capped exponential
+  backoff with full jitter (AWS-recommended scheme). Defaults: 3 total
+  attempts, 250 ms base delay, 7 s ceiling. Customise or disable via the new
+  `retryPolicy` constructor option:
+  ```ts
+  new AtlaSentClient({
+    apiKey: "ask_live_…",
+    retryPolicy: { maxAttempts: 5, baseDelayMs: 100, maxDelayMs: 30_000 },
+  });
+  // Disable entirely:
+  new AtlaSentClient({ apiKey: "ask_live_…", retryPolicy: { maxAttempts: 1 } });
+  ```
+  Non-retryable errors (`invalid_api_key`, `forbidden`, `bad_request`) are
+  thrown immediately on the first attempt.
+- `AtlaSentClientOptions.retryPolicy` — new optional field accepting a
+  `RetryPolicy` object (`maxAttempts`, `baseDelayMs`, `maxDelayMs`).
+
+### Fixed
+
+- `SDK_VERSION` constant in the `User-Agent` header now correctly reflects
+  the package version (`2.2.0`).
+
 ## Unreleased
 
 ### Added (canonical REST migration for revoke / verify)

@@ -192,7 +192,7 @@ describe("atlasent.protect (default export API)", () => {
     const fetchImpl = mockFetchSequence([
       new Response("server boom", { status: 500 }),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
 
     let caught: unknown;
     try {

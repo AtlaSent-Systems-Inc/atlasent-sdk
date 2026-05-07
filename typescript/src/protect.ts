@@ -65,6 +65,8 @@ export interface ConfigureOptions {
   timeoutMs?: number;
   /** Inject a custom fetch (primarily for tests). */
   fetch?: typeof fetch;
+  /** Override the retry policy. Pass `{ maxAttempts: 1 }` to disable retries. */
+  retryPolicy?: import("./retry.js").RetryPolicy;
 }
 
 let sharedClient: AtlaSentClient | null = null;
@@ -101,6 +103,7 @@ function getClient(): AtlaSentClient {
   if (overrides.baseUrl !== undefined) options.baseUrl = overrides.baseUrl;
   if (overrides.timeoutMs !== undefined) options.timeoutMs = overrides.timeoutMs;
   if (overrides.fetch !== undefined) options.fetch = overrides.fetch;
+  if (overrides.retryPolicy !== undefined) options.retryPolicy = overrides.retryPolicy;
   sharedClient = new AtlaSentClient(options);
   return sharedClient;
 }

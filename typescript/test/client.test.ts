@@ -450,6 +450,7 @@ describe("HTTP error mapping", () => {
           headers: { "Retry-After": "30" },
         }),
       ),
+      { retryPolicy: { maxAttempts: 1 } },
     );
     await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
       status: 429,
@@ -467,6 +468,7 @@ describe("HTTP error mapping", () => {
           headers: { "Retry-After": future },
         }),
       ),
+      { retryPolicy: { maxAttempts: 1 } },
     );
     let thrown: AtlaSentError | undefined;
     try {
@@ -1431,5 +1433,104 @@ describe("verifyPermitById()", () => {
   it("throws bad_request when permitId is empty", async () => {
     const client = makeClient(mockFetch(() => jsonResponse({})));
     await expect(client.verifyPermitById("")).rejects.toMatchObject({ code: "bad_request" });
+  });
+});
+
+// ── Retry behaviour ────────────────────────────────────────────────────────────
+
+describe("AtlaSentClient retry", () => {
+  it("retries on 500 and succeeds on the second attempt", async () => {
+    let calls = 0;
+    const fetchImpl = mockFetch(() => {
+      calls++;
+      if (calls === 1) return new Response("boom", { status: 500 });
+      return jsonResponse({ decision: "allow", permit_token: "pt_retry", request_id: "r1" });
+    });
+    const client = makeClient(fetchImpl, {
+      retryPolicy: { maxAttempts: 2, baseDelayMs: 0, maxDelayMs: 0 },
+    });
+    const result = await client.evaluate({ agent: "agent_1", action: "write" });
+    expect(calls).toBe(2);
+    expect(result.decision).toBe("ALLOW");
+    expect(result.permitId).toBe("pt_retry");
+  });
+
+  it("retries on 429 and respects Retry-After", async () => {
+    let calls = 0;
+    const fetchImpl = mockFetch(() => {
+      calls++;
+      if (calls === 1) {
+        return new Response("rate limited", {
+          status: 429,
+          headers: { "Retry-After": "0" },
+        });
+      }
+      return jsonResponse({ decision: "allow", permit_token: "pt_429", request_id: "r2" });
+    });
+    const client = makeClient(fetchImpl, {
+      retryPolicy: { maxAttempts: 2, baseDelayMs: 0, maxDelayMs: 0 },
+    });
+    const result = await client.evaluate({ agent: "agent_1", action: "write" });
+    expect(calls).toBe(2);
+    expect(result.decision).toBe("ALLOW");
+  });
+
+  it("retries on network error and succeeds", async () => {
+    let calls = 0;
+    const fetchImpl = mockFetch(() => {
+      calls++;
+      if (calls === 1) throw new TypeError("fetch failed");
+      return jsonResponse({ decision: "deny", permit_token: "", request_id: "r3" });
+    });
+    const client = makeClient(fetchImpl, {
+      retryPolicy: { maxAttempts: 2, baseDelayMs: 0, maxDelayMs: 0 },
+    });
+    const result = await client.evaluate({ agent: "agent_2", action: "read" });
+    expect(calls).toBe(2);
+    expect(result.decision).toBe("DENY");
+  });
+
+  it("exhausts attempts and throws on persistent 500", async () => {
+    const fetchImpl = mockFetch(() => new Response("err", { status: 500 }));
+    const client = makeClient(fetchImpl, {
+      retryPolicy: { maxAttempts: 3, baseDelayMs: 0, maxDelayMs: 0 },
+    });
+    await expect(
+      client.evaluate({ agent: "agent_3", action: "write" }),
+    ).rejects.toMatchObject({ code: "server_error" });
+    expect(fetchImpl.mock.calls).toHaveLength(3);
+  });
+
+  it("does not retry 401", async () => {
+    const fetchImpl = mockFetch(() => new Response("unauth", { status: 401 }));
+    const client = makeClient(fetchImpl, {
+      retryPolicy: { maxAttempts: 3, baseDelayMs: 0, maxDelayMs: 0 },
+    });
+    await expect(
+      client.evaluate({ agent: "agent_4", action: "write" }),
+    ).rejects.toMatchObject({ code: "invalid_api_key" });
+    expect(fetchImpl.mock.calls).toHaveLength(1);
+  });
+
+  it("does not retry 400 bad_request", async () => {
+    const fetchImpl = mockFetch(() => new Response("bad", { status: 400 }));
+    const client = makeClient(fetchImpl, {
+      retryPolicy: { maxAttempts: 3, baseDelayMs: 0, maxDelayMs: 0 },
+    });
+    await expect(
+      client.evaluate({ agent: "agent_5", action: "write" }),
+    ).rejects.toMatchObject({ code: "bad_request" });
+    expect(fetchImpl.mock.calls).toHaveLength(1);
+  });
+
+  it("maxAttempts: 1 disables retries", async () => {
+    const fetchImpl = mockFetch(() => new Response("err", { status: 503 }));
+    const client = makeClient(fetchImpl, {
+      retryPolicy: { maxAttempts: 1 },
+    });
+    await expect(
+      client.evaluate({ agent: "agent_6", action: "write" }),
+    ).rejects.toMatchObject({ code: "server_error" });
+    expect(fetchImpl.mock.calls).toHaveLength(1);
   });
 });

@@ -51,6 +51,13 @@ import {
   type LegacyEvaluateRequest,
   type V2EvaluateRequest,
 } from "./compat.js";
+import {
+  computeBackoffMs,
+  hasAttemptsLeft,
+  isRetryable,
+  mergePolicy,
+  type RetryPolicy,
+} from "./retry.js";
 import type {
   HitlApprovalRecord,
   HitlApproveRequest,
@@ -64,7 +71,7 @@ import type {
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const SDK_VERSION = "1.6.0";
+const SDK_VERSION = "2.2.0";
 
 function _buildUserAgent(): string {
   const isNode =
@@ -241,6 +248,7 @@ export class AtlaSentClient {
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
   private readonly userAgent: string;
+  private readonly retryPolicy: Required<RetryPolicy>;
 
   constructor(options: AtlaSentClientOptions) {
     if (!options.apiKey || typeof options.apiKey !== "string") {
@@ -264,6 +272,7 @@ export class AtlaSentClient {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.userAgent = _buildUserAgent();
+    this.retryPolicy = mergePolicy(options.retryPolicy ?? {});
   }
 
   /**
@@ -860,48 +869,72 @@ export class AtlaSentClient {
     };
     if (method === "POST") headers["Content-Type"] = "application/json";
 
-    const init: RequestInit = {
-      method,
-      headers,
-      signal: AbortSignal.timeout(this.timeoutMs),
-    };
-    if (method === "POST") init.body = JSON.stringify(body);
+    const bodyStr = method === "POST" ? JSON.stringify(body) : undefined;
 
-    let response: Response;
-    try {
-      response = await this.fetchImpl(url, init);
-    } catch (err) {
-      throw mapFetchError(err, requestId);
+    for (let attempt = 0; ; attempt++) {
+      const init: RequestInit = {
+        method,
+        headers,
+        signal: AbortSignal.timeout(this.timeoutMs),
+      };
+      if (bodyStr !== undefined) init.body = bodyStr;
+
+      let response: Response;
+      try {
+        response = await this.fetchImpl(url, init);
+      } catch (err) {
+        const mapped = mapFetchError(err, requestId);
+        if (isRetryable(mapped) && hasAttemptsLeft(attempt, this.retryPolicy)) {
+          await sleep(computeBackoffMs(attempt, this.retryPolicy, mapped));
+          continue;
+        }
+        throw mapped;
+      }
+
+      if (!response.ok) {
+        const httpErr = await buildHttpError(response, requestId);
+        if (isRetryable(httpErr) && hasAttemptsLeft(attempt, this.retryPolicy)) {
+          await sleep(computeBackoffMs(attempt, this.retryPolicy, httpErr));
+          continue;
+        }
+        throw httpErr;
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = await response.json();
+      } catch (err) {
+        const jsonErr = new AtlaSentError("Invalid JSON response from AtlaSent API", {
+          code: "bad_response",
+          status: response.status,
+          requestId,
+          cause: err,
+        });
+        if (isRetryable(jsonErr) && hasAttemptsLeft(attempt, this.retryPolicy)) {
+          await sleep(computeBackoffMs(attempt, this.retryPolicy, jsonErr));
+          continue;
+        }
+        throw jsonErr;
+      }
+
+      if (parsed === null || typeof parsed !== "object") {
+        const shapeErr = new AtlaSentError("Expected a JSON object from AtlaSent API", {
+          code: "bad_response",
+          status: response.status,
+          requestId,
+        });
+        if (isRetryable(shapeErr) && hasAttemptsLeft(attempt, this.retryPolicy)) {
+          await sleep(computeBackoffMs(attempt, this.retryPolicy, shapeErr));
+          continue;
+        }
+        throw shapeErr;
+      }
+
+      return {
+        body: parsed as T,
+        rateLimit: parseRateLimitHeaders(response.headers),
+      };
     }
-
-    if (!response.ok) {
-      throw await buildHttpError(response, requestId);
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = await response.json();
-    } catch (err) {
-      throw new AtlaSentError("Invalid JSON response from AtlaSent API", {
-        code: "bad_response",
-        status: response.status,
-        requestId,
-        cause: err,
-      });
-    }
-
-    if (parsed === null || typeof parsed !== "object") {
-      throw new AtlaSentError("Expected a JSON object from AtlaSent API", {
-        code: "bad_response",
-        status: response.status,
-        requestId,
-      });
-    }
-
-    return {
-      body: parsed as T,
-      rateLimit: parseRateLimitHeaders(response.headers),
-    };
   }
 
   /**
@@ -1227,6 +1260,10 @@ function buildAuditEventsQuery(query: AuditEventsQuery): URLSearchParams {
     params.set("cursor", query.cursor);
   }
   return params;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseRetryAfter(raw: string | null): number | undefined {
