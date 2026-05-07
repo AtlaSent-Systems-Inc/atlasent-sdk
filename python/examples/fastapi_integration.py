@@ -9,7 +9,7 @@ Run with::
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
-from atlasent import AsyncAtlaSentClient, AtlaSentError
+from atlasent import AsyncAtlaSentClient, AtlaSentDeniedError, AtlaSentError
 
 app = FastAPI(title="AtlaSent + FastAPI Example")
 
@@ -28,6 +28,7 @@ class ModifyRecordRequest(BaseModel):
 
 class ModifyRecordResponse(BaseModel):
     status: str
+    permit_id: str
     permit_hash: str
     audit_hash: str
 
@@ -39,7 +40,7 @@ async def modify_record(
 ):
     """Modify a patient record — gated by AtlaSent authorization."""
     try:
-        result = await client.authorize(
+        permit = await client.protect(
             agent="fastapi-clinical-agent",
             action="modify_patient_record",
             context={
@@ -47,19 +48,19 @@ async def modify_record(
                 "change_reason": body.change_reason,
             },
         )
+    except AtlaSentDeniedError as exc:
+        raise HTTPException(status_code=403, detail=exc.reason) from exc
     except AtlaSentError as exc:
         raise HTTPException(
             status_code=502,
             detail=f"Authorization service error: {exc.message}",
         ) from exc
 
-    if not result.permitted:
-        raise HTTPException(status_code=403, detail=result.reason)
-
     return ModifyRecordResponse(
         status="modified",
-        permit_hash=result.permit_hash,
-        audit_hash=result.audit_hash,
+        permit_id=permit.permit_id,
+        permit_hash=permit.permit_hash,
+        audit_hash=permit.audit_hash,
     )
 
 

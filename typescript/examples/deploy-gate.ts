@@ -1,5 +1,5 @@
 /**
- * CI deploy-gate: evaluate, then verifyPermit before deploying.
+ * CI deploy-gate: evaluate, then verifyPermitById before deploying.
  *
  * Wires AtlaSent into a production deploy pipeline. The deploy is
  * blocked unless (a) the policy engine allows it AND (b) the
@@ -53,22 +53,20 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const verification = await client.verifyPermit({
-    permitId: evaluation.permitId,
-    agent: "ci-deploy-bot",
-    action: "deploy_to_production",
-    context: deployContext,
-  });
+  const verification = await client.verifyPermitById(evaluation.permitId);
 
-  if (!verification.verified) {
-    console.error(`Permit ${evaluation.permitId} failed verification`);
+  if (!verification.valid) {
+    console.error(
+      `Permit ${evaluation.permitId} failed verification: ${verification.reason ?? "unknown"}`,
+    );
     process.exit(1);
   }
 
   console.log(
-    `Deploy approved — permitId=${evaluation.permitId} permitHash=${verification.permitHash}`,
+    `Deploy approved — permitId=${evaluation.permitId} payloadHash=${verification.evidence.payload_hash ?? "n/a"}`,
   );
-  console.log(`  auditHash: ${evaluation.auditHash}`);
+  console.log(`  verifiedAt: ${verification.verified_at}`);
+  console.log(`  auditHash:  ${evaluation.auditHash}`);
   // runDeploy();
 }
 
