@@ -238,7 +238,7 @@ describe("atlaSentErrorHandler", () => {
     const fetchImpl = mockFetchSequence([
       new Response("server boom", { status: 500 }),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
 
     const app = new Hono();
     app.onError(atlaSentErrorHandler());

@@ -242,6 +242,14 @@ export interface AtlaSentClientOptions {
    * Defaults to `globalThis.fetch`.
    */
   fetch?: typeof fetch;
+  /**
+   * Retry policy for transient failures (network errors, timeouts,
+   * 429 rate-limit, 5xx server errors, malformed responses).
+   * Omit to use the default: 3 total attempts, 250 ms base, 7 s cap,
+   * full-jitter exponential backoff.
+   * Pass `{ maxAttempts: 1 }` to disable retries entirely.
+   */
+  retryPolicy?: import("./retry.js").RetryPolicy;
 }
 
 // ── Permit lifecycle (canonical REST shapes) ──────────────────────────────────
