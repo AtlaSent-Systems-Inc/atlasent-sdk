@@ -6,6 +6,45 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Added (canonical REST migration for revoke / verify)
+
+- `client.revokePermitById(permitId, { reason? })` — calls
+  `POST /v1/permits/{permitId}/revoke`. Returns the full updated
+  `PermitRecord` with `status === 'revoked'` and `revoked_at` /
+  `revoked_by` / `revoke_reason` populated, instead of the legacy
+  `{revoked, permitId}` envelope.
+- `client.verifyPermitById(permitId)` — calls
+  `POST /v1/permits/{permitId}/verify`. Returns the unified
+  verification envelope (`valid`, `verification_type: 'permit'`,
+  `reason`, `verified_at`, `evidence`) plus the full `PermitRecord`
+  fields preserved at the top level. The `valid` field is the
+  canonical contract.
+- New types: `RevokePermitByIdInput`, `RevokePermitByIdResponse`,
+  `VerifyPermitByIdResponse`.
+
+### Deprecated
+
+- `client.revokePermit(input)` and `RevokePermitResponse` —
+  legacy `POST /v1-revoke-permit` (token-in-body). Migrate to
+  `revokePermitById(permitId, options)`.
+- `client.verifyPermit(input)` and `VerifyPermitResponse` —
+  legacy `POST /v1-verify-permit` (token-in-body). Migrate to
+  `verifyPermitById(permitId)`.
+
+The legacy methods continue to work for the rest of the
+`@atlasent/sdk@2.x` line. Removal lands in `@atlasent/sdk@3`.
+
+### Notes
+
+- No version bump. Wire contract is unchanged on either path.
+- Wire shape on the canonical surface: `verify` returns the
+  envelope + Permit row (allOf in openapi from atlasent-api#352);
+  `revoke` returns the updated Permit row directly
+  (atlasent-api#351).
+- Tests: +7 (4 revokePermitById, 3 verifyPermitById).
+  Full SDK suite 462/462 green.
+
+
 ### Added (decision casing canonicalization)
 
 - **`decision_canonical`** field on `EvaluateResponse` and

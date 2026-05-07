@@ -117,7 +117,16 @@ export interface VerifyPermitRequest {
   context?: Record<string, unknown>;
 }
 
-/** Result of {@link AtlaSentClient.verifyPermit}. */
+/**
+ * Result of {@link AtlaSentClient.verifyPermit}.
+ *
+ * @deprecated Use {@link VerifyPermitByIdResponse} via
+ * {@link AtlaSentClient.verifyPermitById} — the canonical REST surface
+ * (`POST /v1/permits/{id}/verify`) returns the unified verification
+ * envelope (`valid`, `verification_type`, `reason`, `verified_at`,
+ * `evidence`) plus the full {@link PermitRecord} fields. Will be
+ * removed in `@atlasent/sdk@3`.
+ */
 export interface VerifyPermitResponse {
   /** `true` when the permit is valid and un-revoked. */
   verified: boolean;
@@ -303,6 +312,61 @@ export interface GetPermitResponse {
   rateLimit: RateLimitState | null;
 }
 
+// ── Canonical revoke / verify (REST) ──────────────────────────────────────────
+
+/** Input for {@link AtlaSentClient.revokePermitById}. */
+export interface RevokePermitByIdInput {
+  /** Operator-supplied free-text reason. Recorded on the permit row,
+   *  written to the audit trail, and surfaced (truncated) on later
+   *  verify responses. Optional but strongly encouraged. */
+  reason?: string;
+}
+
+/**
+ * Response from {@link AtlaSentClient.revokePermitById}.
+ *
+ * Returns the updated {@link PermitRecord} with `status === 'revoked'`
+ * and the populated `revoked_at` / `revoked_by` / `revoke_reason`
+ * fields.
+ */
+export interface RevokePermitByIdResponse {
+  permit: PermitRecord;
+  rateLimit: RateLimitState | null;
+}
+
+/**
+ * Response from {@link AtlaSentClient.verifyPermitById}.
+ *
+ * Returns the canonical verification envelope (`valid`,
+ * `verification_type`, `reason`, `verified_at`, `evidence`) plus the
+ * legacy {@link PermitRecord} fields preserved at the top level for
+ * backward compatibility. The envelope shape matches the unified
+ * verify response in atlasent-api PR #352.
+ */
+export interface VerifyPermitByIdResponse {
+  /** `true` iff the permit verified — i.e. unconsumed, unexpired, and signature OK. */
+  valid: boolean;
+  /** Always `'permit'` on this surface. */
+  verification_type: 'permit';
+  /** Operator-readable explanation when `valid` is `false`; `null` on success. */
+  reason: string | null;
+  /** Server clock at the moment verification ran. */
+  verified_at: string;
+  /** Type-specific evidence — same fields as the openapi PermitVerifyEvidence schema. */
+  evidence: {
+    permit_id: string;
+    status: PermitStatus;
+    actor_id?: string;
+    action_id?: string;
+    expires_at?: string;
+    payload_hash?: string | null;
+    decision_id?: string | null;
+  };
+  /** Legacy: full permit row preserved at the top level. */
+  permit: PermitRecord;
+  rateLimit: RateLimitState | null;
+}
+
 // ── Revoke permit ─────────────────────────────────────────────────────────────
 
 /** Input for {@link AtlaSentClient.revokePermit}. */
@@ -313,7 +377,16 @@ export interface RevokePermitRequest {
   reason?: string;
 }
 
-/** Result of {@link AtlaSentClient.revokePermit}. */
+/**
+ * Result of {@link AtlaSentClient.revokePermit}.
+ *
+ * @deprecated Use {@link RevokePermitByIdResponse} via
+ * {@link AtlaSentClient.revokePermitById} — the canonical REST surface
+ * (`POST /v1/permits/{id}/revoke`) returns the full updated
+ * {@link PermitRecord} with `revoked_at`/`revoked_by`/`revoke_reason`
+ * populated, instead of the legacy `{revoked, permitId}` envelope.
+ * Will be removed in `@atlasent/sdk@3`.
+ */
 export interface RevokePermitResponse {
   /** `true` when the permit was found and successfully revoked. */
   revoked: boolean;

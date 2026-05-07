@@ -1324,3 +1324,112 @@ describe("listPermits()", () => {
     expect(result.total).toBe(2);
   });
 });
+
+describe("revokePermitById()", () => {
+  const REVOKED_WIRE = {
+    id: "pt_alpha",
+    org_id: "org_x",
+    actor_id: "agent-1",
+    action_id: "ehr.write",
+    status: "revoked" as const,
+    issued_at: "2026-05-07T01:00:00Z",
+    expires_at: "2026-05-07T01:15:00Z",
+    consumed_at: null,
+    revoked_at: "2026-05-07T01:10:00Z",
+    revoked_by: "user_admin",
+    revoke_reason: "approval rescinded",
+  };
+
+  it("hits POST /v1/permits/:id/revoke and returns updated permit", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(REVOKED_WIRE));
+    const client = makeClient(fetchImpl);
+    const result = await client.revokePermitById("pt_alpha", { reason: "approval rescinded" });
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("https://api.atlasent.io/v1/permits/pt_alpha/revoke");
+    expect(init!.method).toBe("POST");
+    expect(JSON.parse(init!.body as string)).toEqual({ reason: "approval rescinded" });
+    expect(result.permit.status).toBe("revoked");
+    expect(result.permit.revoked_at).toBe("2026-05-07T01:10:00Z");
+    expect(result.permit.revoked_by).toBe("user_admin");
+    expect(result.permit.revoke_reason).toBe("approval rescinded");
+  });
+
+  it("omits reason from body when not supplied", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(REVOKED_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.revokePermitById("pt_alpha");
+    const body = JSON.parse((fetchImpl.mock.calls[0]![1]!.body) as string);
+    expect(body).toEqual({});
+  });
+
+  it("URL-encodes the permitId", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(REVOKED_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.revokePermitById("pt with spaces");
+    const [url] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("https://api.atlasent.io/v1/permits/pt%20with%20spaces/revoke");
+  });
+
+  it("throws bad_request when permitId is empty", async () => {
+    const client = makeClient(mockFetch(() => jsonResponse({})));
+    await expect(client.revokePermitById("")).rejects.toMatchObject({ code: "bad_request" });
+  });
+});
+
+describe("verifyPermitById()", () => {
+  const VERIFY_OK_WIRE = {
+    valid: true,
+    verification_type: "permit" as const,
+    reason: null,
+    verified_at: "2026-05-07T01:00:00.214Z",
+    evidence: {
+      permit_id: "pt_alpha",
+      status: "verified" as const,
+      actor_id: "agent-1",
+      action_id: "ehr.write",
+      expires_at: "2026-05-07T01:15:00Z",
+      payload_hash: "sha256:deadbeef",
+      decision_id: "eval_a",
+    },
+    // Legacy fields preserved at top level (allOf in openapi):
+    id: "pt_alpha",
+    org_id: "org_x",
+    actor_id: "agent-1",
+    action_id: "ehr.write",
+    status: "verified" as const,
+    issued_at: "2026-05-07T01:00:00Z",
+    expires_at: "2026-05-07T01:15:00Z",
+    payload_hash: "sha256:deadbeef",
+    decision_id: "eval_a",
+  };
+
+  it("hits POST /v1/permits/:id/verify and returns the canonical envelope", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(VERIFY_OK_WIRE));
+    const client = makeClient(fetchImpl);
+    const result = await client.verifyPermitById("pt_alpha");
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("https://api.atlasent.io/v1/permits/pt_alpha/verify");
+    expect(init!.method).toBe("POST");
+    expect(result.valid).toBe(true);
+    expect(result.verification_type).toBe("permit");
+    expect(result.reason).toBeNull();
+    expect(result.verified_at).toBe("2026-05-07T01:00:00.214Z");
+    expect(result.evidence.permit_id).toBe("pt_alpha");
+    expect(result.evidence.status).toBe("verified");
+    expect(result.permit.id).toBe("pt_alpha");
+    expect(result.permit.status).toBe("verified");
+  });
+
+  it("URL-encodes the permitId", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(VERIFY_OK_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.verifyPermitById("pt with spaces");
+    const [url] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("https://api.atlasent.io/v1/permits/pt%20with%20spaces/verify");
+  });
+
+  it("throws bad_request when permitId is empty", async () => {
+    const client = makeClient(mockFetch(() => jsonResponse({})));
+    await expect(client.verifyPermitById("")).rejects.toMatchObject({ code: "bad_request" });
+  });
+});
