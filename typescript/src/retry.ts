@@ -27,15 +27,27 @@
  * https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/.
  * It avoids thundering-herd retries from many SDK instances that hit
  * a 429 in the same window.
+ *
+ * Default schedule matches the Python SDK:
+ *   attempt 0 (1st retry): base 2 000 ms, jittered in [0, 2 000)
+ *   attempt 1 (2nd retry): base 4 000 ms, jittered in [0, 4 000)
+ *   attempt 2 (3rd retry): base 8 000 ms, jittered in [0, 8 000)
+ *   attempt 3 (4th retry): capped at 16 000 ms, jittered in [0, 16 000)
+ * Total attempts (including initial): 4
  */
 
 import { AtlaSentError, type AtlaSentErrorCode } from "./errors.js";
 
-/** Defaults for {@link RetryPolicy}. Conservative — three retries, ~7s ceiling. */
+/**
+ * Defaults for {@link RetryPolicy}.
+ *
+ * Matches the Python SDK's backoff schedule:
+ *   2 s → 4 s → 8 s → 16 s (4 total attempts, cap at 16 s).
+ */
 export const DEFAULT_RETRY_POLICY: Required<RetryPolicy> = {
-  maxAttempts: 3,
-  baseDelayMs: 250,
-  maxDelayMs: 7_000,
+  maxAttempts: 4,
+  baseDelayMs: 2_000,
+  maxDelayMs: 16_000,
 };
 
 /**
@@ -96,7 +108,9 @@ export function isRetryable(err: unknown): boolean {
  * server's hint is treated as a floor so we never retry sooner than
  * the server asked.
  *
- * @param attempt    Zero-indexed retry attempt (0, 1, 2, ...).
+ * @param attempt    Zero-indexed retry attempt (0, 1, 2, ...).  For
+ *                   the default policy this produces delays drawn from
+ *                   [0, 2 000), [0, 4 000), [0, 8 000), [0, 16 000).
  * @param policy     Optional override of {@link DEFAULT_RETRY_POLICY}.
  * @param err        Optional error whose `retryAfterMs` is honoured.
  * @param random     Injectable RNG, defaults to `Math.random`. Must
