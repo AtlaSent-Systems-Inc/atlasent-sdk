@@ -38,8 +38,11 @@ from .models import (
     ListPermitsResult,
     Permit,
     PermitRecord,
+    PermitVerifyEvidence,
     RateLimitState,
+    RevokePermitByIdResult,
     RevokePermitResult,
+    VerifyPermitByIdResult,
     VerifyRequest,
     VerifyResult,
 )
@@ -403,6 +406,15 @@ class AtlaSentClient:
     ) -> VerifyResult:
         """Verify a previously issued permit token.
 
+        .. deprecated::
+           Use :meth:`verify_permit_by_id` — the canonical REST surface
+           (``POST /v1/permits/{id}/verify``) returns the unified
+           verification envelope (``valid``, ``verification_type``,
+           ``reason``, ``verified_at``, ``evidence``) plus the full
+           :class:`PermitRecord`, instead of the legacy
+           ``{valid, outcome, permit_hash}`` shape this method emits.
+           Will be removed in ``atlasent`` v3.
+
         Args:
             permit_token: The token from :meth:`evaluate`.
             action_type: Optionally re-state the action for cross-check.
@@ -426,6 +438,14 @@ class AtlaSentClient:
             AtlaSentError: Network error, timeout, or unexpected response.
             RateLimitError: HTTP 429.
         """
+        warnings.warn(
+            "AtlaSentClient.verify() is deprecated. Use verify_permit_by_id() "
+            "for the canonical REST surface; it returns the unified "
+            "verification envelope (valid/verification_type/reason/verified_at/"
+            "evidence) plus the full PermitRecord. Will be removed in v3.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         # `context` arg is preserved on the public method signature for
         # backward-compat but no longer sent on the wire — handler.ts
         # cross-checks via action_type / actor_id only.
@@ -712,6 +732,14 @@ class AtlaSentClient:
     ) -> RevokePermitResult:
         """Revoke a previously-issued permit (``POST /v1-revoke-permit``).
 
+        .. deprecated::
+           Use :meth:`revoke_permit_by_id` — the canonical REST surface
+           (``POST /v1/permits/{id}/revoke``) returns the full updated
+           :class:`PermitRecord` with ``revoked_at`` / ``revoked_by`` /
+           ``revoke_reason`` populated, instead of the legacy
+           ``{revoked, permit_id}`` envelope this method emits. Will
+           be removed in ``atlasent`` v3.
+
         Once revoked, the permit will no longer pass :meth:`verify`.
         The revocation is recorded in the audit log with the optional *reason*.
 
@@ -725,6 +753,14 @@ class AtlaSentClient:
         Raises:
             :class:`AtlaSentError` on transport or server errors.
         """
+        warnings.warn(
+            "AtlaSentClient.revoke_permit() is deprecated. Use "
+            "revoke_permit_by_id() for the canonical REST surface; it "
+            "returns the full updated PermitRecord with revoked_at / "
+            "revoked_by / revoke_reason populated. Will be removed in v3.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         payload = {
             "decision_id": permit_id,
             "reason": reason or "",
@@ -747,6 +783,89 @@ class AtlaSentClient:
         result = RevokePermitResult.model_validate(data)
         result.rate_limit = rate_limit
         return result
+
+    def revoke_permit_by_id(
+        self,
+        permit_id: str,
+        *,
+        reason: str | None = None,
+    ) -> RevokePermitByIdResult:
+        """Revoke a permit through the canonical REST surface
+        (``POST /v1/permits/{permit_id}/revoke``).
+
+        Returns the full updated :class:`PermitRecord` with
+        ``status == 'revoked'`` and ``revoked_at`` / ``revoked_by`` /
+        ``revoke_reason`` populated. After revocation, subsequent
+        verify calls return ``410 PERMIT_REVOKED``.
+
+        Idempotent on ``409 permit_revoked`` for already-revoked
+        permits; the server returns the existing revoked row in that
+        case.
+
+        Args:
+            permit_id: The permit's ``pt_…`` ID.
+            reason: Operator-supplied free-text reason. Recorded on
+                the permit row, written to the audit trail, and
+                surfaced (truncated) on later verify responses.
+                Optional but strongly encouraged.
+
+        Raises:
+            :class:`AtlaSentError` on ``404`` (permit not in calling
+            org), ``409`` (already in a terminal state), ``410``
+            (expired before revoke), or ``429`` (rate limited).
+        """
+        if not permit_id:
+            raise AtlaSentError("permit_id is required", code="bad_request")
+        body: dict[str, Any] = {}
+        if reason is not None:
+            body["reason"] = reason
+        path = f"/v1/permits/{quote(permit_id, safe='')}/revoke"
+        data, rate_limit, _ = self._post(path, body)
+        return RevokePermitByIdResult(
+            permit=PermitRecord.model_validate(data),
+            rate_limit=rate_limit,
+        )
+
+    def verify_permit_by_id(self, permit_id: str) -> VerifyPermitByIdResult:
+        """Verify a permit through the canonical REST surface
+        (``POST /v1/permits/{permit_id}/verify``).
+
+        Returns the unified verification envelope (``valid``,
+        ``verification_type='permit'``, ``reason``, ``verified_at``,
+        ``evidence``) plus the full :class:`PermitRecord` preserved at
+        ``permit`` for backward compatibility. The ``valid`` field is
+        the canonical contract — pin to it.
+
+        A ``valid=False`` is **not** raised when the server returns
+        200 with a denial reason (matches the verify-shape unification
+        on the wire); it is raised on 4xx (``404`` not found, ``410``
+        expired/consumed).
+        """
+        if not permit_id:
+            raise AtlaSentError("permit_id is required", code="bad_request")
+        path = f"/v1/permits/{quote(permit_id, safe='')}/verify"
+        data, rate_limit, request_id = self._post(path, {})
+        # Server returns the canonical envelope merged with the Permit
+        # row (allOf in openapi). Pull out the legacy permit row into
+        # `permit` for callers that want it as a sub-object too.
+        envelope_keys = {"valid", "verification_type", "reason", "verified_at", "evidence"}
+        permit_row = {k: v for k, v in data.items() if k not in envelope_keys}
+        if "valid" not in data or "evidence" not in data:
+            raise AtlaSentError(
+                "Malformed /v1/permits/{id}/verify response: missing canonical envelope fields",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+        return VerifyPermitByIdResult(
+            valid=bool(data["valid"]),
+            verification_type="permit",
+            reason=data.get("reason"),
+            verified_at=str(data["verified_at"]),
+            evidence=PermitVerifyEvidence.model_validate(data["evidence"]),
+            permit=PermitRecord.model_validate(permit_row),
+            rate_limit=rate_limit,
+        )
 
     def get_permit(self, permit_id: str) -> GetPermitResult:
         """Get a single permit's full lifecycle state
