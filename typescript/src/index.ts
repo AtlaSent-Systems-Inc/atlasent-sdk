@@ -123,6 +123,21 @@ export {
   type V2EvaluateRequest,
   type V2EvaluateResponse,
 } from "./compat.js";
+export {
+  hitlRequiredApproverCount,
+  type HitlApprovalRecord,
+  type HitlApproveRequest,
+  type HitlChainHop,
+  type HitlEscalateRequest,
+  type HitlEscalation,
+  type HitlFallbackDecision,
+  type HitlQuorumProgress,
+  type HitlQuorumTier,
+  type HitlRejectRequest,
+  type HitlStatus,
+  type ListHitlEscalationsRequest,
+  type ListHitlEscalationsResponse,
+} from "./hitl.js";
 export type {
   ApprovalArtifactV1,
   ApprovalIssuer,
