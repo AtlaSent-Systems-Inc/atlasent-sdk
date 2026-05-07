@@ -8,6 +8,7 @@ import logging
 import uuid
 import warnings
 from collections.abc import AsyncIterator
+from urllib.parse import quote
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any
@@ -39,11 +40,17 @@ from .models import (
     EvaluateRequest,
     EvaluateResult,
     GateResult,
+    GetPermitResult,
+    ListPermitsResult,
     Permit,
+    PermitRecord,
+    PermitVerifyEvidence,
     RateLimitState,
+    RevokePermitByIdResult,
     RevokePermitResult,
     StreamDecisionEvent,
     StreamProgressEvent,
+    VerifyPermitByIdResult,
     VerifyRequest,
     VerifyResult,
 )
@@ -292,8 +299,22 @@ class AsyncAtlaSentClient:
     ) -> VerifyResult:
         """Verify a previously issued permit token.
 
+        .. deprecated::
+           Use :meth:`verify_permit_by_id` — the canonical REST surface
+           returns the unified verification envelope plus the full
+           PermitRecord. Will be removed in ``atlasent`` v3.
+
         See :meth:`AtlaSentClient.verify` for full kwarg semantics.
         """
+        warnings.warn(
+            "AsyncAtlaSentClient.verify() is deprecated. Use "
+            "verify_permit_by_id() for the canonical REST surface; it "
+            "returns the unified verification envelope (valid / "
+            "verification_type / reason / verified_at / evidence) plus "
+            "the full PermitRecord. Will be removed in v3.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         # `context` arg preserved on the public method signature for
         # backward-compat but no longer sent on the wire — handler.ts
         # cross-checks via action_type / actor_id only.
@@ -592,9 +613,23 @@ class AsyncAtlaSentClient:
     ) -> RevokePermitResult:
         """Revoke a previously-issued permit (``POST /v1-revoke-permit``).
 
+        .. deprecated::
+           Use :meth:`revoke_permit_by_id` — the canonical REST surface
+           returns the full updated PermitRecord with revoked_at /
+           revoked_by / revoke_reason populated. Will be removed in
+           ``atlasent`` v3.
+
         Once revoked the permit will no longer pass :meth:`verify`.
         The revocation is recorded in the audit log with the optional *reason*.
         """
+        warnings.warn(
+            "AsyncAtlaSentClient.revoke_permit() is deprecated. Use "
+            "revoke_permit_by_id() for the canonical REST surface; it "
+            "returns the full updated PermitRecord with revoked_at / "
+            "revoked_by / revoke_reason populated. Will be removed in v3.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         payload = {
             "decision_id": permit_id,
             "reason": reason or "",
@@ -617,6 +652,135 @@ class AsyncAtlaSentClient:
         result = RevokePermitResult.model_validate(data)
         result.rate_limit = rate_limit
         return result
+
+    # ── Canonical REST surface (parity with sync client) ──────────
+
+    async def get_permit(self, permit_id: str) -> GetPermitResult:
+        """Get a single permit's full lifecycle state
+        (``GET /v1/permits/{permit_id}``).
+
+        Async parity for :meth:`AtlaSentClient.get_permit`. See the
+        sync version for full semantics.
+        """
+        if not permit_id:
+            raise AtlaSentError("permit_id is required", code="bad_request")
+        path = f"/v1/permits/{quote(permit_id, safe='')}"
+        data, rate_limit, _ = await self._get(path)
+        return GetPermitResult(
+            permit=PermitRecord.model_validate(data),
+            rate_limit=rate_limit,
+        )
+
+    async def list_permits(
+        self,
+        *,
+        status: str | None = None,
+        actor_id: str | None = None,
+        action_type: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> ListPermitsResult:
+        """List permits issued to the calling org
+        (``GET /v1/permits``).
+
+        Async parity for :meth:`AtlaSentClient.list_permits`. See the
+        sync version for full kwarg semantics.
+        """
+        params: dict[str, str] = {}
+        if status is not None:
+            params["status"] = status
+        if actor_id is not None:
+            params["actor_id"] = actor_id
+        if action_type is not None:
+            params["action_type"] = action_type
+        if from_ is not None:
+            params["from"] = from_
+        if to is not None:
+            params["to"] = to
+        if limit is not None:
+            params["limit"] = str(limit)
+        if cursor is not None:
+            params["cursor"] = cursor
+
+        data, rate_limit, request_id = await self._get(
+            "/v1/permits", params=params or None
+        )
+        permits_raw = data.get("permits")
+        if not isinstance(permits_raw, list):
+            raise AtlaSentError(
+                "Malformed /v1/permits response: missing `permits` array",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+        permits = [PermitRecord.model_validate(p) for p in permits_raw]
+        total = data.get("total")
+        return ListPermitsResult(
+            permits=permits,
+            total=total if isinstance(total, int) else len(permits),
+            next_cursor=data.get("next_cursor"),
+            rate_limit=rate_limit,
+        )
+
+    async def revoke_permit_by_id(
+        self,
+        permit_id: str,
+        *,
+        reason: str | None = None,
+    ) -> RevokePermitByIdResult:
+        """Revoke a permit through the canonical REST surface
+        (``POST /v1/permits/{permit_id}/revoke``).
+
+        Async parity for :meth:`AtlaSentClient.revoke_permit_by_id`.
+        """
+        if not permit_id:
+            raise AtlaSentError("permit_id is required", code="bad_request")
+        body: dict[str, Any] = {}
+        if reason is not None:
+            body["reason"] = reason
+        path = f"/v1/permits/{quote(permit_id, safe='')}/revoke"
+        data, rate_limit, _ = await self._post(path, body)
+        return RevokePermitByIdResult(
+            permit=PermitRecord.model_validate(data),
+            rate_limit=rate_limit,
+        )
+
+    async def verify_permit_by_id(self, permit_id: str) -> VerifyPermitByIdResult:
+        """Verify a permit through the canonical REST surface
+        (``POST /v1/permits/{permit_id}/verify``).
+
+        Async parity for :meth:`AtlaSentClient.verify_permit_by_id`.
+        """
+        if not permit_id:
+            raise AtlaSentError("permit_id is required", code="bad_request")
+        path = f"/v1/permits/{quote(permit_id, safe='')}/verify"
+        data, rate_limit, request_id = await self._post(path, {})
+        envelope_keys = {
+            "valid",
+            "verification_type",
+            "reason",
+            "verified_at",
+            "evidence",
+        }
+        permit_row = {k: v for k, v in data.items() if k not in envelope_keys}
+        if "valid" not in data or "evidence" not in data:
+            raise AtlaSentError(
+                "Malformed /v1/permits/{id}/verify response: missing canonical envelope fields",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+        return VerifyPermitByIdResult(
+            valid=bool(data["valid"]),
+            verification_type="permit",
+            reason=data.get("reason"),
+            verified_at=str(data["verified_at"]),
+            evidence=PermitVerifyEvidence.model_validate(data["evidence"]),
+            permit=PermitRecord.model_validate(permit_row),
+            rate_limit=rate_limit,
+        )
 
     async def list_audit_events(
         self,
@@ -734,14 +898,19 @@ class AsyncAtlaSentClient:
         return await self._request("POST", path, payload, params=params)
 
     async def _get(
-        self, path: str
+        self,
+        path: str,
+        *,
+        params: dict[str, str] | None = None,
     ) -> tuple[dict[str, Any], RateLimitState | None, str]:
         """GET with retry on transient failures.
 
         Same ``(body, rate_limit, request_id)`` shape as :meth:`_post`
         so response-parsing code is shared.
+
+        ``params`` is appended as a URL query string when present.
         """
-        return await self._request("GET", path, None)
+        return await self._request("GET", path, None, params=params)
 
     async def _request(
         self,
