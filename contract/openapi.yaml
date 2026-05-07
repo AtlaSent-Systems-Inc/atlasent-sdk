@@ -236,6 +236,28 @@ components:
         traceparent:
           type: string
           description: "W3C Trace Context fallback when the SDK can't add the header through a signing layer."
+        resource_id:
+          type: string
+          maxLength: 512
+          description: "Resource the action targets (e.g. 'release:abc123'). Bound into the canonical action hash that approval artifacts cover, so an approval issued for one resource cannot authorize another."
+        amount:
+          type: number
+          description: "Optional monetary or quantity bound. Bound into the canonical action hash."
+        approval:
+          type: object
+          additionalProperties: false
+          description: "Optional signed approval. When the action requires human approval (rule-driven OR action-type prefix per requiresHumanApproval), /v1-evaluate verifies this artifact before issuing a permit; failure denies. Schema for the artifact lives in approval-artifact.schema.json."
+          properties:
+            approval_id:
+              type: string
+              description: "Reference to an artifact stored server-side. Either this or `artifact` must be present."
+            artifact:
+              description: "Inline approval artifact body. Mirrors approval-artifact.schema.json."
+              type: object
+              additionalProperties: true
+        require_approval:
+          type: boolean
+          description: "Caller assertion that this action requires verified human approval, even when the action_type heuristic does not match. Echoed onto /v1-verify-permit so the consumer can hard-deny when the permit's persisted `approval` block is missing."
 
     EvaluateResponse:
       title: EvaluateResponse
@@ -291,6 +313,33 @@ components:
           type: string
         risk_score:
           type: number
+        permit:
+          type: object
+          additionalProperties: true
+          description: "Wire-format PermitV2 body. Returned alongside `permit_token` when the legacy v1 surface is upgraded to V2. The `approval` sub-block is the cryptographic linkage to the approval artifact verified at evaluate time."
+          properties:
+            approval:
+              type: object
+              additionalProperties: false
+              required: [approval_id, artifact_hash, reviewer_id, issuer_id, kid]
+              description: "Permit ↔ approval-artifact binding. Present iff /v1-evaluate verified an approval_artifact.v1 for this issuance. /v1-verify-permit re-surfaces this on consume so executors can prove which signed approval authorized the action."
+              properties:
+                approval_id:
+                  type: string
+                  description: "approval_artifact.approval_id from the verified artifact."
+                artifact_hash:
+                  type: string
+                  pattern: "^[0-9a-f]{64}$"
+                  description: "SHA-256 over the artifact's canonical signing payload (i.e. the artifact with the `signature` field stripped). Lets a stored permit row prove which artifact authorized it without retaining the full artifact body."
+                reviewer_id:
+                  type: string
+                  description: "reviewer.principal_id from the verified artifact."
+                issuer_id:
+                  type: string
+                  description: "issuer.issuer_id from the verified artifact."
+                kid:
+                  type: string
+                  description: "issuer.kid used to verify the signature (key id, for rotation)."
 
     VerifyPermitRequest:
       title: VerifyPermitRequest
@@ -309,6 +358,9 @@ components:
         actor_id:
           type: string
           description: "Optional cross-check — re-state the actor_id. ACTOR_MISMATCH if it disagrees."
+        require_approval:
+          type: boolean
+          description: "Caller assertion that this consume must produce a permit row with a populated approval binding. When true and the row carries no binding, the verifier returns APPROVAL_LINKAGE_MISSING (valid=false, consumed=true). Use this when calling on behalf of an action whose human-approval requirement isn't covered by the action_type-prefix heuristic on the server."
 
     VerifyPermitResponse:
       title: VerifyPermitResponse
@@ -347,6 +399,28 @@ components:
         decision:
           type: string
           description: "Echo of the decision the permit's evaluation produced. Always 'allow' on outcome='allow'."
+        consumed:
+          type: boolean
+          description: "True iff the atomic verify-and-consume burned the permit row. APPROVAL_LINKAGE_MISSING returns valid=false BUT consumed=true — the permit cannot be reused; do not retry."
+        approval:
+          oneOf:
+            - type: "null"
+            - type: object
+              additionalProperties: false
+              required: [approval_id, artifact_hash, reviewer_id, issuer_id, kid]
+              properties:
+                approval_id:
+                  type: string
+                artifact_hash:
+                  type: string
+                  pattern: "^[0-9a-f]{64}$"
+                reviewer_id:
+                  type: string
+                issuer_id:
+                  type: string
+                kid:
+                  type: string
+          description: "Permit ↔ approval-artifact binding persisted at issuance. NULL when the permit was minted without an approval requirement. Mirrors PermitV2.approval; surfaced here so executors can prove which signed approval authorized this consume."
 
     ErrorResponse:
       title: ErrorResponse
