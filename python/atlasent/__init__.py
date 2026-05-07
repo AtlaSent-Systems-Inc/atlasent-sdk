@@ -19,7 +19,7 @@ Canonical surface — three primitives, each with a distinct
 lifecycle:
 
 - :func:`atlasent.protect` — fail-closed execution primitive.
-  Use when the caller wants "no permit, no execution." Raises on
+  Use when the caller wants “no permit, no execution.” Raises on
   ``deny``, ``hold``, ``escalate``, or verification failure.
 - :func:`atlasent.evaluate` — raw decision primitive. Use when the
   caller needs to inspect the four-value decision
@@ -72,6 +72,15 @@ from .audit_bundle import (
 from .authorize import authorize, evaluate, gate, protect, verify
 from .cache import TTLCache
 from .client import AtlaSentClient
+from .compliance_evidence import (
+    ComplianceEvidenceRun,
+    ControlStatus,
+    EvidenceControl,
+    EvidenceRunSummary,
+    SOC2ControlId,
+    evidence_run_passes,
+    non_passing_controls,
+)
 from .config import configure
 from .exceptions import (
     AtlaSentDecision,
@@ -84,7 +93,30 @@ from .exceptions import (
     PermitOutcome,
     RateLimitError,
 )
+from .governance_webhooks import (
+    EnforcementWebhookEvent,
+    GovernanceWebhookEvent,
+    WebhookDelivery,
+    WebhookDeliveryStatus,
+    WebhookPayload,
+    WebhookSubscription,
+    verify_webhook_signature,
+)
 from .guard import async_atlasent_guard, atlasent_guard
+from .hitl import (
+    HitlApprovalRecord,
+    HitlApprovalsResult,
+    HitlChainHop,
+    HitlChainResult,
+    HitlEscalation,
+    HitlEscalationResult,
+    HitlFallbackDecision,
+    HitlQuorumProgress,
+    HitlQuorumTier,
+    HitlStatus,
+    ListHitlEscalationsResult,
+    hitl_required_approver_count,
+)
 from .models import (
     ApiKeySelfResult,
     AuthorizationResult,
@@ -103,24 +135,19 @@ from .models import (
     RevokePermitByIdResult,
     RevokePermitResult,
     StreamDecisionEvent,
-    VerifyPermitByIdResult,
     StreamEvent,
     StreamProgressEvent,
+    VerifyPermitByIdResult,
     VerifyResult,
 )
-from .hitl import (
-    HitlApprovalRecord,
-    HitlApprovalsResult,
-    HitlChainHop,
-    HitlChainResult,
-    HitlEscalation,
-    HitlEscalationResult,
-    HitlFallbackDecision,
-    HitlQuorumProgress,
-    HitlQuorumTier,
-    HitlStatus,
-    ListHitlEscalationsResult,
-    hitl_required_approver_count,
+from .policy_sync import (
+    PolicyBundleEntry,
+    PolicySyncDiff,
+    PolicySyncRun,
+    PolicySyncStatus,
+    SubmitPolicySyncRequest,
+    format_policy_sync_diff,
+    is_policy_sync_terminal,
 )
 from .require_permit import ProtectedAction, classify_command, require_permit
 from .with_permit import with_permit
@@ -214,4 +241,28 @@ __all__ = [
     "QuorumProof",
     "QuorumRoleRequirement",
     "TrustedIssuerKey",
+    # Governance webhooks (parity with the TS SDK).
+    "GovernanceWebhookEvent",
+    "EnforcementWebhookEvent",
+    "WebhookSubscription",
+    "WebhookDelivery",
+    "WebhookDeliveryStatus",
+    "WebhookPayload",
+    "verify_webhook_signature",
+    # Compliance evidence (parity with the TS SDK).
+    "SOC2ControlId",
+    "ControlStatus",
+    "EvidenceControl",
+    "EvidenceRunSummary",
+    "ComplianceEvidenceRun",
+    "evidence_run_passes",
+    "non_passing_controls",
+    # Policy sync (parity with the TS SDK).
+    "PolicySyncStatus",
+    "PolicyBundleEntry",
+    "PolicySyncDiff",
+    "PolicySyncRun",
+    "SubmitPolicySyncRequest",
+    "format_policy_sync_diff",
+    "is_policy_sync_terminal",
 ]
