@@ -1536,3 +1536,63 @@ class TestListPermits:
         mocker.patch.object(client._client, "get", return_value=resp)
         result = client.list_permits()
         assert result.total == 2
+
+
+class TestDeprecationWarnings:
+    """Tier 3 of pilot-readiness: legacy entrypoints emit
+    DeprecationWarning. Canonical surface is protect() / evaluate() /
+    verify().
+    """
+
+    def test_client_authorize_emits_deprecation_warning(self, client, mocker):
+        # Mock evaluate path so authorize() doesn't try to network.
+        mocker.patch.object(
+            client, "evaluate", side_effect=AtlaSentDenied(
+                "deny",
+                permit_token="dec_x",
+                reason="policy denied",
+                response_body={},
+            ),
+        )
+        with pytest.warns(DeprecationWarning, match="authorize"):
+            client.authorize(agent="a", action="b")
+
+    def test_client_gate_emits_deprecation_warning(self, client, mocker):
+        mocker.patch.object(
+            client,
+            "evaluate",
+            return_value=EvaluateResult(decision="allow", permit_token="t"),
+        )
+        mocker.patch.object(
+            client, "verify",
+            return_value=VerifyResult(valid=True, outcome="allow",
+                                      permit_hash="h", timestamp="t"),
+        )
+        with pytest.warns(DeprecationWarning, match="gate"):
+            client.gate("act", "actor")
+
+    def test_protect_does_not_emit_deprecation_warning(self, client, mocker):
+        # Canonical surface — must not emit.
+        mocker.patch.object(
+            client,
+            "evaluate",
+            return_value=EvaluateResult(decision="allow", permit_token="t"),
+        )
+        mocker.patch.object(
+            client, "verify",
+            return_value=VerifyResult(valid=True, outcome="allow",
+                                      permit_hash="h", timestamp="t"),
+        )
+        import warnings as _warnings
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error", DeprecationWarning)
+            client.protect(agent="a", action="b")  # must not raise
+
+    def test_evaluate_does_not_emit_deprecation_warning(self, client, mocker):
+        # Canonical surface — must not emit.
+        resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
+        mocker.patch.object(client._client, "post", return_value=resp)
+        import warnings as _warnings
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error", DeprecationWarning)
+            client.evaluate("act", "actor")  # must not raise

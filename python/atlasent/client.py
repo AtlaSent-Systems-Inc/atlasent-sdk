@@ -7,6 +7,7 @@ import os
 import re
 import time
 import uuid
+import warnings
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any
@@ -536,6 +537,11 @@ class AtlaSentClient:
     ) -> GateResult:
         """Evaluate then verify in one call — the happy-path shortcut.
 
+        .. deprecated::
+           Use :meth:`protect` for fail-closed execution, or
+           :meth:`evaluate` + :meth:`verify` to inspect the decision
+           and verify separately. Will be removed in ``atlasent`` v3.
+
         Calls :meth:`evaluate`; if permitted, immediately calls
         :meth:`verify` with the resulting permit token.  Returns a
         :class:`GateResult` containing both results.
@@ -544,6 +550,13 @@ class AtlaSentClient:
             AtlaSentDenied: The action was denied at evaluation.
             AtlaSentError: Any failure at either step.
         """
+        warnings.warn(
+            "AtlaSentClient.gate() is deprecated. Use protect() for "
+            "fail-closed execution or evaluate() + verify() to inspect "
+            "the decision and verify separately. Will be removed in v3.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         ctx = context or {}
         eval_result = self.evaluate(action_type, actor_id, ctx)
         verify_result = self.verify(
@@ -560,7 +573,13 @@ class AtlaSentClient:
         verify: bool = True,
         raise_on_deny: bool = False,
     ) -> AuthorizationResult:
-        """Authorize an agent action — the one-call public API.
+        """Authorize an agent action.
+
+        .. deprecated::
+           Use :meth:`protect` for fail-closed execution
+           (recommended — no ``permitted=False`` return path to forget),
+           or :meth:`evaluate` to inspect the four-value decision.
+           Will be removed in ``atlasent`` v3.
 
         Calls ``POST /v1-evaluate`` and (unless ``verify=False``)
         ``POST /v1-verify-permit`` and returns an
@@ -590,6 +609,13 @@ class AtlaSentClient:
             AtlaSentError: Network / server / configuration errors.
             RateLimitError: HTTP 429.
         """
+        warnings.warn(
+            "AtlaSentClient.authorize() is deprecated. Use protect() for "
+            "fail-closed execution (recommended) or evaluate() to inspect "
+            "the four-value decision. Will be removed in v3.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         ctx = context or {}
         try:
             eval_result = self.evaluate(action, agent, ctx)

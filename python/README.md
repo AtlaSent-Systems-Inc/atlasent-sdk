@@ -175,22 +175,38 @@ client = AtlaSentClient(
 )
 ```
 
-## Lower-level primitives
+## Canonical SDK surface
 
-`protect()` is built on top of the raw two-endpoint surface. If you
-need to branch on the decision rather than raise, use these directly:
+Three primitives, each with a distinct mental model. New code should
+pick one of these:
 
-- `client.evaluate(action, agent, context)` — policy decision;
-  raises `AtlaSentDenied` on deny, otherwise returns
-  `EvaluateResult`.
-- `client.verify(permit_token, ...)` — verify a previously-issued
-  permit end-to-end.
-- `client.gate(action, agent, context)` — evaluate + verify; returns
-  a `GateResult` with both response objects.
-- `authorize(agent, action, context)` — data-not-exception
-  variant: returns an `AuthorizationResult` with `permitted: bool`
-  instead of raising on deny. Prefer `protect()` unless you have a
-  specific reason to branch on a return value.
+| Primitive | Use when | Lifecycle |
+|---|---|---|
+| **`protect()`** | You want fail-closed execution: "no permit, no execution." | Evaluate + verify in one call. Returns a `Permit` on allow; raises on `deny` / `hold` / `escalate` / verification failure / transport error. |
+| **`evaluate()`** | You need to inspect the four-value decision (`allow` / `deny` / `hold` / `escalate`). | Returns the raw decision object. Does not collapse `hold` and `escalate` into a deny; does not auto-verify. |
+| **`verify()`** | You hold a permit token from a prior `evaluate()` and want to confirm it before execution. | Distinct from the other two — operates on an existing permit. |
+
+```python
+from atlasent import protect, evaluate, verify
+```
+
+### Deprecated convenience wrappers
+
+These exist for backward compatibility and **will be removed in
+`atlasent` v3**. They emit `DeprecationWarning` on use.
+
+- `authorize(agent, action, context)` — data-not-exception variant
+  (returns `permitted: bool`). **Migrate to `protect()`** for the
+  fail-closed contract, or `evaluate()` if you specifically want to
+  inspect the decision without raising.
+- `gate(action, agent, context)` — evaluate + verify, returning an
+  inspectable `GateResult`. **Migrate to `protect()`** if you want
+  fail-closed semantics, or `evaluate()` + `verify()` if you want
+  the two-step inspectable shape.
+
+There is no `gate(...)` lifecycle that `protect()` cannot express
+fail-closed, and there is no `authorize(...)` lifecycle that
+`evaluate()` cannot express by inspection.
 
 ## Design choices
 

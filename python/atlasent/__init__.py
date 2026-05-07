@@ -15,10 +15,22 @@ Quick start::
     # If we got here, the action is authorized end-to-end.
     # Otherwise protect() raised and the action never ran.
 
-``protect()`` is the category primitive: one call, fail-closed, never
-returns a "denied" value. See :func:`atlasent.authorize` for the
-older data-not-exception idiom if you prefer to branch on
-``result.permitted``.
+Canonical surface — three primitives, each with a distinct
+lifecycle:
+
+- :func:`atlasent.protect` — fail-closed execution primitive.
+  Use when the caller wants "no permit, no execution." Raises on
+  ``deny``, ``hold``, ``escalate``, or verification failure.
+- :func:`atlasent.evaluate` — raw decision primitive. Use when the
+  caller needs to inspect the four-value decision
+  (``allow`` / ``deny`` / ``hold`` / ``escalate``). Does not
+  collapse states; does not pretend denial is a permit path.
+- :func:`atlasent.verify` — post-permit verification primitive,
+  for callers that already hold a permit token.
+
+``authorize()`` and ``gate()`` are deprecated legacy convenience
+wrappers and will be removed in ``atlasent`` v3. Migrate to
+``protect()`` (for fail-closed) or ``evaluate()`` (to inspect).
 """
 
 from ._version import __version__
