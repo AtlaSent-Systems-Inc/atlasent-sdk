@@ -51,6 +51,16 @@ import {
   type LegacyEvaluateRequest,
   type V2EvaluateRequest,
 } from "./compat.js";
+import type {
+  HitlApprovalRecord,
+  HitlApproveRequest,
+  HitlChainHop,
+  HitlEscalateRequest,
+  HitlEscalation,
+  HitlRejectRequest,
+  ListHitlEscalationsRequest,
+  ListHitlEscalationsResponse,
+} from "./hitl.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -892,6 +902,151 @@ export class AtlaSentClient {
       body: parsed as T,
       rateLimit: parseRateLimitHeaders(response.headers),
     };
+  }
+
+  /**
+   * List HITL escalations for the calling org. Defaults to
+   * `status=pending`; pass `status` to query other queues
+   * (`escalated`, `approved`, `rejected`, `auto_approved`,
+   * `timed_out`).
+   *
+   * Calls `GET /v1/hitl`.
+   */
+  async listHitlEscalations(
+    input: ListHitlEscalationsRequest = {},
+  ): Promise<{ data: ListHitlEscalationsResponse; rateLimit: RateLimitState | null }> {
+    const params = new URLSearchParams();
+    if (input.status) params.set("status", input.status);
+    if (input.agentId) params.set("agent_id", input.agentId);
+    if (input.assignedToUserId) params.set("assigned_to_user_id", input.assignedToUserId);
+    if (input.limit !== undefined) params.set("limit", String(input.limit));
+    if (input.cursor) params.set("cursor", input.cursor);
+    const { body, rateLimit } = await this.get<ListHitlEscalationsResponse>(
+      "/v1/hitl",
+      params,
+    );
+    return { data: body, rateLimit };
+  }
+
+  /**
+   * Get a HITL escalation. The server payload includes a live
+   * `quorum_progress` snapshot when the escalation is still open.
+   *
+   * Calls `GET /v1/hitl/:id`.
+   */
+  async getHitlEscalation(
+    escalationId: string,
+  ): Promise<{ escalation: HitlEscalation; rateLimit: RateLimitState | null }> {
+    if (!escalationId) {
+      throw new AtlaSentError("escalationId is required", { code: "bad_request" });
+    }
+    const { body, rateLimit } = await this.get<HitlEscalation>(
+      `/v1/hitl/${encodeURIComponent(escalationId)}`,
+    );
+    return { escalation: body, rateLimit };
+  }
+
+  /**
+   * List per-approver vote rows for an escalation.
+   * Calls `GET /v1/hitl/:id/approvals`.
+   */
+  async listHitlApprovals(
+    escalationId: string,
+  ): Promise<{ approvals: HitlApprovalRecord[]; rateLimit: RateLimitState | null }> {
+    const { body, rateLimit } = await this.get<{ approvals: HitlApprovalRecord[] }>(
+      `/v1/hitl/${encodeURIComponent(escalationId)}/approvals`,
+    );
+    return { approvals: body.approvals ?? [], rateLimit };
+  }
+
+  /**
+   * List the escalation chain hops for an escalation. Each `/escalate`
+   * call appends one row.
+   * Calls `GET /v1/hitl/:id/chain`.
+   */
+  async getHitlChain(
+    escalationId: string,
+  ): Promise<{ chain: HitlChainHop[]; rateLimit: RateLimitState | null }> {
+    const { body, rateLimit } = await this.get<{ chain: HitlChainHop[] }>(
+      `/v1/hitl/${encodeURIComponent(escalationId)}/chain`,
+    );
+    return { chain: body.chain ?? [], rateLimit };
+  }
+
+  /**
+   * Record an approve vote. Resolves the escalation only once the
+   * server-side quorum count is satisfied; before that the response
+   * carries a refreshed escalation row with the latest
+   * `quorum_progress`.
+   *
+   * Calls `POST /v1/hitl/:id/approve`. The server returns 409
+   * `duplicate_vote` if the same principal has already voted, and
+   * 409 `already_rejected` if a concurrent reject crossed the line.
+   */
+  async approveHitlEscalation(
+    escalationId: string,
+    input: HitlApproveRequest = {},
+  ): Promise<{ escalation: HitlEscalation; rateLimit: RateLimitState | null }> {
+    const { body, rateLimit } = await this.post<HitlEscalation>(
+      `/v1/hitl/${encodeURIComponent(escalationId)}/approve`,
+      input,
+    );
+    return { escalation: body, rateLimit };
+  }
+
+  /**
+   * Record a reject vote. Reject is short-circuit terminal — a single
+   * reject closes the escalation regardless of how many approves have
+   * accumulated.
+   *
+   * Calls `POST /v1/hitl/:id/reject`.
+   */
+  async rejectHitlEscalation(
+    escalationId: string,
+    input: HitlRejectRequest = {},
+  ): Promise<{ escalation: HitlEscalation; rateLimit: RateLimitState | null }> {
+    const { body, rateLimit } = await this.post<HitlEscalation>(
+      `/v1/hitl/${encodeURIComponent(escalationId)}/reject`,
+      input,
+    );
+    return { escalation: body, rateLimit };
+  }
+
+  /**
+   * Re-route an open escalation to a higher tier. Bounded by the
+   * escalation's `max_escalation_depth` — the server returns 409
+   * `chain_exhausted` and applies the configured fallback decision
+   * once the ceiling is hit.
+   *
+   * Calls `POST /v1/hitl/:id/escalate`.
+   */
+  async escalateHitlEscalation(
+    escalationId: string,
+    input: HitlEscalateRequest,
+  ): Promise<{ escalation: HitlEscalation; rateLimit: RateLimitState | null }> {
+    const { body, rateLimit } = await this.post<HitlEscalation>(
+      `/v1/hitl/${encodeURIComponent(escalationId)}/escalate`,
+      input,
+    );
+    return { escalation: body, rateLimit };
+  }
+
+  /**
+   * Manually apply the escalation's `fallback_decision`. Useful for
+   * admin recovery of a hung escalation when the cron sweeper hasn't
+   * run yet, or to short-circuit a stuck flow during incident
+   * response.
+   *
+   * Calls `POST /v1/hitl/:id/timeout`.
+   */
+  async timeoutHitlEscalation(
+    escalationId: string,
+  ): Promise<{ escalation: HitlEscalation; rateLimit: RateLimitState | null }> {
+    const { body, rateLimit } = await this.post<HitlEscalation>(
+      `/v1/hitl/${encodeURIComponent(escalationId)}/timeout`,
+      {},
+    );
+    return { escalation: body, rateLimit };
   }
 }
 
