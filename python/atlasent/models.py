@@ -754,6 +754,58 @@ class ListPermitsResult(BaseModel):
     rate_limit: RateLimitState | None = None
 
 
+# ── Canonical revoke / verify (REST) ──────────────────────────────────
+
+
+class RevokePermitByIdResult(BaseModel):
+    """Result of :meth:`AtlaSentClient.revoke_permit_by_id`.
+
+    Returns the full updated :class:`PermitRecord` with
+    ``status == 'revoked'`` and ``revoked_at`` / ``revoked_by`` /
+    ``revoke_reason`` populated. After revocation, subsequent verify
+    calls return ``410 PERMIT_REVOKED``.
+    """
+
+    permit: PermitRecord
+    rate_limit: RateLimitState | None = None
+
+
+class PermitVerifyEvidence(BaseModel):
+    """Type-specific evidence body returned by
+    :meth:`AtlaSentClient.verify_permit_by_id`.
+
+    Mirrors the openapi ``PermitVerifyEvidence`` schema.
+    """
+
+    permit_id: str
+    status: Literal["issued", "verified", "consumed", "expired", "revoked"]
+    actor_id: str | None = None
+    action_id: str | None = None
+    expires_at: str | None = None
+    payload_hash: str | None = None
+    decision_id: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class VerifyPermitByIdResult(BaseModel):
+    """Result of :meth:`AtlaSentClient.verify_permit_by_id`.
+
+    The unified verification envelope (``valid``,
+    ``verification_type``, ``reason``, ``verified_at``, ``evidence``)
+    plus the full :class:`PermitRecord` preserved at ``permit`` for
+    backward compatibility. Pin to ``valid`` for new code.
+    """
+
+    valid: bool
+    verification_type: Literal["permit"] = "permit"
+    reason: str | None = None
+    verified_at: str
+    evidence: PermitVerifyEvidence
+    permit: PermitRecord
+    rate_limit: RateLimitState | None = None
+
+
 # ── Streaming evaluate events ─────────────────────────────────────────
 
 

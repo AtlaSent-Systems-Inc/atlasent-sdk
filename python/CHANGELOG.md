@@ -34,6 +34,33 @@ and continue to work for the rest of the `atlasent@2` line. They
 will be removed in `atlasent@3`. No wire-format change. No behavior
 change for callers not using the deprecated functions.
 
+### Added — canonical REST migration for revoke / verify
+
+- `AtlaSentClient.revoke_permit_by_id(permit_id, *, reason=None)` —
+  calls `POST /v1/permits/{id}/revoke`. Returns the full updated
+  `PermitRecord` with `status == 'revoked'` and `revoked_at` /
+  `revoked_by` / `revoke_reason` populated, instead of the legacy
+  `{revoked, permit_id}` envelope.
+- `AtlaSentClient.verify_permit_by_id(permit_id)` — calls
+  `POST /v1/permits/{id}/verify`. Returns the unified verification
+  envelope (`valid`, `verification_type='permit'`, `reason`,
+  `verified_at`, `evidence`) plus the full `PermitRecord` preserved
+  on `permit`. Pin to `valid` for new code.
+- New types: `RevokePermitByIdResult`, `VerifyPermitByIdResult`,
+  `PermitVerifyEvidence`.
+
+### Deprecated
+
+- `AtlaSentClient.revoke_permit()` and `RevokePermitResult` — legacy
+  `POST /v1-revoke-permit` (token-in-body). Migrate to
+  `revoke_permit_by_id()`. Emits `DeprecationWarning` on use.
+- `AtlaSentClient.verify()` and `VerifyResult` — legacy
+  `POST /v1-verify-permit` (token-in-body). Migrate to
+  `verify_permit_by_id()`. Emits `DeprecationWarning` on use.
+
+The legacy methods continue to work for the rest of the
+`atlasent@2.x` line. Removed in `atlasent@3`.
+
 ### Added — permit observability surface
 
 - `AtlaSentClient.get_permit(permit_id)` — calls the canonical

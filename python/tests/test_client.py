@@ -1596,3 +1596,130 @@ class TestDeprecationWarnings:
         with _warnings.catch_warnings():
             _warnings.simplefilter("error", DeprecationWarning)
             client.evaluate("act", "actor")  # must not raise
+
+
+class TestRevokePermitById:
+    REVOKED = {
+        "id": "pt_alpha",
+        "org_id": "org_x",
+        "actor_id": "agent-1",
+        "action_id": "ehr.write",
+        "status": "revoked",
+        "issued_at": "2026-05-07T01:00:00Z",
+        "expires_at": "2026-05-07T01:15:00Z",
+        "revoked_at": "2026-05-07T01:10:00Z",
+        "revoked_by": "user_admin",
+        "revoke_reason": "approval rescinded",
+    }
+
+    def test_returns_updated_permit(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.REVOKED)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+        result = client.revoke_permit_by_id("pt_alpha", reason="approval rescinded")
+        url = mock_post.call_args[0][0]
+        body = mock_post.call_args[1]["json"]
+        assert url.endswith("/v1/permits/pt_alpha/revoke")
+        assert body == {"reason": "approval rescinded"}
+        assert result.permit.status == "revoked"
+        assert result.permit.revoked_at == "2026-05-07T01:10:00Z"
+        assert result.permit.revoked_by == "user_admin"
+        assert result.permit.revoke_reason == "approval rescinded"
+
+    def test_omits_reason_when_not_supplied(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.REVOKED)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+        client.revoke_permit_by_id("pt_alpha")
+        body = mock_post.call_args[1]["json"]
+        assert body == {}
+
+    def test_url_encodes_id(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.REVOKED)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+        client.revoke_permit_by_id("pt with spaces")
+        url = mock_post.call_args[0][0]
+        assert url.endswith("/v1/permits/pt%20with%20spaces/revoke")
+
+    def test_empty_id_raises(self, client):
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.revoke_permit_by_id("")
+        assert exc_info.value.code == "bad_request"
+
+
+class TestVerifyPermitById:
+    VERIFY_OK = {
+        "valid": True,
+        "verification_type": "permit",
+        "reason": None,
+        "verified_at": "2026-05-07T01:00:00.214Z",
+        "evidence": {
+            "permit_id": "pt_alpha",
+            "status": "verified",
+            "actor_id": "agent-1",
+            "action_id": "ehr.write",
+            "expires_at": "2026-05-07T01:15:00Z",
+            "payload_hash": "sha256:deadbeef",
+            "decision_id": "eval_a",
+        },
+        # legacy fields preserved at top level (allOf in openapi)
+        "id": "pt_alpha",
+        "org_id": "org_x",
+        "actor_id": "agent-1",
+        "action_id": "ehr.write",
+        "status": "verified",
+        "issued_at": "2026-05-07T01:00:00Z",
+        "expires_at": "2026-05-07T01:15:00Z",
+        "payload_hash": "sha256:deadbeef",
+        "decision_id": "eval_a",
+    }
+
+    def test_returns_canonical_envelope(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.VERIFY_OK)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+        result = client.verify_permit_by_id("pt_alpha")
+        url = mock_post.call_args[0][0]
+        assert url.endswith("/v1/permits/pt_alpha/verify")
+        assert result.valid is True
+        assert result.verification_type == "permit"
+        assert result.reason is None
+        assert result.verified_at == "2026-05-07T01:00:00.214Z"
+        assert result.evidence.permit_id == "pt_alpha"
+        assert result.evidence.status == "verified"
+        assert result.permit.id == "pt_alpha"
+        assert result.permit.status == "verified"
+
+    def test_url_encodes_id(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.VERIFY_OK)
+        mock_post = mocker.patch.object(client._client, "post", return_value=resp)
+        client.verify_permit_by_id("pt with spaces")
+        url = mock_post.call_args[0][0]
+        assert url.endswith("/v1/permits/pt%20with%20spaces/verify")
+
+    def test_empty_id_raises(self, client):
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.verify_permit_by_id("")
+        assert exc_info.value.code == "bad_request"
+
+    def test_bad_response_missing_envelope_raises(self, client, mocker):
+        resp = _mock_resp(mocker, json_data={"id": "pt_alpha", "status": "verified"})
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.verify_permit_by_id("pt_alpha")
+        assert exc_info.value.code == "bad_response"
+
+
+class TestLegacyRevokeVerifyDeprecated:
+    """Confirm legacy revoke_permit() and verify() emit DeprecationWarning."""
+
+    def test_legacy_revoke_permit_emits_warning(self, client, mocker):
+        resp = _mock_resp(mocker, json_data={"revoked": True, "decision_id": "dec_x"})
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.warns(DeprecationWarning, match="revoke_permit"):
+            client.revoke_permit("dec_x")
+
+    def test_legacy_verify_emits_warning(self, client, mocker):
+        resp = _mock_resp(
+            mocker, json_data={"valid": True, "outcome": "allow"}
+        )
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.warns(DeprecationWarning, match="verify"):
+            client.verify("pt_x")
