@@ -2,10 +2,11 @@
 atlasent.billing
 ~~~~~~~~~~~~~~~~
 
-Pydantic v2 models for the AtlaSent billing entitlement API, plus a
-lightweight ``BillingClient`` for consuming the entitlement endpoints.
+Pydantic v2 models for the AtlaSent billing entitlement API, plus
+:class:`BillingClient` (sync) and :class:`AsyncBillingClient` (async)
+for consuming the entitlement endpoints.
 
-Usage::
+Usage (sync)::
 
     from atlasent import AtlaSentClient
     from atlasent.billing import BillingClient
@@ -15,10 +16,21 @@ Usage::
     ent = billing.get_entitlement()
     if not ent.has_action("govern"):
         raise PermissionError(f"Governance blocked: {ent.deny_reason}")
+
+Usage (async)::
+
+    from atlasent import AsyncAtlaSentClient
+    from atlasent.billing import AsyncBillingClient
+
+    async_client = AsyncAtlaSentClient(api_key="...")
+    billing = AsyncBillingClient(async_client)
+    ent = await billing.get_entitlement()
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
@@ -27,7 +39,7 @@ import httpx
 from pydantic import BaseModel, Field, model_validator
 
 
-# ─── Enumerations ────────────────────────────────────────────────────────────────────────────────
+# ─── Enumerations ───────────────────────────────────────────────────────────────────────────────────────
 
 class AccessStatus(str, Enum):
     active     = "active"
@@ -74,7 +86,7 @@ class AllowedAction(str, Enum):
     governance_read    = "governance_read"
 
 
-# ─── Models ──────────────────────────────────────────────────────────────────────────────────
+# ─── Models ──────────────────────────────────────────────────────────────────────────────────────────
 
 class BillingEntitlement(BaseModel):
     """Billing entitlement returned by GET /v1/billing/entitlement."""
@@ -142,11 +154,46 @@ class AdminOverrideResponse(BaseModel):
     override_expires_at: Optional[datetime] = None
 
 
-# ─── Client ──────────────────────────────────────────────────────────────────────────────────
+class BillingWebhookSubscription(BaseModel):
+    """A billing webhook subscription as returned by GET/POST /v1/billing/webhooks."""
+
+    id:         str
+    org_id:     str
+    url:        str
+    events:     List[str]
+    active:     bool = True
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    secret:     Optional[str] = None  # only present on initial creation response
+
+
+# ─── Signature verification ────────────────────────────────────────────────────────────────────────────────────
+
+def verify_billing_webhook_signature(
+    payload: bytes,
+    signature: str,
+    secret: str,
+) -> bool:
+    """Verify the X-AtlaSent-Signature header on a billing.access_changed delivery.
+
+    :param payload:   Raw request body bytes.
+    :param signature: Value of the ``X-AtlaSent-Signature`` header (hex digest).
+    :param secret:    The webhook secret returned when the subscription was created.
+    :returns:         ``True`` if the signature is valid, ``False`` otherwise.
+    """
+    expected = hmac.new(
+        secret.encode("utf-8"),
+        payload,
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+# ─── Sync client ────────────────────────────────────────────────────────────────────────────────────────
 
 class BillingClient:
     """
-    Convenience wrapper for the AtlaSent billing entitlement API.
+    Convenience wrapper for the AtlaSent billing entitlement API (sync).
 
     Requires an ``atlasent.AtlaSentClient`` (or compatible) instance that
     exposes ``._http`` (``httpx.Client``) and ``._base_url`` (str).
@@ -183,3 +230,146 @@ class BillingClient:
         return self.set_override(
             AdminOverrideRequest(org_id=org_id, status=None, reason=reason)
         )
+
+    def list_webhook_subscriptions(
+        self, org_id: Optional[str] = None
+    ) -> List[BillingWebhookSubscription]:
+        """List billing webhook subscriptions for the authenticated org."""
+        params: Dict[str, str] = {}
+        if org_id:
+            params["org_id"] = org_id
+        resp: httpx.Response = self._client._http.get(
+            f"{self._client._base_url}/v1/billing/webhooks",
+            params=params,
+        )
+        resp.raise_for_status()
+        return [
+            BillingWebhookSubscription.model_validate(s)
+            for s in resp.json().get("subscriptions", [])
+        ]
+
+    def create_webhook_subscription(
+        self,
+        url: str,
+        events: List[str],
+        org_id: Optional[str] = None,
+    ) -> BillingWebhookSubscription:
+        """Subscribe an endpoint to one or more billing events.
+
+        :param url:    HTTPS endpoint to receive deliveries.
+        :param events: List of event names, e.g. ``["billing.access_changed"]``.
+        :param org_id: Override the authenticated org (super-admin only).
+        :returns:      The created subscription, including the one-time ``secret``.
+        """
+        body: Dict[str, Any] = {"url": url, "events": events}
+        if org_id:
+            body["org_id"] = org_id
+        resp: httpx.Response = self._client._http.post(
+            f"{self._client._base_url}/v1/billing/webhooks",
+            json=body,
+        )
+        resp.raise_for_status()
+        return BillingWebhookSubscription.model_validate(resp.json())
+
+    def delete_webhook_subscription(self, subscription_id: str) -> None:
+        """Delete a billing webhook subscription by ID."""
+        resp: httpx.Response = self._client._http.delete(
+            f"{self._client._base_url}/v1/billing/webhooks/{subscription_id}",
+        )
+        resp.raise_for_status()
+
+
+# ─── Async client ────────────────────────────────────────────────────────────────────────────────────
+
+class AsyncBillingClient:
+    """
+    Async variant of :class:`BillingClient` for use with ``AsyncAtlaSentClient``.
+
+    Requires an ``atlasent.AsyncAtlaSentClient`` (or compatible) instance that
+    exposes ``._async_http`` (``httpx.AsyncClient``) and ``._base_url`` (str).
+
+    Example::
+
+        from atlasent import AsyncAtlaSentClient
+        from atlasent.billing import AsyncBillingClient, AllowedAction
+
+        async_client = AsyncAtlaSentClient(api_key="...")
+        billing = AsyncBillingClient(async_client)
+
+        ent = await billing.get_entitlement()
+        if not ent.has_action(AllowedAction.govern):
+            raise PermissionError(f"Governance blocked: {ent.deny_reason}")
+    """
+
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    async def get_entitlement(self, org_id: Optional[str] = None) -> BillingEntitlement:
+        """Fetch billing entitlement for the authenticated org (async)."""
+        params: Dict[str, str] = {}
+        if org_id:
+            params["org_id"] = org_id
+        resp: httpx.Response = await self._client._async_http.get(
+            f"{self._client._base_url}/v1/billing/entitlement",
+            params=params,
+        )
+        resp.raise_for_status()
+        return BillingEntitlement.model_validate(resp.json())
+
+    async def set_override(self, request: AdminOverrideRequest) -> AdminOverrideResponse:
+        """Apply or clear a manual billing override (async)."""
+        resp: httpx.Response = await self._client._async_http.post(
+            f"{self._client._base_url}/v1/billing/admin-override",
+            json=request.model_dump(mode="json", exclude_none=True),
+        )
+        resp.raise_for_status()
+        return AdminOverrideResponse.model_validate(resp.json())
+
+    async def clear_override(
+        self, org_id: str, reason: str = "Cleared via SDK"
+    ) -> AdminOverrideResponse:
+        """Convenience: clear an existing manual override (async)."""
+        return await self.set_override(
+            AdminOverrideRequest(org_id=org_id, status=None, reason=reason)
+        )
+
+    async def list_webhook_subscriptions(
+        self, org_id: Optional[str] = None
+    ) -> List[BillingWebhookSubscription]:
+        """List billing webhook subscriptions (async)."""
+        params: Dict[str, str] = {}
+        if org_id:
+            params["org_id"] = org_id
+        resp: httpx.Response = await self._client._async_http.get(
+            f"{self._client._base_url}/v1/billing/webhooks",
+            params=params,
+        )
+        resp.raise_for_status()
+        return [
+            BillingWebhookSubscription.model_validate(s)
+            for s in resp.json().get("subscriptions", [])
+        ]
+
+    async def create_webhook_subscription(
+        self,
+        url: str,
+        events: List[str],
+        org_id: Optional[str] = None,
+    ) -> BillingWebhookSubscription:
+        """Subscribe an endpoint to one or more billing events (async)."""
+        body: Dict[str, Any] = {"url": url, "events": events}
+        if org_id:
+            body["org_id"] = org_id
+        resp: httpx.Response = await self._client._async_http.post(
+            f"{self._client._base_url}/v1/billing/webhooks",
+            json=body,
+        )
+        resp.raise_for_status()
+        return BillingWebhookSubscription.model_validate(resp.json())
+
+    async def delete_webhook_subscription(self, subscription_id: str) -> None:
+        """Delete a billing webhook subscription by ID (async)."""
+        resp: httpx.Response = await self._client._async_http.delete(
+            f"{self._client._base_url}/v1/billing/webhooks/{subscription_id}",
+        )
+        resp.raise_for_status()
