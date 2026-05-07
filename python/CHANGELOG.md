@@ -1,8 +1,40 @@
 # Changelog
 
-## 2.3.1 — Unreleased — permit observability surface
+## 2.3.1 — Unreleased — permit observability surface + entrypoint canonicalization
 
-### Added
+### Canonical SDK surface (Tier 3 of pilot-readiness plan)
+
+The SDK now pitches **three** primitives as canonical, each with a
+distinct lifecycle. New code should pick one:
+
+- `atlasent.protect()` — **fail-closed execution.** Use when the
+  caller wants "no permit, no execution." Raises on `deny`,
+  `hold`, `escalate`, or verification failure.
+- `atlasent.evaluate()` — **raw decision primitive.** Use when the
+  caller needs to inspect the four-value decision
+  (`allow` / `deny` / `hold` / `escalate`).
+- `atlasent.verify()` — **post-permit verification primitive**,
+  for callers that already hold a permit token.
+
+### Deprecated
+
+- `atlasent.authorize()` and `AtlaSentClient.authorize()` /
+  `AsyncAtlaSentClient.authorize()` — the data-not-exception variant
+  (returns `permitted: bool`). Migrate to `protect()` for
+  fail-closed execution, or `evaluate()` to inspect the
+  four-value decision.
+- `atlasent.gate()` and `AtlaSentClient.gate()` /
+  `AsyncAtlaSentClient.gate()` — evaluate + verify in one call,
+  returning an inspectable `GateResult`. Migrate to `protect()`
+  for fail-closed execution, or `evaluate()` + `verify()` for the
+  two-step inspectable shape.
+
+All four deprecated entrypoints emit `DeprecationWarning` on use
+and continue to work for the rest of the `atlasent@2` line. They
+will be removed in `atlasent@3`. No wire-format change. No behavior
+change for callers not using the deprecated functions.
+
+### Added — permit observability surface
 
 - `AtlaSentClient.get_permit(permit_id)` — calls the canonical
   `GET /v1/permits/{permit_id}` REST endpoint. Returns

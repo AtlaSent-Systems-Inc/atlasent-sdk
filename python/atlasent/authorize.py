@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import Any
 
 from .client import AtlaSentClient
@@ -13,6 +14,19 @@ from .models import (
     GateResult,
     Permit,
     VerifyResult,
+)
+
+_DEPRECATED_GATE_MSG = (
+    "atlasent.gate() is deprecated. For fail-closed execution, use "
+    "atlasent.protect(). To inspect the four-value decision, use "
+    "atlasent.evaluate() and (optionally) atlasent.verify(). "
+    "Will be removed in atlasent v3."
+)
+_DEPRECATED_AUTHORIZE_MSG = (
+    "atlasent.authorize() is deprecated. For fail-closed execution, use "
+    "atlasent.protect() — same fail-closed contract, no permitted=False "
+    "return path to forget. To inspect the four-value decision, use "
+    "atlasent.evaluate(). Will be removed in atlasent v3."
 )
 
 logger = logging.getLogger("atlasent")
@@ -69,7 +83,15 @@ def gate(
     actor_id: str,
     context: dict[str, Any] | None = None,
 ) -> GateResult:
-    """Evaluate then verify using the globally configured client."""
+    """Evaluate then verify using the globally configured client.
+
+    .. deprecated::
+       Use :func:`atlasent.protect` for fail-closed execution, or
+       :func:`atlasent.evaluate` + :func:`atlasent.verify` to inspect
+       the decision and verify separately. Will be removed in
+       ``atlasent`` v3.
+    """
+    warnings.warn(_DEPRECATED_GATE_MSG, DeprecationWarning, stacklevel=2)
     return _get_default_client().gate(action_type, actor_id, context)
 
 
@@ -127,7 +149,13 @@ def authorize(
     verify: bool = True,
     raise_on_deny: bool = False,
 ) -> AuthorizationResult:
-    """Authorize an agent action — the one-call public SDK entrypoint.
+    """Authorize an agent action.
+
+    .. deprecated::
+       Use :func:`atlasent.protect` for fail-closed execution
+       (recommended — no ``permitted=False`` return path to forget),
+       or :func:`atlasent.evaluate` to inspect the four-value decision.
+       Will be removed in ``atlasent`` v3.
 
     Stripe-style convenience wrapper that uses the globally configured
     client (see :func:`atlasent.configure` or ``ATLASENT_API_KEY``).
@@ -158,6 +186,7 @@ def authorize(
     Returns:
         :class:`AuthorizationResult`.
     """
+    warnings.warn(_DEPRECATED_AUTHORIZE_MSG, DeprecationWarning, stacklevel=2)
     return _get_default_client().authorize(
         agent=agent,
         action=action,

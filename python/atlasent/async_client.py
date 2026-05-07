@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import uuid
+import warnings
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -447,7 +448,20 @@ class AsyncAtlaSentClient:
         actor_id: str,
         context: dict[str, Any] | None = None,
     ) -> GateResult:
-        """Evaluate then verify in one call — the happy-path shortcut."""
+        """Evaluate then verify in one call — the happy-path shortcut.
+
+        .. deprecated::
+           Use :meth:`protect` for fail-closed execution, or
+           :meth:`evaluate` + :meth:`verify` to inspect the decision
+           and verify separately. Will be removed in ``atlasent`` v3.
+        """
+        warnings.warn(
+            "AsyncAtlaSentClient.gate() is deprecated. Use protect() for "
+            "fail-closed execution or evaluate() + verify() to inspect "
+            "the decision and verify separately. Will be removed in v3.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         ctx = context or {}
         eval_result = await self.evaluate(action_type, actor_id, ctx)
         verify_result = await self.verify(
@@ -466,7 +480,20 @@ class AsyncAtlaSentClient:
     ) -> AuthorizationResult:
         """Authorize an agent action — async version of
         :meth:`AtlaSentClient.authorize`.
+
+        .. deprecated::
+           Use :meth:`protect` for fail-closed execution
+           (recommended — no ``permitted=False`` return path to forget),
+           or :meth:`evaluate` to inspect the four-value decision.
+           Will be removed in ``atlasent`` v3.
         """
+        warnings.warn(
+            "AsyncAtlaSentClient.authorize() is deprecated. Use protect() for "
+            "fail-closed execution (recommended) or evaluate() to inspect "
+            "the four-value decision. Will be removed in v3.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         ctx = context or {}
         try:
             eval_result = await self.evaluate(action, agent, ctx)
