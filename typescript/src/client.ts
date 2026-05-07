@@ -35,11 +35,14 @@ import type {
   ListPermitsResponse,
   PermitRecord,
   RateLimitState,
+  RevokePermitByIdInput,
+  RevokePermitByIdResponse,
   RevokePermitRequest,
   RevokePermitResponse,
   StreamDecisionEvent,
   StreamEvent,
   StreamProgressEvent,
+  VerifyPermitByIdResponse,
   VerifyPermitRequest,
   VerifyPermitResponse,
 } from "./types.js";
@@ -407,6 +410,12 @@ export class AtlaSentClient {
   /**
    * Verify that a previously issued permit is still valid.
    *
+   * @deprecated Use {@link verifyPermitById} — the canonical REST
+   * surface (`POST /v1/permits/{id}/verify`) returns the unified
+   * verification envelope plus the full {@link PermitRecord}, instead
+   * of the legacy `{verified, outcome, permitHash}` shape this method
+   * emits. Will be removed in `@atlasent/sdk@3`.
+   *
    * A `verified: false` response is **not** thrown — inspect the
    * returned object. Only transport / server errors throw.
    */
@@ -450,6 +459,12 @@ export class AtlaSentClient {
    * Revoke a previously-issued permit so it can no longer pass
    * {@link verifyPermit}.
    *
+   * @deprecated Use {@link revokePermitById} — the canonical REST
+   * surface (`POST /v1/permits/{id}/revoke`) returns the full updated
+   * {@link PermitRecord} with `revoked_at`/`revoked_by`/`revoke_reason`
+   * populated, instead of the legacy `{revoked, permitId}` envelope
+   * this method emits. Will be removed in `@atlasent/sdk@3`.
+   *
    * Use this when an agent's action is cancelled, superseded, or
    * determined to be unauthorized after the fact. The revocation is
    * recorded in the audit log with the optional `reason`.
@@ -481,6 +496,73 @@ export class AtlaSentClient {
       permitId: wire.decision_id,
       revokedAt: wire.revoked_at,
       auditHash: wire.audit_hash,
+      rateLimit,
+    };
+  }
+
+  /**
+   * Revoke a permit through the canonical REST surface
+   * (`POST /v1/permits/{permitId}/revoke`).
+   *
+   * Returns the full updated {@link PermitRecord} with `status === 'revoked'`
+   * and `revoked_at` / `revoked_by` / `revoke_reason` populated. After
+   * revocation, subsequent verify calls return `410 PERMIT_REVOKED`.
+   *
+   * Idempotent on `409 permit_revoked` for already-revoked permits;
+   * server returns the existing revoked row in that case.
+   *
+   * Throws {@link AtlaSentError} on `404` (permit not in calling org),
+   * `409` (already in a terminal state), `410` (expired before revoke),
+   * or `429` (rate limited).
+   */
+  async revokePermitById(
+    permitId: string,
+    input: RevokePermitByIdInput = {},
+  ): Promise<RevokePermitByIdResponse> {
+    if (!permitId) {
+      throw new AtlaSentError("permitId is required", { code: "bad_request" });
+    }
+    const body: { reason?: string } = {};
+    if (input.reason !== undefined) body.reason = input.reason;
+    const { body: wire, rateLimit } = await this.post<PermitRecord>(
+      `/v1/permits/${encodeURIComponent(permitId)}/revoke`,
+      body,
+    );
+    return { permit: wire, rateLimit };
+  }
+
+  /**
+   * Verify a permit through the canonical REST surface
+   * (`POST /v1/permits/{permitId}/verify`).
+   *
+   * Returns the unified verification envelope (`valid`,
+   * `verification_type: 'permit'`, `reason`, `verified_at`, `evidence`)
+   * plus the full {@link PermitRecord} fields preserved at the top
+   * level. The `valid` field is the contract — pin to it.
+   *
+   * A `valid: false` is **not** thrown when the server returns 200 with
+   * a denial reason (matches the verify-shape unification on the wire);
+   * it is thrown on 4xx (`404` not found, `410` expired/consumed).
+   */
+  async verifyPermitById(permitId: string): Promise<VerifyPermitByIdResponse> {
+    if (!permitId) {
+      throw new AtlaSentError("permitId is required", { code: "bad_request" });
+    }
+    const { body: wire, rateLimit } = await this.post<
+      VerifyPermitByIdResponse & PermitRecord
+    >(`/v1/permits/${encodeURIComponent(permitId)}/verify`, {});
+    // Server returns the canonical envelope merged with the Permit row
+    // (allOf in openapi). Pull out the legacy permit row into `permit`
+    // for callers that want it as a sub-object too.
+    const { valid, verification_type, reason, verified_at, evidence, ...row } =
+      wire as VerifyPermitByIdResponse & PermitRecord;
+    return {
+      valid,
+      verification_type,
+      reason,
+      verified_at,
+      evidence,
+      permit: row as PermitRecord,
       rateLimit,
     };
   }
