@@ -878,6 +878,11 @@ export class AtlaSentClient {
     const url = `${this.baseUrl}${path}${qs}`;
     const requestId = globalThis.crypto.randomUUID();
 
+    /**
+     * Canonical auth header. The API also accepts X-AtlaSent-Key for legacy
+     * compatibility but that path is deprecated and will be removed in a future
+     * version. Always use Authorization: Bearer <api_key>.
+     */
     const headers: Record<string, string> = {
       Accept: "application/json",
       Authorization: `Bearer ${this.apiKey}`,
