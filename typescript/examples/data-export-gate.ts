@@ -1,5 +1,5 @@
 /**
- * Data-export gate: evaluate, then verifyPermit before emitting a
+ * Data-export gate: evaluate, then verifyPermitById before emitting a
  * patient-data export. Captures the auditHash and permit in the
  * export manifest so regulators can tie every exported row back to
  * a policy decision.
@@ -32,9 +32,10 @@ interface ExportManifest {
   dataset: string;
   requester: string;
   permitId: string;
-  permitHash: string;
+  payloadHash: string | null;
   auditHash: string;
   approvedAt: string;
+  verifiedAt: string;
 }
 
 async function main(): Promise<void> {
@@ -63,15 +64,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const verification = await client.verifyPermit({
-    permitId: evaluation.permitId,
-    agent: "data-export-agent",
-    action: "export_patient_dataset",
-    context: exportContext,
-  });
+  const verification = await client.verifyPermitById(evaluation.permitId);
 
-  if (!verification.verified) {
-    console.error(`Permit ${evaluation.permitId} failed verification`);
+  if (!verification.valid) {
+    console.error(
+      `Permit ${evaluation.permitId} failed verification: ${verification.reason ?? "unknown"}`,
+    );
     process.exit(1);
   }
 
@@ -79,9 +77,10 @@ async function main(): Promise<void> {
     dataset: exportContext.dataset,
     requester: exportContext.requester,
     permitId: evaluation.permitId,
-    permitHash: verification.permitHash,
+    payloadHash: verification.evidence.payload_hash ?? null,
     auditHash: evaluation.auditHash,
     approvedAt: evaluation.timestamp,
+    verifiedAt: verification.verified_at,
   };
 
   console.log(JSON.stringify(manifest, null, 2));

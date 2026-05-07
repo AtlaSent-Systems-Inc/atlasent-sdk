@@ -8,7 +8,7 @@ Run with::
 
 from flask import Flask, abort, jsonify, request
 
-from atlasent import AtlaSentClient, AtlaSentError
+from atlasent import AtlaSentClient, AtlaSentDeniedError, AtlaSentError
 
 app = Flask(__name__)
 
@@ -22,7 +22,7 @@ def modify_record():
     body = request.get_json() or {}
 
     try:
-        result = client.authorize(
+        permit = client.protect(
             agent="flask-clinical-agent",
             action="modify_patient_record",
             context={
@@ -30,14 +30,14 @@ def modify_record():
                 "change_reason": body.get("change_reason", ""),
             },
         )
+    except AtlaSentDeniedError as exc:
+        abort(403, description=exc.reason)
     except AtlaSentError as exc:
         abort(502, description=f"Authorization service error: {exc.message}")
 
-    if not result.permitted:
-        abort(403, description=result.reason)
-
     return jsonify(
         status="modified",
-        permit_hash=result.permit_hash,
-        audit_hash=result.audit_hash,
+        permit_id=permit.permit_id,
+        permit_hash=permit.permit_hash,
+        audit_hash=permit.audit_hash,
     )
