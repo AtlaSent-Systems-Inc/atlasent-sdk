@@ -161,7 +161,7 @@ export type {
   QuorumRoleRequirement,
 } from "./approvalQuorum.js";
 
-// ── Economic Governance & Liability Attribution ───────────────────────────────
+// ── Economic Governance & Liability Attribution ────────────────────────────────────────────────
 
 export {
   DEFAULT_RISK_TIER_THRESHOLDS,
@@ -289,6 +289,50 @@ export {
   type OverrideAnalytics,
   type RiskTimelinePoint,
 } from "./financialDashboard.js";
+
+// ── Governance Webhooks, Compliance Evidence & Policy Sync ─────────────────────────
+
+export {
+  verifyWebhookSignature,
+  type CreateWebhookSubscriptionRequest,
+  type EnforcementWebhookEvent,
+  type GovernanceWebhookEvent,
+  type ListWebhookDeliveriesResponse,
+  type ListWebhookSubscriptionsResponse,
+  type WebhookDelivery,
+  type WebhookDeliveryStatus,
+  type WebhookPayload,
+  type WebhookSubscription,
+} from "./governanceWebhooks.js";
+
+export {
+  evidenceRunPasses,
+  nonPassingControls,
+  type ComplianceEvidenceRun,
+  type ComplianceEvidenceSummary,
+  type ComplianceFramework,
+  type ComplianceRunStatus,
+  type EvidenceControl,
+  type EvidenceControlStatus,
+  type ListEvidenceRunsResponse,
+  type SOC2ControlId,
+  type TriggerEvidenceRunRequest,
+  type TriggerEvidenceRunResponse,
+} from "./complianceEvidence.js";
+
+export {
+  formatPolicySyncDiff,
+  isPolicySyncTerminal,
+  type ApplyPolicySyncResponse,
+  type ListPolicySyncRunsResponse,
+  type PolicyBundleEntry,
+  type PolicyRef,
+  type PolicySyncDiff,
+  type PolicySyncRun,
+  type PolicySyncStatus,
+  type SubmitPolicySyncRequest,
+  type SubmitPolicySyncResponse,
+} from "./policySync.js";
 
 /**
  * Default export. The opinionated, category-defining entry point:
