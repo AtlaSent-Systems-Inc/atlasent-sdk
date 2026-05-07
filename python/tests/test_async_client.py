@@ -1015,3 +1015,150 @@ class TestParseSseEdgeCases:
 
         events = [e async for e in _parse_sse(lines(), "rid_test")]
         assert len(events) == 1
+
+
+class TestAsyncGetPermit:
+    PERMIT = {
+        "id": "pt_a", "org_id": "org_x", "actor_id": "agent-1",
+        "action_id": "ehr.write", "status": "verified",
+        "issued_at": "2026-05-07T01:00:00Z",
+        "expires_at": "2026-05-07T01:15:00Z",
+    }
+
+    @pytest.mark.asyncio
+    async def test_returns_permit(self, async_client, mocker):
+        resp = _mock_resp(mocker, json_data=self.PERMIT)
+        mock_get = mocker.patch.object(
+            async_client._client, "get",
+            return_value=resp,
+        )
+        result = await async_client.get_permit("pt_a")
+        url = mock_get.call_args[0][0]
+        assert url.endswith("/v1/permits/pt_a")
+        assert result.permit.id == "pt_a"
+
+    @pytest.mark.asyncio
+    async def test_empty_id_raises(self, async_client):
+        with pytest.raises(AtlaSentError) as exc:
+            await async_client.get_permit("")
+        assert exc.value.code == "bad_request"
+
+
+class TestAsyncListPermits:
+    LIST = {
+        "permits": [
+            {
+                "id": "pt_a", "org_id": "org_x", "actor_id": "a",
+                "action_id": "x", "status": "issued",
+                "issued_at": "2026-05-07T01:00:00Z",
+                "expires_at": "2026-05-07T01:15:00Z",
+            }
+        ],
+        "total": 1,
+    }
+
+    @pytest.mark.asyncio
+    async def test_returns_list(self, async_client, mocker):
+        resp = _mock_resp(mocker, json_data=self.LIST)
+        mock_get = mocker.patch.object(
+            async_client._client, "get",
+            return_value=resp,
+        )
+        result = await async_client.list_permits()
+        url = mock_get.call_args[0][0]
+        assert url.endswith("/v1/permits")
+        assert len(result.permits) == 1
+
+    @pytest.mark.asyncio
+    async def test_passes_filters(self, async_client, mocker):
+        resp = _mock_resp(mocker, json_data=self.LIST)
+        mock_get = mocker.patch.object(
+            async_client._client, "get",
+            return_value=resp,
+        )
+        await async_client.list_permits(status="revoked", actor_id="u_42")
+        params = mock_get.call_args[1]["params"]
+        assert params["status"] == "revoked"
+        assert params["actor_id"] == "u_42"
+
+
+class TestAsyncRevokePermitById:
+    REVOKED = {
+        "id": "pt_a", "org_id": "org_x", "actor_id": "agent-1",
+        "action_id": "ehr.write", "status": "revoked",
+        "issued_at": "2026-05-07T01:00:00Z",
+        "expires_at": "2026-05-07T01:15:00Z",
+        "revoked_at": "2026-05-07T01:10:00Z",
+        "revoked_by": "user_admin",
+        "revoke_reason": "approval rescinded",
+    }
+
+    @pytest.mark.asyncio
+    async def test_returns_updated_permit(self, async_client, mocker):
+        resp = _mock_resp(mocker, json_data=self.REVOKED)
+        mock_post = mocker.patch.object(
+            async_client._client, "post",
+            return_value=resp,
+        )
+        result = await async_client.revoke_permit_by_id(
+            "pt_a", reason="approval rescinded"
+        )
+        url = mock_post.call_args[0][0]
+        body = mock_post.call_args[1]["json"]
+        assert url.endswith("/v1/permits/pt_a/revoke")
+        assert body == {"reason": "approval rescinded"}
+        assert result.permit.status == "revoked"
+        assert result.permit.revoke_reason == "approval rescinded"
+
+
+class TestAsyncVerifyPermitById:
+    VERIFY_OK = {
+        "valid": True, "verification_type": "permit", "reason": None,
+        "verified_at": "2026-05-07T01:00:00Z",
+        "evidence": {
+            "permit_id": "pt_a", "status": "verified",
+            "actor_id": "agent-1", "action_id": "ehr.write",
+            "expires_at": "2026-05-07T01:15:00Z",
+        },
+        "id": "pt_a", "org_id": "org_x", "actor_id": "agent-1",
+        "action_id": "ehr.write", "status": "verified",
+        "issued_at": "2026-05-07T01:00:00Z",
+        "expires_at": "2026-05-07T01:15:00Z",
+    }
+
+    @pytest.mark.asyncio
+    async def test_returns_canonical_envelope(self, async_client, mocker):
+        resp = _mock_resp(mocker, json_data=self.VERIFY_OK)
+        mock_post = mocker.patch.object(
+            async_client._client, "post",
+            return_value=resp,
+        )
+        result = await async_client.verify_permit_by_id("pt_a")
+        url = mock_post.call_args[0][0]
+        assert url.endswith("/v1/permits/pt_a/verify")
+        assert result.valid is True
+        assert result.verification_type == "permit"
+        assert result.evidence.permit_id == "pt_a"
+        assert result.permit.id == "pt_a"
+
+
+class TestAsyncLegacyDeprecation:
+    @pytest.mark.asyncio
+    async def test_async_legacy_revoke_emits_warning(self, async_client, mocker):
+        resp = _mock_resp(mocker, json_data={"revoked": True, "decision_id": "dec_x"})
+        mocker.patch.object(
+            async_client._client, "post",
+            return_value=resp,
+        )
+        with pytest.warns(DeprecationWarning, match="revoke_permit"):
+            await async_client.revoke_permit("dec_x")
+
+    @pytest.mark.asyncio
+    async def test_async_legacy_verify_emits_warning(self, async_client, mocker):
+        resp = _mock_resp(mocker, json_data={"valid": True, "outcome": "allow"})
+        mocker.patch.object(
+            async_client._client, "post",
+            return_value=resp,
+        )
+        with pytest.warns(DeprecationWarning, match="verify"):
+            await async_client.verify("pt_x")

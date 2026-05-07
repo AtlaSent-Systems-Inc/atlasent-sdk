@@ -34,6 +34,30 @@ and continue to work for the rest of the `atlasent@2` line. They
 will be removed in `atlasent@3`. No wire-format change. No behavior
 change for callers not using the deprecated functions.
 
+### Async parity (AsyncAtlaSentClient)
+
+The async client now ships full parity for the canonical permit
+observability + lifecycle surface:
+
+- `AsyncAtlaSentClient.get_permit(permit_id)`
+- `AsyncAtlaSentClient.list_permits(*, status=, actor_id=, action_type=, from_=, to=, limit=, cursor=)`
+- `AsyncAtlaSentClient.revoke_permit_by_id(permit_id, *, reason=None)`
+- `AsyncAtlaSentClient.verify_permit_by_id(permit_id)`
+
+Same shapes / semantics as the sync versions; documented as parity.
+
+### Async deprecations
+
+- `AsyncAtlaSentClient.revoke_permit()` — legacy
+  `POST /v1-revoke-permit`. Emits `DeprecationWarning`. Migrate to
+  `revoke_permit_by_id()`.
+- `AsyncAtlaSentClient.verify()` — legacy
+  `POST /v1-verify-permit`. Emits `DeprecationWarning`. Migrate to
+  `verify_permit_by_id()`.
+
+Brings the async surface to parity with the sync client's
+deprecation state from this same release.
+
 ### Added — canonical REST migration for revoke / verify
 
 - `AtlaSentClient.revoke_permit_by_id(permit_id, *, reason=None)` —
