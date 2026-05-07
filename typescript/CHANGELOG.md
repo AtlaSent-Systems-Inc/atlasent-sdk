@@ -6,6 +6,30 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Added
+
+- `client.getPermit(permitId)` — calls the canonical
+  `GET /v1/permits/{permitId}` REST endpoint and returns the full
+  Permit lifecycle state (status, all timestamps, `revoked_at` /
+  `revoked_by` / `revoke_reason`, bound `payload_hash` /
+  `decision_id`).
+- `client.listPermits({status?, actorId?, actionType?, from?, to?, limit?, cursor?})`
+  — calls `GET /v1/permits` with cursor pagination.
+- New types exported from `@atlasent/sdk`: `PermitRecord`,
+  `PermitStatus`, `ListPermitsRequest`, `ListPermitsResponse`,
+  `GetPermitResponse`.
+
+### Notes
+
+- The existing `Permit` type (re-exported from `protect.ts`) is a
+  smaller convenience shape used by `protect()`; it is unaffected.
+  The new wire-shape type is exposed under the deliberately distinct
+  name `PermitRecord` to avoid colliding with it.
+- No SDK-version bump: types and methods are additive; `verifyPermit`
+  and `revokePermit` continue to call their existing (legacy)
+  endpoints. Migrating those to the canonical REST surface is a
+  separate follow-on with a deprecation cycle.
+
 ## 2.0.0 — 2026-04-30 — wire-format reconciliation (BREAKING)
 
 Wire-format reconciliation with the canonical shape in `atlasent-api/handler.ts`.

@@ -193,6 +193,74 @@ export interface AtlaSentClientOptions {
   fetch?: typeof fetch;
 }
 
+// ── Permit lifecycle (canonical REST shapes) ──────────────────────────────────
+
+/** Permit lifecycle status. */
+export type PermitStatus =
+  | "issued"
+  | "verified"
+  | "consumed"
+  | "expired"
+  | "revoked";
+
+/**
+ * Wire shape of a Permit row, returned by {@link AtlaSentClient.getPermit}
+ * and {@link AtlaSentClient.listPermits}. Mirrors the openapi `Permit`
+ * schema.
+ *
+ * Revocation fields (`revoked_at`, `revoked_by`, `revoke_reason`) are
+ * populated only when `status === 'revoked'`; null otherwise.
+ */
+export interface PermitRecord {
+  id: string;
+  org_id: string;
+  actor_id: string;
+  action_id: string;
+  target_id?: string;
+  environment?: string;
+  status: PermitStatus;
+  issued_at: string;
+  expires_at: string;
+  consumed_at?: string | null;
+  revoked_at?: string | null;
+  revoked_by?: string | null;
+  revoke_reason?: string | null;
+  signature?: string;
+  payload_hash?: string | null;
+  decision_id?: string | null;
+}
+
+/** Optional filters for {@link AtlaSentClient.listPermits}. */
+export interface ListPermitsRequest {
+  status?: PermitStatus;
+  actorId?: string;
+  actionType?: string;
+  /** ISO-8601 lower bound on `created_at`. */
+  from?: string;
+  /** ISO-8601 upper bound on `created_at`. */
+  to?: string;
+  /** Page size. Server max is 500; default 50. */
+  limit?: number;
+  /** Pass `nextCursor` from a prior response to page forward. */
+  cursor?: string;
+}
+
+/** Response from {@link AtlaSentClient.listPermits}. */
+export interface ListPermitsResponse {
+  permits: PermitRecord[];
+  /** Total matching rows ignoring `limit`/`cursor`. */
+  total: number;
+  /** Pass on next call as `cursor`. Absent when no more rows. */
+  nextCursor?: string;
+  rateLimit: RateLimitState | null;
+}
+
+/** Response from {@link AtlaSentClient.getPermit}. */
+export interface GetPermitResponse {
+  permit: PermitRecord;
+  rateLimit: RateLimitState | null;
+}
+
 // ── Revoke permit ─────────────────────────────────────────────────────────────
 
 /** Input for {@link AtlaSentClient.revokePermit}. */

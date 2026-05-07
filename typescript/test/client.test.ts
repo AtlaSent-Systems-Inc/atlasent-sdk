@@ -1118,3 +1118,153 @@ describe("revokePermit()", () => {
     ).rejects.toMatchObject({ code: "bad_response" });
   });
 });
+
+
+describe("getPermit()", () => {
+  const PERMIT_WIRE = {
+    id: "pt_alpha",
+    org_id: "org_x",
+    actor_id: "agent-1",
+    action_id: "ehr.write",
+    status: "verified" as const,
+    issued_at: "2026-05-07T01:00:00Z",
+    expires_at: "2026-05-07T01:15:00Z",
+    consumed_at: null,
+    revoked_at: null,
+    revoked_by: null,
+    revoke_reason: null,
+    payload_hash: "sha256:deadbeef",
+    decision_id: "eval_a",
+  };
+
+  it("hits GET /v1/permits/:id and returns the permit row", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(PERMIT_WIRE));
+    const client = makeClient(fetchImpl);
+    const result = await client.getPermit("pt_alpha");
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("https://api.atlasent.io/v1/permits/pt_alpha");
+    expect(init!.method).toBe("GET");
+    expect(result.permit.id).toBe("pt_alpha");
+    expect(result.permit.status).toBe("verified");
+  });
+
+  it("URL-encodes the permitId", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(PERMIT_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.getPermit("pt with spaces");
+    const [url] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("https://api.atlasent.io/v1/permits/pt%20with%20spaces");
+  });
+
+  it("throws when permitId is empty", async () => {
+    const client = makeClient(mockFetch(() => jsonResponse({})));
+    await expect(client.getPermit("")).rejects.toMatchObject({
+      code: "bad_request",
+    });
+  });
+
+  it("surfaces revocation fields when status is revoked", async () => {
+    const revoked = {
+      ...PERMIT_WIRE,
+      status: "revoked" as const,
+      revoked_at: "2026-05-07T01:10:00Z",
+      revoked_by: "user_admin",
+      revoke_reason: "approval rescinded",
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(revoked)));
+    const result = await client.getPermit("pt_alpha");
+    expect(result.permit.status).toBe("revoked");
+    expect(result.permit.revoked_at).toBe("2026-05-07T01:10:00Z");
+    expect(result.permit.revoked_by).toBe("user_admin");
+    expect(result.permit.revoke_reason).toBe("approval rescinded");
+  });
+});
+
+describe("listPermits()", () => {
+  const LIST_WIRE = {
+    permits: [
+      {
+        id: "pt_a",
+        org_id: "org_x",
+        actor_id: "a",
+        action_id: "x",
+        status: "issued" as const,
+        issued_at: "2026-05-07T01:00:00Z",
+        expires_at: "2026-05-07T01:15:00Z",
+      },
+      {
+        id: "pt_b",
+        org_id: "org_x",
+        actor_id: "a",
+        action_id: "x",
+        status: "consumed" as const,
+        issued_at: "2026-05-07T00:00:00Z",
+        expires_at: "2026-05-07T00:15:00Z",
+        consumed_at: "2026-05-07T00:10:00Z",
+      },
+    ],
+    total: 2,
+  };
+
+  it("hits GET /v1/permits with no query params when no filters", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(LIST_WIRE));
+    const client = makeClient(fetchImpl);
+    const result = await client.listPermits();
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("https://api.atlasent.io/v1/permits");
+    expect(init!.method).toBe("GET");
+    expect(result.permits).toHaveLength(2);
+    expect(result.total).toBe(2);
+  });
+
+  it("translates camelCase filters to snake_case query params", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(LIST_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.listPermits({
+      status: "revoked",
+      actorId: "user_42",
+      actionType: "ehr.write",
+      from: "2026-05-01T00:00:00Z",
+      to: "2026-05-07T00:00:00Z",
+      limit: 100,
+      cursor: "2026-05-06T00:00:00Z",
+    });
+    const [url] = fetchImpl.mock.calls[0]!;
+    const u = new URL(url as string);
+    expect(u.pathname).toBe("/v1/permits");
+    expect(u.searchParams.get("status")).toBe("revoked");
+    expect(u.searchParams.get("actor_id")).toBe("user_42");
+    expect(u.searchParams.get("action_type")).toBe("ehr.write");
+    expect(u.searchParams.get("from")).toBe("2026-05-01T00:00:00Z");
+    expect(u.searchParams.get("to")).toBe("2026-05-07T00:00:00Z");
+    expect(u.searchParams.get("limit")).toBe("100");
+    expect(u.searchParams.get("cursor")).toBe("2026-05-06T00:00:00Z");
+  });
+
+  it("surfaces nextCursor when present", async () => {
+    const client = makeClient(
+      mockFetch(() =>
+        jsonResponse({
+          ...LIST_WIRE,
+          next_cursor: "2026-05-06T23:00:00Z",
+        }),
+      ),
+    );
+    const result = await client.listPermits({ limit: 2 });
+    expect(result.nextCursor).toBe("2026-05-06T23:00:00Z");
+  });
+
+  it("throws bad_response when permits array is missing", async () => {
+    const client = makeClient(mockFetch(() => jsonResponse({ total: 0 })));
+    await expect(client.listPermits()).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+
+  it("falls back to permits.length when total is missing", async () => {
+    const { total: _t, ...withoutTotal } = LIST_WIRE;
+    const client = makeClient(mockFetch(() => jsonResponse(withoutTotal)));
+    const result = await client.listPermits();
+    expect(result.total).toBe(2);
+  });
+});
