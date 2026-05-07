@@ -2,10 +2,11 @@
 atlasent.billing
 ~~~~~~~~~~~~~~~~
 
-Pydantic v2 models for the AtlaSent billing entitlement API, plus a
-lightweight ``BillingClient`` for consuming the entitlement endpoints.
+Pydantic v2 models for the AtlaSent billing entitlement API, plus
+:class:`BillingClient` (sync) and :class:`AsyncBillingClient` (async)
+for consuming the entitlement endpoints.
 
-Usage::
+Usage (sync)::
 
     from atlasent import AtlaSentClient
     from atlasent.billing import BillingClient
@@ -15,6 +16,15 @@ Usage::
     ent = billing.get_entitlement()
     if not ent.has_action("govern"):
         raise PermissionError(f"Governance blocked: {ent.deny_reason}")
+
+Usage (async)::
+
+    from atlasent import AsyncAtlaSentClient
+    from atlasent.billing import AsyncBillingClient
+
+    async_client = AsyncAtlaSentClient(api_key="...")
+    billing = AsyncBillingClient(async_client)
+    ent = await billing.get_entitlement()
 """
 
 from __future__ import annotations
@@ -27,7 +37,7 @@ import httpx
 from pydantic import BaseModel, Field, model_validator
 
 
-# ─── Enumerations ────────────────────────────────────────────────────────────────────────────────
+# ─── Enumerations ────────────────────────────────────────────────────────────────────────────────────
 
 class AccessStatus(str, Enum):
     active     = "active"
@@ -142,11 +152,11 @@ class AdminOverrideResponse(BaseModel):
     override_expires_at: Optional[datetime] = None
 
 
-# ─── Client ──────────────────────────────────────────────────────────────────────────────────
+# ─── Sync client ──────────────────────────────────────────────────────────────────────────
 
 class BillingClient:
     """
-    Convenience wrapper for the AtlaSent billing entitlement API.
+    Convenience wrapper for the AtlaSent billing entitlement API (sync).
 
     Requires an ``atlasent.AtlaSentClient`` (or compatible) instance that
     exposes ``._http`` (``httpx.Client``) and ``._base_url`` (str).
@@ -181,5 +191,60 @@ class BillingClient:
     ) -> AdminOverrideResponse:
         """Convenience: clear an existing manual override."""
         return self.set_override(
+            AdminOverrideRequest(org_id=org_id, status=None, reason=reason)
+        )
+
+
+# ─── Async client ────────────────────────────────────────────────────────────────────────
+
+class AsyncBillingClient:
+    """
+    Async variant of :class:`BillingClient` for use with ``AsyncAtlaSentClient``.
+
+    Requires an ``atlasent.AsyncAtlaSentClient`` (or compatible) instance that
+    exposes ``._async_http`` (``httpx.AsyncClient``) and ``._base_url`` (str).
+
+    Example::
+
+        from atlasent import AsyncAtlaSentClient
+        from atlasent.billing import AsyncBillingClient, AllowedAction
+
+        async_client = AsyncAtlaSentClient(api_key="...")
+        billing = AsyncBillingClient(async_client)
+
+        ent = await billing.get_entitlement()
+        if not ent.has_action(AllowedAction.govern):
+            raise PermissionError(f"Governance blocked: {ent.deny_reason}")
+    """
+
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    async def get_entitlement(self, org_id: Optional[str] = None) -> BillingEntitlement:
+        """Fetch billing entitlement for the authenticated org (async)."""
+        params: Dict[str, str] = {}
+        if org_id:
+            params["org_id"] = org_id
+        resp: httpx.Response = await self._client._async_http.get(
+            f"{self._client._base_url}/v1/billing/entitlement",
+            params=params,
+        )
+        resp.raise_for_status()
+        return BillingEntitlement.model_validate(resp.json())
+
+    async def set_override(self, request: AdminOverrideRequest) -> AdminOverrideResponse:
+        """Apply or clear a manual billing override (async)."""
+        resp: httpx.Response = await self._client._async_http.post(
+            f"{self._client._base_url}/v1/billing/admin-override",
+            json=request.model_dump(mode="json", exclude_none=True),
+        )
+        resp.raise_for_status()
+        return AdminOverrideResponse.model_validate(resp.json())
+
+    async def clear_override(
+        self, org_id: str, reason: str = "Cleared via SDK"
+    ) -> AdminOverrideResponse:
+        """Convenience: clear an existing manual override (async)."""
+        return await self.set_override(
             AdminOverrideRequest(org_id=org_id, status=None, reason=reason)
         )

@@ -75,6 +75,7 @@ from .billing import (
     AdminOverrideRequest,
     AdminOverrideResponse,
     AllowedAction,
+    AsyncBillingClient,
     BillingClient,
     BillingEntitlement,
     BillingMode,
@@ -279,6 +280,7 @@ __all__ = [
     # Billing entitlement (enterprise grace period support).
     "AccessStatus",
     "AllowedAction",
+    "AsyncBillingClient",
     "BillingClient",
     "BillingEntitlement",
     "BillingMode",
