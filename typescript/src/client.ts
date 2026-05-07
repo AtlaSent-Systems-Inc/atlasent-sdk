@@ -309,6 +309,7 @@ export class AtlaSentClient {
 
     return {
       decision: decision === "allow" ? "ALLOW" : "DENY",
+      decision_canonical: decision,
       permitId: permitToken ?? "",
       reason: wire.denial?.reason ?? wire.reason ?? "",
       auditHash: wire.audit_hash ?? "",
@@ -379,6 +380,7 @@ export class AtlaSentClient {
 
     const evaluation: EvaluateResponse = {
       decision: decision === "allow" ? "ALLOW" : "DENY",
+      decision_canonical: decision,
       permitId: permitToken ?? "",
       reason: wire.denial?.reason ?? wire.reason ?? "",
       auditHash: wire.audit_hash ?? "",
@@ -1069,6 +1071,10 @@ async function* parseSseStream(
           yield {
             type: "decision",
             decision: d.permitted ? "ALLOW" : "DENY",
+            // Streaming wire is the legacy {permitted, decision_id} shape;
+            // canonical projection is the boolean → 'allow' | 'deny'.
+            // The 4-value shape isn't representable from the legacy boolean.
+            decision_canonical: d.permitted ? "allow" : "deny",
             permitId: d.decision_id,
             reason: d.reason ?? "",
             auditHash: d.audit_hash ?? "",

@@ -68,6 +68,7 @@ export type {
   ConstraintTracePolicy,
   ConstraintTraceStage,
   Decision,
+  DecisionCanonical,
   EvaluatePreflightResponse,
   EvaluateRequest,
   EvaluateResponse,

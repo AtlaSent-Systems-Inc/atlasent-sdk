@@ -118,6 +118,7 @@ describe("evaluate()", () => {
     });
     expect(result).toEqual({
       decision: "ALLOW",
+      decision_canonical: "allow",
       permitId: "dec_alpha",
       reason: "Operator authorized under GxP policy",
       auditHash: "hash_alpha",
@@ -173,6 +174,61 @@ describe("evaluate()", () => {
     await client.evaluate({ agent: "a", action: "b" });
     const body = JSON.parse(fetchImpl.mock.calls[0]![1]!.body as string);
     expect(body.context).toEqual({});
+  });
+
+  it("populates decision_canonical='allow' when wire decision is 'allow'", async () => {
+    const wire = {
+      decision: "allow",
+      permit_token: "pt_canonical_allow",
+      request_id: "req_a",
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.decision).toBe("ALLOW");
+    expect(result.decision_canonical).toBe("allow");
+  });
+
+  it("populates decision_canonical='deny' when wire decision is 'deny'", async () => {
+    const wire = {
+      decision: "deny",
+      denial: { reason: "policy denied", code: "POLICY_DENY" },
+      request_id: "req_d",
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.decision).toBe("DENY");
+    expect(result.decision_canonical).toBe("deny");
+    expect(result.reason).toBe("policy denied");
+  });
+
+  it("populates decision_canonical='hold' (legacy decision collapses to DENY)", async () => {
+    const wire = {
+      decision: "hold",
+      denial: { reason: "awaiting reviewer", code: "ACTOR_HELD" },
+      request_id: "req_h",
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    // Legacy 2-value collapses hold → DENY (deprecated behavior)
+    expect(result.decision).toBe("DENY");
+    // Canonical 4-value preserves the distinct hold state
+    expect(result.decision_canonical).toBe("hold");
+    expect(result.reason).toBe("awaiting reviewer");
+  });
+
+  it("populates decision_canonical='escalate' (legacy decision collapses to DENY)", async () => {
+    const wire = {
+      decision: "escalate",
+      denial: { reason: "queued for human review", code: "ACTOR_ESCALATED" },
+      request_id: "req_e",
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    // Legacy 2-value collapses escalate → DENY (deprecated behavior)
+    expect(result.decision).toBe("DENY");
+    // Canonical 4-value preserves the distinct escalate state
+    expect(result.decision_canonical).toBe("escalate");
+    expect(result.reason).toBe("queued for human review");
   });
 });
 
