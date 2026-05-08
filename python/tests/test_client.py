@@ -71,7 +71,7 @@ class TestInit:
         assert c._anon_key == ""
         assert c._base_url == "https://api.atlasent.io"
         assert c._timeout == 10
-        assert c._max_retries == 2
+        assert c._max_retries == 3
 
     def test_custom(self):
         c = AtlaSentClient(

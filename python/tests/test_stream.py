@@ -102,7 +102,7 @@ class TestProtectStream:
         assert len(events) == 1
         ev = events[0]
         assert isinstance(ev, StreamDecisionEvent)
-        assert ev.decision == "ALLOW"
+        assert ev.decision == "allow"
         assert ev.permit_id == "dec_final"
         assert ev.is_final is True
 
@@ -118,7 +118,7 @@ class TestProtectStream:
 
         assert len(events) == 1
         assert isinstance(events[0], StreamDecisionEvent)
-        assert events[0].decision == "DENY"
+        assert events[0].decision == "deny"
 
     async def test_yields_progress_then_decision(self) -> None:
         lines = _lines_from(

@@ -823,8 +823,14 @@ class StreamDecisionEvent(BaseModel):
     @classmethod
     def from_wire(cls, data: dict[str, Any]) -> StreamDecisionEvent:  # noqa: D401
         permitted = data.get("permitted", True)
+        # Normalise to lowercase for parity with the TypeScript SDK and the
+        # four-value decision literals used everywhere else in the SDK.
+        raw_decision = data.get("decision", "allow" if permitted else "deny")
+        decision = raw_decision.lower() if isinstance(raw_decision, str) else (
+            "allow" if permitted else "deny"
+        )
         return cls(
-            decision="ALLOW" if permitted else "DENY",
+            decision=decision,
             decision_id=data.get("decision_id", ""),
             reason=data.get("reason", ""),
             audit_hash=data.get("audit_hash", ""),
