@@ -83,7 +83,15 @@ export interface EvidenceBundleVerificationResult {
   readonly reason: string | null;
 }
 
-function canonicalizeForEvidence(value: unknown): string {
+/**
+ * Canonicalize a value to a stable string representation.
+ *
+ * Exported (rather than file-private) to enable cross-language
+ * byte-equivalence verification against the Python implementation in
+ * ``atlasent-sdk/python/atlasent/governance/_canonical.py``. The shared
+ * fixture lives at ``compat/governance/fixtures/parity.json``.
+ */
+export function canonicalizeForEvidence(value: unknown): string {
   if (value === null || value === undefined) return "null";
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "null";
   if (typeof value === "boolean") return value ? "true" : "false";
