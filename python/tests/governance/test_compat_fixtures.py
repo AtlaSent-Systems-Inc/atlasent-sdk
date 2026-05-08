@@ -14,11 +14,15 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
 from atlasent.governance import (
     ROLE_WEIGHTS,
+    AutonomousBoundsDenyCode,
+    BudgetDenyCode,
+    FinancialQuorumDenyCode,
     budget_utilization_severity,
     canonicalize_for_evidence,
     classify_risk_tier,
@@ -103,3 +107,23 @@ def test_budget_severity_cases(fixture: dict) -> None:
             f"budget_utilization_severity({case['utilization_pct']}) "
             f"returned {actual!r}, expected {case['expected']!r}"
         )
+
+
+def test_deny_code_taxonomy_matches_python_literals(fixture: dict) -> None:
+    """The Literal types defined in atlasent.governance.enforcement MUST be
+    exactly the set of codes documented in the cross-language fixture.
+
+    Drift here means a deny code exists in Python but not in TypeScript
+    (or vice versa), which would silently produce divergent enforcement
+    error strings across SDKs.
+    """
+    fixture_codes = fixture["governance_deny_codes"]
+    assert set(get_args(FinancialQuorumDenyCode)) == set(
+        fixture_codes["financial_quorum"]
+    ), "FinancialQuorumDenyCode diverges from fixture"
+    assert set(get_args(BudgetDenyCode)) == set(
+        fixture_codes["budget"]
+    ), "BudgetDenyCode diverges from fixture"
+    assert set(get_args(AutonomousBoundsDenyCode)) == set(
+        fixture_codes["autonomous_bounds"]
+    ), "AutonomousBoundsDenyCode diverges from fixture"
