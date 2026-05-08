@@ -1,0 +1,101 @@
+"""Cross-language parity test — Python side.
+
+Reads ``python/tests/governance/fixtures/parity.json`` and validates that
+the canonical Python implementation produces the documented outputs.
+
+The corresponding TypeScript test in
+``typescript/test/governance/canonicalCompat.test.ts`` reads the same
+fixture and validates the canonical TS implementation. Both tests MUST
+pass for the cross-language equivalence guarantee to hold.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from atlasent.governance import (
+    ROLE_WEIGHTS,
+    budget_utilization_severity,
+    canonicalize_for_evidence,
+    classify_risk_tier,
+    compute_escalated_approval_count,
+)
+from atlasent.governance.financial_quorum import AmountThreshold
+
+
+FIXTURE_PATH = Path(__file__).parent / "fixtures" / "parity.json"
+
+
+@pytest.fixture(scope="module")
+def fixture() -> dict:
+    return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+def test_canonical_for_evidence_cases(fixture: dict) -> None:
+    for case in fixture["canonical_for_evidence"]:
+        if "input_eval" in case:
+            # Special: dynamic input expressed as a Python literal eval.
+            input_value = eval(case["input_eval"])  # noqa: S307 — fixture-only, trusted source
+        else:
+            input_value = case["input"]
+        expected = case["expected"]
+        actual = canonicalize_for_evidence(input_value)
+        assert actual == expected, (
+            f"canonicalize_for_evidence({input_value!r}) returned {actual!r}, "
+            f"expected {expected!r} (case: {case.get('description', '')})"
+        )
+
+
+def test_risk_tier_classification_cases(fixture: dict) -> None:
+    for case in fixture["risk_tier_classification"]:
+        actual = classify_risk_tier(case["value"])
+        assert actual == case["expected"], (
+            f"classify_risk_tier({case['value']}) returned {actual!r}, "
+            f"expected {case['expected']!r}"
+        )
+
+
+def test_liability_role_weights_match_fixture(fixture: dict) -> None:
+    expected_weights = fixture["liability_role_weights"]["weights"]
+    for role, weight in expected_weights.items():
+        assert ROLE_WEIGHTS[role] == weight, (
+            f"ROLE_WEIGHTS[{role!r}] = {ROLE_WEIGHTS[role]}, "
+            f"fixture says {weight}"
+        )
+    assert set(ROLE_WEIGHTS.keys()) == set(expected_weights.keys()), (
+        "Role taxonomy in ROLE_WEIGHTS diverges from fixture; both must be updated together"
+    )
+
+
+def test_escalated_approval_count_cases(fixture: dict) -> None:
+    for case in fixture["escalated_approval_count"]:
+        thresholds = tuple(
+            AmountThreshold(
+                value=t["value"],
+                currency="USD",
+                additional_approvals=t["additional_approvals"],
+            )
+            for t in case["thresholds"]
+        )
+        actual = compute_escalated_approval_count(
+            case["base_count"],
+            case["action_value"],
+            thresholds,
+        )
+        assert actual == case["expected"], (
+            f"compute_escalated_approval_count({case['base_count']}, "
+            f"{case['action_value']}, ...) returned {actual}, "
+            f"expected {case['expected']}"
+        )
+
+
+def test_budget_severity_cases(fixture: dict) -> None:
+    for case in fixture["budget_severity"]:
+        actual = budget_utilization_severity(case["utilization_pct"])
+        assert actual == case["expected"], (
+            f"budget_utilization_severity({case['utilization_pct']}) "
+            f"returned {actual!r}, expected {case['expected']!r}"
+        )

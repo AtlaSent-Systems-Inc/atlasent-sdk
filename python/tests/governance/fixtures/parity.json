@@ -1,0 +1,92 @@
+{
+  "$schema": "economic-governance-parity-v1",
+  "description": "Cross-language parity fixture for atlasent.governance. The Python tests in test_compat_fixtures.py validate the canonical Python implementation; the corresponding TS test in typescript/test/governance/canonicalCompat.test.ts validates the canonical TypeScript implementation. Adding a case here is the canonical way to extend cross-language coverage.",
+  "canonical_for_evidence": [
+    {"input": null, "expected": "null"},
+    {"input": true, "expected": "true"},
+    {"input": false, "expected": "false"},
+    {"input": 0, "expected": "0"},
+    {"input": 42, "expected": "42"},
+    {"input": -7, "expected": "-7"},
+    {"input": 1.5, "expected": "1.5"},
+    {"input": -0.5, "expected": "-0.5"},
+    {"input": "hello", "expected": "\"hello\""},
+    {"input": "", "expected": "\"\""},
+    {"input": "café", "expected": "\"café\""},
+    {"input": [], "expected": "[]"},
+    {"input": {}, "expected": "{}"},
+    {"input": [1, 2, 3], "expected": "[1,2,3]"},
+    {"input": {"b": 1, "a": 2}, "expected": "{\"a\":2,\"b\":1}"},
+    {"input": {"z": 1, "a": 2, "m": 3}, "expected": "{\"a\":2,\"m\":3,\"z\":1}"},
+    {
+      "description": "Nested object with whole-number floats and unicode",
+      "input": {"y": {"b": true, "a": null}, "x": [1, 2.5]},
+      "expected": "{\"x\":[1,2.5],\"y\":{\"a\":null,\"b\":true}}"
+    },
+    {
+      "description": "Standard precision-loss case; both runtimes produce the same bytes",
+      "input_eval": "0.1+0.2",
+      "expected": "0.30000000000000004"
+    }
+  ],
+  "risk_tier_classification": [
+    {"value": 0, "expected": "low"},
+    {"value": 999.99, "expected": "low"},
+    {"value": 1000, "expected": "medium"},
+    {"value": 49999.99, "expected": "medium"},
+    {"value": 50000, "expected": "high"},
+    {"value": 999999.99, "expected": "high"},
+    {"value": 1000000, "expected": "critical"},
+    {"value": 9999999, "expected": "critical"}
+  ],
+  "liability_role_weights": {
+    "description": "Locked weight table. Both implementations MUST agree on these numbers byte-for-byte.",
+    "weights": {
+      "authorizer": 0.30,
+      "delegator": 0.15,
+      "delegate": 0.15,
+      "executor": 0.25,
+      "approver": 0.05,
+      "override_actor": 0.40,
+      "supervisor": 0.10,
+      "exception_approver": 0.05
+    }
+  },
+  "escalated_approval_count": [
+    {
+      "base_count": 2,
+      "action_value": 5000,
+      "thresholds": [
+        {"value": 10000, "additional_approvals": 1},
+        {"value": 100000, "additional_approvals": 3}
+      ],
+      "expected": 2
+    },
+    {
+      "base_count": 2,
+      "action_value": 50000,
+      "thresholds": [
+        {"value": 10000, "additional_approvals": 1},
+        {"value": 100000, "additional_approvals": 3}
+      ],
+      "expected": 3
+    },
+    {
+      "base_count": 2,
+      "action_value": 500000,
+      "thresholds": [
+        {"value": 10000, "additional_approvals": 1},
+        {"value": 100000, "additional_approvals": 3}
+      ],
+      "expected": 5
+    }
+  ],
+  "budget_severity": [
+    {"utilization_pct": 0, "expected": "normal"},
+    {"utilization_pct": 79.99, "expected": "normal"},
+    {"utilization_pct": 80, "expected": "warn"},
+    {"utilization_pct": 99.99, "expected": "warn"},
+    {"utilization_pct": 100, "expected": "critical"},
+    {"utilization_pct": 150, "expected": "critical"}
+  ]
+}
