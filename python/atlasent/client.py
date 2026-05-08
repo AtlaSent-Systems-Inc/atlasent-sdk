@@ -62,8 +62,13 @@ logger = logging.getLogger("atlasent")
 
 DEFAULT_BASE_URL = "https://api.atlasent.io"
 DEFAULT_TIMEOUT = 10
-DEFAULT_MAX_RETRIES = 2
-DEFAULT_RETRY_BACKOFF = 0.5
+# Retry schedule parity with the TypeScript SDK:
+#   4 total attempts (1 initial + 3 retries), delays 2 s → 4 s → 8 s
+#   (capped at 16 s) via the exponential formula:
+#   delay = min(16, retry_backoff * 2**attempt)
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_BACKOFF = 2.0
+_RETRY_MAX_DELAY = 16.0
 
 # API-key prefix contract per atlasent-api/supabase/functions/_shared/auth.ts:
 #   "ask_live_<entropy>" — production keys
@@ -1267,7 +1272,7 @@ class AtlaSentClient:
         )
 
     def _backoff(self, attempt: int) -> None:
-        delay = self._retry_backoff * (2**attempt)
+        delay = min(_RETRY_MAX_DELAY, self._retry_backoff * (2**attempt))
         logger.debug("Retrying in %.1fs…", delay)
         time.sleep(delay)
 

@@ -164,6 +164,7 @@ from .policy_sync import (
     is_policy_sync_terminal,
 )
 from .require_permit import ProtectedAction, classify_command, require_permit
+from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
 
 __all__ = [
@@ -292,4 +293,8 @@ __all__ = [
     "AdminOverrideRequest",
     "AdminOverrideResponse",
     "verify_billing_webhook_signature",
+    # Webhook signature verification (parity with the TypeScript SDK).
+    "verify_webhook",
+    "assert_webhook",
+    "WebhookVerificationError",
 ]
