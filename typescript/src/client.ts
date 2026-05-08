@@ -78,6 +78,26 @@ import type {
   GovernanceGraphResultRow,
 } from "./governanceGraph.js";
 import type { IncidentTimelineResponse } from "./incidentReconstruction.js";
+import type {
+  ConnectorType,
+  InstallConnectorInput,
+  AuthenticateConnectorInput,
+  UpsertEnforcementPolicyInput,
+  ListConnectorsResponse,
+  InstallConnectorResponse,
+  AuthenticateConnectorResponse,
+  SyncConnectorResponse,
+  RevokeConnectorResponse,
+  RotateCredentialsResponse,
+  ListEnforcementPoliciesResponse,
+  UpsertEnforcementPolicyResponse,
+} from "./connectorManagement.js";
+import type {
+  ComputeOrgRiskOptions,
+  ComputeOrgRiskResponse,
+  GetLatestOrgRiskResponse,
+  ListOrgRiskHistoryResponse,
+} from "./orgRiskGraph.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -1226,6 +1246,196 @@ export class AtlaSentClient {
       Omit<IncidentTimelineResponse, "rateLimit">
     >(`/v1/governance/timeline/incident/${encodeURIComponent(incidentId)}`);
     return { ...body, rateLimit };
+  }
+
+  // ── Connector Management ─────────────────────────────────────────────────
+
+  /**
+   * List connectors registered for the calling org.
+   * Calls `GET /v1/governance/connectors`.
+   */
+  async listConnectors(
+    options: { cursor?: string; limit?: number } = {},
+  ): Promise<ListConnectorsResponse> {
+    const params = new URLSearchParams();
+    if (options.cursor) params.set("cursor", options.cursor);
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    const { body, rateLimit } = await this.get<{
+      connectors: ListConnectorsResponse["connectors"];
+      total: number;
+      next_cursor?: string;
+    }>("/v1/governance/connectors", params);
+    const result: ListConnectorsResponse = {
+      connectors: body.connectors ?? [],
+      total: body.total,
+      rateLimit,
+    };
+    if (body.next_cursor) result.nextCursor = body.next_cursor;
+    return result;
+  }
+
+  /**
+   * Register and install a new connector for the calling org.
+   * Calls `POST /v1/governance/connectors`.
+   */
+  async installConnector(
+    input: InstallConnectorInput,
+  ): Promise<InstallConnectorResponse> {
+    const { body, rateLimit } = await this.post<
+      InstallConnectorResponse["connector"]
+    >("/v1/governance/connectors", input);
+    return { connector: body, rateLimit };
+  }
+
+  /**
+   * Store encrypted credentials for a connector.
+   * Calls `POST /v1/governance/connectors/{id}/authenticate`.
+   */
+  async authenticateConnector(
+    connectorId: string,
+    input: AuthenticateConnectorInput,
+  ): Promise<AuthenticateConnectorResponse> {
+    if (!connectorId) {
+      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+    }
+    const { body, rateLimit } = await this.post<{
+      credential_id: string;
+      version: number;
+    }>(`/v1/governance/connectors/${encodeURIComponent(connectorId)}/authenticate`, input);
+    return { credential_id: body.credential_id, version: body.version, rateLimit };
+  }
+
+  /**
+   * Trigger an incremental sync for a connector.
+   * Calls `POST /v1/governance/connectors/{id}/sync`.
+   */
+  async syncConnector(connectorId: string): Promise<SyncConnectorResponse> {
+    if (!connectorId) {
+      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+    }
+    const { body, rateLimit } = await this.post<{
+      connector_id: string;
+      status: SyncConnectorResponse["status"];
+      sync_started_at: string;
+    }>(`/v1/governance/connectors/${encodeURIComponent(connectorId)}/sync`, {});
+    return { ...body, rateLimit };
+  }
+
+  /**
+   * Revoke a connector and all its associated credentials.
+   * Calls `POST /v1/governance/connectors/{id}/revoke`.
+   */
+  async revokeConnector(
+    connectorId: string,
+    reason?: string,
+  ): Promise<RevokeConnectorResponse> {
+    if (!connectorId) {
+      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+    }
+    const body: { reason?: string } = {};
+    if (reason !== undefined) body.reason = reason;
+    const { body: wire, rateLimit } = await this.post<{
+      connector_id: string;
+      revoked_at: string;
+    }>(`/v1/governance/connectors/${encodeURIComponent(connectorId)}/revoke`, body);
+    return { ...wire, rateLimit };
+  }
+
+  /**
+   * Rotate the credentials for a connector.
+   * Calls `POST /v1/governance/connectors/{id}/rotate-credentials`.
+   */
+  async rotateConnectorCredentials(
+    connectorId: string,
+  ): Promise<RotateCredentialsResponse> {
+    if (!connectorId) {
+      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+    }
+    const { body, rateLimit } = await this.post<{
+      connector_id: string;
+      new_version: number;
+      rotated_at: string;
+    }>(`/v1/governance/connectors/${encodeURIComponent(connectorId)}/rotate-credentials`, {});
+    return { ...body, rateLimit };
+  }
+
+  /**
+   * List enforcement policies for the calling org, optionally filtered by connector type.
+   * Calls `GET /v1/governance/enforcement-policies`.
+   */
+  async listEnforcementPolicies(
+    connectorType?: ConnectorType,
+  ): Promise<ListEnforcementPoliciesResponse> {
+    const params = new URLSearchParams();
+    if (connectorType) params.set("connector_type", connectorType);
+    const { body, rateLimit } = await this.get<{
+      policies: ListEnforcementPoliciesResponse["policies"];
+      total: number;
+    }>("/v1/governance/enforcement-policies", params);
+    return { policies: body.policies ?? [], total: body.total, rateLimit };
+  }
+
+  /**
+   * Create or update a connector enforcement policy.
+   * Calls `POST /v1/governance/enforcement-policies`.
+   */
+  async upsertEnforcementPolicy(
+    input: UpsertEnforcementPolicyInput,
+  ): Promise<UpsertEnforcementPolicyResponse> {
+    const { body, rateLimit } = await this.post<
+      UpsertEnforcementPolicyResponse["policy"]
+    >("/v1/governance/enforcement-policies", input);
+    return { policy: body, rateLimit };
+  }
+
+  // ── Organizational Risk Graph ─────────────────────────────────────────────
+
+  /**
+   * Trigger a fresh org-level risk score computation.
+   * Calls `POST /v1/governance/risk/compute`.
+   */
+  async computeOrgRisk(
+    options: ComputeOrgRiskOptions = {},
+  ): Promise<ComputeOrgRiskResponse> {
+    const { body, rateLimit } = await this.post<
+      ComputeOrgRiskResponse["score"]
+    >("/v1/governance/risk/compute", options);
+    return { score: body, rateLimit };
+  }
+
+  /**
+   * Retrieve the most recently computed risk score for the calling org.
+   * Calls `GET /v1/governance/risk/latest`.
+   */
+  async getLatestOrgRisk(): Promise<GetLatestOrgRiskResponse> {
+    const { body, rateLimit } = await this.get<{
+      score: GetLatestOrgRiskResponse["score"];
+    }>("/v1/governance/risk/latest");
+    return { score: body.score ?? null, rateLimit };
+  }
+
+  /**
+   * Page through historical org risk scores, most-recent first.
+   * Calls `GET /v1/governance/risk/history`.
+   */
+  async listOrgRiskHistory(
+    options: { cursor?: string; limit?: number } = {},
+  ): Promise<ListOrgRiskHistoryResponse> {
+    const params = new URLSearchParams();
+    if (options.cursor) params.set("cursor", options.cursor);
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    const { body, rateLimit } = await this.get<{
+      scores: ListOrgRiskHistoryResponse["scores"];
+      total: number;
+      next_cursor?: string;
+    }>("/v1/governance/risk/history", params);
+    const result: ListOrgRiskHistoryResponse = {
+      scores: body.scores ?? [],
+      total: body.total,
+      rateLimit,
+    };
+    if (body.next_cursor) result.nextCursor = body.next_cursor;
+    return result;
   }
 }
 

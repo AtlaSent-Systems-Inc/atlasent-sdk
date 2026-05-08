@@ -373,6 +373,43 @@ export type {
   IncidentTimelineResponse,
 } from "./incidentReconstruction.js";
 
+// ── Connector Management & Organizational Risk Graph ─────────────────────────
+
+export type {
+  ConnectorType,
+  ConnectorStatus,
+  ConnectorRow,
+  ConnectorCredentialType,
+  ConnectorCredentialRow,
+  EnforcementAction,
+  EnforcementQuorumConfig,
+  ConnectorEnforcementPolicy,
+  ConnectorAuditLogEntry,
+  ConnectorSyncState,
+  ConnectorEnforcementEventInput,
+  ConnectorEnforcementResult,
+  InstallConnectorInput,
+  AuthenticateConnectorInput,
+  UpsertEnforcementPolicyInput,
+  ListConnectorsResponse,
+  InstallConnectorResponse,
+  AuthenticateConnectorResponse,
+  SyncConnectorResponse,
+  RevokeConnectorResponse,
+  RotateCredentialsResponse,
+  ListEnforcementPoliciesResponse,
+  UpsertEnforcementPolicyResponse,
+} from "./connectorManagement.js";
+
+export type {
+  OrgRiskLevel,
+  OrgRiskScore,
+  ComputeOrgRiskOptions,
+  ComputeOrgRiskResponse,
+  GetLatestOrgRiskResponse,
+  ListOrgRiskHistoryResponse,
+} from "./orgRiskGraph.js";
+
 /**
  * Default export. The opinionated, category-defining entry point:
  *
