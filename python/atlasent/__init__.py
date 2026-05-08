@@ -106,6 +106,8 @@ from .exceptions import (
     PermissionDeniedError,
     PermitOutcome,
     RateLimitError,
+    StreamParseError,
+    StreamTimeoutError,
 )
 from .governance_webhooks import (
     EnforcementWebhookEvent,
@@ -201,6 +203,8 @@ __all__ = [
     "PermitOutcome",
     "ConfigurationError",
     "RateLimitError",
+    "StreamTimeoutError",
+    "StreamParseError",
     "atlasent_guard",
     "async_atlasent_guard",
     "TTLCache",

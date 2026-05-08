@@ -516,6 +516,29 @@ export interface EvaluatePreflightResponse {
 
 // ── Streaming evaluate ────────────────────────────────────────────────────────
 
+/**
+ * Options for {@link AtlaSentClient.protectStream}.
+ *
+ * All fields are optional; defaults are used when omitted.
+ */
+export interface StreamOptions {
+  /**
+   * Optional abort signal to cancel the stream from the caller side.
+   */
+  signal?: AbortSignal;
+  /**
+   * Per-event timeout in milliseconds: if no SSE event arrives within
+   * this window the stream throws {@link StreamTimeoutError}.
+   * Defaults to 30 000 ms (30 s). Pass `0` to disable.
+   */
+  timeoutMs?: number;
+  /**
+   * Maximum reconnection attempts on network drop before the stream
+   * gives up and throws. Defaults to 3.
+   */
+  maxRetries?: number;
+}
+
 /** A policy decision emitted mid-stream. */
 export interface StreamDecisionEvent {
   type: "decision";
