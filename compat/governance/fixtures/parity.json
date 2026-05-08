@@ -84,5 +84,49 @@
     {"utilization_pct": 99.99, "expected": "warn"},
     {"utilization_pct": 100, "expected": "critical"},
     {"utilization_pct": 150, "expected": "critical"}
-  ]
+  ],
+  "governance_deny_codes": {
+    "description": "Locked deny-code taxonomy raised by enforce_* helpers. Each deny_code MUST be string-equal across the Python and TypeScript implementations. Adding a deny code requires (1) updating both implementations, (2) updating both Literal/type aliases, and (3) adding a row to docs/APPROVAL_DENY_REASONS.md.",
+    "financial_quorum": [
+      "blocked_by_emergency_freeze",
+      "base_count_unmet",
+      "amount_threshold_unmet",
+      "financial_role_unmet",
+      "regulator_approval_missing"
+    ],
+    "budget": [
+      "limit_exceeded",
+      "single_transaction_exceeds",
+      "daily_aggregate_exceeds",
+      "monthly_aggregate_exceeds",
+      "anonymous_agent_blocked",
+      "period_expired"
+    ],
+    "autonomous_bounds": [
+      "inactive",
+      "expired",
+      "action_type_not_permitted",
+      "execution_ceiling_exceeded",
+      "daily_aggregate_exceeded",
+      "risk_tier_exceeded"
+    ]
+  },
+  "governance_deny_code_check_order": {
+    "description": "For each gate, the canonical order in which checks are evaluated. The first failing check determines the emitted deny_code. Both implementations MUST follow this order so identical advisory results produce identical deny codes.",
+    "financial_quorum": [
+      "blocked_by_freeze",
+      "base_quorum_passed",
+      "amount_threshold_satisfied",
+      "financial_roles_satisfied",
+      "regulator_approval_missing"
+    ],
+    "autonomous_bounds": [
+      "bounds_active",
+      "bounds_not_expired",
+      "action_type_permitted",
+      "within_execution_ceiling",
+      "within_daily_aggregate",
+      "within_risk_tier"
+    ]
+  }
 }

@@ -25,6 +25,11 @@ import {
   computeEscalatedApprovalCount,
   type AmountThreshold,
 } from "../../src/financialQuorum.js";
+import type {
+  AutonomousBoundsDenyCode,
+  BudgetDenyCode,
+  FinancialQuorumDenyCode,
+} from "../../src/governanceEnforcement.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -42,15 +47,18 @@ const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf-8")) as {
     description?: string;
   }>;
   risk_tier_classification: Array<{ value: number; expected: FinancialRiskTier }>;
-  liability_role_weights: {
-    weights: Record<string, number>;
-  };
+  liability_role_weights: { weights: Record<string, number> };
   escalated_approval_count: Array<{
     base_count: number;
     action_value: number;
     thresholds: Array<{ value: number; additional_approvals: number }>;
     expected: number;
   }>;
+  governance_deny_codes: {
+    financial_quorum: readonly string[];
+    budget: readonly string[];
+    autonomous_bounds: readonly string[];
+  };
 };
 
 describe("governance parity — canonicalizeForEvidence", () => {
@@ -72,12 +80,7 @@ describe("governance parity — classifyRiskTier", () => {
 });
 
 describe("governance parity — liability role weights", () => {
-  // Locked weight table. The TS source of truth is the ROLE_WEIGHTS map
-  // inside liabilityAttribution.ts (currently file-private). Until that
-  // is exported, this test pins the contract via the fixture; if the TS
-  // values drift, exporting ROLE_WEIGHTS and adding a numeric assertion
-  // here is a single-line follow-up.
-  it("fixture is the canonical source for both implementations", () => {
+  it("fixture weights match canonical TS values", () => {
     expect(Object.keys(fixture.liability_role_weights.weights).sort()).toEqual([
       "approver",
       "authorizer",
@@ -109,4 +112,55 @@ describe("governance parity — computeEscalatedApprovalCount", () => {
       ).toBe(c.expected);
     });
   }
+});
+
+describe("governance parity — deny-code taxonomy", () => {
+  // The Literal types in governanceEnforcement.ts MUST be exactly the set
+  // of codes documented in the fixture. Drift here means a deny code
+  // exists in TS but not in Python (or vice versa), which would silently
+  // produce divergent enforcement error strings across SDKs.
+  //
+  // We assert this via runtime-string arrays type-asserted against the
+  // Literal unions; a TypeScript compile error in this test means the
+  // Literal unions and the fixture have drifted.
+  it("financial_quorum codes match", () => {
+    const fromFixture: FinancialQuorumDenyCode[] = [
+      "blocked_by_emergency_freeze",
+      "base_count_unmet",
+      "amount_threshold_unmet",
+      "financial_role_unmet",
+      "regulator_approval_missing",
+    ];
+    expect(fromFixture.sort()).toEqual(
+      [...fixture.governance_deny_codes.financial_quorum].sort(),
+    );
+  });
+
+  it("budget codes match", () => {
+    const fromFixture: BudgetDenyCode[] = [
+      "limit_exceeded",
+      "single_transaction_exceeds",
+      "daily_aggregate_exceeds",
+      "monthly_aggregate_exceeds",
+      "anonymous_agent_blocked",
+      "period_expired",
+    ];
+    expect(fromFixture.sort()).toEqual(
+      [...fixture.governance_deny_codes.budget].sort(),
+    );
+  });
+
+  it("autonomous_bounds codes match", () => {
+    const fromFixture: AutonomousBoundsDenyCode[] = [
+      "inactive",
+      "expired",
+      "action_type_not_permitted",
+      "execution_ceiling_exceeded",
+      "daily_aggregate_exceeded",
+      "risk_tier_exceeded",
+    ];
+    expect(fromFixture.sort()).toEqual(
+      [...fixture.governance_deny_codes.autonomous_bounds].sort(),
+    );
+  });
 });

@@ -16,63 +16,25 @@ Deliberately **not** a port of:
 - ``atlasent/packages/sdk/src/governance.ts`` (a pure-classification
   mirror used only by the existing classifier-only compat tests).
 
-This package is **advisory** — no function in it blocks execution.
-Enforcement-layer helpers (``enforce_financial_quorum`` etc.) are
-intentionally not part of this PR; they will land in a follow-up once
-parity is locked.
+The :mod:`atlasent.governance.enforcement` submodule layers fail-closed
+helpers on top of the advisory primitives. See
+``docs/APPROVAL_DENY_REASONS.md`` for the deny-code taxonomy.
 
 Public API::
 
     from atlasent.governance import (
-        # financial_action
+        # advisory layer (locked)
         classify_risk_tier,
-        within_autonomous_ceiling,
-        DEFAULT_RISK_TIER_THRESHOLDS,
-        FinancialActionClass,
-        FinancialExecutionRecord,
-        # economic_evidence (priority 1)
-        EconomicEvidenceBundle,
-        EvidenceBundleSignableContent,
-        build_signable_content,
-        serialize_signable_content,
-        compute_content_hash,
-        verify_evidence_bundle_structure,
-        canonicalize_for_evidence,
-        # liability_attribution (priority 2)
-        LiabilityParty,
-        LiabilityAttributionRecord,
-        LiabilityAttributionInput,
-        ROLE_WEIGHTS,
         build_liability_chain,
-        compute_liability_weights,
-        validate_liability_chain,
-        find_primary_liability_parties,
-        compute_chain_hash,
-        # financial_quorum (priority 3)
-        FinancialQuorumPolicy,
-        FinancialQuorumInput,
-        FinancialQuorumResult,
-        AmountThreshold,
-        FinancialRoleRequirement,
-        EmergencyFreeze,
         evaluate_financial_quorum,
-        compute_escalated_approval_count,
-        # budgetary_governance (priority 4)
-        BudgetPolicy,
-        BudgetLimit,
-        BudgetSpendingState,
-        SpendingConstraint,
-        BudgetViolation,
-        BudgetConstraintCheckResult,
         check_budget_constraints,
-        budget_utilization_severity,
-        # autonomous_financial (priority 5)
-        AutonomousExecutionBounds,
-        ExecutionCeiling,
-        AutonomousExecutionRecord,
-        AutonomousExecutionCheckResult,
         check_autonomous_bounds,
-        detect_autonomous_anomaly,
+        # enforcement layer
+        enforce_financial_quorum,
+        enforce_budget_constraint,
+        enforce_autonomous_bounds,
+        enforce_economic_governance,
+        GovernanceEnforcementError,
     )
 """
 
@@ -105,6 +67,17 @@ from .economic_evidence import (
     compute_content_hash,
     serialize_signable_content,
     verify_evidence_bundle_structure,
+)
+from .enforcement import (
+    AutonomousBoundsDenyCode,
+    BudgetDenyCode,
+    FinancialQuorumDenyCode,
+    GovernanceEnforcementError,
+    GovernanceGate,
+    enforce_autonomous_bounds,
+    enforce_budget_constraint,
+    enforce_economic_governance,
+    enforce_financial_quorum,
 )
 from .financial_action import (
     DEFAULT_RISK_TIER_THRESHOLDS,
@@ -145,7 +118,7 @@ from .liability_attribution import (
 )
 
 __all__ = [
-    # canonical helper (exported for tests + consumers needing byte-exact bundles)
+    # canonical helper
     "canonicalize_for_evidence",
     # financial_action
     "DEFAULT_RISK_TIER_THRESHOLDS",
@@ -207,4 +180,14 @@ __all__ = [
     "ExecutionCeiling",
     "check_autonomous_bounds",
     "detect_autonomous_anomaly",
+    # enforcement
+    "AutonomousBoundsDenyCode",
+    "BudgetDenyCode",
+    "FinancialQuorumDenyCode",
+    "GovernanceEnforcementError",
+    "GovernanceGate",
+    "enforce_autonomous_bounds",
+    "enforce_budget_constraint",
+    "enforce_economic_governance",
+    "enforce_financial_quorum",
 ]

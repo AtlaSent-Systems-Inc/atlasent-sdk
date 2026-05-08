@@ -164,7 +164,7 @@ export type {
   QuorumRoleRequirement,
 } from "./approvalQuorum.js";
 
-// ── Economic Governance & Liability Attribution ────────────────────────────────────────────────
+// ── Economic Governance & Liability Attribution ────────────────────────────────────
 
 export {
   DEFAULT_RISK_TIER_THRESHOLDS,
@@ -257,6 +257,7 @@ export {
 
 export {
   buildSignableContent,
+  canonicalizeForEvidence,
   serializeSignableContent,
   verifyEvidenceBundleStructure,
   type ApprovalProvenance,
@@ -292,6 +293,20 @@ export {
   type OverrideAnalytics,
   type RiskTimelinePoint,
 } from "./financialDashboard.js";
+
+// ── Governance enforcement layer (fail-closed helpers on top of the advisory primitives) ──
+export {
+  GovernanceEnforcementError,
+  enforceAutonomousBounds,
+  enforceBudgetConstraint,
+  enforceEconomicGovernance,
+  enforceFinancialQuorum,
+  type AutonomousBoundsDenyCode,
+  type BudgetDenyCode,
+  type FinancialQuorumDenyCode,
+  type GovernanceEnforcementErrorInit,
+  type GovernanceGate,
+} from "./governanceEnforcement.js";
 
 // ── Governance Webhooks, Compliance Evidence & Policy Sync ─────────────────────────
 
@@ -343,7 +358,7 @@ export {
   WebhookVerificationError,
 } from "./webhook.js";
 
-// ── Governance Graph & Incident Reconstruction ──────────────────────────────
+// ── Governance Graph & Incident Reconstruction ──────────────────────────────────
 
 export type {
   GovernanceGraphQueryType,
@@ -373,7 +388,7 @@ export type {
   IncidentTimelineResponse,
 } from "./incidentReconstruction.js";
 
-// ── Connector Management & Organizational Risk Graph ─────────────────────────
+// ── Connector Management & Organizational Risk Graph ─────────────────────────────
 
 export type {
   ConnectorType,
