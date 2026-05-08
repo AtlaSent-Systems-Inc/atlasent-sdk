@@ -334,6 +334,12 @@ export {
   type SubmitPolicySyncResponse,
 } from "./policySync.js";
 
+export {
+  assertWebhook,
+  verifyWebhook,
+  WebhookVerificationError,
+} from "./webhook.js";
+
 /**
  * Default export. The opinionated, category-defining entry point:
  *
