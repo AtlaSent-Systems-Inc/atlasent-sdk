@@ -39,6 +39,8 @@ export { AtlaSentClient } from "./client.js";
 export {
   AtlaSentDeniedError,
   AtlaSentError,
+  StreamParseError,
+  StreamTimeoutError,
   normalizePermitOutcome,
   type AtlaSentDecision,
   type AtlaSentDeniedErrorInit,
@@ -85,6 +87,7 @@ export type {
   VerifyPermitByIdResponse,
   StreamDecisionEvent,
   StreamEvent,
+  StreamOptions,
   StreamProgressEvent,
   VerifyPermitRequest,
   VerifyPermitResponse,
@@ -369,6 +372,43 @@ export type {
   IncidentChainEvidenceRow,
   IncidentTimelineResponse,
 } from "./incidentReconstruction.js";
+
+// ── Connector Management & Organizational Risk Graph ─────────────────────────
+
+export type {
+  ConnectorType,
+  ConnectorStatus,
+  ConnectorRow,
+  ConnectorCredentialType,
+  ConnectorCredentialRow,
+  EnforcementAction,
+  EnforcementQuorumConfig,
+  ConnectorEnforcementPolicy,
+  ConnectorAuditLogEntry,
+  ConnectorSyncState,
+  ConnectorEnforcementEventInput,
+  ConnectorEnforcementResult,
+  InstallConnectorInput,
+  AuthenticateConnectorInput,
+  UpsertEnforcementPolicyInput,
+  ListConnectorsResponse,
+  InstallConnectorResponse,
+  AuthenticateConnectorResponse,
+  SyncConnectorResponse,
+  RevokeConnectorResponse,
+  RotateCredentialsResponse,
+  ListEnforcementPoliciesResponse,
+  UpsertEnforcementPolicyResponse,
+} from "./connectorManagement.js";
+
+export type {
+  OrgRiskLevel,
+  OrgRiskScore,
+  ComputeOrgRiskOptions,
+  ComputeOrgRiskResponse,
+  GetLatestOrgRiskResponse,
+  ListOrgRiskHistoryResponse,
+} from "./orgRiskGraph.js";
 
 /**
  * Default export. The opinionated, category-defining entry point:
