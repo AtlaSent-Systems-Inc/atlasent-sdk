@@ -39,6 +39,8 @@ export { AtlaSentClient } from "./client.js";
 export {
   AtlaSentDeniedError,
   AtlaSentError,
+  StreamParseError,
+  StreamTimeoutError,
   normalizePermitOutcome,
   type AtlaSentDecision,
   type AtlaSentDeniedErrorInit,
@@ -85,6 +87,7 @@ export type {
   VerifyPermitByIdResponse,
   StreamDecisionEvent,
   StreamEvent,
+  StreamOptions,
   StreamProgressEvent,
   VerifyPermitRequest,
   VerifyPermitResponse,

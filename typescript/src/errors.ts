@@ -8,6 +8,59 @@
  * {@link AtlaSentError}.
  */
 
+// ── Streaming-specific errors ─────────────────────────────────────────────────
+
+/**
+ * Thrown when no SSE event arrives within the configured timeout window.
+ *
+ * Callers can catch this specifically to distinguish a stalled stream
+ * from other network or parse failures:
+ *
+ * ```ts
+ * catch (e) {
+ *   if (e instanceof StreamTimeoutError) { // reconnect or alert }
+ * }
+ * ```
+ */
+export class StreamTimeoutError extends Error {
+  override name: string = "StreamTimeoutError";
+  /** Timeout that was exceeded, in milliseconds. */
+  readonly timeoutMs: number;
+
+  constructor(timeoutMs: number) {
+    super(`AtlaSent stream timed out after ${timeoutMs}ms with no event`);
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+/**
+ * Thrown when the SSE stream closes with a partial / malformed JSON payload.
+ *
+ * This is a recoverable condition — the stream closed mid-JSON. The
+ * caller can reconnect using the last received `Last-Event-ID` and
+ * resume from where the server left off.
+ *
+ * ```ts
+ * catch (e) {
+ *   if (e instanceof StreamParseError) { // log raw data, maybe reconnect }
+ * }
+ * ```
+ */
+export class StreamParseError extends Error {
+  override name: string = "StreamParseError";
+  /** The raw data string that failed to parse. */
+  readonly rawData: string;
+
+  constructor(rawData: string, cause?: unknown) {
+    super(`AtlaSent stream received malformed JSON: ${rawData.slice(0, 200)}`);
+    this.rawData = rawData;
+    if (cause !== undefined) {
+      // ES2022 cause
+      (this as { cause?: unknown }).cause = cause;
+    }
+  }
+}
+
 /** Discriminator for {@link AtlaSentError.code}. */
 export type AtlaSentErrorCode =
   | "invalid_api_key"

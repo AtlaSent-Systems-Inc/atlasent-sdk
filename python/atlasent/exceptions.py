@@ -255,6 +255,50 @@ class AtlaSentDeniedError(AtlaSentDenied):
         return self.outcome == "permit_not_found"
 
 
+class StreamTimeoutError(AtlaSentError):
+    """Raised when no SSE event arrives within the configured timeout window.
+
+    Callers can catch this specifically to distinguish a stalled stream
+    from other network or parse failures::
+
+        except StreamTimeoutError:
+            # reconnect or alert
+
+    Attributes:
+        timeout_s: The timeout in seconds that was exceeded.
+    """
+
+    def __init__(self, timeout_s: float) -> None:
+        self.timeout_s = timeout_s
+        super().__init__(
+            f"AtlaSent stream timed out after {timeout_s}s with no event",
+            code="timeout",
+        )
+
+
+class StreamParseError(AtlaSentError):
+    """Raised when the SSE stream closes with a partial / malformed JSON payload.
+
+    Callers can catch this specifically to distinguish a parse failure
+    from a timeout or network error::
+
+        except StreamParseError as e:
+            logger.error("bad SSE data: %s", e.raw_data[:200])
+
+    Attributes:
+        raw_data: The raw data string that failed to parse.
+    """
+
+    def __init__(self, raw_data: str, cause: Exception | None = None) -> None:
+        self.raw_data = raw_data
+        super().__init__(
+            f"AtlaSent stream received malformed JSON: {raw_data[:200]}",
+            code="bad_response",
+        )
+        if cause is not None:
+            self.__cause__ = cause
+
+
 class RateLimitError(AtlaSentError):
     """Raised when the API returns HTTP 429 (Too Many Requests).
 

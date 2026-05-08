@@ -29,6 +29,8 @@ from .exceptions import (
     AtlaSentError,
     PermissionDeniedError,
     RateLimitError,
+    StreamParseError,
+    StreamTimeoutError,
     _normalize_permit_outcome,
 )
 from .approval_artifact import ApprovalReference
@@ -416,6 +418,9 @@ class AsyncAtlaSentClient:
         agent: str,
         action: str,
         context: dict[str, Any] | None = None,
+        *,
+        stream_timeout_s: float = 30.0,
+        max_retries: int = 3,
     ) -> AsyncIterator[StreamDecisionEvent | StreamProgressEvent]:
         """Open a streaming evaluation session against ``POST /v1-evaluate-stream``.
 
@@ -423,6 +428,18 @@ class AsyncAtlaSentClient:
         objects as the server emits them. The iterator ends cleanly when the
         server sends ``event: done``; it raises :class:`AtlaSentError` on
         transport errors or when the server sends ``event: error``.
+
+        Hardening:
+
+        - Raises :class:`StreamTimeoutError` when no event arrives within
+          ``stream_timeout_s`` seconds (default 30 s). Pass ``0`` to disable.
+        - Retries up to ``max_retries`` times (default 3) with 1 s / 2 s / 4 s
+          delays on ``httpx.ConnectError`` or ``asyncio.TimeoutError``. Sends
+          ``Last-Event-ID`` on reconnect when the server emitted event IDs.
+        - Raises :class:`StreamParseError` on partial / malformed JSON rather
+          than letting ``json.JSONDecodeError`` escape.
+        - Closes cleanly on ``event: done`` or a decision event with
+          ``done: true``.
 
         Usage::
 
@@ -438,35 +455,87 @@ class AsyncAtlaSentClient:
             "api_key": self._api_key,
         }
         request_id = uuid.uuid4().hex[:12]
-        headers = {
-            "Accept": "text/event-stream",
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self._api_key}",
-            "User-Agent": f"atlasent-python/{__version__}",
-            "X-Request-ID": request_id,
-        }
 
-        async with self._client.stream(
-            "POST",
-            url,
-            content=json.dumps(payload).encode(),
-            headers=headers,
-        ) as response:
-            if response.status_code != 200:
-                # Drain the body so the connection can be reused; we don't
-                # surface the body in the error because it's an SSE stream
-                # and the head bytes are unlikely to be a useful message.
-                await response.aread()
-                raise AtlaSentError(
-                    "AtlaSent stream request failed with status "
-                    f"{response.status_code}",
-                    code="server_error",
-                    status_code=response.status_code,
-                    request_id=request_id,
-                )
+        last_event_id: str | None = None
+        retry_count = 0
 
-            async for event in _parse_sse(response.aiter_lines(), request_id):
-                yield event
+        while True:
+            headers: dict[str, str] = {
+                "Accept": "text/event-stream",
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._api_key}",
+                "User-Agent": f"atlasent-python/{__version__}",
+                "X-Request-ID": request_id,
+            }
+            if last_event_id is not None:
+                headers["Last-Event-ID"] = last_event_id
+
+            stream_done = False
+            network_drop = False
+
+            try:
+                async with self._client.stream(
+                    "POST",
+                    url,
+                    content=json.dumps(payload).encode(),
+                    headers=headers,
+                ) as response:
+                    if response.status_code != 200:
+                        await response.aread()
+                        raise AtlaSentError(
+                            "AtlaSent stream request failed with status "
+                            f"{response.status_code}",
+                            code="server_error",
+                            status_code=response.status_code,
+                            request_id=request_id,
+                        )
+
+                    last_event_id_container: list[str | None] = [last_event_id]
+
+                    def _on_event_id(eid: str) -> None:
+                        last_event_id_container[0] = eid
+
+                    async for event in _parse_sse(
+                        response.aiter_lines(),
+                        request_id,
+                        stream_timeout_s,
+                        _on_event_id,
+                    ):
+                        yield event
+                        if (
+                            isinstance(event, StreamDecisionEvent)
+                            and event.is_final
+                        ):
+                            stream_done = True
+
+                    last_event_id = last_event_id_container[0]
+                    stream_done = True
+
+            except (httpx.ConnectError, httpx.RemoteProtocolError) as exc:
+                if retry_count < max_retries:
+                    network_drop = True
+                else:
+                    raise AtlaSentError(
+                        f"AtlaSent stream failed after {retry_count} retries: {exc}",
+                        code="network",
+                        request_id=request_id,
+                    ) from exc
+            except asyncio.TimeoutError as exc:
+                if retry_count < max_retries:
+                    network_drop = True
+                else:
+                    raise StreamTimeoutError(stream_timeout_s) from exc
+
+            if stream_done:
+                break
+
+            if network_drop:
+                retry_count += 1
+                delay = 1.0 * (2 ** (retry_count - 1))  # 1s, 2s, 4s
+                await asyncio.sleep(delay)
+                continue
+
+            break
 
     async def gate(
         self,
@@ -1104,35 +1173,71 @@ def _parse_retry_after(response: httpx.Response) -> float | None:
 async def _parse_sse(
     lines: AsyncIterator[str],
     request_id: str,
+    timeout_s: float = 0.0,
+    on_event_id: Any = None,
 ) -> AsyncIterator[StreamDecisionEvent | StreamProgressEvent]:
     """Parse server-sent events from an async line iterator.
 
     Yields :class:`StreamDecisionEvent` and :class:`StreamProgressEvent`.
     Raises :class:`AtlaSentError` on ``event: error``.
-    Returns (stops iterating) on ``event: done``.
+    Returns (stops iterating) on ``event: done`` or ``done: true`` payload.
     Unknown event types are silently skipped for forward compatibility.
+
+    Hardening additions:
+    - Per-event timeout via ``timeout_s`` (0 = disabled): raises
+      :class:`StreamTimeoutError` if no line arrives in time.
+    - JSON parse failures raise :class:`StreamParseError`.
+    - Calls ``on_event_id(id)`` when an ``id:`` field is seen.
     """
     event_type = "message"
     data_lines: list[str] = []
+    event_id: str | None = None
 
-    async for line in lines:
+    async def _next_line(it: AsyncIterator[str], timeout: float) -> str | None:
+        """Fetch the next line, applying a timeout when timeout > 0.
+
+        Returns ``None`` when the iterator is exhausted.
+        Raises :class:`StreamTimeoutError` on timeout.
+        """
+        if timeout <= 0:
+            try:
+                return await it.__anext__()
+            except StopAsyncIteration:
+                return None
+        try:
+            return await asyncio.wait_for(it.__anext__(), timeout=timeout)
+        except StopAsyncIteration:
+            return None
+        except asyncio.TimeoutError as exc:
+            raise StreamTimeoutError(timeout) from exc
+
+    while True:
+        line = await _next_line(lines, timeout_s)
+        if line is None:
+            # Stream ended without an explicit done event.
+            # If there's partial data accumulated, surface it as a parse error.
+            if data_lines:
+                raise StreamParseError("\n".join(data_lines))
+            return
+
         if line == "":
             # Blank line: dispatch accumulated event
             if data_lines:
                 data = "\n".join(data_lines)
                 data_lines = []
 
+                if event_id is not None and on_event_id is not None:
+                    on_event_id(event_id)
+
                 if event_type == "done":
                     return
 
                 try:
                     parsed: dict[str, Any] = json.loads(data)
+                except json.JSONDecodeError as exc:
+                    raise StreamParseError(data, exc) from exc
                 except (ValueError, TypeError) as exc:
-                    raise AtlaSentError(
-                        "Malformed SSE data from AtlaSent API",
-                        code="bad_response",
-                        request_id=request_id,
-                    ) from exc
+                    raise StreamParseError(data, exc) from exc
 
                 if event_type == "error":
                     raise AtlaSentError(
@@ -1142,7 +1247,11 @@ async def _parse_sse(
                     )
 
                 if event_type == "decision":
-                    yield StreamDecisionEvent.from_wire(parsed)
+                    ev = StreamDecisionEvent.from_wire(parsed)
+                    yield ev
+                    # Terminal: final decision (or inline done: true) closes stream.
+                    if ev.is_final or parsed.get("done") is True:
+                        return
                 elif event_type == "progress":
                     extra = {
                         k: v for k, v in parsed.items() if k not in ("type", "stage")
@@ -1151,10 +1260,16 @@ async def _parse_sse(
                         stage=str(parsed.get("stage", "")),
                         **extra,
                     )
+                    # Check done: true on progress events too.
+                    if isinstance(parsed, dict) and parsed.get("done") is True:
+                        return
                 # unknown event types skipped
 
             event_type = "message"
+            event_id = None
         elif line.startswith("event: "):
             event_type = line[7:].strip()
         elif line.startswith("data: "):
             data_lines.append(line[6:])
+        elif line.startswith("id: ") or line.startswith("id:"):
+            event_id = line.split(":", 1)[1].strip()
