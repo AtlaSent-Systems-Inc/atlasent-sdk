@@ -340,6 +340,36 @@ export {
   WebhookVerificationError,
 } from "./webhook.js";
 
+// ── Governance Graph & Incident Reconstruction ──────────────────────────────
+
+export type {
+  GovernanceGraphQueryType,
+  GovernanceGraphQueryParams,
+  GovernanceGraphQueryResponse,
+  GovernanceGraphResultRow,
+  GraphNodeType,
+  GraphEdgeType,
+  GraphNode,
+  GraphEdge,
+  ProductionDeployerRow,
+  ExecutionApproverRow,
+  QuorumBypassConnectorRow,
+  EmergencyOverrideActionRow,
+  ConnectedSystemRow,
+  UserApprovalRow,
+  ListGraphNodesResponse,
+  ListGraphEdgesResponse,
+  CreateGraphNodeInput,
+  CreateGraphEdgeInput,
+} from "./governanceGraph.js";
+
+export type {
+  IncidentChainExecutionRow,
+  IncidentChainActorEntry,
+  IncidentChainEvidenceRow,
+  IncidentTimelineResponse,
+} from "./incidentReconstruction.js";
+
 /**
  * Default export. The opinionated, category-defining entry point:
  *
