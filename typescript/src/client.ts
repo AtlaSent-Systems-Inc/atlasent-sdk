@@ -17,6 +17,8 @@ import type {
 } from "./audit.js";
 import {
   AtlaSentError,
+  StreamParseError,
+  StreamTimeoutError,
   type AtlaSentErrorCode,
   type AtlaSentErrorInit,
 } from "./errors.js";
@@ -41,6 +43,7 @@ import type {
   RevokePermitResponse,
   StreamDecisionEvent,
   StreamEvent,
+  StreamOptions,
   StreamProgressEvent,
   VerifyPermitByIdResponse,
   VerifyPermitRequest,
@@ -75,6 +78,26 @@ import type {
   GovernanceGraphResultRow,
 } from "./governanceGraph.js";
 import type { IncidentTimelineResponse } from "./incidentReconstruction.js";
+import type {
+  ConnectorType,
+  InstallConnectorInput,
+  AuthenticateConnectorInput,
+  UpsertEnforcementPolicyInput,
+  ListConnectorsResponse,
+  InstallConnectorResponse,
+  AuthenticateConnectorResponse,
+  SyncConnectorResponse,
+  RevokeConnectorResponse,
+  RotateCredentialsResponse,
+  ListEnforcementPoliciesResponse,
+  UpsertEnforcementPolicyResponse,
+} from "./connectorManagement.js";
+import type {
+  ComputeOrgRiskOptions,
+  ComputeOrgRiskResponse,
+  GetLatestOrgRiskResponse,
+  ListOrgRiskHistoryResponse,
+} from "./orgRiskGraph.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -796,6 +819,16 @@ export class AtlaSentClient {
    * The final {@link StreamDecisionEvent} (isFinal: true) carries a `permitId`
    * suitable for passing to {@link verifyPermit} after the stream closes.
    *
+   * Hardening:
+   * - Throws {@link StreamTimeoutError} when no event arrives within
+   *   `opts.timeoutMs` (default 30 s). Pass `0` to disable.
+   * - Retries up to `opts.maxRetries` times (default 3) with 1 s / 2 s / 4 s
+   *   delays on network drop (before a terminal event). Sends `Last-Event-ID`
+   *   on reconnect when the server has emitted event IDs.
+   * - Throws {@link StreamParseError} on partial / malformed JSON rather than
+   *   crashing with a raw `SyntaxError`.
+   * - Closes cleanly on `event: done` or a decision event with `done: true`.
+   *
    * ```ts
    * for await (const event of client.protectStream({ agent, action })) {
    *   if (event.type === "decision" && event.isFinal) {
@@ -806,8 +839,11 @@ export class AtlaSentClient {
    */
   async *protectStream(
     input: EvaluateRequest,
-    opts: { signal?: AbortSignal } = {},
+    opts: StreamOptions = {},
   ): AsyncIterable<StreamEvent> {
+    const streamTimeoutMs = opts.timeoutMs ?? 30_000;
+    const maxRetries = opts.maxRetries ?? 3;
+
     const body = {
       action: input.action,
       agent: input.agent,
@@ -817,47 +853,101 @@ export class AtlaSentClient {
 
     const requestId = globalThis.crypto.randomUUID();
     const url = `${this.baseUrl}/v1-evaluate-stream`;
-    const headers: Record<string, string> = {
-      Accept: "text/event-stream",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${this.apiKey}`,
-      "User-Agent": this.userAgent,
-      "X-Request-ID": requestId,
-    };
 
-    const timeoutSignal = AbortSignal.timeout(this.timeoutMs);
-    const signal = opts.signal
-      ? (AbortSignal as unknown as { any(s: AbortSignal[]): AbortSignal }).any([
-          timeoutSignal,
-          opts.signal,
-        ])
-      : timeoutSignal;
+    let lastEventId: string | undefined;
+    let retryCount = 0;
 
-    let response: Response;
-    try {
-      response = await this.fetchImpl(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-        signal,
-      });
-    } catch (err) {
-      throw mapFetchError(err, requestId);
+    while (true) {
+      const headers: Record<string, string> = {
+        Accept: "text/event-stream",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+        "User-Agent": this.userAgent,
+        "X-Request-ID": requestId,
+      };
+      if (lastEventId !== undefined) {
+        headers["Last-Event-ID"] = lastEventId;
+      }
+
+      const connectionTimeoutSignal = AbortSignal.timeout(this.timeoutMs);
+      const signal = opts.signal
+        ? (AbortSignal as unknown as { any(s: AbortSignal[]): AbortSignal }).any([
+            connectionTimeoutSignal,
+            opts.signal,
+          ])
+        : connectionTimeoutSignal;
+
+      let response: Response;
+      try {
+        response = await this.fetchImpl(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          signal,
+        });
+      } catch (err) {
+        const mapped = mapFetchError(err, requestId);
+        if (mapped.code === "network" && retryCount < maxRetries) {
+          retryCount++;
+          await sleep(1_000 * Math.pow(2, retryCount - 1)); // 1s, 2s, 4s
+          continue;
+        }
+        throw mapped;
+      }
+
+      if (!response.ok) {
+        throw await buildHttpError(response, requestId);
+      }
+
+      if (!response.body) {
+        throw new AtlaSentError("Expected streaming body from AtlaSent API", {
+          code: "bad_response",
+          status: response.status,
+          requestId,
+        });
+      }
+
+      let streamDone = false;
+      let networkDrop = false;
+
+      try {
+        for await (const event of parseSseStream(
+          response.body,
+          requestId,
+          streamTimeoutMs,
+          (id) => { lastEventId = id; },
+        )) {
+          yield event;
+          if (event.type === "decision" && event.isFinal) {
+            streamDone = true;
+          }
+        }
+        // parseSseStream returned normally (saw event: done or stream ended)
+        streamDone = true;
+      } catch (err) {
+        if (err instanceof AtlaSentError && err.code === "network") {
+          networkDrop = true;
+        } else {
+          throw err;
+        }
+      }
+
+      if (streamDone) break;
+
+      // Network drop before terminal event — attempt reconnect
+      if (networkDrop && retryCount < maxRetries) {
+        retryCount++;
+        await sleep(1_000 * Math.pow(2, retryCount - 1)); // 1s, 2s, 4s
+        continue;
+      }
+      if (networkDrop) {
+        throw new AtlaSentError(
+          `AtlaSent stream dropped after ${retryCount} reconnection attempts`,
+          { code: "network", requestId },
+        );
+      }
+      break;
     }
-
-    if (!response.ok) {
-      throw await buildHttpError(response, requestId);
-    }
-
-    if (!response.body) {
-      throw new AtlaSentError("Expected streaming body from AtlaSent API", {
-        code: "bad_response",
-        status: response.status,
-        requestId,
-      });
-    }
-
-    yield* parseSseStream(response.body, requestId);
   }
 
   private async post<T>(
@@ -1157,6 +1247,140 @@ export class AtlaSentClient {
     >(`/v1/governance/timeline/incident/${encodeURIComponent(incidentId)}`);
     return { ...body, rateLimit };
   }
+
+  // ── Connector Management ──────────────────────────────────────────────────
+
+  /** List all connectors for the authenticated org. */
+  async listConnectors(options: { cursor?: string; limit?: number } = {}): Promise<ListConnectorsResponse> {
+    const qs = new URLSearchParams();
+    if (options.cursor) qs.set("cursor", options.cursor);
+    if (options.limit != null) qs.set("limit", String(options.limit));
+    const { body, rateLimit } = await this.get<Omit<ListConnectorsResponse, "rateLimit">>(
+      "/v1/governance/connectors",
+      qs,
+    );
+    return { ...body, rateLimit };
+  }
+
+  /** Install a new external connector for the authenticated org. */
+  async installConnector(input: InstallConnectorInput): Promise<InstallConnectorResponse> {
+    const { body, rateLimit } = await this.post<Omit<InstallConnectorResponse, "rateLimit">>(
+      "/v1/governance/connectors",
+      input,
+    );
+    return { ...body, rateLimit };
+  }
+
+  /**
+   * Store encrypted credentials for an existing connector.
+   * The raw credential value must be encrypted by the caller before transmission.
+   */
+  async authenticateConnector(
+    connectorId: string,
+    input: AuthenticateConnectorInput,
+  ): Promise<AuthenticateConnectorResponse> {
+    if (!connectorId) {
+      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+    }
+    const { body, rateLimit } = await this.post<Omit<AuthenticateConnectorResponse, "rateLimit">>(
+      `/v1/governance/connectors/${encodeURIComponent(connectorId)}/authenticate`,
+      input,
+    );
+    return { ...body, rateLimit };
+  }
+
+  /** Trigger a sync cycle on a connector (pull latest state from the external system). */
+  async syncConnector(connectorId: string): Promise<SyncConnectorResponse> {
+    if (!connectorId) {
+      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+    }
+    const { body, rateLimit } = await this.post<Omit<SyncConnectorResponse, "rateLimit">>(
+      `/v1/governance/connectors/${encodeURIComponent(connectorId)}/sync`,
+      {},
+    );
+    return { ...body, rateLimit };
+  }
+
+  /** Revoke a connector and bulk-revoke all its active credentials. */
+  async revokeConnector(connectorId: string, reason?: string): Promise<RevokeConnectorResponse> {
+    if (!connectorId) {
+      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+    }
+    const { body, rateLimit } = await this.post<Omit<RevokeConnectorResponse, "rateLimit">>(
+      `/v1/governance/connectors/${encodeURIComponent(connectorId)}/revoke`,
+      reason ? { reason } : {},
+    );
+    return { ...body, rateLimit };
+  }
+
+  /**
+   * Rotate credentials for a connector.
+   * Increments the credential version and revokes the previous version.
+   */
+  async rotateConnectorCredentials(connectorId: string): Promise<RotateCredentialsResponse> {
+    if (!connectorId) {
+      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+    }
+    const { body, rateLimit } = await this.post<Omit<RotateCredentialsResponse, "rateLimit">>(
+      `/v1/governance/connectors/${encodeURIComponent(connectorId)}/rotate`,
+      {},
+    );
+    return { ...body, rateLimit };
+  }
+
+  /** List connector enforcement policies for the org. Pass `connectorType` to filter by system. */
+  async listEnforcementPolicies(connectorType?: ConnectorType): Promise<ListEnforcementPoliciesResponse> {
+    const qs = new URLSearchParams();
+    if (connectorType) qs.set("connector_type", connectorType);
+    const { body, rateLimit } = await this.get<Omit<ListEnforcementPoliciesResponse, "rateLimit">>(
+      "/v1/governance/connectors/enforcement-policies",
+      qs,
+    );
+    return { ...body, rateLimit };
+  }
+
+  /** Create or update a connector enforcement policy. */
+  async upsertEnforcementPolicy(input: UpsertEnforcementPolicyInput): Promise<UpsertEnforcementPolicyResponse> {
+    const { body, rateLimit } = await this.post<Omit<UpsertEnforcementPolicyResponse, "rateLimit">>(
+      "/v1/governance/connectors/enforcement-policies",
+      input,
+    );
+    return { ...body, rateLimit };
+  }
+
+  // ── Organizational Risk Graph ─────────────────────────────────────────────
+
+  /**
+   * Trigger a full risk score recompute for the authenticated org.
+   * Sub-scores: actor_risk, connector_risk, enforcement_gap, incident_frequency, override_rate.
+   */
+  async computeOrgRisk(options: ComputeOrgRiskOptions = {}): Promise<ComputeOrgRiskResponse> {
+    const { body, rateLimit } = await this.post<Omit<ComputeOrgRiskResponse, "rateLimit">>(
+      "/v1/governance/risk/org/compute",
+      options,
+    );
+    return { ...body, rateLimit };
+  }
+
+  /** Get the most recently computed organizational risk score. Returns `score: null` if none exists yet. */
+  async getLatestOrgRisk(): Promise<GetLatestOrgRiskResponse> {
+    const { body, rateLimit } = await this.get<Omit<GetLatestOrgRiskResponse, "rateLimit">>(
+      "/v1/governance/risk/org/latest",
+    );
+    return { ...body, rateLimit };
+  }
+
+  /** List historical organizational risk scores for the org, newest first. */
+  async listOrgRiskHistory(options: { cursor?: string; limit?: number } = {}): Promise<ListOrgRiskHistoryResponse> {
+    const qs = new URLSearchParams();
+    if (options.cursor) qs.set("cursor", options.cursor);
+    if (options.limit != null) qs.set("limit", String(options.limit));
+    const { body, rateLimit } = await this.get<Omit<ListOrgRiskHistoryResponse, "rateLimit">>(
+      "/v1/governance/risk/org/history",
+      qs,
+    );
+    return { ...body, rateLimit };
+  }
 }
 
 /**
@@ -1356,17 +1580,69 @@ function parseRetryAfter(raw: string | null): number | undefined {
 
 // ── SSE stream parser ─────────────────────────────────────────────────────────
 
+/**
+ * Parse an SSE `ReadableStream<Uint8Array>` into typed {@link StreamEvent}s.
+ *
+ * Hardening additions over the original:
+ * - Per-event timeout: if no chunk arrives within `timeoutMs` (0 = disabled),
+ *   throws {@link StreamTimeoutError}.
+ * - Partial-JSON guard: wraps `JSON.parse` failures in {@link StreamParseError}
+ *   rather than letting the raw `SyntaxError` escape.
+ * - Calls `onEventId` whenever the server emits an `id:` field so the caller
+ *   can track the `Last-Event-ID` for reconnection.
+ * - Terminal detection: returns on `event: done` OR when a `decision` event
+ *   carries `done: true` at the top level (server-side terminal signal).
+ */
 async function* parseSseStream(
   body: ReadableStream<Uint8Array>,
   requestId: string,
+  timeoutMs: number,
+  onEventId: (id: string) => void,
 ): AsyncIterable<StreamEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buf = "";
 
+  type ChunkResult = { done: true; value?: undefined } | { done: false; value: Uint8Array };
+
+  /**
+   * Read the next chunk from the reader, applying a per-read timeout when
+   * `timeoutMs > 0`. Returns `{ done: true }` when the stream ends, throws
+   * {@link StreamTimeoutError} on timeout.
+   */
+  async function readChunk(): Promise<ChunkResult> {
+    if (timeoutMs <= 0) {
+      return reader.read() as Promise<ChunkResult>;
+    }
+    return new Promise<ChunkResult>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new StreamTimeoutError(timeoutMs));
+      }, timeoutMs);
+      (reader.read() as Promise<ChunkResult>).then(
+        (result) => { clearTimeout(timer); resolve(result); },
+        (err: unknown) => { clearTimeout(timer); reject(err); },
+      );
+    });
+  }
+
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      let done: boolean;
+      let value: Uint8Array | undefined;
+      try {
+        const result = await readChunk();
+        done = result.done;
+        value = result.value;
+      } catch (err) {
+        if (err instanceof StreamTimeoutError) throw err;
+        // Network error mid-stream: surface as AtlaSentError(network) so the
+        // caller's reconnection loop can catch and retry.
+        throw new AtlaSentError(
+          `AtlaSent stream read failed: ${err instanceof Error ? err.message : String(err)}`,
+          { code: "network", requestId, cause: err },
+        );
+      }
+
       if (done) break;
       buf += decoder.decode(value, { stream: true });
 
@@ -1377,10 +1653,15 @@ async function* parseSseStream(
 
         let eventType = "message";
         let data = "";
+        let eventId: string | undefined;
         for (const line of block.split("\n")) {
           if (line.startsWith("event: ")) eventType = line.slice(7).trim();
           else if (line.startsWith("data: ")) data = line.slice(6);
+          else if (line.startsWith("id: ")) eventId = line.slice(4).trim();
+          else if (line.startsWith("id:")) eventId = line.slice(3).trim();
         }
+
+        if (eventId !== undefined) onEventId(eventId);
 
         if (!data) continue;
         if (eventType === "done") return;
@@ -1388,11 +1669,8 @@ async function* parseSseStream(
         let parsed: unknown;
         try {
           parsed = JSON.parse(data);
-        } catch {
-          throw new AtlaSentError("Malformed SSE data from AtlaSent API", {
-            code: "bad_response",
-            requestId,
-          });
+        } catch (err) {
+          throw new StreamParseError(data, err);
         }
 
         if (eventType === "error") {
@@ -1411,6 +1689,7 @@ async function* parseSseStream(
             audit_hash?: string;
             timestamp?: string;
             is_final?: boolean;
+            done?: boolean;
           };
           if (typeof d.permitted !== "boolean" || typeof d.decision_id !== "string") {
             throw new AtlaSentError("Malformed decision event from AtlaSent API", {
@@ -1421,6 +1700,7 @@ async function* parseSseStream(
           // Streaming wire uses legacy {permitted, decision_id} shape;
           // normalise to canonical lowercase decision vocabulary.
           const streamDecision = d.permitted ? "allow" : "deny";
+          const isFinal = d.is_final ?? false;
           yield {
             type: "decision",
             decision: streamDecision,
@@ -1429,14 +1709,34 @@ async function* parseSseStream(
             reason: d.reason ?? "",
             auditHash: d.audit_hash ?? "",
             timestamp: d.timestamp ?? "",
-            isFinal: d.is_final ?? false,
+            isFinal,
           } satisfies StreamDecisionEvent;
+
+          // Terminal: final decision OR inline done: true closes the stream.
+          if (isFinal || d.done === true) return;
         } else if (eventType === "progress") {
           const p = parsed as Record<string, unknown>;
           yield { type: "progress", stage: String(p["stage"] ?? ""), ...p } satisfies StreamProgressEvent;
+          // Server may signal terminal state via done: true on any event type.
+          if ((p as Record<string, unknown>).done === true) return;
+        } else {
+          // Unknown event type: check for done: true as a terminal signal.
+          if (
+            parsed !== null &&
+            typeof parsed === "object" &&
+            (parsed as Record<string, unknown>).done === true
+          ) {
+            return;
+          }
         }
         // Unknown event types skipped for forward compatibility.
       }
+    }
+
+    // Stream closed before an explicit `event: done`. If there's leftover
+    // partial data in the buffer, it means the stream was cut mid-event.
+    if (buf.trim().length > 0) {
+      throw new StreamParseError(buf);
     }
   } finally {
     reader.releaseLock();
