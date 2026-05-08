@@ -68,6 +68,13 @@ import type {
   ListHitlEscalationsRequest,
   ListHitlEscalationsResponse,
 } from "./hitl.js";
+import type {
+  GovernanceGraphQueryType,
+  GovernanceGraphQueryParams,
+  GovernanceGraphQueryResponse,
+  GovernanceGraphResultRow,
+} from "./governanceGraph.js";
+import type { IncidentTimelineResponse } from "./incidentReconstruction.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -1102,6 +1109,53 @@ export class AtlaSentClient {
       {},
     );
     return { escalation: body, rateLimit };
+  }
+
+  /**
+   * Run a named governance graph traversal query.
+   *
+   * Dispatches to `GET /v1/governance/graph/query?type=<queryType>`.
+   * Each query type returns a different row shape — the return type
+   * narrows automatically based on the literal `queryType` argument.
+   *
+   * `"user_approvals"` requires `params.actor_id` — the server returns
+   * a 400 if it is absent.
+   */
+  async queryGovernanceGraph<T extends GovernanceGraphQueryType>(
+    queryType: T,
+    params: GovernanceGraphQueryParams = {},
+  ): Promise<GovernanceGraphQueryResponse<T>> {
+    const qs = new URLSearchParams({ type: queryType });
+    if (params.actor_id) qs.set("actor_id", params.actor_id);
+    const { body, rateLimit } = await this.get<{
+      query_type: T;
+      results: GovernanceGraphResultRow<T>[];
+      org_id: string;
+    }>("/v1/governance/graph/query", qs);
+    return { ...body, rateLimit };
+  }
+
+  /**
+   * Reconstruct the multi-system execution timeline for a specific incident.
+   *
+   * Calls `GET /v1/governance/timeline/incident/{incidentId}`. Backed
+   * server-side by `reconstruct_incident_chains_v2()`, which fixes the
+   * `executor_id → actor_id` bug that silently produced empty timelines
+   * in the original function.
+   *
+   * Returns full execution rows including the §13.1 columns
+   * (`delegation_chain_id`, `replay_of_execution_id`, `incident_id`,
+   * `policy_version_id`, `bundle_version_id`) alongside the actor
+   * timeline and evidence rows.
+   */
+  async getIncidentTimeline(incidentId: string): Promise<IncidentTimelineResponse> {
+    if (!incidentId) {
+      throw new AtlaSentError("incidentId is required", { code: "bad_request" });
+    }
+    const { body, rateLimit } = await this.get<
+      Omit<IncidentTimelineResponse, "rateLimit">
+    >(`/v1/governance/timeline/incident/${encodeURIComponent(incidentId)}`);
+    return { ...body, rateLimit };
   }
 }
 
