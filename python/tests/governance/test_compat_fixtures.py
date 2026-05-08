@@ -1,7 +1,8 @@
 """Cross-language parity test — Python side.
 
-Reads ``python/tests/governance/fixtures/parity.json`` and validates that
-the canonical Python implementation produces the documented outputs.
+Reads the canonical fixture at ``compat/governance/fixtures/parity.json``
+(the cross-language source of truth) and validates that the canonical
+Python implementation produces the documented outputs.
 
 The corresponding TypeScript test in
 ``typescript/test/governance/canonicalCompat.test.ts`` reads the same
@@ -25,8 +26,15 @@ from atlasent.governance import (
 )
 from atlasent.governance.financial_quorum import AmountThreshold
 
-
-FIXTURE_PATH = Path(__file__).parent / "fixtures" / "parity.json"
+# Repo layout: python/tests/governance/test_compat_fixtures.py
+# parents[0] = governance/, [1] = tests/, [2] = python/, [3] = repo root.
+FIXTURE_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "compat"
+    / "governance"
+    / "fixtures"
+    / "parity.json"
+)
 
 
 @pytest.fixture(scope="module")
@@ -36,11 +44,7 @@ def fixture() -> dict:
 
 def test_canonical_for_evidence_cases(fixture: dict) -> None:
     for case in fixture["canonical_for_evidence"]:
-        if "input_eval" in case:
-            # Special: dynamic input expressed as a Python literal eval.
-            input_value = eval(case["input_eval"])  # noqa: S307 — fixture-only, trusted source
-        else:
-            input_value = case["input"]
+        input_value = case["input"]
         expected = case["expected"]
         actual = canonicalize_for_evidence(input_value)
         assert actual == expected, (
