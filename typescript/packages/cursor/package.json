@@ -2,7 +2,7 @@
   "name": "@atlasent/cursor",
   "version": "1.6.0",
   "description": "AtlaSent authorization wrapper for Cursor agent tools — authorize every tool call before execution",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
