@@ -128,12 +128,17 @@ export {
 } from "./compat.js";
 export {
   hitlRequiredApproverCount,
+  type HitlAiUnavailableFallback,
   type HitlApprovalRecord,
   type HitlApproveRequest,
+  type HitlApproverPoolEntry,
+  type HitlApproverType,
   type HitlChainHop,
   type HitlEscalateRequest,
   type HitlEscalation,
   type HitlFallbackDecision,
+  type HitlHeterogeneousQuorumExtension,
+  type HitlHeterogeneousQuorumTally,
   type HitlQuorumProgress,
   type HitlQuorumTier,
   type HitlRejectRequest,
@@ -141,6 +146,21 @@ export {
   type ListHitlEscalationsRequest,
   type ListHitlEscalationsResponse,
 } from "./hitl.js";
+export {
+  isSandboxDiffPopulated,
+  type SandboxDiff,
+  type SandboxDiffEmpty,
+  type SandboxDiffPerTable,
+  type SandboxDiffResponse,
+  type SandboxRunMode,
+  type SandboxRunStatus,
+  type SandboxRunWrite,
+  type SandboxWriteOp,
+} from "./sandboxDiff.js";
+export {
+  delegationPropagationHadEffect,
+  type DelegationPropagationSummary,
+} from "./delegationPropagation.js";
 export type {
   ApprovalArtifactV1,
   ApprovalIssuer,
@@ -164,7 +184,7 @@ export type {
   QuorumRoleRequirement,
 } from "./approvalQuorum.js";
 
-// ── Economic Governance & Liability Attribution ────────────────────────────────────────────────
+// ── Economic Governance & Liability Attribution ─────────────────────────────────────────────────
 
 export {
   DEFAULT_RISK_TIER_THRESHOLDS,
@@ -257,6 +277,7 @@ export {
 
 export {
   buildSignableContent,
+  canonicalizeForEvidence,
   serializeSignableContent,
   verifyEvidenceBundleStructure,
   type ApprovalProvenance,
@@ -293,7 +314,21 @@ export {
   type RiskTimelinePoint,
 } from "./financialDashboard.js";
 
-// ── Governance Webhooks, Compliance Evidence & Policy Sync ─────────────────────────
+// ── Governance enforcement layer (fail-closed helpers on top of the advisory primitives) ──
+export {
+  GovernanceEnforcementError,
+  enforceAutonomousBounds,
+  enforceBudgetConstraint,
+  enforceEconomicGovernance,
+  enforceFinancialQuorum,
+  type AutonomousBoundsDenyCode,
+  type BudgetDenyCode,
+  type FinancialQuorumDenyCode,
+  type GovernanceEnforcementErrorInit,
+  type GovernanceGate,
+} from "./governanceEnforcement.js";
+
+// ── Governance Webhooks, Compliance Evidence & Policy Sync ─────────────────
 
 export {
   verifyWebhookSignature,
@@ -373,7 +408,44 @@ export type {
   IncidentTimelineResponse,
 } from "./incidentReconstruction.js";
 
-// ── Cross-Org Permission Negotiation ──────────────────────────────────────
+// ── Connector Management & Organizational Risk Graph ────────────────────
+
+export type {
+  ConnectorType,
+  ConnectorStatus,
+  ConnectorRow,
+  ConnectorCredentialType,
+  ConnectorCredentialRow,
+  EnforcementAction,
+  EnforcementQuorumConfig,
+  ConnectorEnforcementPolicy,
+  ConnectorAuditLogEntry,
+  ConnectorSyncState,
+  ConnectorEnforcementEventInput,
+  ConnectorEnforcementResult,
+  InstallConnectorInput,
+  AuthenticateConnectorInput,
+  UpsertEnforcementPolicyInput,
+  ListConnectorsResponse,
+  InstallConnectorResponse,
+  AuthenticateConnectorResponse,
+  SyncConnectorResponse,
+  RevokeConnectorResponse,
+  RotateCredentialsResponse,
+  ListEnforcementPoliciesResponse,
+  UpsertEnforcementPolicyResponse,
+} from "./connectorManagement.js";
+
+export type {
+  OrgRiskLevel,
+  OrgRiskScore,
+  ComputeOrgRiskOptions,
+  ComputeOrgRiskResponse,
+  GetLatestOrgRiskResponse,
+  ListOrgRiskHistoryResponse,
+} from "./orgRiskGraph.js";
+
+// ── Cross-Org Permission Negotiation ────────────────────────────────
 
 export {
   summarizeCrossOrgPermission,
@@ -383,7 +455,7 @@ export {
   type CrossOrgTrustHop,
 } from "./crossOrgPermission.js";
 
-// ── Anomaly Response Automation ───────────────────────────────────────────
+// ── Anomaly Response Automation ───────────────────────────────────
 
 export {
   highestSeverityAction,
@@ -395,7 +467,7 @@ export {
   type TriggerAnomalyResponseRequest,
 } from "./anomalyResponse.js";
 
-// ── Budget Exception Workflows ────────────────────────────────────────────
+// ── Budget Exception Workflows ──────────────────────────────────────
 
 export {
   isBudgetExceptionActive,
@@ -406,7 +478,7 @@ export {
   type CreateBudgetExceptionRequest,
 } from "./budgetExceptions.js";
 
-// ── Regulatory Escalation Chain ───────────────────────────────────────────
+// ── Regulatory Escalation Chain ────────────────────────────────────
 
 export {
   isEscalationSlaBreached,
@@ -417,7 +489,7 @@ export {
   type RegulatoryEscalationStatus,
 } from "./regulatoryEscalation.js";
 
-// ── Incentive Signal Feedback Loop ────────────────────────────────────────
+// ── Incentive Signal Feedback Loop ────────────────────────────────
 
 export {
   computeSignalEngagementRate,
@@ -429,7 +501,7 @@ export {
   type SignalActionType,
 } from "./incentiveSignalFeedback.js";
 
-// ── Cross-Org Impersonation ───────────────────────────────────────────────
+// ── Cross-Org Impersonation ───────────────────────────────────────
 
 export {
   clampTokenDuration,
