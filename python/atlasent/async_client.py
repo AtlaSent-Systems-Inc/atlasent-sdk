@@ -1124,13 +1124,19 @@ class AsyncAtlaSentClient:
 
 
 def _server_message(response: httpx.Response) -> str | None:
-    """Return `message` / `reason` from a JSON error body, if present."""
+    """Return the error string from a JSON error body, if present.
+
+    Reads ``body.error`` first (the canonical Phase 4 ErrorEnvelope
+    field — see atlasent-api `supabase/functions/_shared/errors.ts`),
+    then falls back to ``message`` / ``reason`` for older servers and
+    permit-side responses that haven't migrated yet.
+    """
     try:
         body = response.json()
     except ValueError:
         return None
     if isinstance(body, dict):
-        for key in ("message", "reason"):
+        for key in ("error", "message", "reason"):
             value = body.get(key)
             if isinstance(value, str) and value:
                 return value
