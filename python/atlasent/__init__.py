@@ -135,14 +135,17 @@ from .hitl import (
 )
 from .models import (
     ApiKeySelfResult,
+    AuthError,
     AuthorizationResult,
     ConstraintTrace,
     ConstraintTracePolicy,
     ConstraintTraceStage,
+    EnforcementOutcome,
     EvaluatePreflightResult,
     EvaluateResult,
     GateResult,
     GetPermitResult,
+    GovernanceDecision,
     ListPermitsResult,
     Permit,
     PermitRecord,
@@ -227,6 +230,10 @@ __all__ = [
     "StreamDecisionEvent",
     "StreamProgressEvent",
     "StreamEvent",
+    # Phase 7 typed models (provisional — see models.py).
+    "GovernanceDecision",
+    "AuthError",
+    "EnforcementOutcome",
     # HITL orchestration surface (parity with the TS SDK).
     "HitlApprovalRecord",
     "HitlApprovalsResult",

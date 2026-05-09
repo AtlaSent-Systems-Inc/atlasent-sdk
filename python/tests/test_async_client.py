@@ -451,6 +451,21 @@ class TestAsyncHttpStatusCodes:
         assert "key lacks phi:read scope" in str(exc_info.value)
 
     @pytest.mark.asyncio
+    async def test_403_prefers_error_field_over_message(self, async_client, mocker):
+        # Phase 4 ErrorEnvelope: body.error is canonical and must win
+        # over the legacy `message` / `reason` keys.
+        resp = _mock_resp(mocker, status_code=403)
+        resp.json.return_value = {
+            "error": "phi_scope_required",
+            "message": "fallback should not appear",
+        }
+        mocker.patch.object(async_client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            await async_client.evaluate("a", "b")
+        assert "phi_scope_required" in str(exc_info.value)
+        assert "fallback should not appear" not in str(exc_info.value)
+
+    @pytest.mark.asyncio
     async def test_200_with_invalid_json_is_bad_response(self, async_client, mocker):
         resp = _mock_resp(mocker, status_code=200)
         resp.json.side_effect = ValueError("not json")
