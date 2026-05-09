@@ -60,6 +60,17 @@ export interface HitlEscalation {
   expired_reason: "sla_expired" | "escalation_chain_exhausted" | "manual_expire" | null;
 
   quorum_progress?: HitlQuorumProgress;
+
+  // Heterogeneous N-of-M extension. Empty `approver_pool` means the
+  // legacy single-pool path applies (server-side resolver decides).
+  approver_pool?: HitlApproverPoolEntry[];
+  quorum_threshold?: number | null;
+  ai_unavailable_fallback?: HitlAiUnavailableFallback;
+  fallback_human_role?: string | null;
+  pool_unavailable_at?: string | null;
+
+  /** Populated when the server attaches a heterogeneous-quorum tally. */
+  heterogeneous_tally?: HitlHeterogeneousQuorumTally;
 }
 
 export interface HitlApprovalRecord {
@@ -70,6 +81,8 @@ export interface HitlApprovalRecord {
   note: string | null;
   quorum_at_vote: HitlQuorumTier;
   created_at: string;
+  /** Which kind of approver cast this vote (default `"human"`). */
+  approver_type?: HitlApproverType;
 }
 
 export interface HitlChainHop {
@@ -138,4 +151,56 @@ export function hitlRequiredApproverCount(
     case "unanimous":
       return n;
   }
+}
+
+// ── Heterogeneous N-of-M quorum (migration 20260509120002) ───────────
+//
+// Mirrors the SQL `approver_pool` jsonb shape and
+// `evaluate_heterogeneous_quorum()` row shape. The legacy
+// homogeneous path (`approver_pool_size` + `quorum_required` tier) is
+// still authoritative when `approver_pool` is empty; these types
+// describe the new path only.
+
+export type HitlApproverType =
+  | "human"
+  | "ai_supervisor"
+  | "automated_compliance"
+  | "hardware_signer"
+  | "service_account";
+
+export type HitlAiUnavailableFallback =
+  | "escalate_to_human"
+  | "reduce_pool"
+  | "fail_closed";
+
+export interface HitlApproverPoolEntry {
+  type: HitlApproverType;
+  principal_id: string;
+  role?: string;
+  weight?: number;
+  required?: boolean;
+  /** Marker for slots inserted by the AI-unavailable fallback. */
+  origin?: string;
+}
+
+export interface HitlHeterogeneousQuorumExtension {
+  approver_pool: HitlApproverPoolEntry[];
+  quorum_threshold: number | null;
+  ai_unavailable_fallback: HitlAiUnavailableFallback;
+  fallback_human_role: string | null;
+  pool_unavailable_at: string | null;
+}
+
+export interface HitlHeterogeneousQuorumTally {
+  pool_size: number;
+  effective_pool_size: number;
+  required_threshold: number;
+  approve_count: number;
+  reject_count: number;
+  unavailable_count: number;
+  /** Per-approver-type breakdown: `{ ai_supervisor: { approve: 1, reject: 0 } }` */
+  by_type: Record<HitlApproverType, { approve: number; reject: number }>;
+  meets_threshold: boolean;
+  any_required_reject: boolean;
+  any_required_missing: boolean;
 }
