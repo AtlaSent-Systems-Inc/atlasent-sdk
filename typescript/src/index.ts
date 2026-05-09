@@ -128,12 +128,17 @@ export {
 } from "./compat.js";
 export {
   hitlRequiredApproverCount,
+  type HitlAiUnavailableFallback,
   type HitlApprovalRecord,
   type HitlApproveRequest,
+  type HitlApproverPoolEntry,
+  type HitlApproverType,
   type HitlChainHop,
   type HitlEscalateRequest,
   type HitlEscalation,
   type HitlFallbackDecision,
+  type HitlHeterogeneousQuorumExtension,
+  type HitlHeterogeneousQuorumTally,
   type HitlQuorumProgress,
   type HitlQuorumTier,
   type HitlRejectRequest,
@@ -141,6 +146,21 @@ export {
   type ListHitlEscalationsRequest,
   type ListHitlEscalationsResponse,
 } from "./hitl.js";
+export {
+  isSandboxDiffPopulated,
+  type SandboxDiff,
+  type SandboxDiffEmpty,
+  type SandboxDiffPerTable,
+  type SandboxDiffResponse,
+  type SandboxRunMode,
+  type SandboxRunStatus,
+  type SandboxRunWrite,
+  type SandboxWriteOp,
+} from "./sandboxDiff.js";
+export {
+  delegationPropagationHadEffect,
+  type DelegationPropagationSummary,
+} from "./delegationPropagation.js";
 export type {
   ApprovalArtifactV1,
   ApprovalIssuer,
