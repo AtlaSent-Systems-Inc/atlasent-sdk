@@ -373,6 +373,73 @@ export type {
   IncidentTimelineResponse,
 } from "./incidentReconstruction.js";
 
+// ── Cross-Org Permission Negotiation ──────────────────────────────────────
+
+export {
+  summarizeCrossOrgPermission,
+  type CrossOrgPermissionCheckListParams,
+  type CrossOrgPermissionCheckRequest,
+  type CrossOrgPermissionCheckResult,
+  type CrossOrgTrustHop,
+} from "./crossOrgPermission.js";
+
+// ── Anomaly Response Automation ───────────────────────────────────────────
+
+export {
+  highestSeverityAction,
+  matchAnomalyRules,
+  type AnomalyActionType,
+  type AnomalyResponseEvent,
+  type AnomalyResponseRule,
+  type CreateAnomalyResponseRuleRequest,
+  type TriggerAnomalyResponseRequest,
+} from "./anomalyResponse.js";
+
+// ── Budget Exception Workflows ────────────────────────────────────────────
+
+export {
+  isBudgetExceptionActive,
+  isBudgetExceptionTerminal,
+  type ApproveBudgetExceptionRequest,
+  type BudgetExceptionRequest,
+  type BudgetExceptionStatus,
+  type CreateBudgetExceptionRequest,
+} from "./budgetExceptions.js";
+
+// ── Regulatory Escalation Chain ───────────────────────────────────────────
+
+export {
+  isEscalationSlaBreached,
+  isRegulatoryEscalationTerminal,
+  type CreateRegulatoryEscalationRequest,
+  type RegulatoryAuthorityLevel,
+  type RegulatoryEscalation,
+  type RegulatoryEscalationStatus,
+} from "./regulatoryEscalation.js";
+
+// ── Incentive Signal Feedback Loop ────────────────────────────────────────
+
+export {
+  computeSignalEngagementRate,
+  isSubstantiveSignalResponse,
+  type GovernanceSignalAction,
+  type RecordSignalActionRequest,
+  type RecordSignalOutcomeRequest,
+  type SignalActionSummary,
+  type SignalActionType,
+} from "./incentiveSignalFeedback.js";
+
+// ── Cross-Org Impersonation ───────────────────────────────────────────────
+
+export {
+  clampTokenDuration,
+  isImpersonationGrantUsable,
+  type CreateImpersonationGrantRequest,
+  type CrossOrgImpersonationGrant,
+  type ImpersonationToken,
+  type ImpersonationValidationResult,
+} from "./crossOrgImpersonation.js";
+
 /**
  * Default export. The opinionated, category-defining entry point:
  *

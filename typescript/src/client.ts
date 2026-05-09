@@ -78,6 +78,41 @@ import type {
   GovernanceGraphResultRow,
 } from "./governanceGraph.js";
 import type { IncidentTimelineResponse } from "./incidentReconstruction.js";
+import type {
+  CrossOrgPermissionCheckRequest,
+  CrossOrgPermissionCheckResult,
+  CrossOrgPermissionCheckListParams,
+} from "./crossOrgPermission.js";
+import type {
+  AnomalyResponseRule,
+  AnomalyResponseEvent,
+  CreateAnomalyResponseRuleRequest,
+  TriggerAnomalyResponseRequest,
+} from "./anomalyResponse.js";
+import type {
+  BudgetExceptionRequest,
+  BudgetExceptionStatus,
+  CreateBudgetExceptionRequest,
+  ApproveBudgetExceptionRequest,
+} from "./budgetExceptions.js";
+import type {
+  RegulatoryAuthorityLevel,
+  RegulatoryEscalation,
+  RegulatoryEscalationStatus,
+  CreateRegulatoryEscalationRequest,
+} from "./regulatoryEscalation.js";
+import type {
+  GovernanceSignalAction,
+  RecordSignalActionRequest,
+  RecordSignalOutcomeRequest,
+  SignalActionSummary,
+} from "./incentiveSignalFeedback.js";
+import type {
+  CrossOrgImpersonationGrant,
+  CreateImpersonationGrantRequest,
+  ImpersonationToken,
+  ImpersonationValidationResult,
+} from "./crossOrgImpersonation.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -298,636 +333,371 @@ export class AtlaSentClient {
    * Accepts either the current v2.0 shape (`action_type` / `actor_id`)
    * or the legacy v1.x shape (`action` / `agent`). Legacy callers
    * receive a deprecation warning via `console.warn`; the shim is
-   * handled by {@link normalizeEvaluateRequest} and will be removed
-   * in v3.0.0.
+   * removed in the next major.
    *
-   * A "deny" is **not** thrown — it is returned in
-   * `response.decision`. Network errors, invalid API key, rate
-   * limits, timeouts, and malformed responses throw
-   * {@link AtlaSentError}.
+   * Calls `POST /v1-evaluate`.
    */
   async evaluate(
-    input: EvaluateRequest | LegacyEvaluateRequest,
+    request: EvaluateRequest | LegacyEvaluateRequest | V2EvaluateRequest,
   ): Promise<EvaluateResponse> {
-    _warnOversizeContext(input.context);
-
-    // Run the dual-shape bridge: legacy {action, agent} → {action_type, actor_id}.
-    // For callers already on the current EvaluateRequest shape the bridge is a
-    // transparent pass-through (no warn, no allocation).
-    const normalized = normalizeEvaluateRequest(
-      input as LegacyEvaluateRequest | V2EvaluateRequest,
+    const normalized = normalizeEvaluateRequest(request as EvaluateRequest);
+    _warnOversizeContext(
+      (normalized as { context?: Record<string, unknown> }).context,
+    );
+    const { body, rateLimit } = await this.post<EvaluateWire>(
+      "/v1-evaluate",
+      normalized,
     );
 
-    const body = {
-      action_type: normalized.action_type,
-      actor_id: normalized.actor_id,
-      context: normalized.context ?? {},
-    };
-    const { body: wire, rateLimit } = await this.post<EvaluateWire>("/v1-evaluate", body);
-
-    // Normalise decision to lowercase canonical form. API responses may
-    // arrive as uppercase (legacy deployments) or lowercase (canonical);
-    // we always emit lowercase so callers can rely on a stable vocabulary.
-    let decision = (typeof wire.decision === "string"
-      ? wire.decision.toLowerCase()
-      : wire.decision) as EvaluateWire["decision"] | undefined;
-
-    // Tolerate both canonical {decision, permit_token} and legacy
-    // {permitted, decision_id} server responses.
-    if (decision === undefined && typeof wire.permitted === "boolean") {
-      decision = wire.permitted ? "allow" : "deny";
-    }
-    const permitToken = wire.permit_token ?? wire.decision_id;
-
-    if (decision !== "allow" && decision !== "deny" && decision !== "hold" && decision !== "escalate") {
-      throw new AtlaSentError(
-        "Malformed response from /v1-evaluate: missing `decision` (or legacy `permitted`)",
-        { code: "bad_response" },
-      );
-    }
-    if (decision === "allow" && (typeof permitToken !== "string" || permitToken.length === 0)) {
-      throw new AtlaSentError(
-        "Malformed response from /v1-evaluate: decision='allow' but no `permit_token` (or legacy `decision_id`)",
-        { code: "bad_response" },
-      );
+    // Canonical shape (new deployments).
+    if ("decision" in body && typeof body.decision === "string") {
+      const permitToken =
+        body.decision === "allow" ? (body.permit_token ?? null) : null;
+      const denial =
+        body.decision !== "allow"
+          ? {
+              reason: body.denial?.reason ?? body.reason ?? "policy denied",
+              code: body.denial?.code,
+            }
+          : undefined;
+      return {
+        decision: body.decision,
+        permitToken,
+        requestId: body.request_id ?? null,
+        expiresAt: body.expires_at ?? null,
+        denial,
+        rateLimit,
+      };
     }
 
+    // Legacy shape (older deployments).
+    const permitted = Boolean(body.permitted);
     return {
-      decision,
-      decision_canonical: decision,
-      permitId: permitToken ?? "",
-      reason: wire.denial?.reason ?? wire.reason ?? "",
-      auditHash: wire.audit_hash ?? "",
-      timestamp: wire.timestamp ?? "",
+      decision: permitted ? "allow" : "deny",
+      permitToken: permitted ? (body.decision_id ?? null) : null,
+      requestId: body.request_id ?? null,
+      expiresAt: null,
+      denial: permitted
+        ? undefined
+        : {
+            reason: body.reason ?? "policy denied",
+            code: undefined,
+          },
       rateLimit,
     };
   }
 
   /**
-   * Pre-flight evaluation that always returns the constraint trace.
+   * Run a preflight evaluate (with constraint trace) to understand
+   * which policy rules are blocking or allowing an action before
+   * committing to it.
    *
-   * Wraps `POST /v1-evaluate?include=constraint_trace`. Use this from
-   * a workflow's submission step to surface trivial defects (missing
-   * fields, wrong roles, mis-set context) BEFORE pushing the request
-   * onto an approval queue — only requests that would actually pass
-   * make it through to a human reviewer.
+   * Calls `POST /v1-evaluate?include=constraint_trace`.
    *
-   * Returns an {@link EvaluatePreflightResponse} carrying the regular
-   * {@link EvaluateResponse} plus the {@link ConstraintTrace}. Unlike
-   * {@link evaluate}, this method does NOT mark a non-allow as a
-   * thrown condition — the whole point is to inspect both the outcome
    * AND the per-policy trace, so the caller branches on
-   * `result.evaluation.decision` and reads `result.constraintTrace`
-   * to render the failing stages.
-   *
-   * The constraint-trace shape mirrors `ConstraintTraceResponse` in
-   * atlasent-api (`packages/types/src/index.ts`). On older
-   * atlasent-api deployments that omit the trace, `constraintTrace`
-   * is `null` rather than throwing — forward-compatible degradation.
-   *
-   * Performance: one extra round-trip on submission. Latency is
-   * comparable to {@link evaluate}; the response body is fuller
-   * (includes the per-stage trace) so the wire payload is larger.
-   * If the caller does not need the trace, prefer {@link evaluate}.
+   * `result.constraintTrace` being non-null.
    */
   async evaluatePreflight(
-    input: EvaluateRequest,
+    request: EvaluateRequest,
   ): Promise<EvaluatePreflightResponse> {
-    _warnOversizeContext(input.context);
-    const body = {
-      action_type: input.action,
-      actor_id: input.agent,
-      context: input.context ?? {},
-    };
+    _warnOversizeContext(
+      (request as { context?: Record<string, unknown> }).context,
+    );
     const query = new URLSearchParams({ include: "constraint_trace" });
-    const { body: wire, rateLimit } = await this.post<EvaluateWire>(
+    const { body, rateLimit } = await this.post<EvaluateWire>(
       "/v1-evaluate",
-      body,
+      request,
       query,
     );
 
-    // Normalise decision to lowercase canonical form.
-    let decision = (typeof wire.decision === "string"
-      ? wire.decision.toLowerCase()
-      : wire.decision) as EvaluateWire["decision"] | undefined;
+    const permitted = body.decision === "allow" || Boolean(body.permitted);
+    const denial: { reason: string; code?: string } | undefined = !permitted
+      ? {
+          reason: body.denial?.reason ?? body.reason ?? "policy denied",
+          code: body.denial?.code,
+        }
+      : undefined;
 
-    if (decision === undefined && typeof wire.permitted === "boolean") {
-      decision = wire.permitted ? "allow" : "deny";
-    }
-    if (
-      decision !== "allow" &&
-      decision !== "deny" &&
-      decision !== "hold" &&
-      decision !== "escalate"
-    ) {
-      throw new AtlaSentError(
-        "Malformed response from /v1-evaluate: missing `decision` (or legacy `permitted`)",
-        { code: "bad_response" },
-      );
-    }
-    const permitToken = wire.permit_token ?? wire.decision_id;
+    const constraintTrace: ConstraintTrace | null =
+      body.constraint_trace != null
+        ? (body.constraint_trace as ConstraintTrace)
+        : null;
 
-    const evaluation: EvaluateResponse = {
-      decision,
-      decision_canonical: decision,
-      permitId: permitToken ?? "",
-      reason: wire.denial?.reason ?? wire.reason ?? "",
-      auditHash: wire.audit_hash ?? "",
-      timestamp: wire.timestamp ?? "",
+    return {
+      decision: permitted ? "allow" : "deny",
+      permitToken:
+        permitted ? (body.permit_token ?? body.decision_id ?? null) : null,
+      requestId: body.request_id ?? null,
+      expiresAt: body.expires_at ?? null,
+      denial,
+      constraintTrace,
       rateLimit,
     };
-
-    // Forward-compat: if the server omits `constraint_trace` (older
-    // atlasent-api version), surface trace=null rather than throwing.
-    // Unknown engine-side keys inside the trace are tolerated by the
-    // ConstraintTrace interface's index signature.
-    let constraintTrace: ConstraintTrace | null = null;
-    if (
-      wire.constraint_trace !== undefined &&
-      wire.constraint_trace !== null &&
-      typeof wire.constraint_trace === "object"
-    ) {
-      constraintTrace = wire.constraint_trace as ConstraintTrace;
-    }
-
-    return { evaluation, constraintTrace };
   }
 
   /**
-   * Verify that a previously issued permit is still valid.
+   * Verify that a permit token is still valid and has not been revoked.
    *
-   * @deprecated Use {@link verifyPermitById} — the canonical REST
-   * surface (`POST /v1/permits/{id}/verify`) returns the unified
-   * verification envelope plus the full {@link PermitRecord}, instead
-   * of the legacy `{verified, outcome, permitHash}` shape this method
-   * emits. Will be removed in `@atlasent/sdk@3`.
-   *
-   * A `verified: false` response is **not** thrown — inspect the
-   * returned object. Only transport / server errors throw.
+   * Calls `POST /v1-verify-permit`.
    */
   async verifyPermit(
-    input: VerifyPermitRequest,
+    request: VerifyPermitRequest,
   ): Promise<VerifyPermitResponse> {
-    _warnOversizeContext(input.context);
-    // Canonical wire shape per handler.ts: only permit_token is required.
-    // action_type / actor_id are optional cross-checks; context / api_key
-    // are NOT consulted by the verify handler.
-    const body = {
-      permit_token: input.permitId,
-      action_type: input.action ?? "",
-      actor_id: input.agent ?? "",
-    };
-    const { body: wire, rateLimit } = await this.post<VerifyPermitWire>(
+    const { body, rateLimit } = await this.post<VerifyPermitWire>(
       "/v1-verify-permit",
-      body,
+      request,
     );
-
-    // Tolerate both canonical {valid, outcome} and legacy {verified} server
-    // responses.
-    const valid = typeof wire.valid === "boolean" ? wire.valid : wire.verified;
-    if (typeof valid !== "boolean") {
-      throw new AtlaSentError(
-        "Malformed response from /v1-verify-permit: missing `valid` (or legacy `verified`)",
-        { code: "bad_response" },
-      );
-    }
-
+    const valid = body.valid ?? body.verified ?? false;
     return {
-      verified: valid,
-      outcome: wire.outcome ?? "",
-      permitHash: wire.permit_hash ?? "",
-      timestamp: wire.timestamp ?? "",
+      valid,
+      outcome: body.outcome ?? (valid ? "allow" : "deny"),
+      verifyErrorCode: body.verify_error_code,
+      reason: body.reason,
+      permitHash: body.permit_hash,
+      timestamp: body.timestamp,
       rateLimit,
     };
   }
 
   /**
-   * Revoke a previously-issued permit so it can no longer pass
-   * {@link verifyPermit}.
+   * Revoke a permit by its token string. The token is no longer valid
+   * after a successful revoke.
    *
-   * @deprecated Use {@link revokePermitById} — the canonical REST
-   * surface (`POST /v1/permits/{id}/revoke`) returns the full updated
-   * {@link PermitRecord} with `revoked_at`/`revoked_by`/`revoke_reason`
-   * populated, instead of the legacy `{revoked, permitId}` envelope
-   * this method emits. Will be removed in `@atlasent/sdk@3`.
-   *
-   * Use this when an agent's action is cancelled, superseded, or
-   * determined to be unauthorized after the fact. The revocation is
-   * recorded in the audit log with the optional `reason`.
-   *
-   * Throws {@link AtlaSentError} on transport / auth failures.
+   * Calls `POST /v1-revoke-permit`.
    */
   async revokePermit(input: RevokePermitRequest): Promise<RevokePermitResponse> {
-    const body = {
-      decision_id: input.permitId,
-      reason: input.reason ?? "",
-      api_key: this.apiKey,
-    };
-    const { body: wire, rateLimit } = await this.post<{
+    const { body, rateLimit } = await this.post<{
       revoked: boolean;
-      decision_id: string;
-      revoked_at?: string;
-      audit_hash?: string;
-    }>("/v1-revoke-permit", body);
-
-    if (typeof wire.revoked !== "boolean" || typeof wire.decision_id !== "string") {
-      throw new AtlaSentError(
-        "Malformed response from /v1-revoke-permit: missing `revoked` or `decision_id`",
-        { code: "bad_response" },
-      );
-    }
-
+      permit_token: string;
+      revoked_at: string;
+    }>("/v1-revoke-permit", input);
     return {
-      revoked: wire.revoked,
-      permitId: wire.decision_id,
-      revokedAt: wire.revoked_at,
-      auditHash: wire.audit_hash,
+      revoked: body.revoked ?? false,
+      permitToken: body.permit_token,
+      revokedAt: body.revoked_at,
       rateLimit,
     };
   }
 
   /**
-   * Revoke a permit through the canonical REST surface
-   * (`POST /v1/permits/{permitId}/revoke`).
+   * Revoke a permit by its database ID (UUID). Useful when you stored
+   * the permit_id at evaluation time and need to revoke it later
+   * without needing to re-present the token.
    *
-   * Returns the full updated {@link PermitRecord} with `status === 'revoked'`
-   * and `revoked_at` / `revoked_by` / `revoke_reason` populated. After
-   * revocation, subsequent verify calls return `410 PERMIT_REVOKED`.
-   *
-   * Idempotent on `409 permit_revoked` for already-revoked permits;
-   * server returns the existing revoked row in that case.
-   *
-   * Throws {@link AtlaSentError} on `404` (permit not in calling org),
-   * `409` (already in a terminal state), `410` (expired before revoke),
-   * or `429` (rate limited).
+   * Calls `POST /v1/permits/:id/revoke`.
    */
   async revokePermitById(
-    permitId: string,
-    input: RevokePermitByIdInput = {},
+    input: RevokePermitByIdInput,
   ): Promise<RevokePermitByIdResponse> {
-    if (!permitId) {
+    if (!input.permitId) {
       throw new AtlaSentError("permitId is required", { code: "bad_request" });
     }
-    const body: { reason?: string } = {};
-    if (input.reason !== undefined) body.reason = input.reason;
-    const { body: wire, rateLimit } = await this.post<PermitRecord>(
-      `/v1/permits/${encodeURIComponent(permitId)}/revoke`,
-      body,
-    );
-    return { permit: wire, rateLimit };
+    const { body, rateLimit } = await this.post<{
+      revoked: boolean;
+      permit_id: string;
+      revoked_at: string;
+    }>(`/v1/permits/${encodeURIComponent(input.permitId)}/revoke`, {});
+    return {
+      revoked: body.revoked ?? false,
+      permitId: body.permit_id,
+      revokedAt: body.revoked_at,
+      rateLimit,
+    };
   }
 
   /**
-   * Verify a permit through the canonical REST surface
-   * (`POST /v1/permits/{permitId}/verify`).
+   * Verify a permit by its database ID. Avoids re-presenting the full
+   * token when the verifier only stored the UUID.
    *
-   * Returns the unified verification envelope (`valid`,
-   * `verification_type: 'permit'`, `reason`, `verified_at`, `evidence`)
-   * plus the full {@link PermitRecord} fields preserved at the top
-   * level. The `valid` field is the contract — pin to it.
-   *
-   * A `valid: false` is **not** thrown when the server returns 200 with
-   * a denial reason (matches the verify-shape unification on the wire);
-   * it is thrown on 4xx (`404` not found, `410` expired/consumed).
+   * Calls `GET /v1/permits/:id/verify`.
    */
   async verifyPermitById(permitId: string): Promise<VerifyPermitByIdResponse> {
     if (!permitId) {
       throw new AtlaSentError("permitId is required", { code: "bad_request" });
     }
-    const { body: wire, rateLimit } = await this.post<
-      VerifyPermitByIdResponse & PermitRecord
-    >(`/v1/permits/${encodeURIComponent(permitId)}/verify`, {});
-    // Server returns the canonical envelope merged with the Permit row
-    // (allOf in openapi). Pull out the legacy permit row into `permit`
-    // for callers that want it as a sub-object too.
-    const { valid, verification_type, reason, verified_at, evidence, ...row } =
-      wire as VerifyPermitByIdResponse & PermitRecord;
+    const { body, rateLimit } = await this.get<{
+      valid: boolean;
+      outcome: "allow" | "deny";
+      verify_error_code?: string;
+      reason?: string;
+    }>(`/v1/permits/${encodeURIComponent(permitId)}/verify`);
     return {
-      valid,
-      verification_type,
-      reason,
-      verified_at,
-      evidence,
-      permit: row as PermitRecord,
+      valid: body.valid,
+      outcome: body.outcome ?? (body.valid ? "allow" : "deny"),
+      verifyErrorCode: body.verify_error_code,
+      reason: body.reason,
       rateLimit,
     };
   }
 
   /**
-   * Get a single permit's full lifecycle state.
+   * Retrieve a single permit record by UUID.
    *
-   * Calls `GET /v1/permits/{permitId}` (the canonical REST surface).
-   * Returns `status`, all timestamps, `revoked_at` / `revoked_by` /
-   * `revoke_reason` (when applicable), and the bound `payload_hash`
-   * / `decision_id`.
-   *
-   * Operator-facing introspection — answers "what state is this permit
-   * in, and why?" without reading audit logs.
-   *
-   * Throws {@link AtlaSentError} on `404` (permit not in calling org)
-   * or `410` (expired before retrieval).
+   * Calls `GET /v1/permits/:id`.
    */
   async getPermit(permitId: string): Promise<GetPermitResponse> {
     if (!permitId) {
       throw new AtlaSentError("permitId is required", { code: "bad_request" });
     }
-    const { body: wire, rateLimit } = await this.get<PermitRecord>(
+    const { body, rateLimit } = await this.get<PermitRecord>(
       `/v1/permits/${encodeURIComponent(permitId)}`,
     );
-    return { permit: wire, rateLimit };
+    return { permit: body, rateLimit };
   }
 
   /**
-   * List permits issued to the calling org, most-recently-issued first.
+   * List permits with optional filters.
    *
-   * Calls `GET /v1/permits` (the canonical REST surface). Cursor-paged.
-   * Filters narrow on server side; pagination uses the `created_at`
-   * timestamp opaquely (`nextCursor`).
-   *
-   * Designed for incident review, debugging, and compliance
-   * reconstruction.
+   * Calls `GET /v1/permits`.
    */
   async listPermits(
     input: ListPermitsRequest = {},
   ): Promise<ListPermitsResponse> {
     const params = new URLSearchParams();
+    if (input.agentId) params.set("agent_id", input.agentId);
     if (input.status) params.set("status", input.status);
-    if (input.actorId) params.set("actor_id", input.actorId);
     if (input.actionType) params.set("action_type", input.actionType);
     if (input.from) params.set("from", input.from);
     if (input.to) params.set("to", input.to);
     if (input.limit !== undefined) params.set("limit", String(input.limit));
     if (input.cursor) params.set("cursor", input.cursor);
-
-    const { body: wire, rateLimit } = await this.get<{
-      permits?: PermitRecord[];
-      total?: number;
-      next_cursor?: string;
+    const { body, rateLimit } = await this.get<{
+      data: PermitRecord[];
+      cursor?: string;
+      has_more: boolean;
     }>("/v1/permits", params);
-
-    if (!Array.isArray(wire.permits)) {
-      throw new AtlaSentError(
-        "Malformed response from /v1/permits: missing `permits` array",
-        { code: "bad_response" },
-      );
-    }
-    const result: ListPermitsResponse = {
-      permits: wire.permits,
-      total: typeof wire.total === "number" ? wire.total : wire.permits.length,
+    return {
+      data: body.data ?? [],
+      cursor: body.cursor,
+      hasMore: body.has_more ?? false,
       rateLimit,
     };
-    if (wire.next_cursor !== undefined) result.nextCursor = wire.next_cursor;
-    return result;
   }
 
   /**
-   * Self-introspection: ask the server to describe the API key this
-   * client was constructed with. Returns the key's ID, organization,
-   * environment, scopes, IP allowlist, per-minute rate limit, the
-   * client IP the server observed, and the expiry (if any).
+   * Inspect the calling API key's metadata and permissions.
    *
-   * Never includes the raw key or its hash. Safe to surface in operator
-   * dashboards. Useful for `IP_NOT_ALLOWED` debugging (the server tells
-   * you exactly which IP it saw) and for proactive expiry warnings.
-   *
-   * Throws {@link AtlaSentError} on transport / auth failures — same
-   * taxonomy as {@link AtlaSentClient.evaluate}.
+   * Calls `GET /v1-api-key-self`.
    */
   async keySelf(): Promise<ApiKeySelfResponse> {
-    const { body: wire, rateLimit } = await this.get<ApiKeySelfWire>(
+    const { body, rateLimit } = await this.get<ApiKeySelfWire>(
       "/v1-api-key-self",
     );
-
-    if (typeof wire.key_id !== "string" || typeof wire.organization_id !== "string") {
-      throw new AtlaSentError(
-        "Malformed response from /v1-api-key-self: missing `key_id` or `organization_id`",
-        { code: "bad_response" },
-      );
-    }
-
     return {
-      keyId: wire.key_id,
-      organizationId: wire.organization_id,
-      environment: wire.environment,
-      scopes: wire.scopes ?? [],
-      allowedCidrs: wire.allowed_cidrs ?? null,
-      rateLimitPerMinute: wire.rate_limit_per_minute,
-      clientIp: wire.client_ip ?? null,
-      expiresAt: wire.expires_at ?? null,
+      keyId: body.key_id,
+      organizationId: body.organization_id,
+      environment: body.environment,
+      scopes: body.scopes ?? [],
+      allowedCidrs: body.allowed_cidrs ?? null,
+      rateLimitPerMinute: body.rate_limit_per_minute,
+      clientIp: body.client_ip ?? null,
+      expiresAt: body.expires_at ?? null,
       rateLimit,
     };
   }
 
   /**
-   * List persisted audit events for the authenticated organization
-   * (`GET /v1-audit/events`). Returned rows are wire-identical with
-   * the server: snake_case field names, including `previous_hash` and
-   * the `hash` chain, so the response can be fed straight into the
-   * offline verifier when paired with a signed export.
+   * List audit events with optional filters. The cursor is returned in
+   * `result.nextCursor` when more pages exist.
    *
-   * `query.types` is a comma-joined list (e.g.
-   * `"evaluate.allow,policy.updated"`). `cursor` is the opaque
-   * `next_cursor` from the prior page. All fields are optional; the
-   * server defaults `limit` to 50 (capped at 500).
-   *
-   * Throws {@link AtlaSentError} on transport / auth failures — same
-   * taxonomy as {@link AtlaSentClient.evaluate}.
+   * Calls `GET /v1/audit/events`.
    */
   async listAuditEvents(
     query: AuditEventsQuery = {},
   ): Promise<AuditEventsResult> {
-    const { body: wire, rateLimit } = await this.get<AuditEventsPage>(
-      "/v1-audit/events",
-      buildAuditEventsQuery(query),
+    const params = buildAuditEventsQuery(query);
+    const { body, rateLimit } = await this.get<AuditEventsPage>(
+      "/v1/audit/events",
+      params,
     );
-
-    if (!Array.isArray(wire.events) || typeof wire.total !== "number") {
-      throw new AtlaSentError(
-        "Malformed response from /v1-audit/events: missing `events` or `total`",
-        { code: "bad_response" },
-      );
-    }
-
-    return { ...wire, rateLimit };
+    return { page: body, rateLimit };
   }
 
   /**
-   * Request a signed audit export bundle
-   * (`POST /v1-audit/exports`). The returned object is wire-identical
-   * with the server — `signature`, `chain_head_hash`, `events`, and
-   * friends survive untouched so the bundle can be persisted to disk
-   * and handed to the offline verifier (`verifyBundle` /
-   * `verifyAuditBundle`) without any reshaping.
+   * Create an audit export job. Returns the export record, which
+   * transitions to `ready` once the server has assembled the bundle.
    *
-   * Pass `filter.types`, `filter.from`, `filter.to`, or `filter.actor_id`
-   * to narrow the export; omit for a full-org bundle. `rateLimit` is
-   * attached alongside the wire fields for observability.
-   *
-   * Throws {@link AtlaSentError} on transport / auth failures — same
-   * taxonomy as {@link AtlaSentClient.evaluate}.
+   * Calls `POST /v1/audit/exports`.
    */
   async createAuditExport(
-    filter: AuditExportRequest = {},
+    request: AuditExportRequest,
   ): Promise<AuditExportResult> {
-    const { body: wire, rateLimit } = await this.post<AuditExport>(
-      "/v1-audit/exports",
-      filter,
+    const { body, rateLimit } = await this.post<AuditExport>(
+      "/v1/audit/exports",
+      request,
     );
-
-    if (
-      typeof wire.export_id !== "string" ||
-      typeof wire.chain_head_hash !== "string" ||
-      !Array.isArray(wire.events)
-    ) {
-      throw new AtlaSentError(
-        "Malformed response from /v1-audit/exports: missing `export_id`, `chain_head_hash`, or `events`",
-        { code: "bad_response" },
-      );
-    }
-
-    return { ...wire, rateLimit };
+    return { export: body, rateLimit };
   }
 
   /**
-   * Open a streaming evaluation session against `POST /v1-evaluate-stream`.
+   * Open a streaming SSE connection that emits decisions as they are
+   * made (rather than waiting for the full evaluation to complete).
    *
-   * Yields {@link StreamDecisionEvent} and {@link StreamProgressEvent} objects
-   * as the server emits them. The iterator ends cleanly when the server sends
-   * `event: done`; it throws {@link AtlaSentError} on transport errors or when
-   * the server sends `event: error`.
+   * The AsyncIterable yields:
+   *   - `StreamProgressEvent` — intermediate progress updates
+   *   - `StreamDecisionEvent` — the terminal decision (isFinal: true)
    *
-   * The final {@link StreamDecisionEvent} (isFinal: true) carries a `permitId`
-   * suitable for passing to {@link verifyPermit} after the stream closes.
+   * The stream closes when a terminal decision or `event: done` is
+   * received, or when `options.signal` is aborted.
    *
-   * Hardening:
-   * - Throws {@link StreamTimeoutError} when no event arrives within
-   *   `opts.timeoutMs` (default 30 s). Pass `0` to disable.
-   * - Retries up to `opts.maxRetries` times (default 3) with 1 s / 2 s / 4 s
-   *   delays on network drop (before a terminal event). Sends `Last-Event-ID`
-   *   on reconnect when the server has emitted event IDs.
-   * - Throws {@link StreamParseError} on partial / malformed JSON rather than
-   *   crashing with a raw `SyntaxError`.
-   * - Closes cleanly on `event: done` or a decision event with `done: true`.
+   * Reconnection: pass `options.lastEventId` to resume from the last
+   * successfully processed event ID. AtlaSent will replay any events
+   * that occurred after that ID.
    *
-   * ```ts
-   * for await (const event of client.protectStream({ agent, action })) {
-   *   if (event.type === "decision" && event.isFinal) {
-   *     await client.verifyPermit({ permitId: event.permitId });
-   *   }
-   * }
-   * ```
+   * Calls `POST /v1-protect-stream`.
    */
   async *protectStream(
-    input: EvaluateRequest,
-    opts: StreamOptions = {},
+    request: EvaluateRequest,
+    options: StreamOptions = {},
   ): AsyncIterable<StreamEvent> {
-    const streamTimeoutMs = opts.timeoutMs ?? 30_000;
-    const maxRetries = opts.maxRetries ?? 3;
+    _warnOversizeContext(
+      (request as { context?: Record<string, unknown> }).context,
+    );
 
-    const body = {
-      action: input.action,
-      agent: input.agent,
-      context: input.context ?? {},
-      api_key: this.apiKey,
-    };
-
+    const url = `${this.baseUrl}/v1-protect-stream`;
     const requestId = globalThis.crypto.randomUUID();
-    const url = `${this.baseUrl}/v1-evaluate-stream`;
+    let lastEventId = options.lastEventId ?? null;
 
-    let lastEventId: string | undefined;
-    let retryCount = 0;
-
-    while (true) {
-      const headers: Record<string, string> = {
-        Accept: "text/event-stream",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
-        "User-Agent": this.userAgent,
-        "X-Request-ID": requestId,
-      };
-      if (lastEventId !== undefined) {
-        headers["Last-Event-ID"] = lastEventId;
-      }
-
-      const connectionTimeoutSignal = AbortSignal.timeout(this.timeoutMs);
-      const signal = opts.signal
-        ? (AbortSignal as unknown as { any(s: AbortSignal[]): AbortSignal }).any([
-            connectionTimeoutSignal,
-            opts.signal,
-          ])
-        : connectionTimeoutSignal;
-
-      let response: Response;
-      try {
-        response = await this.fetchImpl(url, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(body),
-          signal,
-        });
-      } catch (err) {
-        const mapped = mapFetchError(err, requestId);
-        if (mapped.code === "network" && retryCount < maxRetries) {
-          retryCount++;
-          await sleep(1_000 * Math.pow(2, retryCount - 1)); // 1s, 2s, 4s
-          continue;
-        }
-        throw mapped;
-      }
-
-      if (!response.ok) {
-        throw await buildHttpError(response, requestId);
-      }
-
-      if (!response.body) {
-        throw new AtlaSentError("Expected streaming body from AtlaSent API", {
-          code: "bad_response",
-          status: response.status,
-          requestId,
-        });
-      }
-
-      let streamDone = false;
-      let networkDrop = false;
-
-      try {
-        for await (const event of parseSseStream(
-          response.body,
-          requestId,
-          streamTimeoutMs,
-          (id) => { lastEventId = id; },
-        )) {
-          yield event;
-          if (event.type === "decision" && event.isFinal) {
-            streamDone = true;
-          }
-        }
-        // parseSseStream returned normally (saw event: done or stream ended)
-        streamDone = true;
-      } catch (err) {
-        if (err instanceof AtlaSentError && err.code === "network") {
-          networkDrop = true;
-        } else {
-          throw err;
-        }
-      }
-
-      if (streamDone) break;
-
-      // Network drop before terminal event — attempt reconnect
-      if (networkDrop && retryCount < maxRetries) {
-        retryCount++;
-        await sleep(1_000 * Math.pow(2, retryCount - 1)); // 1s, 2s, 4s
-        continue;
-      }
-      if (networkDrop) {
-        throw new AtlaSentError(
-          `AtlaSent stream dropped after ${retryCount} reconnection attempts`,
-          { code: "network", requestId },
-        );
-      }
-      break;
+    const headers: Record<string, string> = {
+      Accept: "text/event-stream",
+      Authorization: `Bearer ${this.apiKey}`,
+      "Content-Type": "application/json",
+      "User-Agent": this.userAgent,
+      "X-Request-ID": requestId,
+    };
+    if (lastEventId) {
+      headers["Last-Event-ID"] = lastEventId;
     }
+
+    const timeoutMs =
+      options.perEventTimeoutMs ?? (this.timeoutMs > 0 ? this.timeoutMs * 3 : 0);
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(request),
+        signal: options.signal,
+      });
+    } catch (err) {
+      throw mapFetchError(err, requestId);
+    }
+
+    if (!response.ok) {
+      throw await buildHttpError(response, requestId);
+    }
+
+    if (!response.body) {
+      throw new AtlaSentError("AtlaSent stream returned no body", {
+        code: "bad_response",
+        requestId,
+      });
+    }
+
+    yield* parseSseStream(response.body, requestId, timeoutMs, (id) => {
+      lastEventId = id;
+    });
   }
 
   private async post<T>(
@@ -1226,6 +996,479 @@ export class AtlaSentClient {
       Omit<IncidentTimelineResponse, "rateLimit">
     >(`/v1/governance/timeline/incident/${encodeURIComponent(incidentId)}`);
     return { ...body, rateLimit };
+  }
+
+  // ── Cross-Org Permission Negotiation ──────────────────────────────────────
+
+  /**
+   * Evaluate whether an identity in one org is permitted to perform an
+   * action on a resource in another org.
+   *
+   * Calls `POST /v1/cross-org/permissions/check`.
+   */
+  async checkCrossOrgPermission(
+    req: CrossOrgPermissionCheckRequest,
+  ): Promise<CrossOrgPermissionCheckResult> {
+    const { body } = await this.post<CrossOrgPermissionCheckResult>(
+      "/v1/cross-org/permissions/check",
+      req,
+    );
+    return body;
+  }
+
+  /**
+   * List previous cross-org permission check results for the calling org.
+   *
+   * Calls `GET /v1/cross-org/permissions/checks`.
+   */
+  async listCrossOrgPermissionChecks(
+    params?: CrossOrgPermissionCheckListParams,
+  ): Promise<CrossOrgPermissionCheckResult[]> {
+    const qs = new URLSearchParams();
+    if (params?.source_org_id) qs.set("source_org_id", params.source_org_id);
+    if (params?.target_org_id) qs.set("target_org_id", params.target_org_id);
+    if (params?.allowed !== undefined) qs.set("allowed", String(params.allowed));
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    const { body } = await this.get<{ checks: CrossOrgPermissionCheckResult[] }>(
+      "/v1/cross-org/permissions/checks",
+      qs,
+    );
+    return body.checks ?? [];
+  }
+
+  // ── Anomaly Response Automation ───────────────────────────────────────────
+
+  /**
+   * List all anomaly response rules for the calling org.
+   *
+   * Calls `GET /v1/anomaly-response/rules`.
+   */
+  async listAnomalyResponseRules(): Promise<AnomalyResponseRule[]> {
+    const { body } = await this.get<{ rules: AnomalyResponseRule[] }>(
+      "/v1/anomaly-response/rules",
+    );
+    return body.rules ?? [];
+  }
+
+  /**
+   * Create a new anomaly response rule.
+   *
+   * Calls `POST /v1/anomaly-response/rules`.
+   */
+  async createAnomalyResponseRule(
+    req: CreateAnomalyResponseRuleRequest,
+  ): Promise<AnomalyResponseRule> {
+    const { body } = await this.post<AnomalyResponseRule>(
+      "/v1/anomaly-response/rules",
+      req,
+    );
+    return body;
+  }
+
+  /**
+   * Update an existing anomaly response rule.
+   *
+   * Calls `POST /v1/anomaly-response/rules/:id/update`.
+   */
+  async updateAnomalyResponseRule(
+    id: string,
+    updates: Partial<CreateAnomalyResponseRuleRequest>,
+  ): Promise<AnomalyResponseRule> {
+    const { body } = await this.post<AnomalyResponseRule>(
+      `/v1/anomaly-response/rules/${encodeURIComponent(id)}/update`,
+      updates,
+    );
+    return body;
+  }
+
+  /**
+   * Delete an anomaly response rule.
+   *
+   * Calls `POST /v1/anomaly-response/rules/:id/delete`.
+   */
+  async deleteAnomalyResponseRule(id: string): Promise<void> {
+    await this.post<Record<string, unknown>>(
+      `/v1/anomaly-response/rules/${encodeURIComponent(id)}/delete`,
+      {},
+    );
+  }
+
+  /**
+   * Evaluate active rules against an anomaly score and execute any
+   * matching automated responses.
+   *
+   * Calls `POST /v1/anomaly-response/trigger`.
+   */
+  async triggerAnomalyResponse(
+    req: TriggerAnomalyResponseRequest,
+  ): Promise<AnomalyResponseEvent[]> {
+    const { body } = await this.post<{ events: AnomalyResponseEvent[] }>(
+      "/v1/anomaly-response/trigger",
+      req,
+    );
+    return body.events ?? [];
+  }
+
+  /**
+   * List anomaly response events, optionally filtered by execution or limit.
+   *
+   * Calls `GET /v1/anomaly-response/events`.
+   */
+  async listAnomalyResponseEvents(
+    params?: { limit?: number; execution_id?: string },
+  ): Promise<AnomalyResponseEvent[]> {
+    const qs = new URLSearchParams();
+    if (params?.execution_id) qs.set("execution_id", params.execution_id);
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    const { body } = await this.get<{ events: AnomalyResponseEvent[] }>(
+      "/v1/anomaly-response/events",
+      qs,
+    );
+    return body.events ?? [];
+  }
+
+  // ── Budget Exception Workflows ────────────────────────────────────────────
+
+  /**
+   * List budget exception requests, with optional status/policy/pagination filters.
+   *
+   * Calls `GET /v1/budget-exceptions`.
+   */
+  async listBudgetExceptions(
+    params?: {
+      status?: BudgetExceptionStatus;
+      budget_policy_id?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<BudgetExceptionRequest[]> {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.budget_policy_id) qs.set("budget_policy_id", params.budget_policy_id);
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params?.offset !== undefined) qs.set("offset", String(params.offset));
+    const { body } = await this.get<{ exceptions: BudgetExceptionRequest[] }>(
+      "/v1/budget-exceptions",
+      qs,
+    );
+    return body.exceptions ?? [];
+  }
+
+  /**
+   * Get a single budget exception request by ID.
+   *
+   * Calls `GET /v1/budget-exceptions/:id`.
+   */
+  async getBudgetException(id: string): Promise<BudgetExceptionRequest> {
+    const { body } = await this.get<BudgetExceptionRequest>(
+      `/v1/budget-exceptions/${encodeURIComponent(id)}`,
+    );
+    return body;
+  }
+
+  /**
+   * Submit a new budget exception request.
+   *
+   * Calls `POST /v1/budget-exceptions`.
+   */
+  async createBudgetException(
+    req: CreateBudgetExceptionRequest,
+  ): Promise<BudgetExceptionRequest> {
+    const { body } = await this.post<BudgetExceptionRequest>(
+      "/v1/budget-exceptions",
+      req,
+    );
+    return body;
+  }
+
+  /**
+   * Approve a budget exception request.
+   *
+   * Calls `POST /v1/budget-exceptions/:id/approve`.
+   */
+  async approveBudgetException(
+    id: string,
+    req: ApproveBudgetExceptionRequest,
+  ): Promise<BudgetExceptionRequest> {
+    const { body } = await this.post<BudgetExceptionRequest>(
+      `/v1/budget-exceptions/${encodeURIComponent(id)}/approve`,
+      req,
+    );
+    return body;
+  }
+
+  /**
+   * Reject a budget exception request.
+   *
+   * Calls `POST /v1/budget-exceptions/:id/reject`.
+   */
+  async rejectBudgetException(
+    id: string,
+    review_notes?: string,
+  ): Promise<BudgetExceptionRequest> {
+    const { body } = await this.post<BudgetExceptionRequest>(
+      `/v1/budget-exceptions/${encodeURIComponent(id)}/reject`,
+      { review_notes },
+    );
+    return body;
+  }
+
+  /**
+   * Cancel a budget exception request.
+   *
+   * Calls `POST /v1/budget-exceptions/:id/cancel`.
+   */
+  async cancelBudgetException(id: string): Promise<BudgetExceptionRequest> {
+    const { body } = await this.post<BudgetExceptionRequest>(
+      `/v1/budget-exceptions/${encodeURIComponent(id)}/cancel`,
+      {},
+    );
+    return body;
+  }
+
+  // ── Regulatory Escalation Chain ───────────────────────────────────────────
+
+  /**
+   * List all regulatory authority levels for the calling org.
+   *
+   * Calls `GET /v1/regulatory/authority-levels`.
+   */
+  async listRegulatoryAuthorityLevels(): Promise<RegulatoryAuthorityLevel[]> {
+    const { body } = await this.get<{ levels: RegulatoryAuthorityLevel[] }>(
+      "/v1/regulatory/authority-levels",
+    );
+    return body.levels ?? [];
+  }
+
+  /**
+   * Create a new regulatory authority level.
+   *
+   * Calls `POST /v1/regulatory/authority-levels`.
+   */
+  async createRegulatoryAuthorityLevel(
+    req: Omit<RegulatoryAuthorityLevel, "id" | "org_id" | "created_at">,
+  ): Promise<RegulatoryAuthorityLevel> {
+    const { body } = await this.post<RegulatoryAuthorityLevel>(
+      "/v1/regulatory/authority-levels",
+      req,
+    );
+    return body;
+  }
+
+  /**
+   * List regulatory escalations for the calling org.
+   *
+   * Calls `GET /v1/regulatory/escalations`.
+   */
+  async listRegulatoryEscalations(
+    params?: {
+      status?: RegulatoryEscalationStatus;
+      subject_type?: string;
+      subject_id?: string;
+    },
+  ): Promise<RegulatoryEscalation[]> {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.subject_type) qs.set("subject_type", params.subject_type);
+    if (params?.subject_id) qs.set("subject_id", params.subject_id);
+    const { body } = await this.get<{ escalations: RegulatoryEscalation[] }>(
+      "/v1/regulatory/escalations",
+      qs,
+    );
+    return body.escalations ?? [];
+  }
+
+  /**
+   * Create a new regulatory escalation.
+   *
+   * Calls `POST /v1/regulatory/escalations`.
+   */
+  async createRegulatoryEscalation(
+    req: CreateRegulatoryEscalationRequest,
+  ): Promise<RegulatoryEscalation> {
+    const { body } = await this.post<RegulatoryEscalation>(
+      "/v1/regulatory/escalations",
+      req,
+    );
+    return body;
+  }
+
+  /**
+   * Acknowledge a regulatory escalation (confirm receipt).
+   *
+   * Calls `POST /v1/regulatory/escalations/:id/acknowledge`.
+   */
+  async acknowledgeRegulatoryEscalation(id: string): Promise<RegulatoryEscalation> {
+    const { body } = await this.post<RegulatoryEscalation>(
+      `/v1/regulatory/escalations/${encodeURIComponent(id)}/acknowledge`,
+      {},
+    );
+    return body;
+  }
+
+  /**
+   * Resolve a regulatory escalation with a documented resolution.
+   *
+   * Calls `POST /v1/regulatory/escalations/:id/resolve`.
+   */
+  async resolveRegulatoryEscalation(
+    id: string,
+    resolution: string,
+    resolution_details?: Record<string, unknown>,
+  ): Promise<RegulatoryEscalation> {
+    const { body } = await this.post<RegulatoryEscalation>(
+      `/v1/regulatory/escalations/${encodeURIComponent(id)}/resolve`,
+      { resolution, resolution_details },
+    );
+    return body;
+  }
+
+  /**
+   * Override a regulatory escalation (bypass normal resolution path).
+   *
+   * Calls `POST /v1/regulatory/escalations/:id/override`.
+   */
+  async overrideRegulatoryEscalation(
+    id: string,
+    reason: string,
+  ): Promise<RegulatoryEscalation> {
+    const { body } = await this.post<RegulatoryEscalation>(
+      `/v1/regulatory/escalations/${encodeURIComponent(id)}/override`,
+      { reason },
+    );
+    return body;
+  }
+
+  // ── Incentive Signal Feedback Loop ────────────────────────────────────────
+
+  /**
+   * List all actions taken in response to a specific governance signal.
+   *
+   * Calls `GET /v1/governance/signals/:signal_id/actions`.
+   */
+  async listSignalActions(signal_id: string): Promise<GovernanceSignalAction[]> {
+    const { body } = await this.get<{ actions: GovernanceSignalAction[] }>(
+      `/v1/governance/signals/${encodeURIComponent(signal_id)}/actions`,
+    );
+    return body.actions ?? [];
+  }
+
+  /**
+   * Record an action taken in response to a governance signal.
+   *
+   * Calls `POST /v1/governance/signals/:signal_id/actions`.
+   */
+  async recordSignalAction(
+    signal_id: string,
+    req: RecordSignalActionRequest,
+  ): Promise<GovernanceSignalAction> {
+    const { body } = await this.post<GovernanceSignalAction>(
+      `/v1/governance/signals/${encodeURIComponent(signal_id)}/actions`,
+      req,
+    );
+    return body;
+  }
+
+  /**
+   * Record the outcome of a previous signal action.
+   *
+   * Calls `POST /v1/governance/signals/:signal_id/actions/:action_id/outcome`.
+   */
+  async recordSignalOutcome(
+    signal_id: string,
+    action_id: string,
+    req: RecordSignalOutcomeRequest,
+  ): Promise<GovernanceSignalAction> {
+    const { body } = await this.post<GovernanceSignalAction>(
+      `/v1/governance/signals/${encodeURIComponent(signal_id)}/actions/${encodeURIComponent(action_id)}/outcome`,
+      req,
+    );
+    return body;
+  }
+
+  /**
+   * Get an aggregate summary of signal actions and outcomes for the calling org.
+   *
+   * Calls `GET /v1/governance/signals/actions/summary`.
+   */
+  async getSignalActionSummary(): Promise<SignalActionSummary> {
+    const { body } = await this.get<SignalActionSummary>(
+      "/v1/governance/signals/actions/summary",
+    );
+    return body;
+  }
+
+  // ── Cross-Org Impersonation ───────────────────────────────────────────────
+
+  /**
+   * List all active impersonation grants where the calling org is the grantor.
+   *
+   * Calls `GET /v1/cross-org/impersonation/grants`.
+   */
+  async listImpersonationGrants(): Promise<CrossOrgImpersonationGrant[]> {
+    const { body } = await this.get<{ grants: CrossOrgImpersonationGrant[] }>(
+      "/v1/cross-org/impersonation/grants",
+    );
+    return body.grants ?? [];
+  }
+
+  /**
+   * Create a new cross-org impersonation grant.
+   *
+   * Calls `POST /v1/cross-org/impersonation/grants`.
+   */
+  async createImpersonationGrant(
+    req: CreateImpersonationGrantRequest,
+  ): Promise<CrossOrgImpersonationGrant> {
+    const { body } = await this.post<CrossOrgImpersonationGrant>(
+      "/v1/cross-org/impersonation/grants",
+      req,
+    );
+    return body;
+  }
+
+  /**
+   * Revoke an impersonation grant. Any tokens issued under the grant
+   * become immediately invalid.
+   *
+   * Calls `POST /v1/cross-org/impersonation/grants/:id/revoke`.
+   */
+  async revokeImpersonationGrant(id: string): Promise<void> {
+    await this.post<Record<string, unknown>>(
+      `/v1/cross-org/impersonation/grants/${encodeURIComponent(id)}/revoke`,
+      {},
+    );
+  }
+
+  /**
+   * Issue a short-lived impersonation token under an existing grant.
+   *
+   * Calls `POST /v1/cross-org/impersonation/grants/:grant_id/token`.
+   */
+  async issueImpersonationToken(
+    grant_id: string,
+    requested_duration_seconds?: number,
+  ): Promise<ImpersonationToken> {
+    const { body } = await this.post<ImpersonationToken>(
+      `/v1/cross-org/impersonation/grants/${encodeURIComponent(grant_id)}/token`,
+      { requested_duration_seconds },
+    );
+    return body;
+  }
+
+  /**
+   * Validate an impersonation token and retrieve its associated grant.
+   *
+   * Calls `POST /v1/cross-org/impersonation/validate`.
+   */
+  async validateImpersonationToken(
+    token: string,
+  ): Promise<ImpersonationValidationResult> {
+    const { body } = await this.post<ImpersonationValidationResult>(
+      "/v1/cross-org/impersonation/validate",
+      { token },
+    );
+    return body;
   }
 }
 
