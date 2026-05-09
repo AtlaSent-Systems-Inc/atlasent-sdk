@@ -98,6 +98,41 @@ import type {
   GetLatestOrgRiskResponse,
   ListOrgRiskHistoryResponse,
 } from "./orgRiskGraph.js";
+import type {
+  CrossOrgPermissionCheckRequest,
+  CrossOrgPermissionCheckResult,
+  CrossOrgPermissionCheckListParams,
+} from "./crossOrgPermission.js";
+import type {
+  AnomalyResponseRule,
+  AnomalyResponseEvent,
+  CreateAnomalyResponseRuleRequest,
+  TriggerAnomalyResponseRequest,
+} from "./anomalyResponse.js";
+import type {
+  BudgetExceptionRequest,
+  BudgetExceptionStatus,
+  CreateBudgetExceptionRequest,
+  ApproveBudgetExceptionRequest,
+} from "./budgetExceptions.js";
+import type {
+  RegulatoryAuthorityLevel,
+  RegulatoryEscalation,
+  RegulatoryEscalationStatus,
+  CreateRegulatoryEscalationRequest,
+} from "./regulatoryEscalation.js";
+import type {
+  GovernanceSignalAction,
+  RecordSignalActionRequest,
+  RecordSignalOutcomeRequest,
+  SignalActionSummary,
+} from "./incentiveSignalFeedback.js";
+import type {
+  CrossOrgImpersonationGrant,
+  CreateImpersonationGrantRequest,
+  ImpersonationToken,
+  ImpersonationValidationResult,
+} from "./crossOrgImpersonation.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -1436,6 +1471,316 @@ export class AtlaSentClient {
     };
     if (body.next_cursor) result.nextCursor = body.next_cursor;
     return result;
+  }
+  // ── Cross-Org Permission Negotiation ──────────────────────────────────────
+
+  async checkCrossOrgPermission(
+    req: CrossOrgPermissionCheckRequest,
+  ): Promise<CrossOrgPermissionCheckResult> {
+    const { body } = await this.post<CrossOrgPermissionCheckResult>(
+      "/v1/cross-org/permissions/check",
+      req,
+    );
+    return body;
+  }
+
+  async listCrossOrgPermissionChecks(
+    params?: CrossOrgPermissionCheckListParams,
+  ): Promise<CrossOrgPermissionCheckResult[]> {
+    const qs = new URLSearchParams();
+    if (params?.source_org_id) qs.set("source_org_id", params.source_org_id);
+    if (params?.target_org_id) qs.set("target_org_id", params.target_org_id);
+    if (params?.allowed !== undefined) qs.set("allowed", String(params.allowed));
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    const { body } = await this.get<{ checks: CrossOrgPermissionCheckResult[] }>(
+      "/v1/cross-org/permissions/checks",
+      qs,
+    );
+    return body.checks ?? [];
+  }
+
+  // ── Anomaly Response Automation ───────────────────────────────────────────
+
+  async listAnomalyResponseRules(): Promise<AnomalyResponseRule[]> {
+    const { body } = await this.get<{ rules: AnomalyResponseRule[] }>(
+      "/v1/anomaly-response/rules",
+    );
+    return body.rules ?? [];
+  }
+
+  async createAnomalyResponseRule(
+    req: CreateAnomalyResponseRuleRequest,
+  ): Promise<AnomalyResponseRule> {
+    const { body } = await this.post<AnomalyResponseRule>(
+      "/v1/anomaly-response/rules",
+      req,
+    );
+    return body;
+  }
+
+  async updateAnomalyResponseRule(
+    id: string,
+    updates: Partial<CreateAnomalyResponseRuleRequest>,
+  ): Promise<AnomalyResponseRule> {
+    const { body } = await this.post<AnomalyResponseRule>(
+      `/v1/anomaly-response/rules/${encodeURIComponent(id)}/update`,
+      updates,
+    );
+    return body;
+  }
+
+  async deleteAnomalyResponseRule(id: string): Promise<void> {
+    await this.post<Record<string, unknown>>(
+      `/v1/anomaly-response/rules/${encodeURIComponent(id)}/delete`,
+      {},
+    );
+  }
+
+  async triggerAnomalyResponse(
+    req: TriggerAnomalyResponseRequest,
+  ): Promise<AnomalyResponseEvent[]> {
+    const { body } = await this.post<{ events: AnomalyResponseEvent[] }>(
+      "/v1/anomaly-response/trigger",
+      req,
+    );
+    return body.events ?? [];
+  }
+
+  async listAnomalyResponseEvents(
+    params?: { limit?: number; execution_id?: string },
+  ): Promise<AnomalyResponseEvent[]> {
+    const qs = new URLSearchParams();
+    if (params?.execution_id) qs.set("execution_id", params.execution_id);
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    const { body } = await this.get<{ events: AnomalyResponseEvent[] }>(
+      "/v1/anomaly-response/events",
+      qs,
+    );
+    return body.events ?? [];
+  }
+
+  // ── Budget Exception Workflows ────────────────────────────────────────────
+
+  async listBudgetExceptions(
+    params?: { status?: BudgetExceptionStatus; budget_policy_id?: string; limit?: number; offset?: number },
+  ): Promise<BudgetExceptionRequest[]> {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.budget_policy_id) qs.set("budget_policy_id", params.budget_policy_id);
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params?.offset !== undefined) qs.set("offset", String(params.offset));
+    const { body } = await this.get<{ exceptions: BudgetExceptionRequest[] }>(
+      "/v1/budget-exceptions",
+      qs,
+    );
+    return body.exceptions ?? [];
+  }
+
+  async getBudgetException(id: string): Promise<BudgetExceptionRequest> {
+    const { body } = await this.get<BudgetExceptionRequest>(
+      `/v1/budget-exceptions/${encodeURIComponent(id)}`,
+    );
+    return body;
+  }
+
+  async createBudgetException(
+    req: CreateBudgetExceptionRequest,
+  ): Promise<BudgetExceptionRequest> {
+    const { body } = await this.post<BudgetExceptionRequest>(
+      "/v1/budget-exceptions",
+      req,
+    );
+    return body;
+  }
+
+  async approveBudgetException(
+    id: string,
+    req: ApproveBudgetExceptionRequest,
+  ): Promise<BudgetExceptionRequest> {
+    const { body } = await this.post<BudgetExceptionRequest>(
+      `/v1/budget-exceptions/${encodeURIComponent(id)}/approve`,
+      req,
+    );
+    return body;
+  }
+
+  async rejectBudgetException(
+    id: string,
+    review_notes?: string,
+  ): Promise<BudgetExceptionRequest> {
+    const { body } = await this.post<BudgetExceptionRequest>(
+      `/v1/budget-exceptions/${encodeURIComponent(id)}/reject`,
+      { review_notes },
+    );
+    return body;
+  }
+
+  async cancelBudgetException(id: string): Promise<BudgetExceptionRequest> {
+    const { body } = await this.post<BudgetExceptionRequest>(
+      `/v1/budget-exceptions/${encodeURIComponent(id)}/cancel`,
+      {},
+    );
+    return body;
+  }
+
+  // ── Regulatory Escalation Chain ───────────────────────────────────────────
+
+  async listRegulatoryAuthorityLevels(): Promise<RegulatoryAuthorityLevel[]> {
+    const { body } = await this.get<{ levels: RegulatoryAuthorityLevel[] }>(
+      "/v1/regulatory/authority-levels",
+    );
+    return body.levels ?? [];
+  }
+
+  async createRegulatoryAuthorityLevel(
+    req: Omit<RegulatoryAuthorityLevel, "id" | "org_id" | "created_at">,
+  ): Promise<RegulatoryAuthorityLevel> {
+    const { body } = await this.post<RegulatoryAuthorityLevel>(
+      "/v1/regulatory/authority-levels",
+      req,
+    );
+    return body;
+  }
+
+  async listRegulatoryEscalations(
+    params?: { status?: RegulatoryEscalationStatus; subject_type?: string; subject_id?: string },
+  ): Promise<RegulatoryEscalation[]> {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.subject_type) qs.set("subject_type", params.subject_type);
+    if (params?.subject_id) qs.set("subject_id", params.subject_id);
+    const { body } = await this.get<{ escalations: RegulatoryEscalation[] }>(
+      "/v1/regulatory/escalations",
+      qs,
+    );
+    return body.escalations ?? [];
+  }
+
+  async createRegulatoryEscalation(
+    req: CreateRegulatoryEscalationRequest,
+  ): Promise<RegulatoryEscalation> {
+    const { body } = await this.post<RegulatoryEscalation>(
+      "/v1/regulatory/escalations",
+      req,
+    );
+    return body;
+  }
+
+  async acknowledgeRegulatoryEscalation(id: string): Promise<RegulatoryEscalation> {
+    const { body } = await this.post<RegulatoryEscalation>(
+      `/v1/regulatory/escalations/${encodeURIComponent(id)}/acknowledge`,
+      {},
+    );
+    return body;
+  }
+
+  async resolveRegulatoryEscalation(
+    id: string,
+    resolution: string,
+    resolution_details?: Record<string, unknown>,
+  ): Promise<RegulatoryEscalation> {
+    const { body } = await this.post<RegulatoryEscalation>(
+      `/v1/regulatory/escalations/${encodeURIComponent(id)}/resolve`,
+      { resolution, resolution_details },
+    );
+    return body;
+  }
+
+  async overrideRegulatoryEscalation(
+    id: string,
+    reason: string,
+  ): Promise<RegulatoryEscalation> {
+    const { body } = await this.post<RegulatoryEscalation>(
+      `/v1/regulatory/escalations/${encodeURIComponent(id)}/override`,
+      { reason },
+    );
+    return body;
+  }
+
+  // ── Incentive Signal Feedback Loop ────────────────────────────────────────
+
+  async listSignalActions(signal_id: string): Promise<GovernanceSignalAction[]> {
+    const { body } = await this.get<{ actions: GovernanceSignalAction[] }>(
+      `/v1/governance/signals/${encodeURIComponent(signal_id)}/actions`,
+    );
+    return body.actions ?? [];
+  }
+
+  async recordSignalAction(
+    signal_id: string,
+    req: RecordSignalActionRequest,
+  ): Promise<GovernanceSignalAction> {
+    const { body } = await this.post<GovernanceSignalAction>(
+      `/v1/governance/signals/${encodeURIComponent(signal_id)}/actions`,
+      req,
+    );
+    return body;
+  }
+
+  async recordSignalOutcome(
+    signal_id: string,
+    action_id: string,
+    req: RecordSignalOutcomeRequest,
+  ): Promise<GovernanceSignalAction> {
+    const { body } = await this.post<GovernanceSignalAction>(
+      `/v1/governance/signals/${encodeURIComponent(signal_id)}/actions/${encodeURIComponent(action_id)}/outcome`,
+      req,
+    );
+    return body;
+  }
+
+  async getSignalActionSummary(): Promise<SignalActionSummary> {
+    const { body } = await this.get<SignalActionSummary>(
+      "/v1/governance/signals/actions/summary",
+    );
+    return body;
+  }
+
+  // ── Cross-Org Impersonation ───────────────────────────────────────────────
+
+  async listImpersonationGrants(): Promise<CrossOrgImpersonationGrant[]> {
+    const { body } = await this.get<{ grants: CrossOrgImpersonationGrant[] }>(
+      "/v1/cross-org/impersonation/grants",
+    );
+    return body.grants ?? [];
+  }
+
+  async createImpersonationGrant(
+    req: CreateImpersonationGrantRequest,
+  ): Promise<CrossOrgImpersonationGrant> {
+    const { body } = await this.post<CrossOrgImpersonationGrant>(
+      "/v1/cross-org/impersonation/grants",
+      req,
+    );
+    return body;
+  }
+
+  async revokeImpersonationGrant(id: string): Promise<void> {
+    await this.post<Record<string, unknown>>(
+      `/v1/cross-org/impersonation/grants/${encodeURIComponent(id)}/revoke`,
+      {},
+    );
+  }
+
+  async issueImpersonationToken(
+    grant_id: string,
+    requested_duration_seconds?: number,
+  ): Promise<ImpersonationToken> {
+    const { body } = await this.post<ImpersonationToken>(
+      `/v1/cross-org/impersonation/grants/${encodeURIComponent(grant_id)}/token`,
+      { requested_duration_seconds },
+    );
+    return body;
+  }
+
+  async validateImpersonationToken(
+    token: string,
+  ): Promise<ImpersonationValidationResult> {
+    const { body } = await this.post<ImpersonationValidationResult>(
+      "/v1/cross-org/impersonation/validate",
+      { token },
+    );
+    return body;
   }
 }
 
