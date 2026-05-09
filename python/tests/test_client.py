@@ -697,6 +697,20 @@ class TestSyncRetryPaths:
         assert "key is read-only" in str(exc_info.value)
         assert exc_info.value.code == "forbidden"
 
+    def test_403_prefers_error_field_over_message(self, client, mocker):
+        # Phase 4 ErrorEnvelope: body.error is canonical and must win
+        # over the legacy `message` / `reason` keys.
+        resp = _mock_resp(mocker, status_code=403)
+        resp.json.return_value = {
+            "error": "phi_scope_required",
+            "message": "fallback should not appear",
+        }
+        mocker.patch.object(client._client, "post", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.evaluate("a", "b")
+        assert "phi_scope_required" in str(exc_info.value)
+        assert "fallback should not appear" not in str(exc_info.value)
+
     def test_401_with_non_json_body_uses_default_message(self, client, mocker):
         resp = _mock_resp(mocker, status_code=401)
         resp.json.side_effect = ValueError("not json")

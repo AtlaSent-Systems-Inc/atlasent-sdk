@@ -853,3 +853,117 @@ StreamEvent = Annotated[
     StreamDecisionEvent | StreamProgressEvent,
     Field(discriminator="type"),
 ]
+
+
+# ── Phase 7 typed models (provisional) ────────────────────────────────────────
+#
+# These shapes are SDK-side projections of cross-endpoint concepts:
+#   - GovernanceDecision: a uniform decision envelope across
+#     /v1-evaluate, governance webhooks, and enforcement helpers.
+#   - AuthError: the Phase 4 ErrorEnvelope (`{error, code?, message?,
+#     request_id?, status?}`) parsed off any 4xx/5xx response.
+#   - EnforcementOutcome: the result of running a governance gate
+#     against a decision (raised? passed-through? logged-only?).
+#
+# Wire contract for the error envelope is being finalized in
+# atlasent-api (Phase 4 ErrorEnvelope, see PR #563). Until that lands
+# in production the SDK keeps the legacy fallback chain
+# (`error → message → reason`) in `_server_message`. Don't pin
+# downstream code to these classes until `python-v2.4.0` is tagged.
+
+
+class GovernanceDecision(BaseModel):
+    """Uniform decision envelope across evaluate / webhook / enforcement.
+
+    Mirrors the canonical fields the API emits on /v1-evaluate, plus
+    `policy_id` and `evaluated_at` which governance webhooks include
+    for deep-linking back to the audit trail.
+    """
+
+    decision: Literal["allow", "deny", "hold", "escalate"]
+    reason: str | None = None
+    code: str | None = None
+    policy_id: str | None = None
+    request_id: str | None = None
+    evaluated_at: str | None = None
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    @classmethod
+    def from_wire(cls, data: dict[str, Any]) -> GovernanceDecision:
+        denial = data.get("denial") or {}
+        return cls(
+            decision=data.get("decision", "deny"),
+            reason=data.get("reason") or denial.get("reason"),
+            code=data.get("code") or denial.get("code"),
+            policy_id=data.get("policy_id"),
+            request_id=data.get("request_id"),
+            evaluated_at=data.get("evaluated_at") or data.get("timestamp"),
+        )
+
+
+class AuthError(BaseModel):
+    """Parsed Phase 4 ErrorEnvelope.
+
+    `error` is the canonical machine-readable identifier (e.g.
+    ``"phi_scope_required"``). `message` is the human-readable string
+    on legacy responses. `code` is a server-emitted slug; SDKs surface
+    it via :class:`atlasent.exceptions.AtlaSentError.code` already.
+    """
+
+    error: str
+    message: str | None = None
+    code: str | None = None
+    request_id: str | None = None
+    status: int | None = None
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    @classmethod
+    def from_body(
+        cls,
+        body: dict[str, Any] | None,
+        *,
+        status: int | None = None,
+        request_id: str | None = None,
+    ) -> AuthError | None:
+        if not isinstance(body, dict):
+            return None
+        err = body.get("error")
+        msg = body.get("message") or body.get("reason")
+        if not isinstance(err, str) or not err:
+            # No canonical error; synthesize from message if we have one,
+            # otherwise this isn't an envelope we can type.
+            if not isinstance(msg, str) or not msg:
+                return None
+            err = msg
+        return cls(
+            error=err,
+            message=msg if isinstance(msg, str) else None,
+            code=body.get("code") if isinstance(body.get("code"), str) else None,
+            request_id=request_id or body.get("request_id"),
+            status=status,
+        )
+
+
+class EnforcementOutcome(BaseModel):
+    """Result of a governance enforcement check.
+
+    Emitted by helpers in :mod:`atlasent.governance.enforcement` when
+    a decision is gated through the enforcement layer. ``enforced``
+    indicates whether the helper would raise (or did raise, depending
+    on the call site); ``enforcement_action`` records what was done.
+    """
+
+    enforced: bool
+    decision: Literal["allow", "deny", "hold", "escalate"]
+    permit_token: str | None = None
+    expires_at: str | None = None
+    outcome: Literal["allow", "deny"] | None = None
+    enforcement_action: Literal[
+        "raised", "logged_only", "passthrough", "skipped"
+    ] | None = None
+    reason: str | None = None
+    code: str | None = None
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)

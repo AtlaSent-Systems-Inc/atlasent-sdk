@@ -11,9 +11,12 @@ response.
 import warnings
 
 from atlasent.models import (
+    AuthError,
+    EnforcementOutcome,
     EvaluateRequest,
     EvaluateResult,
     GateResult,
+    GovernanceDecision,
     VerifyRequest,
     VerifyResult,
 )
@@ -208,3 +211,81 @@ class TestNoExtraneousWarnings:
             VerifyRequest(permit_token="t", action_type="x", actor_id="y")
         deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
         assert deprecations == []
+
+
+class TestGovernanceDecision:
+    def test_from_wire_canonical_shape(self):
+        d = GovernanceDecision.from_wire(
+            {
+                "decision": "deny",
+                "reason": "outside_change_window",
+                "code": "change_window",
+                "policy_id": "pol_42",
+                "request_id": "req_abc",
+                "evaluated_at": "2026-05-09T10:00:00Z",
+            }
+        )
+        assert d.decision == "deny"
+        assert d.code == "change_window"
+        assert d.policy_id == "pol_42"
+        assert d.evaluated_at == "2026-05-09T10:00:00Z"
+
+    def test_from_wire_lifts_denial_substruct(self):
+        # /v1-evaluate emits {decision: "deny", denial: {reason, code}}
+        # — GovernanceDecision flattens that for downstream consumers.
+        d = GovernanceDecision.from_wire(
+            {"decision": "deny", "denial": {"reason": "no_quorum", "code": "qrm"}}
+        )
+        assert d.reason == "no_quorum"
+        assert d.code == "qrm"
+
+    def test_from_wire_defaults_to_deny_on_missing_decision(self):
+        d = GovernanceDecision.from_wire({})
+        assert d.decision == "deny"
+
+
+class TestAuthError:
+    def test_from_body_prefers_error_field(self):
+        err = AuthError.from_body(
+            {"error": "phi_scope_required", "message": "key lacks phi:read"},
+            status=403,
+            request_id="req_xyz",
+        )
+        assert err is not None
+        assert err.error == "phi_scope_required"
+        assert err.message == "key lacks phi:read"
+        assert err.status == 403
+        assert err.request_id == "req_xyz"
+
+    def test_from_body_synthesizes_error_from_message(self):
+        # Older servers without the Phase 4 envelope still produce a
+        # usable AuthError so callers can rely on `.error` being set.
+        err = AuthError.from_body({"message": "rate limit exceeded"}, status=429)
+        assert err is not None
+        assert err.error == "rate limit exceeded"
+        assert err.status == 429
+
+    def test_from_body_returns_none_for_empty_envelope(self):
+        assert AuthError.from_body({}) is None
+        assert AuthError.from_body(None) is None
+        assert AuthError.from_body("not a dict") is None  # type: ignore[arg-type]
+
+
+class TestEnforcementOutcome:
+    def test_construct_minimal(self):
+        out = EnforcementOutcome(enforced=False, decision="allow")
+        assert out.enforced is False
+        assert out.decision == "allow"
+        assert out.enforcement_action is None
+
+    def test_construct_with_enforcement(self):
+        out = EnforcementOutcome(
+            enforced=True,
+            decision="deny",
+            enforcement_action="raised",
+            reason="quorum_failed",
+            code="qrm",
+        )
+        assert out.enforced is True
+        assert out.enforcement_action == "raised"
+        assert out.reason == "quorum_failed"

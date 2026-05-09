@@ -1423,13 +1423,18 @@ class AtlaSentClient:
 
 
 def _server_message(response: httpx.Response) -> str | None:
-    """Return `message` / `reason` from a JSON error body, if present."""
+    """Return the error string from a JSON error body, if present.
+
+    See :func:`atlasent.async_client._server_message`. Reads
+    ``body.error`` first (Phase 4 ErrorEnvelope), then falls back to
+    ``message`` / ``reason``.
+    """
     try:
         body = response.json()
     except ValueError:
         return None
     if isinstance(body, dict):
-        for key in ("message", "reason"):
+        for key in ("error", "message", "reason"):
             value = body.get(key)
             if isinstance(value, str) and value:
                 return value
