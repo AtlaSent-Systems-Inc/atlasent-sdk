@@ -72,5 +72,10 @@ Sign up at [atlasent.io](https://atlasent.io) → Settings → API Keys.
 
 ## License
 
-- Python SDK: [MIT](./python/LICENSE)
-- TypeScript SDK: [Apache-2.0](./typescript/LICENSE)
+Licensed under the [Apache License, Version 2.0](./LICENSE). See [NOTICE](./NOTICE) for attribution.
+
+Copyright (c) AtlaSent IP Holdings LLC
+
+Commercial licensing inquiries: [legal@atlasent.io](mailto:legal@atlasent.io)
+
+> Note: subpackage manifests under `python/` and `typescript/` may still carry their previous license metadata. Future releases will publish under Apache-2.0; already-published tarballs cannot be retroactively relicensed.
