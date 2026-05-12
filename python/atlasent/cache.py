@@ -1,7 +1,13 @@
-"""In-memory TTL cache for authorization decisions.
+"""In-memory TTL cache for org metadata and static configuration lookups.
 
-Avoids redundant API calls when the same (action_type, actor_id, context)
-tuple is evaluated repeatedly within a short window.
+.. warning::
+    Do **not** pass an instance of this cache to :class:`AtlaSentClient`
+    for caching :meth:`~AtlaSentClient.evaluate` or
+    :meth:`~AtlaSentClient.protect` results.  Authorization decisions
+    must be re-evaluated live on every request — a cached "allow" can
+    replay after a permission is revoked or a policy changes, violating
+    the fail-closed contract.  This class is safe only for immutable or
+    slowly-changing data such as org metadata or plan-tier config.
 
 Usage::
 
@@ -27,6 +33,14 @@ class TTLCache:
         ttl: Time-to-live in seconds for cached entries. Defaults to 30.
         max_size: Maximum number of entries. Oldest are evicted when full.
             Defaults to 1024.
+
+    .. warning::
+        Do **not** use this cache for :meth:`~AtlaSentClient.evaluate` or
+        :meth:`~AtlaSentClient.protect` results.  Authorization decisions
+        must be evaluated live on every request — caching can replay an
+        "allow" after a permission is revoked or a policy changes.  Only
+        use this class for org metadata, plan-tier config, or other
+        slowly-changing, non-security-critical lookups.
     """
 
     def __init__(self, ttl: float = 30, max_size: int = 1024) -> None:
