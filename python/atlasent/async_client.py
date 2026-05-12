@@ -20,7 +20,9 @@ from .audit import AuditEventsResult, AuditExportResult
 from .client import (
     _enforce_tls,
     _parse_rate_limit_headers,
+    _parse_retry_after,
     _redact_token,
+    _server_message,
     _validate_api_key,
 )
 from .exceptions import (
@@ -121,7 +123,7 @@ class AsyncAtlaSentClient:
             timeout=self._timeout,
         )
 
-    # ── public API ────────────────────────────────────────────────
+    # ── public API ────────────────────────────────────────────
 
     async def evaluate(
         self,
@@ -394,7 +396,12 @@ class AsyncAtlaSentClient:
                 audit_hash=audit_hash,
             ) from None
 
-        verify_result = await self.verify(eval_result.permit_token, action, agent, ctx)
+        # Suppress the DeprecationWarning from the public verify() method:
+        # protect() is the canonical API and should not surface deprecation
+        # noise from its own internal implementation.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            verify_result = await self.verify(eval_result.permit_token, action, agent, ctx)
 
         if not verify_result.valid:
             raise AtlaSentDeniedError(
@@ -633,7 +640,7 @@ class AsyncAtlaSentClient:
             raw=eval_result.model_dump(by_alias=True),
         )
 
-    # ── lifecycle ─────────────────────────────────────────────────
+    # ── lifecycle ─────────────────────────────────────────────
 
     async def close(self) -> None:
         """Close the underlying HTTP client and release resources."""
@@ -727,7 +734,7 @@ class AsyncAtlaSentClient:
         result.rate_limit = rate_limit
         return result
 
-    # ── Canonical REST surface (parity with sync client) ──────────
+    # ── Canonical REST surface (parity with sync client) ───────────
 
     async def get_permit(self, permit_id: str) -> GetPermitResult:
         """Get a single permit's full lifecycle state
@@ -944,7 +951,7 @@ class AsyncAtlaSentClient:
 
         return AuditExportResult(bundle=data, rate_limit=rate_limit)
 
-    # ── internals ─────────────────────────────────────────────────
+    # ── internals ─────────────────────────────────────────────
 
     async def _post(
         self,
@@ -1123,57 +1130,7 @@ class AsyncAtlaSentClient:
         await asyncio.sleep(delay)
 
 
-def _server_message(response: httpx.Response) -> str | None:
-    """Return the error string from a JSON error body, if present.
-
-    Reads ``body.error`` first (the canonical Phase 4 ErrorEnvelope
-    field — see atlasent-api `supabase/functions/_shared/errors.ts`),
-    then falls back to ``message`` / ``reason`` for older servers and
-    permit-side responses that haven't migrated yet.
-    """
-    try:
-        body = response.json()
-    except ValueError:
-        return None
-    if isinstance(body, dict):
-        for key in ("error", "message", "reason"):
-            value = body.get(key)
-            if isinstance(value, str) and value:
-                return value
-    return None
-
-
-def _parse_retry_after(response: httpx.Response) -> float | None:
-    """Parse a ``Retry-After`` header per RFC 9110 §10.2.3.
-
-    Accepts both forms:
-    - ``delta-seconds`` — ``"30"`` → ``30.0``
-    - ``HTTP-date``      — ``"Wed, 21 Oct 2026 07:28:00 GMT"`` →
-      non-negative seconds remaining until that instant.
-
-    Returns ``None`` if the header is absent or unparseable. An
-    HTTP-date in the past is clamped to ``0.0`` so retry-pacing code
-    still backs off consistently rather than silently skipping the
-    header.
-    """
-    value = response.headers.get("retry-after")
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        pass
-    try:
-        parsed = parsedate_to_datetime(value)
-    except (ValueError, TypeError):
-        return None
-    if parsed.tzinfo is None:  # pragma: no cover
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    delta = (parsed - datetime.now(timezone.utc)).total_seconds()
-    return max(0.0, delta)
-
-
-# ── SSE parser ────────────────────────────────────────────────────────────────
+# ── SSE parser ─────────────────────────────────────────────────────────────────────────────────
 
 
 async def _parse_sse(
