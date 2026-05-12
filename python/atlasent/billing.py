@@ -33,13 +33,13 @@ import hashlib
 import hmac
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 import httpx
 from pydantic import BaseModel, Field, model_validator
 
 
-# ─── Enumerations ───────────────────────────────────────────────────────────────────────────────────────
+# ─── Enumerations ──────────────────────────────────────────────────────────────────────────────────────
 
 class AccessStatus(str, Enum):
     active     = "active"
@@ -94,19 +94,19 @@ class BillingEntitlement(BaseModel):
     org_id:                  str
     access_status:           AccessStatus
     effective_status:        AccessStatus
-    allowed_actions:         List[AllowedAction] = Field(default_factory=list)
-    deny_reason:             Optional[DenyReason] = None
-    warning:                 Optional[str] = None
-    grace_until:             Optional[datetime] = None
+    allowed_actions:         list[AllowedAction] = Field(default_factory=list)
+    deny_reason:             DenyReason | None = None
+    warning:                 str | None = None
+    grace_until:             datetime | None = None
     billing_mode:            str = "self_serve"
     plan:                    str = "free"
     invoice_status:          str = "none"
     manual_override:         bool = False
-    manual_override_status:  Optional[str] = None
-    manual_override_reason:  Optional[str] = None
+    manual_override_status:  str | None = None
+    manual_override_reason:  str | None = None
     computed_at:             datetime
 
-    def has_action(self, action: "str | AllowedAction") -> bool:
+    def has_action(self, action: str | AllowedAction) -> bool:
         """Return True if the given action is permitted under current entitlement."""
         try:
             key = action if isinstance(action, AllowedAction) else AllowedAction(action)
@@ -122,7 +122,7 @@ class BillingEntitlement(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _coerce_allowed_actions(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def _coerce_allowed_actions(cls, values: dict[str, Any]) -> dict[str, Any]:
         actions = values.get("allowed_actions", [])
         coerced = []
         for a in actions:
@@ -138,20 +138,20 @@ class AdminOverrideRequest(BaseModel):
     """Body for POST /v1/billing/admin-override."""
 
     org_id:     str
-    status:     Optional[Literal["active", "grace", "restricted", "suspended"]] = None
+    status:     Literal["active", "grace", "restricted", "suspended"] | None = None
     reason:     str = ""
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
 
 class AdminOverrideResponse(BaseModel):
     """Response from POST /v1/billing/admin-override."""
 
     org_id:              str
-    new_status:          Optional[str] = None
+    new_status:          str | None = None
     override_active:     bool = False
-    override_status:     Optional[str] = None
-    override_reason:     Optional[str] = None
-    override_expires_at: Optional[datetime] = None
+    override_status:     str | None = None
+    override_reason:     str | None = None
+    override_expires_at: datetime | None = None
 
 
 class BillingWebhookSubscription(BaseModel):
@@ -160,14 +160,14 @@ class BillingWebhookSubscription(BaseModel):
     id:         str
     org_id:     str
     url:        str
-    events:     List[str]
+    events:     list[str]
     active:     bool = True
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    secret:     Optional[str] = None  # only present on initial creation response
+    updated_at: datetime | None = None
+    secret:     str | None = None  # only present on initial creation response
 
 
-# ─── Signature verification ─────────────────────────────────────────────────────────────────────────
+# ─── Signature verification ──────────────────────────────────────────────────────────────────────
 
 def verify_billing_webhook_signature(
     payload: bytes,
@@ -196,18 +196,18 @@ class BillingClient:
     Convenience wrapper for the AtlaSent billing entitlement API (sync).
 
     Requires an ``atlasent.AtlaSentClient`` (or compatible) instance that
-    exposes ``._http`` (``httpx.Client``) and ``._base_url`` (str).
+    exposes ``._client`` (``httpx.Client``) and ``._base_url`` (str).
     """
 
     def __init__(self, client: Any) -> None:
         self._client = client
 
-    def get_entitlement(self, org_id: Optional[str] = None) -> BillingEntitlement:
+    def get_entitlement(self, org_id: str | None = None) -> BillingEntitlement:
         """Fetch billing entitlement for the authenticated org."""
-        params: Dict[str, str] = {}
+        params: dict[str, str] = {}
         if org_id:
             params["org_id"] = org_id
-        resp: httpx.Response = self._client._http.get(
+        resp: httpx.Response = self._client._client.get(
             f"{self._client._base_url}/v1/billing/entitlement",
             params=params,
         )
@@ -216,7 +216,7 @@ class BillingClient:
 
     def set_override(self, request: AdminOverrideRequest) -> AdminOverrideResponse:
         """Apply or clear a manual billing override (org_owner / super_admin)."""
-        resp: httpx.Response = self._client._http.post(
+        resp: httpx.Response = self._client._client.post(
             f"{self._client._base_url}/v1/billing/admin-override",
             json=request.model_dump(mode="json", exclude_none=True),
         )
@@ -232,13 +232,13 @@ class BillingClient:
         )
 
     def list_webhook_subscriptions(
-        self, org_id: Optional[str] = None
-    ) -> List[BillingWebhookSubscription]:
+        self, org_id: str | None = None
+    ) -> list[BillingWebhookSubscription]:
         """List billing webhook subscriptions for the authenticated org."""
-        params: Dict[str, str] = {}
+        params: dict[str, str] = {}
         if org_id:
             params["org_id"] = org_id
-        resp: httpx.Response = self._client._http.get(
+        resp: httpx.Response = self._client._client.get(
             f"{self._client._base_url}/v1/billing/webhooks",
             params=params,
         )
@@ -251,8 +251,8 @@ class BillingClient:
     def create_webhook_subscription(
         self,
         url: str,
-        events: List[str],
-        org_id: Optional[str] = None,
+        events: list[str],
+        org_id: str | None = None,
     ) -> BillingWebhookSubscription:
         """Subscribe an endpoint to one or more billing events.
 
@@ -261,10 +261,10 @@ class BillingClient:
         :param org_id: Override the authenticated org (super-admin only).
         :returns:      The created subscription, including the one-time ``secret``.
         """
-        body: Dict[str, Any] = {"url": url, "events": events}
+        body: dict[str, Any] = {"url": url, "events": events}
         if org_id:
             body["org_id"] = org_id
-        resp: httpx.Response = self._client._http.post(
+        resp: httpx.Response = self._client._client.post(
             f"{self._client._base_url}/v1/billing/webhooks",
             json=body,
         )
@@ -273,7 +273,7 @@ class BillingClient:
 
     def delete_webhook_subscription(self, subscription_id: str) -> None:
         """Delete a billing webhook subscription by ID."""
-        resp: httpx.Response = self._client._http.delete(
+        resp: httpx.Response = self._client._client.delete(
             f"{self._client._base_url}/v1/billing/webhooks/{subscription_id}",
         )
         resp.raise_for_status()
@@ -286,7 +286,7 @@ class AsyncBillingClient:
     Async variant of :class:`BillingClient` for use with ``AsyncAtlaSentClient``.
 
     Requires an ``atlasent.AsyncAtlaSentClient`` (or compatible) instance that
-    exposes ``._async_http`` (``httpx.AsyncClient``) and ``._base_url`` (str).
+    exposes ``._client`` (``httpx.AsyncClient``) and ``._base_url`` (str).
 
     Example::
 
@@ -304,12 +304,12 @@ class AsyncBillingClient:
     def __init__(self, client: Any) -> None:
         self._client = client
 
-    async def get_entitlement(self, org_id: Optional[str] = None) -> BillingEntitlement:
+    async def get_entitlement(self, org_id: str | None = None) -> BillingEntitlement:
         """Fetch billing entitlement for the authenticated org (async)."""
-        params: Dict[str, str] = {}
+        params: dict[str, str] = {}
         if org_id:
             params["org_id"] = org_id
-        resp: httpx.Response = await self._client._async_http.get(
+        resp: httpx.Response = await self._client._client.get(
             f"{self._client._base_url}/v1/billing/entitlement",
             params=params,
         )
@@ -318,7 +318,7 @@ class AsyncBillingClient:
 
     async def set_override(self, request: AdminOverrideRequest) -> AdminOverrideResponse:
         """Apply or clear a manual billing override (async)."""
-        resp: httpx.Response = await self._client._async_http.post(
+        resp: httpx.Response = await self._client._client.post(
             f"{self._client._base_url}/v1/billing/admin-override",
             json=request.model_dump(mode="json", exclude_none=True),
         )
@@ -334,13 +334,13 @@ class AsyncBillingClient:
         )
 
     async def list_webhook_subscriptions(
-        self, org_id: Optional[str] = None
-    ) -> List[BillingWebhookSubscription]:
+        self, org_id: str | None = None
+    ) -> list[BillingWebhookSubscription]:
         """List billing webhook subscriptions (async)."""
-        params: Dict[str, str] = {}
+        params: dict[str, str] = {}
         if org_id:
             params["org_id"] = org_id
-        resp: httpx.Response = await self._client._async_http.get(
+        resp: httpx.Response = await self._client._client.get(
             f"{self._client._base_url}/v1/billing/webhooks",
             params=params,
         )
@@ -353,14 +353,14 @@ class AsyncBillingClient:
     async def create_webhook_subscription(
         self,
         url: str,
-        events: List[str],
-        org_id: Optional[str] = None,
+        events: list[str],
+        org_id: str | None = None,
     ) -> BillingWebhookSubscription:
         """Subscribe an endpoint to one or more billing events (async)."""
-        body: Dict[str, Any] = {"url": url, "events": events}
+        body: dict[str, Any] = {"url": url, "events": events}
         if org_id:
             body["org_id"] = org_id
-        resp: httpx.Response = await self._client._async_http.post(
+        resp: httpx.Response = await self._client._client.post(
             f"{self._client._base_url}/v1/billing/webhooks",
             json=body,
         )
@@ -369,7 +369,7 @@ class AsyncBillingClient:
 
     async def delete_webhook_subscription(self, subscription_id: str) -> None:
         """Delete a billing webhook subscription by ID (async)."""
-        resp: httpx.Response = await self._client._async_http.delete(
+        resp: httpx.Response = await self._client._client.delete(
             f"{self._client._base_url}/v1/billing/webhooks/{subscription_id}",
         )
         resp.raise_for_status()
