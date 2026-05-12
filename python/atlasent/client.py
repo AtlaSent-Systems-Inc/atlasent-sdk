@@ -543,7 +543,9 @@ class AtlaSentClient:
                 audit_hash=audit_hash,
             ) from None
 
-        verify_result = self.verify(eval_result.permit_token, action, agent, ctx)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            verify_result = self.verify(eval_result.permit_token, action, agent, ctx)
 
         if not verify_result.valid:
             raise AtlaSentDeniedError(
