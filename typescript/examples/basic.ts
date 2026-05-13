@@ -25,8 +25,10 @@ const result = await client.evaluate({
   },
 });
 
-if (result.decision === "ALLOW") {
-  console.log(`ALLOW permitId=${result.permitId} auditHash=${result.auditHash}`);
+if (result.decision === "allow") {
+  console.log(
+    `ALLOW permitId=${result.permitId} auditHash=${result.auditHash}`,
+  );
   // execute the action here
 } else {
   console.log(`DENY reason="${result.reason}" permitId=${result.permitId}`);

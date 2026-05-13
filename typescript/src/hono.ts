@@ -11,7 +11,7 @@
  * app.post(
  *   "/deploy",
  *   atlaSentGuard({
- *     action: "deploy_to_production",
+ *     action: "deployment.production",
  *     agent: (c) => c.req.header("x-agent-id") ?? "anonymous",
  *     context: async (c) => ({ commit: (await c.req.json()).commit }),
  *   }),
@@ -41,10 +41,7 @@
 
 import type { Context, ErrorHandler, MiddlewareHandler } from "hono";
 
-import {
-  AtlaSentDeniedError,
-  AtlaSentError,
-} from "./errors.js";
+import { AtlaSentDeniedError, AtlaSentError } from "./errors.js";
 import { protect, type Permit, type ProtectRequest } from "./protect.js";
 
 /** Resolver: a literal string, or a function deriving one from the request. */
@@ -55,7 +52,7 @@ type Resolver<T extends string | Record<string, unknown>> =
 /** Options for {@link atlaSentGuard}. */
 export interface AtlaSentGuardOptions {
   /**
-   * Action being authorized (e.g. `"deploy_to_production"`). A string
+   * Action being authorized (e.g. `"deployment.production"`). A string
    * fixes the action; a function lets you derive it per-request (e.g.
    * from route params or the HTTP verb).
    */
@@ -70,7 +67,9 @@ export interface AtlaSentGuardOptions {
    * Receives the Hono context so you can reach into headers, body,
    * route params, or previously-set middleware values.
    */
-  context?: (c: Context) => Record<string, unknown> | Promise<Record<string, unknown>>;
+  context?: (
+    c: Context,
+  ) => Record<string, unknown> | Promise<Record<string, unknown>>;
   /**
    * Key used to stash the resulting {@link Permit} on the Hono
    * context via `c.set(...)`. Callers read it back with

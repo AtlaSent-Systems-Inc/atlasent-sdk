@@ -62,6 +62,41 @@ export interface RateLimitState {
   resetAt: Date;
 }
 
+/** Canonical Deploy Gate V1 protected action. */
+export const DEPLOYMENT_PRODUCTION_ACTION = "deployment.production" as const;
+
+/** Input to {@link AtlaSentClient.deployGate}. */
+export interface DeployGateRequest {
+  /** CI/repo actor performing the deployment. Defaults to `ci-deploy-bot`. */
+  agent?: string;
+  /** Protected action. Defaults to `deployment.production`. */
+  action?: typeof DEPLOYMENT_PRODUCTION_ACTION | string;
+  /** Deployment evidence context: repo, commit, run id, approver, etc. */
+  context?: Record<string, unknown>;
+}
+
+/** Evidence metadata returned by {@link AtlaSentClient.deployGate}. */
+export interface DeployGateEvidence {
+  permitId?: string;
+  permitHash?: string;
+  auditHash?: string;
+  verifiedAt?: string;
+}
+
+/** Result of the canonical Deploy Gate V1 flow. */
+export interface DeployGateResponse {
+  /** True only after evaluate allowed AND `/v1-verify-permit` verified server-side. */
+  allowed: boolean;
+  /** Evaluation response from `POST /v1-evaluate`, when available. */
+  evaluation?: EvaluateResponse;
+  /** Verification response from `POST /v1-verify-permit`, when evaluation allowed. */
+  verification?: VerifyPermitResponse;
+  /** Human-readable block/allow reason. */
+  reason: string;
+  /** Best-effort audit/evidence metadata available to the SDK. */
+  evidence: DeployGateEvidence;
+}
+
 /** Input to {@link AtlaSentClient.evaluate}. */
 export interface EvaluateRequest {
   /** Identifier of the calling agent (e.g. "clinical-data-agent"). */
@@ -361,7 +396,7 @@ export interface VerifyPermitByIdResponse {
   /** `true` iff the permit verified — i.e. unconsumed, unexpired, and signature OK. */
   valid: boolean;
   /** Always `'permit'` on this surface. */
-  verification_type: 'permit';
+  verification_type: "permit";
   /** Operator-readable explanation when `valid` is `false`; `null` on success. */
   reason: string | null;
   /** Server clock at the moment verification ran. */

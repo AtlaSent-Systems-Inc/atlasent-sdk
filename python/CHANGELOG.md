@@ -577,7 +577,7 @@ but previously ignored by the SDK.
 
       permit = protect(
           agent="deploy-bot",
-          action="deploy_to_production",
+          action="deployment.production",
           context={"commit": commit, "approver": approver},
       )
       # …execute the action. If we got here, AtlaSent authorized it.

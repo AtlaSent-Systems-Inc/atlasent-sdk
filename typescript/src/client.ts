@@ -22,6 +22,7 @@ import {
   type AtlaSentErrorCode,
   type AtlaSentErrorInit,
 } from "./errors.js";
+import { DEPLOYMENT_PRODUCTION_ACTION } from "./types.js";
 import type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
@@ -29,6 +30,9 @@ import type {
   AuditExportRequest,
   AuditExportResult,
   ConstraintTrace,
+  DeployGateEvidence,
+  DeployGateRequest,
+  DeployGateResponse,
   EvaluatePreflightResponse,
   EvaluateRequest,
   EvaluateResponse,
@@ -154,7 +158,9 @@ function _buildUserAgent(): string {
 // raising, so production traffic isn't broken on the day this ships.
 const CONTEXT_PROPERTIES_SOFT_CAP = 64;
 
-function _warnOversizeContext(context: Record<string, unknown> | undefined): void {
+function _warnOversizeContext(
+  context: Record<string, unknown> | undefined,
+): void {
   if (context && Object.keys(context).length > CONTEXT_PROPERTIES_SOFT_CAP) {
     // eslint-disable-next-line no-console
     console.warn(
@@ -280,6 +286,20 @@ interface EvaluateWire {
   timestamp?: string;
 }
 
+function deployGateEvidence(input: {
+  permitId?: string;
+  permitHash?: string;
+  auditHash?: string;
+  verifiedAt?: string;
+}): DeployGateEvidence {
+  const evidence: DeployGateEvidence = {};
+  if (input.permitId) evidence.permitId = input.permitId;
+  if (input.permitHash) evidence.permitHash = input.permitHash;
+  if (input.auditHash) evidence.auditHash = input.auditHash;
+  if (input.verifiedAt) evidence.verifiedAt = input.verifiedAt;
+  return evidence;
+}
+
 /** Raw JSON shape received from `GET /v1-api-key-self`. */
 interface ApiKeySelfWire {
   key_id: string;
@@ -378,14 +398,19 @@ export class AtlaSentClient {
       actor_id: normalized.actor_id,
       context: normalized.context ?? {},
     };
-    const { body: wire, rateLimit } = await this.post<EvaluateWire>("/v1-evaluate", body);
+    const { body: wire, rateLimit } = await this.post<EvaluateWire>(
+      "/v1-evaluate",
+      body,
+    );
 
     // Normalise decision to lowercase canonical form. API responses may
     // arrive as uppercase (legacy deployments) or lowercase (canonical);
     // we always emit lowercase so callers can rely on a stable vocabulary.
-    let decision = (typeof wire.decision === "string"
-      ? wire.decision.toLowerCase()
-      : wire.decision) as EvaluateWire["decision"] | undefined;
+    let decision = (
+      typeof wire.decision === "string"
+        ? wire.decision.toLowerCase()
+        : wire.decision
+    ) as EvaluateWire["decision"] | undefined;
 
     // Tolerate both canonical {decision, permit_token} and legacy
     // {permitted, decision_id} server responses.
@@ -394,13 +419,21 @@ export class AtlaSentClient {
     }
     const permitToken = wire.permit_token ?? wire.decision_id;
 
-    if (decision !== "allow" && decision !== "deny" && decision !== "hold" && decision !== "escalate") {
+    if (
+      decision !== "allow" &&
+      decision !== "deny" &&
+      decision !== "hold" &&
+      decision !== "escalate"
+    ) {
       throw new AtlaSentError(
         "Malformed response from /v1-evaluate: missing `decision` (or legacy `permitted`)",
         { code: "bad_response" },
       );
     }
-    if (decision === "allow" && (typeof permitToken !== "string" || permitToken.length === 0)) {
+    if (
+      decision === "allow" &&
+      (typeof permitToken !== "string" || permitToken.length === 0)
+    ) {
       throw new AtlaSentError(
         "Malformed response from /v1-evaluate: decision='allow' but no `permit_token` (or legacy `decision_id`)",
         { code: "bad_response" },
@@ -462,9 +495,11 @@ export class AtlaSentClient {
     );
 
     // Normalise decision to lowercase canonical form.
-    let decision = (typeof wire.decision === "string"
-      ? wire.decision.toLowerCase()
-      : wire.decision) as EvaluateWire["decision"] | undefined;
+    let decision = (
+      typeof wire.decision === "string"
+        ? wire.decision.toLowerCase()
+        : wire.decision
+    ) as EvaluateWire["decision"] | undefined;
 
     if (decision === undefined && typeof wire.permitted === "boolean") {
       decision = wire.permitted ? "allow" : "deny";
@@ -557,6 +592,74 @@ export class AtlaSentClient {
   }
 
   /**
+   * Run the canonical Deploy Gate V1 flow:
+   * evaluate `deployment.production`, verify the issued permit server-side,
+   * and return allow/block plus audit/evidence metadata.
+   *
+   * This helper never treats a signed/offline permit artifact as sufficient
+   * authorization. Execution is allowed only when `POST /v1-evaluate` returns
+   * `decision: "allow"` with a permit AND `POST /v1-verify-permit` returns
+   * `verified: true` / `valid: true`.
+   */
+  async deployGate(input: DeployGateRequest = {}): Promise<DeployGateResponse> {
+    const agent = input.agent ?? "ci-deploy-bot";
+    const action = input.action ?? DEPLOYMENT_PRODUCTION_ACTION;
+    const context = input.context ?? {};
+
+    const evaluation = await this.evaluate({ agent, action, context });
+    if (evaluation.decision !== "allow") {
+      return {
+        allowed: false,
+        evaluation,
+        reason:
+          evaluation.reason ||
+          `Deploy Gate blocked by decision=${evaluation.decision}`,
+        evidence: deployGateEvidence({
+          permitId: evaluation.permitId,
+          auditHash: evaluation.auditHash,
+        }),
+      };
+    }
+
+    const verification = await this.verifyPermit({
+      permitId: evaluation.permitId,
+      agent,
+      action,
+      context,
+    });
+
+    if (!verification.verified) {
+      return {
+        allowed: false,
+        evaluation,
+        verification,
+        reason: verification.outcome
+          ? `Deploy Gate blocked by permit verification outcome=${verification.outcome}`
+          : "Deploy Gate blocked because permit verification failed",
+        evidence: deployGateEvidence({
+          permitId: evaluation.permitId,
+          permitHash: verification.permitHash,
+          auditHash: evaluation.auditHash,
+          verifiedAt: verification.timestamp,
+        }),
+      };
+    }
+
+    return {
+      allowed: true,
+      evaluation,
+      verification,
+      reason: evaluation.reason || "Deploy Gate permit verified",
+      evidence: deployGateEvidence({
+        permitId: evaluation.permitId,
+        permitHash: verification.permitHash,
+        auditHash: evaluation.auditHash,
+        verifiedAt: verification.timestamp,
+      }),
+    };
+  }
+
+  /**
    * Revoke a previously-issued permit so it can no longer pass
    * {@link verifyPermit}.
    *
@@ -572,7 +675,9 @@ export class AtlaSentClient {
    *
    * Throws {@link AtlaSentError} on transport / auth failures.
    */
-  async revokePermit(input: RevokePermitRequest): Promise<RevokePermitResponse> {
+  async revokePermit(
+    input: RevokePermitRequest,
+  ): Promise<RevokePermitResponse> {
     const body = {
       decision_id: input.permitId,
       reason: input.reason ?? "",
@@ -585,7 +690,10 @@ export class AtlaSentClient {
       audit_hash?: string;
     }>("/v1-revoke-permit", body);
 
-    if (typeof wire.revoked !== "boolean" || typeof wire.decision_id !== "string") {
+    if (
+      typeof wire.revoked !== "boolean" ||
+      typeof wire.decision_id !== "string"
+    ) {
       throw new AtlaSentError(
         "Malformed response from /v1-revoke-permit: missing `revoked` or `decision_id`",
         { code: "bad_response" },
@@ -749,11 +857,13 @@ export class AtlaSentClient {
    * taxonomy as {@link AtlaSentClient.evaluate}.
    */
   async keySelf(): Promise<ApiKeySelfResponse> {
-    const { body: wire, rateLimit } = await this.get<ApiKeySelfWire>(
-      "/v1-api-key-self",
-    );
+    const { body: wire, rateLimit } =
+      await this.get<ApiKeySelfWire>("/v1-api-key-self");
 
-    if (typeof wire.key_id !== "string" || typeof wire.organization_id !== "string") {
+    if (
+      typeof wire.key_id !== "string" ||
+      typeof wire.organization_id !== "string"
+    ) {
       throw new AtlaSentError(
         "Malformed response from /v1-api-key-self: missing `key_id` or `organization_id`",
         { code: "bad_response" },
@@ -906,10 +1016,9 @@ export class AtlaSentClient {
 
       const connectionTimeoutSignal = AbortSignal.timeout(this.timeoutMs);
       const signal = opts.signal
-        ? (AbortSignal as unknown as { any(s: AbortSignal[]): AbortSignal }).any([
-            connectionTimeoutSignal,
-            opts.signal,
-          ])
+        ? (
+            AbortSignal as unknown as { any(s: AbortSignal[]): AbortSignal }
+          ).any([connectionTimeoutSignal, opts.signal])
         : connectionTimeoutSignal;
 
       let response: Response;
@@ -950,7 +1059,9 @@ export class AtlaSentClient {
           response.body,
           requestId,
           streamTimeoutMs,
-          (id) => { lastEventId = id; },
+          (id) => {
+            lastEventId = id;
+          },
         )) {
           yield event;
           if (event.type === "decision" && event.isFinal) {
@@ -1006,7 +1117,8 @@ export class AtlaSentClient {
     body: unknown,
     query: URLSearchParams | undefined,
   ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
-    const qs = query && Array.from(query).length > 0 ? `?${query.toString()}` : "";
+    const qs =
+      query && Array.from(query).length > 0 ? `?${query.toString()}` : "";
     const url = `${this.baseUrl}${path}${qs}`;
     const requestId = globalThis.crypto.randomUUID();
 
@@ -1047,7 +1159,10 @@ export class AtlaSentClient {
 
       if (!response.ok) {
         const httpErr = await buildHttpError(response, requestId);
-        if (isRetryable(httpErr) && hasAttemptsLeft(attempt, this.retryPolicy)) {
+        if (
+          isRetryable(httpErr) &&
+          hasAttemptsLeft(attempt, this.retryPolicy)
+        ) {
           await sleep(computeBackoffMs(attempt, this.retryPolicy, httpErr));
           continue;
         }
@@ -1058,13 +1173,19 @@ export class AtlaSentClient {
       try {
         parsed = await response.json();
       } catch (err) {
-        const jsonErr = new AtlaSentError("Invalid JSON response from AtlaSent API", {
-          code: "bad_response",
-          status: response.status,
-          requestId,
-          cause: err,
-        });
-        if (isRetryable(jsonErr) && hasAttemptsLeft(attempt, this.retryPolicy)) {
+        const jsonErr = new AtlaSentError(
+          "Invalid JSON response from AtlaSent API",
+          {
+            code: "bad_response",
+            status: response.status,
+            requestId,
+            cause: err,
+          },
+        );
+        if (
+          isRetryable(jsonErr) &&
+          hasAttemptsLeft(attempt, this.retryPolicy)
+        ) {
           await sleep(computeBackoffMs(attempt, this.retryPolicy, jsonErr));
           continue;
         }
@@ -1072,12 +1193,18 @@ export class AtlaSentClient {
       }
 
       if (parsed === null || typeof parsed !== "object") {
-        const shapeErr = new AtlaSentError("Expected a JSON object from AtlaSent API", {
-          code: "bad_response",
-          status: response.status,
-          requestId,
-        });
-        if (isRetryable(shapeErr) && hasAttemptsLeft(attempt, this.retryPolicy)) {
+        const shapeErr = new AtlaSentError(
+          "Expected a JSON object from AtlaSent API",
+          {
+            code: "bad_response",
+            status: response.status,
+            requestId,
+          },
+        );
+        if (
+          isRetryable(shapeErr) &&
+          hasAttemptsLeft(attempt, this.retryPolicy)
+        ) {
           await sleep(computeBackoffMs(attempt, this.retryPolicy, shapeErr));
           continue;
         }
@@ -1099,13 +1226,15 @@ export class AtlaSentClient {
    *
    * Calls `GET /v1/hitl`.
    */
-  async listHitlEscalations(
-    input: ListHitlEscalationsRequest = {},
-  ): Promise<{ data: ListHitlEscalationsResponse; rateLimit: RateLimitState | null }> {
+  async listHitlEscalations(input: ListHitlEscalationsRequest = {}): Promise<{
+    data: ListHitlEscalationsResponse;
+    rateLimit: RateLimitState | null;
+  }> {
     const params = new URLSearchParams();
     if (input.status) params.set("status", input.status);
     if (input.agentId) params.set("agent_id", input.agentId);
-    if (input.assignedToUserId) params.set("assigned_to_user_id", input.assignedToUserId);
+    if (input.assignedToUserId)
+      params.set("assigned_to_user_id", input.assignedToUserId);
     if (input.limit !== undefined) params.set("limit", String(input.limit));
     if (input.cursor) params.set("cursor", input.cursor);
     const { body, rateLimit } = await this.get<ListHitlEscalationsResponse>(
@@ -1125,7 +1254,9 @@ export class AtlaSentClient {
     escalationId: string,
   ): Promise<{ escalation: HitlEscalation; rateLimit: RateLimitState | null }> {
     if (!escalationId) {
-      throw new AtlaSentError("escalationId is required", { code: "bad_request" });
+      throw new AtlaSentError("escalationId is required", {
+        code: "bad_request",
+      });
     }
     const { body, rateLimit } = await this.get<HitlEscalation>(
       `/v1/hitl/${encodeURIComponent(escalationId)}`,
@@ -1137,12 +1268,13 @@ export class AtlaSentClient {
    * List per-approver vote rows for an escalation.
    * Calls `GET /v1/hitl/:id/approvals`.
    */
-  async listHitlApprovals(
-    escalationId: string,
-  ): Promise<{ approvals: HitlApprovalRecord[]; rateLimit: RateLimitState | null }> {
-    const { body, rateLimit } = await this.get<{ approvals: HitlApprovalRecord[] }>(
-      `/v1/hitl/${encodeURIComponent(escalationId)}/approvals`,
-    );
+  async listHitlApprovals(escalationId: string): Promise<{
+    approvals: HitlApprovalRecord[];
+    rateLimit: RateLimitState | null;
+  }> {
+    const { body, rateLimit } = await this.get<{
+      approvals: HitlApprovalRecord[];
+    }>(`/v1/hitl/${encodeURIComponent(escalationId)}/approvals`);
     return { approvals: body.approvals ?? [], rateLimit };
   }
 
@@ -1273,9 +1405,13 @@ export class AtlaSentClient {
    * `policy_version_id`, `bundle_version_id`) alongside the actor
    * timeline and evidence rows.
    */
-  async getIncidentTimeline(incidentId: string): Promise<IncidentTimelineResponse> {
+  async getIncidentTimeline(
+    incidentId: string,
+  ): Promise<IncidentTimelineResponse> {
     if (!incidentId) {
-      throw new AtlaSentError("incidentId is required", { code: "bad_request" });
+      throw new AtlaSentError("incidentId is required", {
+        code: "bad_request",
+      });
     }
     const { body, rateLimit } = await this.get<
       Omit<IncidentTimelineResponse, "rateLimit">
@@ -1331,13 +1467,22 @@ export class AtlaSentClient {
     input: AuthenticateConnectorInput,
   ): Promise<AuthenticateConnectorResponse> {
     if (!connectorId) {
-      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+      throw new AtlaSentError("connectorId is required", {
+        code: "bad_request",
+      });
     }
     const { body, rateLimit } = await this.post<{
       credential_id: string;
       version: number;
-    }>(`/v1/governance/connectors/${encodeURIComponent(connectorId)}/authenticate`, input);
-    return { credential_id: body.credential_id, version: body.version, rateLimit };
+    }>(
+      `/v1/governance/connectors/${encodeURIComponent(connectorId)}/authenticate`,
+      input,
+    );
+    return {
+      credential_id: body.credential_id,
+      version: body.version,
+      rateLimit,
+    };
   }
 
   /**
@@ -1346,7 +1491,9 @@ export class AtlaSentClient {
    */
   async syncConnector(connectorId: string): Promise<SyncConnectorResponse> {
     if (!connectorId) {
-      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+      throw new AtlaSentError("connectorId is required", {
+        code: "bad_request",
+      });
     }
     const { body, rateLimit } = await this.post<{
       connector_id: string;
@@ -1365,14 +1512,19 @@ export class AtlaSentClient {
     reason?: string,
   ): Promise<RevokeConnectorResponse> {
     if (!connectorId) {
-      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+      throw new AtlaSentError("connectorId is required", {
+        code: "bad_request",
+      });
     }
     const body: { reason?: string } = {};
     if (reason !== undefined) body.reason = reason;
     const { body: wire, rateLimit } = await this.post<{
       connector_id: string;
       revoked_at: string;
-    }>(`/v1/governance/connectors/${encodeURIComponent(connectorId)}/revoke`, body);
+    }>(
+      `/v1/governance/connectors/${encodeURIComponent(connectorId)}/revoke`,
+      body,
+    );
     return { ...wire, rateLimit };
   }
 
@@ -1384,13 +1536,18 @@ export class AtlaSentClient {
     connectorId: string,
   ): Promise<RotateCredentialsResponse> {
     if (!connectorId) {
-      throw new AtlaSentError("connectorId is required", { code: "bad_request" });
+      throw new AtlaSentError("connectorId is required", {
+        code: "bad_request",
+      });
     }
     const { body, rateLimit } = await this.post<{
       connector_id: string;
       new_version: number;
       rotated_at: string;
-    }>(`/v1/governance/connectors/${encodeURIComponent(connectorId)}/rotate-credentials`, {});
+    }>(
+      `/v1/governance/connectors/${encodeURIComponent(connectorId)}/rotate-credentials`,
+      {},
+    );
     return { ...body, rateLimit };
   }
 
@@ -1490,12 +1647,12 @@ export class AtlaSentClient {
     const qs = new URLSearchParams();
     if (params?.source_org_id) qs.set("source_org_id", params.source_org_id);
     if (params?.target_org_id) qs.set("target_org_id", params.target_org_id);
-    if (params?.allowed !== undefined) qs.set("allowed", String(params.allowed));
+    if (params?.allowed !== undefined)
+      qs.set("allowed", String(params.allowed));
     if (params?.limit !== undefined) qs.set("limit", String(params.limit));
-    const { body } = await this.get<{ checks: CrossOrgPermissionCheckResult[] }>(
-      "/v1/cross-org/permissions/checks",
-      qs,
-    );
+    const { body } = await this.get<{
+      checks: CrossOrgPermissionCheckResult[];
+    }>("/v1/cross-org/permissions/checks", qs);
     return body.checks ?? [];
   }
 
@@ -1546,9 +1703,10 @@ export class AtlaSentClient {
     return body.events ?? [];
   }
 
-  async listAnomalyResponseEvents(
-    params?: { limit?: number; execution_id?: string },
-  ): Promise<AnomalyResponseEvent[]> {
+  async listAnomalyResponseEvents(params?: {
+    limit?: number;
+    execution_id?: string;
+  }): Promise<AnomalyResponseEvent[]> {
     const qs = new URLSearchParams();
     if (params?.execution_id) qs.set("execution_id", params.execution_id);
     if (params?.limit !== undefined) qs.set("limit", String(params.limit));
@@ -1561,12 +1719,16 @@ export class AtlaSentClient {
 
   // ── Budget Exception Workflows ────────────────────────────────────────────
 
-  async listBudgetExceptions(
-    params?: { status?: BudgetExceptionStatus; budget_policy_id?: string; limit?: number; offset?: number },
-  ): Promise<BudgetExceptionRequest[]> {
+  async listBudgetExceptions(params?: {
+    status?: BudgetExceptionStatus;
+    budget_policy_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<BudgetExceptionRequest[]> {
     const qs = new URLSearchParams();
     if (params?.status) qs.set("status", params.status);
-    if (params?.budget_policy_id) qs.set("budget_policy_id", params.budget_policy_id);
+    if (params?.budget_policy_id)
+      qs.set("budget_policy_id", params.budget_policy_id);
     if (params?.limit !== undefined) qs.set("limit", String(params.limit));
     if (params?.offset !== undefined) qs.set("offset", String(params.offset));
     const { body } = await this.get<{ exceptions: BudgetExceptionRequest[] }>(
@@ -1642,9 +1804,11 @@ export class AtlaSentClient {
     return body;
   }
 
-  async listRegulatoryEscalations(
-    params?: { status?: RegulatoryEscalationStatus; subject_type?: string; subject_id?: string },
-  ): Promise<RegulatoryEscalation[]> {
+  async listRegulatoryEscalations(params?: {
+    status?: RegulatoryEscalationStatus;
+    subject_type?: string;
+    subject_id?: string;
+  }): Promise<RegulatoryEscalation[]> {
     const qs = new URLSearchParams();
     if (params?.status) qs.set("status", params.status);
     if (params?.subject_type) qs.set("subject_type", params.subject_type);
@@ -1666,7 +1830,9 @@ export class AtlaSentClient {
     return body;
   }
 
-  async acknowledgeRegulatoryEscalation(id: string): Promise<RegulatoryEscalation> {
+  async acknowledgeRegulatoryEscalation(
+    id: string,
+  ): Promise<RegulatoryEscalation> {
     const { body } = await this.post<RegulatoryEscalation>(
       `/v1/regulatory/escalations/${encodeURIComponent(id)}/acknowledge`,
       {},
@@ -1699,7 +1865,9 @@ export class AtlaSentClient {
 
   // ── Incentive Signal Feedback Loop ────────────────────────────────────────
 
-  async listSignalActions(signal_id: string): Promise<GovernanceSignalAction[]> {
+  async listSignalActions(
+    signal_id: string,
+  ): Promise<GovernanceSignalAction[]> {
     const { body } = await this.get<{ actions: GovernanceSignalAction[] }>(
       `/v1/governance/signals/${encodeURIComponent(signal_id)}/actions`,
     );
@@ -2004,7 +2172,9 @@ async function* parseSseStream(
   const decoder = new TextDecoder("utf-8");
   let buf = "";
 
-  type ChunkResult = { done: true; value?: undefined } | { done: false; value: Uint8Array };
+  type ChunkResult =
+    | { done: true; value?: undefined }
+    | { done: false; value: Uint8Array };
 
   /**
    * Read the next chunk from the reader, applying a per-read timeout when
@@ -2020,8 +2190,14 @@ async function* parseSseStream(
         reject(new StreamTimeoutError(timeoutMs));
       }, timeoutMs);
       (reader.read() as Promise<ChunkResult>).then(
-        (result) => { clearTimeout(timer); resolve(result); },
-        (err: unknown) => { clearTimeout(timer); reject(err); },
+        (result) => {
+          clearTimeout(timer);
+          resolve(result);
+        },
+        (err: unknown) => {
+          clearTimeout(timer);
+          reject(err);
+        },
       );
     });
   }
@@ -2075,11 +2251,18 @@ async function* parseSseStream(
         }
 
         if (eventType === "error") {
-          const e = parsed as { code?: string; message?: string; request_id?: string };
-          throw new AtlaSentError(e.message ?? "Stream error from AtlaSent API", {
-            code: (e.code as AtlaSentErrorCode | undefined) ?? "server_error",
-            requestId: e.request_id ?? requestId,
-          });
+          const e = parsed as {
+            code?: string;
+            message?: string;
+            request_id?: string;
+          };
+          throw new AtlaSentError(
+            e.message ?? "Stream error from AtlaSent API",
+            {
+              code: (e.code as AtlaSentErrorCode | undefined) ?? "server_error",
+              requestId: e.request_id ?? requestId,
+            },
+          );
         }
 
         if (eventType === "decision") {
@@ -2092,11 +2275,17 @@ async function* parseSseStream(
             is_final?: boolean;
             done?: boolean;
           };
-          if (typeof d.permitted !== "boolean" || typeof d.decision_id !== "string") {
-            throw new AtlaSentError("Malformed decision event from AtlaSent API", {
-              code: "bad_response",
-              requestId,
-            });
+          if (
+            typeof d.permitted !== "boolean" ||
+            typeof d.decision_id !== "string"
+          ) {
+            throw new AtlaSentError(
+              "Malformed decision event from AtlaSent API",
+              {
+                code: "bad_response",
+                requestId,
+              },
+            );
           }
           // Streaming wire uses legacy {permitted, decision_id} shape;
           // normalise to canonical lowercase decision vocabulary.
@@ -2117,7 +2306,11 @@ async function* parseSseStream(
           if (isFinal || d.done === true) return;
         } else if (eventType === "progress") {
           const p = parsed as Record<string, unknown>;
-          yield { type: "progress", stage: String(p["stage"] ?? ""), ...p } satisfies StreamProgressEvent;
+          yield {
+            type: "progress",
+            stage: String(p["stage"] ?? ""),
+            ...p,
+          } satisfies StreamProgressEvent;
           // Server may signal terminal state via done: true on any event type.
           if ((p as Record<string, unknown>).done === true) return;
         } else {

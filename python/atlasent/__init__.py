@@ -9,7 +9,7 @@ Quick start::
 
     permit = protect(
         agent="deploy-bot",
-        action="deploy_to_production",
+        action="deployment.production",
         context={"commit": commit, "approver": approver},
     )
     # If we got here, the action is authorized end-to-end.

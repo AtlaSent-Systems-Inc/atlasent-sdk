@@ -19,15 +19,17 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 function mockFetch(
   impl: (url: string, init: RequestInit) => Response | Promise<Response>,
 ): FetchMock {
-  return vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input.url;
-    return impl(url, init ?? {});
-  }) as unknown as FetchMock;
+  return vi.fn(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      return impl(url, init ?? {});
+    },
+  ) as unknown as FetchMock;
 }
 
 function makeClient(fetchImpl: FetchMock) {
@@ -110,7 +112,7 @@ describe("AtlaSentClient HITL methods", () => {
       limit: 25,
     });
     expect(result.data.escalations).toHaveLength(1);
-    expect(result.data.escalations[0].id).toBe("esc_1");
+    expect(result.data.escalations[0]!.id).toBe("esc_1");
   });
 
   it("getHitlEscalation hits the right path", async () => {
@@ -181,7 +183,7 @@ describe("AtlaSentClient HITL methods", () => {
     const client = makeClient(fetchMock);
     const result = await client.listHitlApprovals("esc_1");
     expect(result.approvals).toHaveLength(1);
-    expect(result.approvals[0].decision).toBe("approve");
+    expect(result.approvals[0]!.decision).toBe("approve");
   });
 
   it("timeoutHitlEscalation sends an empty POST body", async () => {

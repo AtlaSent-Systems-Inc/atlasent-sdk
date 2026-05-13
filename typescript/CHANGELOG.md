@@ -230,7 +230,7 @@ import { atlaSentGuard, atlaSentErrorHandler } from "@atlasent/sdk/hono";
 app.post(
   "/deploy",
   atlaSentGuard({
-    action: "deploy_to_production",
+    action: "deployment.production",
     agent: (c) => c.req.header("x-agent-id") ?? "anonymous",
     context: async (c) => ({ commit: (await c.req.json()).commit }),
   }),
@@ -250,7 +250,7 @@ import { atlaSentGuard, atlaSentErrorHandler } from "@atlasent/sdk/hono";
 
 const enforce = new Enforce({
   client,
-  bindings: { actorId: (c) => c.get("userId"), actionType: "deploy_to_production" },
+  bindings: { actorId: (c) => c.get("userId"), actionType: "deployment.production" },
   failClosed: true,
 });
 
@@ -586,7 +586,7 @@ the SDK.
 
       const permit = await atlasent.protect({
         agent: "deploy-bot",
-        action: "deploy_to_production",
+        action: "deployment.production",
         context: { commit, approver },
       });
       // …execute the action. If we got here, AtlaSent authorized it.
@@ -642,7 +642,7 @@ and one flat `AtlaSentError`.
 ### Added
 
 - `AtlaSentClient.evaluate({ agent, action, context? })` — policy
-  decision. Returns `{ decision: "ALLOW" | "DENY", permitId, reason,
+  decision. Returns `{ decision: "allow" | "deny", permitId, reason,
   auditHash, timestamp }`. A clean `DENY` is **not** thrown.
 - `AtlaSentClient.verifyPermit({ permitId, agent?, action?, context? })`
   — verify a previously-issued permit end-to-end.

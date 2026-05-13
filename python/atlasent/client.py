@@ -521,7 +521,7 @@ class AtlaSentClient:
 
             permit = client.protect(
                 agent="deploy-bot",
-                action="deploy_to_production",
+                action="deployment.production",
                 context={"commit": commit, "approver": approver},
             )
             # If we got here, AtlaSent authorized it end-to-end.

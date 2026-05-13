@@ -36,7 +36,9 @@ function makeClient(fetch: typeof globalThis.fetch): AtlaSentClient {
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
-async function collect(iter: AsyncIterable<StreamEvent>): Promise<StreamEvent[]> {
+async function collect(
+  iter: AsyncIterable<StreamEvent>,
+): Promise<StreamEvent[]> {
   const out: StreamEvent[] = [];
   for await (const e of iter) out.push(e);
   return out;
@@ -62,13 +64,15 @@ describe("protectStream", () => {
 
     const fetch = vi.fn(() => Promise.resolve(sseResponse(chunks)));
     const client = makeClient(fetch);
-    const events = await collect(client.protectStream({ agent: "bot", action: "read" }));
+    const events = await collect(
+      client.protectStream({ agent: "bot", action: "read" }),
+    );
 
     expect(events).toHaveLength(1);
     const [ev] = events;
     expect(ev?.type).toBe("decision");
     if (ev?.type === "decision") {
-      expect(ev.decision).toBe("ALLOW");
+      expect(ev.decision).toBe("allow");
       expect(ev.permitId).toBe("dec_stream_1");
       expect(ev.isFinal).toBe(true);
     }
@@ -97,7 +101,9 @@ describe("protectStream", () => {
     ];
 
     const events = await collect(
-      makeClient(vi.fn(() => Promise.resolve(sseResponse(chunks)))).protectStream({
+      makeClient(
+        vi.fn(() => Promise.resolve(sseResponse(chunks))),
+      ).protectStream({
         agent: "bot",
         action: "write",
       }),
@@ -126,7 +132,9 @@ describe("protectStream", () => {
     ];
 
     const events = await collect(
-      makeClient(vi.fn(() => Promise.resolve(sseResponse(chunks)))).protectStream({
+      makeClient(
+        vi.fn(() => Promise.resolve(sseResponse(chunks))),
+      ).protectStream({
         agent: "bot",
         action: "read",
       }),
@@ -134,7 +142,8 @@ describe("protectStream", () => {
 
     expect(events).toHaveLength(2);
     expect(events[0]?.type).toBe("progress");
-    if (events[0]?.type === "progress") expect(events[0].stage).toBe("policy_loading");
+    if (events[0]?.type === "progress")
+      expect(events[0].stage).toBe("policy_loading");
     expect(events[1]?.type).toBe("decision");
   });
 
@@ -152,7 +161,9 @@ describe("protectStream", () => {
     ];
 
     const events = await collect(
-      makeClient(vi.fn(() => Promise.resolve(sseResponse(chunks)))).protectStream({
+      makeClient(
+        vi.fn(() => Promise.resolve(sseResponse(chunks))),
+      ).protectStream({
         agent: "bot",
         action: "delete",
       }),
@@ -160,18 +171,24 @@ describe("protectStream", () => {
 
     expect(events).toHaveLength(1);
     if (events[0]?.type === "decision") {
-      expect(events[0].decision).toBe("DENY");
+      expect(events[0].decision).toBe("deny");
       expect(events[0].isFinal).toBe(true);
     }
   });
 
   it("throws AtlaSentError on event:error", async () => {
-    const errEvent = { code: "server_error", message: "upstream timeout", request_id: "req_abc" };
+    const errEvent = {
+      code: "server_error",
+      message: "upstream timeout",
+      request_id: "req_abc",
+    };
     const chunks = [`event: error\ndata: ${JSON.stringify(errEvent)}\n\n`];
 
     await expect(
       collect(
-        makeClient(vi.fn(() => Promise.resolve(sseResponse(chunks)))).protectStream({
+        makeClient(
+          vi.fn(() => Promise.resolve(sseResponse(chunks))),
+        ).protectStream({
           agent: "bot",
           action: "read",
         }),
@@ -190,7 +207,9 @@ describe("protectStream", () => {
     );
 
     await expect(
-      collect(makeClient(fetch).protectStream({ agent: "bot", action: "read" })),
+      collect(
+        makeClient(fetch).protectStream({ agent: "bot", action: "read" }),
+      ),
     ).rejects.toThrow();
   });
 
@@ -206,7 +225,11 @@ describe("protectStream", () => {
     });
 
     await collect(
-      makeClient(fetch).protectStream({ agent: "svc:app", action: "my_action", context: { env: "prod" } }),
+      makeClient(fetch).protectStream({
+        agent: "svc:app",
+        action: "my_action",
+        context: { env: "prod" },
+      }),
     );
 
     expect(capturedInit?.method).toBe("POST");
@@ -235,17 +258,24 @@ describe("protectStream", () => {
 
     // Split the full SSE block into 3 arbitrary chunks
     const mid = Math.floor(full.length / 3);
-    const chunks = [full.slice(0, mid), full.slice(mid, mid * 2), full.slice(mid * 2)];
+    const chunks = [
+      full.slice(0, mid),
+      full.slice(mid, mid * 2),
+      full.slice(mid * 2),
+    ];
 
     const events = await collect(
-      makeClient(vi.fn(() => Promise.resolve(sseResponse(chunks)))).protectStream({
+      makeClient(
+        vi.fn(() => Promise.resolve(sseResponse(chunks))),
+      ).protectStream({
         agent: "bot",
         action: "read",
       }),
     );
 
     expect(events).toHaveLength(1);
-    if (events[0]?.type === "decision") expect(events[0].permitId).toBe("dec_chunked");
+    if (events[0]?.type === "decision")
+      expect(events[0].permitId).toBe("dec_chunked");
   });
 
   it("silently skips unknown event types (forward compat)", async () => {
@@ -263,7 +293,9 @@ describe("protectStream", () => {
     ];
 
     const events = await collect(
-      makeClient(vi.fn(() => Promise.resolve(sseResponse(chunks)))).protectStream({
+      makeClient(
+        vi.fn(() => Promise.resolve(sseResponse(chunks))),
+      ).protectStream({
         agent: "bot",
         action: "read",
       }),

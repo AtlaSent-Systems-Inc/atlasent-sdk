@@ -7,7 +7,7 @@
  *
  * const permit = await atlasent.protect({
  *   agent: "deploy-bot",
- *   action: "deploy_to_production",
+ *   action: "deployment.production",
  *   context: { commit, approver },
  * });
  * // …run the action. If we got here, AtlaSent authorized it
@@ -23,6 +23,7 @@
  */
 
 import { AtlaSentClient } from "./client.js";
+import type { DeployGateRequest, DeployGateResponse } from "./types.js";
 import {
   AtlaSentDeniedError,
   AtlaSentError,
@@ -83,6 +84,17 @@ export function configure(options: ConfigureOptions): void {
   sharedClient = null;
 }
 
+/**
+ * Run the canonical Deploy Gate V1 helper using the process-wide client.
+ * Defaults to action `deployment.production`; execution is allowed only after
+ * server-side `/v1-evaluate` and `/v1-verify-permit` both pass.
+ */
+export async function deployGate(
+  request: DeployGateRequest = {},
+): Promise<DeployGateResponse> {
+  return getClient().deployGate(request);
+}
+
 /** Reset the singleton. Exported for tests; not part of the public API. */
 export function __resetSharedClientForTests(): void {
   sharedClient = null;
@@ -108,9 +120,11 @@ function getClient(): AtlaSentClient {
   }
   const options: AtlaSentClientOptions = { apiKey };
   if (overrides.baseUrl !== undefined) options.baseUrl = overrides.baseUrl;
-  if (overrides.timeoutMs !== undefined) options.timeoutMs = overrides.timeoutMs;
+  if (overrides.timeoutMs !== undefined)
+    options.timeoutMs = overrides.timeoutMs;
   if (overrides.fetch !== undefined) options.fetch = overrides.fetch;
-  if (overrides.retryPolicy !== undefined) options.retryPolicy = overrides.retryPolicy;
+  if (overrides.retryPolicy !== undefined)
+    options.retryPolicy = overrides.retryPolicy;
   sharedClient = new AtlaSentClient(options);
   return sharedClient;
 }

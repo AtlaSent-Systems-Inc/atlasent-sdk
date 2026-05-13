@@ -149,8 +149,7 @@ class IdentityTrustedIssuersConfig(BaseModel):
     def to_env_dict(self) -> dict[str, Any]:
         return {
             issuer_id: {
-                kid: entry.model_dump(exclude_none=True)
-                for kid, entry in kids.items()
+                kid: entry.model_dump(exclude_none=True) for kid, entry in kids.items()
             }
             for issuer_id, kids in self.root.items()
         }
@@ -265,7 +264,7 @@ class TrustedIssuerKey(BaseModel):
     allowed_action_types: Optional[list[str]] = None
     """Per-issuer scope: ``action_types`` this kid may approve.
     Entries match exactly OR with a trailing ``.*`` wildcard (e.g.
-    ``deployment.production.*`` matches ``deployment.production.deploy``).
+    ``deployment.*`` matches ``deployment.production``).
     Empty / missing = unscoped on action types."""
 
     allowed_environments: Optional[list[str]] = None
@@ -311,8 +310,7 @@ class ApprovalTrustedIssuersConfig(BaseModel):
         """Render to the plain dict shape stored in the env var."""
         return {
             issuer_id: {
-                kid: entry.model_dump(exclude_none=True)
-                for kid, entry in kids.items()
+                kid: entry.model_dump(exclude_none=True) for kid, entry in kids.items()
             }
             for issuer_id, kids in self.root.items()
         }

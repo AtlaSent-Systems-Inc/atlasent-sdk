@@ -152,7 +152,11 @@ describe("requirePermit", () => {
 
   it("never calls the executor on policy deny", async () => {
     const fetchImpl = mockFetchSequence([jsonResponse(EVALUATE_DENY_WIRE)]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+    configure({
+      apiKey: "ask_live_test",
+      fetch: fetchImpl,
+      retryPolicy: { maxAttempts: 1 },
+    });
 
     const executor = vi.fn(async () => "should-not-run");
 
@@ -172,7 +176,11 @@ describe("requirePermit", () => {
     const fetchImpl = mockFetchSequence([
       new Response("internal server error", { status: 500 }),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+    configure({
+      apiKey: "ask_live_test",
+      fetch: fetchImpl,
+      retryPolicy: { maxAttempts: 1 },
+    });
 
     const executor = vi.fn(async () => "should-not-run");
 
