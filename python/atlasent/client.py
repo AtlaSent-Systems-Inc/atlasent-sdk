@@ -49,6 +49,7 @@ from .models import (
 from .hitl import (
     HitlApprovalsResult,
     HitlChainResult,
+    HitlCreateRequest,
     HitlEscalation,
     HitlEscalationResult,
     HitlStatus,
@@ -1279,6 +1280,29 @@ class AtlaSentClient:
         time.sleep(delay)
 
     # ── HITL orchestration (path-routed /v1/hitl/*) ─────────────────
+
+    def create_hitl_escalation(
+        self,
+        request: HitlCreateRequest,
+    ) -> HitlEscalationResult:
+        """Open a new HITL escalation (``POST /v1/hitl``).
+
+        Bridges a ``hold`` outcome from :func:`atlasent.protect` to
+        the approval queue: an agent that receives a ``hold`` decision
+        calls this to enroll the proposed action for human review.
+        The returned escalation can then be polled with
+        :meth:`get_hitl_escalation` or driven to terminal by
+        :meth:`approve_hitl_escalation` / :meth:`reject_hitl_escalation`.
+
+        Quorum, pool size, fallback decision and routing inherit from
+        the server-side policy when omitted from ``request``.
+        """
+        body = request.model_dump(exclude_none=True)
+        data, rate_limit, _ = self._post("/v1/hitl", body)
+        return HitlEscalationResult(
+            escalation=HitlEscalation.model_validate(data),
+            rate_limit=rate_limit,
+        )
 
     def list_hitl_escalations(
         self,
