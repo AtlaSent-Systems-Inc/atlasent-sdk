@@ -111,6 +111,39 @@ export interface ListHitlEscalationsResponse {
   next_cursor?: string;
 }
 
+/**
+ * Wire shape for `POST /v1/hitl` — open a new escalation.
+ *
+ * The agent-side bridge between a `hold` outcome from `protect()`
+ * and the approval queue. Only `agent_id` and `escalation_reason`
+ * are required; the rest map to defaults configured on the
+ * server-side policy. Pass `approver_pool` to use the heterogeneous
+ * N-of-M extension instead of the homogeneous quorum tier.
+ */
+export interface HitlCreateRequest {
+  agent_id: string;
+  escalation_reason: string;
+
+  sandbox_run_id?: string;
+  proposed_action?: Record<string, unknown>;
+  risk_score?: number;
+  assigned_to_user_id?: string;
+  assigned_to_role?: string;
+
+  quorum_required?: HitlQuorumTier;
+  min_approvers?: number;
+  approver_pool_size?: number;
+  max_escalation_depth?: number;
+  fallback_decision?: HitlFallbackDecision;
+  timeout_at?: string;
+  governance_advisory_id?: string;
+
+  approver_pool?: HitlApproverPoolEntry[];
+  quorum_threshold?: number;
+  ai_unavailable_fallback?: HitlAiUnavailableFallback;
+  fallback_human_role?: string;
+}
+
 export interface HitlApproveRequest {
   note?: string;
 }

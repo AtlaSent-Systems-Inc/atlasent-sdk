@@ -144,6 +144,7 @@ export {
   type HitlApproverPoolEntry,
   type HitlApproverType,
   type HitlChainHop,
+  type HitlCreateRequest,
   type HitlEscalateRequest,
   type HitlEscalation,
   type HitlFallbackDecision,
@@ -194,7 +195,7 @@ export type {
   QuorumRoleRequirement,
 } from "./approvalQuorum.js";
 
-// ── Economic Governance & Liability Attribution ────────────────────────────────────
+// ── Economic Governance & Liability Attribution ──────────────────────────────────
 
 export {
   DEFAULT_RISK_TIER_THRESHOLDS,
@@ -338,7 +339,7 @@ export {
   type GovernanceGate,
 } from "./governanceEnforcement.js";
 
-// ── Governance Webhooks, Compliance Evidence & Policy Sync ─────────────────────────
+// ── Governance Webhooks, Compliance Evidence & Policy Sync ───────────────────────────────
 
 export {
   verifyWebhookSignature,
@@ -388,7 +389,7 @@ export {
   WebhookVerificationError,
 } from "./webhook.js";
 
-// ── Governance Graph & Incident Reconstruction ──────────────────────────────────
+// ── Governance Graph & Incident Reconstruction ──────────────────────────────
 
 export type {
   GovernanceGraphQueryType,
@@ -418,7 +419,7 @@ export type {
   IncidentTimelineResponse,
 } from "./incidentReconstruction.js";
 
-// ── Connector Management & Organizational Risk Graph ─────────────────────────────
+// ── Connector Management & Organizational Risk Graph ────────────────────────────
 
 export type {
   ConnectorType,
@@ -454,7 +455,7 @@ export type {
   GetLatestOrgRiskResponse,
   ListOrgRiskHistoryResponse,
 } from "./orgRiskGraph.js";
-// ── Cross-Org Permission Negotiation ────────────────────────────────
+// ── Cross-Org Permission Negotiation ─────────────────────────────────
 
 export {
   summarizeCrossOrgPermission,
@@ -476,7 +477,7 @@ export {
   type TriggerAnomalyResponseRequest,
 } from "./anomalyResponse.js";
 
-// ── Budget Exception Workflows ──────────────────────────────────────
+// ── Budget Exception Workflows ───────────────────────────────────────
 
 export {
   isBudgetExceptionActive,
@@ -498,7 +499,7 @@ export {
   type RegulatoryEscalationStatus,
 } from "./regulatoryEscalation.js";
 
-// ── Incentive Signal Feedback Loop ────────────────────────────────
+// ── Incentive Signal Feedback Loop ──────────────────────────────────
 
 export {
   computeSignalEngagementRate,
@@ -510,7 +511,7 @@ export {
   type SignalActionType,
 } from "./incentiveSignalFeedback.js";
 
-// ── Cross-Org Impersonation ───────────────────────────────────────
+// ── Cross-Org Impersonation ──────────────────────────────────────
 
 export {
   clampTokenDuration,
