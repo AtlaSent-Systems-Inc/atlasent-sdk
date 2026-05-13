@@ -69,6 +69,7 @@ import type {
   HitlApprovalRecord,
   HitlApproveRequest,
   HitlChainHop,
+  HitlCreateRequest,
   HitlEscalateRequest,
   HitlEscalation,
   HitlRejectRequest,
@@ -1216,6 +1217,29 @@ export class AtlaSentClient {
         rateLimit: parseRateLimitHeaders(response.headers),
       };
     }
+  }
+
+  /**
+   * Open a new HITL escalation. Bridges a `hold` outcome from
+   * `protect()` to the approval queue: an agent that receives a
+   * `hold` decision calls this to enroll the proposed action for
+   * human review. The returned escalation can then be polled with
+   * `getHitlEscalation()` or driven to terminal by
+   * `approveHitlEscalation()` / `rejectHitlEscalation()`.
+   *
+   * Quorum, pool size, fallback decision and routing inherit from
+   * the server-side policy when omitted from `input`.
+   *
+   * Calls `POST /v1/hitl`.
+   */
+  async createHitlEscalation(
+    input: HitlCreateRequest,
+  ): Promise<{ escalation: HitlEscalation; rateLimit: RateLimitState | null }> {
+    const { body, rateLimit } = await this.post<HitlEscalation>(
+      "/v1/hitl",
+      input,
+    );
+    return { escalation: body, rateLimit };
   }
 
   /**
