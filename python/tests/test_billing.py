@@ -51,7 +51,7 @@ def make_http_mock(response_body: dict[str, Any], status_code: int = 200) -> Any
     mock_http.post.return_value = mock_response
 
     mock_client = MagicMock()
-    mock_client._http     = mock_http
+    mock_client._client     = mock_http
     mock_client._base_url = "https://api.example.com"
     return mock_client
 
@@ -263,14 +263,14 @@ class TestBillingClient:
         mock_client = make_http_mock(self._entitlement_payload())
         billing = BillingClient(mock_client)
         billing.get_entitlement(org_id="org_99")
-        call_kwargs = mock_client._http.get.call_args
+        call_kwargs = mock_client._client.get.call_args
         assert call_kwargs.kwargs["params"]["org_id"] == "org_99"
 
     def test_get_entitlement_no_param_when_none(self) -> None:
         mock_client = make_http_mock(self._entitlement_payload())
         billing = BillingClient(mock_client)
         billing.get_entitlement()
-        call_kwargs = mock_client._http.get.call_args
+        call_kwargs = mock_client._client.get.call_args
         assert call_kwargs.kwargs["params"] == {}
 
     def test_set_override_returns_response_model(self) -> None:
@@ -294,8 +294,8 @@ class TestBillingClient:
         mock_client = make_http_mock(payload)
         billing = BillingClient(mock_client)
         billing.clear_override("org_01", reason="Ticket resolved")
-        assert mock_client._http.post.called
-        posted = mock_client._http.post.call_args.kwargs["json"]
+        assert mock_client._client.post.called
+        posted = mock_client._client.post.call_args.kwargs["json"]
         assert "status" not in posted
         assert posted["reason"] == "Ticket resolved"
 
@@ -307,7 +307,7 @@ class TestBillingClient:
         mock_http = MagicMock()
         mock_http.get.return_value = mock_response
         mock_client = MagicMock()
-        mock_client._http     = mock_http
+        mock_client._client     = mock_http
         mock_client._base_url = "https://api.example.com"
         billing = BillingClient(mock_client)
         with pytest.raises(httpx.HTTPStatusError):
