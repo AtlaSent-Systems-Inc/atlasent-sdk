@@ -83,6 +83,44 @@ class HitlEscalation(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class HitlCreateRequest(BaseModel):
+    """Wire shape for ``POST /v1/hitl`` — open a new escalation.
+
+    The agent-side bridge between a ``hold`` outcome from
+    :func:`atlasent.protect` and the approval queue. Only
+    ``agent_id`` and ``escalation_reason`` are required; the rest map
+    to defaults configured on the server-side policy. Pass
+    ``approver_pool`` to use the heterogeneous N-of-M extension
+    instead of the homogeneous quorum tier.
+    """
+
+    agent_id: str
+    escalation_reason: str
+
+    sandbox_run_id: str | None = None
+    proposed_action: dict[str, Any] | None = None
+    risk_score: float | None = None
+    assigned_to_user_id: str | None = None
+    assigned_to_role: str | None = None
+
+    quorum_required: HitlQuorumTier | None = None
+    min_approvers: int | None = None
+    approver_pool_size: int | None = None
+    max_escalation_depth: int | None = None
+    fallback_decision: HitlFallbackDecision | None = None
+    timeout_at: str | None = None
+    governance_advisory_id: str | None = None
+
+    approver_pool: list[dict[str, Any]] | None = None
+    quorum_threshold: int | None = None
+    ai_unavailable_fallback: Literal[
+        "escalate_to_human", "reduce_pool", "fail_closed"
+    ] | None = None
+    fallback_human_role: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 class HitlApprovalRecord(BaseModel):
     """One row from ``GET /v1/hitl/:id/approvals``."""
 
