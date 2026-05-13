@@ -87,7 +87,7 @@ class TestEvaluateVectors:
                 assert sdk_error["message_contains"] in exc_info.value.message
         else:
             expected_output = vector["sdk_output"]
-            if expected_output["decision"] == "ALLOW":
+            if expected_output["decision"] == "allow":
                 result = client.evaluate(action, agent, context)
                 # legacy attr (canonical: result.decision)
                 assert result.permitted is True
