@@ -13,15 +13,15 @@ Fail-closed by design — no action proceeds without an explicit permit.
 ### Python
 
 ```python
-from atlasent import authorize
+from atlasent import protect
 
-result = authorize(
-    agent="clinical-data-agent",
-    action="modify_patient_record",
-    context={"user": "dr_smith", "environment": "production"},
+permit = protect(
+    agent="ci-deploy-bot",
+    action="deployment.production",
+    context={"repo": "atlasent/api", "commit": commit, "environment": "production"},
 )
-if result.permitted:
-    ...  # execute action
+# If protect() returns, /v1-evaluate allowed and /v1-verify-permit verified.
+run_deploy()
 ```
 
 ### TypeScript
@@ -31,15 +31,15 @@ import { AtlaSentClient } from "@atlasent/sdk";
 
 const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
 
-const result = await client.evaluate({
-  agent: "clinical-data-agent",
-  action: "modify_patient_record",
-  context: { user: "dr_smith", environment: "production" },
+const gate = await client.deployGate({
+  context: { repo: "atlasent/api", commit: process.env.GIT_SHA, environment: "production" },
 });
 
-if (result.decision === "ALLOW") {
-  // execute action
+if (!gate.allowed) {
+  throw new Error(`Deploy blocked: ${gate.reason}`);
 }
+
+runDeploy();
 ```
 
 ## API endpoints

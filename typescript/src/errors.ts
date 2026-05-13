@@ -2,7 +2,7 @@
  * Error types for the AtlaSent TypeScript SDK.
  *
  * The SDK follows a fail-closed design: a clean policy DENY is
- * returned as `EvaluateResponse.decision === "DENY"` (not thrown),
+ * returned as `EvaluateResponse.decision === "deny"` (not thrown),
  * but any failure to confirm authorization — network, timeout,
  * bad response, invalid key, rate limit — throws an
  * {@link AtlaSentError}.
@@ -162,7 +162,9 @@ const KNOWN_PERMIT_OUTCOMES: ReadonlySet<string> = new Set([
  * see `undefined` and fall through to their generic deny path
  * rather than match an unknown literal.
  */
-export function normalizePermitOutcome(raw: string | undefined): PermitOutcome | undefined {
+export function normalizePermitOutcome(
+  raw: string | undefined,
+): PermitOutcome | undefined {
   if (raw !== undefined && KNOWN_PERMIT_OUTCOMES.has(raw)) {
     return raw as PermitOutcome;
   }

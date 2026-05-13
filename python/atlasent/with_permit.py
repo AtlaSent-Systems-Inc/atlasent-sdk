@@ -26,7 +26,7 @@ in v1, so there is no compensating revoke.
 
     result = with_permit(
         agent="deploy-bot",
-        action="deploy_to_production",
+        action="deployment.production",
         context={"commit": commit, "approver": approver},
         fn=lambda permit: do_deploy(commit, permit_id=permit.permit_token),
     )

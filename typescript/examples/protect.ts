@@ -17,7 +17,7 @@ async function deploy(commit: string, approver: string): Promise<void> {
   try {
     const permit = await atlasent.protect({
       agent: "deploy-bot",
-      action: "deploy_to_production",
+      action: "deployment.production",
       context: { commit, approver },
     });
     console.log(

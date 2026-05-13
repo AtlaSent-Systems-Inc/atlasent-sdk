@@ -47,15 +47,17 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 function mockFetch(
   impl: (url: string, init: RequestInit) => Response | Promise<Response>,
 ): FetchMock {
-  return vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input.url;
-    return impl(url, init ?? {});
-  }) as unknown as FetchMock;
+  return vi.fn(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      return impl(url, init ?? {});
+    },
+  ) as unknown as FetchMock;
 }
 
 function makeClient(fetchImpl: FetchMock) {
@@ -63,6 +65,7 @@ function makeClient(fetchImpl: FetchMock) {
     apiKey: "ask_live_browser_test",
     fetch: fetchImpl,
     timeoutMs: 5_000,
+    retryPolicy: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 },
   });
 }
 
@@ -82,7 +85,7 @@ describe("AtlaSentClient — browser environment (jsdom)", () => {
       context: { userId: "u_123" },
     });
 
-    expect(result.decision).toBe("ALLOW");
+    expect(result.decision).toBe("allow");
     expect(result.permitId).toBe("dec_browser_001");
     expect(result.reason).toBe("Allowed by policy");
     expect(result.rateLimit).toBeNull();
@@ -92,9 +95,12 @@ describe("AtlaSentClient — browser environment (jsdom)", () => {
     const fetchImpl = mockFetch(() => jsonResponse(EVALUATE_DENY_WIRE));
     const client = makeClient(fetchImpl);
 
-    const result = await client.evaluate({ agent: "browser-agent", action: "admin_action" });
+    const result = await client.evaluate({
+      agent: "browser-agent",
+      action: "admin_action",
+    });
 
-    expect(result.decision).toBe("DENY");
+    expect(result.decision).toBe("deny");
     expect(result.permitId).toBe("dec_browser_002");
   });
 
@@ -129,10 +135,14 @@ describe("AtlaSentClient — browser environment (jsdom)", () => {
   });
 
   it("throws AtlaSentError on HTTP 401", async () => {
-    const fetchImpl = mockFetch(() => new Response("unauthorized", { status: 401 }));
+    const fetchImpl = mockFetch(
+      () => new Response("unauthorized", { status: 401 }),
+    );
     const client = makeClient(fetchImpl);
 
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       name: "AtlaSentError",
       status: 401,
       code: "invalid_api_key",
@@ -145,7 +155,9 @@ describe("AtlaSentClient — browser environment (jsdom)", () => {
     });
     const client = makeClient(fetchImpl);
 
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       name: "AtlaSentError",
       code: "network",
     });
@@ -157,15 +169,14 @@ describe("AtlaSentClient — browser environment (jsdom)", () => {
     try {
       // @ts-expect-error — intentionally deleting to simulate old browser
       delete AbortSignal.timeout;
-      expect(() => makeClient(mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE)))).toThrow(
-        AtlaSentError,
-      );
-      expect(() => makeClient(mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE)))).toThrow(
-        /AbortSignal\.timeout/,
-      );
+      expect(() =>
+        makeClient(mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE))),
+      ).toThrow(AtlaSentError);
+      expect(() =>
+        makeClient(mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE))),
+      ).toThrow(/AbortSignal\.timeout/);
     } finally {
       AbortSignal.timeout = original;
     }
   });
 });
-

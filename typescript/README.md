@@ -13,32 +13,34 @@ import { AtlaSentClient } from "@atlasent/sdk";
 
 const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
 
-const result = await client.evaluate({
-  agent: "clinical-data-agent",
-  action: "modify_patient_record",
-  context: { user: "dr_smith", environment: "production" },
+const gate = await client.deployGate({
+  context: { repo: "atlasent/api", commit: process.env.GIT_SHA },
 });
 
-if (result.decision === "ALLOW") {
-  // execute the action
-} else {
-  console.warn("Blocked:", result.reason);
+if (!gate.allowed) {
+  console.error("Deploy blocked:", gate.reason);
+  process.exit(1);
 }
+
+// runDeploy();
 ```
 
-That's it. `evaluate()` calls the AtlaSent policy engine, generates a hash-chained audit entry (21 CFR Part 11 / GxP-ready), and returns a result you branch on. A clean `DENY` is **not** thrown — network / server / auth failures are.
+That's it. `deployGate()` performs the V1 Deploy Gate sequence against `deployment.production`: `evaluate()` calls `POST /v1-evaluate`, receives a permit when allowed, then `verifyPermit()` calls `POST /v1-verify-permit` before your deployment can run. A clean `deny` is returned as a block result — network / server / auth failures are thrown.
 
-## Two methods, that's the whole surface
+## Simple V1 surface
 
 ```ts
 client.evaluate({ agent, action, context? })
-  // → { decision: "ALLOW" | "DENY", permitId, reason, auditHash, timestamp }
+  // → { decision: "allow" | "deny" | "hold" | "escalate", permitId, reason, auditHash, timestamp }
 
 client.verifyPermit({ permitId, agent?, action?, context? })
   // → { verified, outcome, permitHash, timestamp }
+
+client.deployGate({ agent?, action?, context? })
+  // defaults action to "deployment.production" and returns { allowed, reason, evidence }
 ```
 
-`verifyPermit()` confirms a previously-issued permit end-to-end — use it as a second-factor gate (e.g., in a CI deploy pipeline before side-effects run).
+`verifyPermit()` confirms a previously-issued permit server-side. Signed/offline permit artifacts never imply deployment authorization by themselves.
 
 ## CI deploy-gate pattern
 
@@ -49,11 +51,11 @@ const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
 
 const evaluation = await client.evaluate({
   agent: "ci-deploy-bot",
-  action: "deploy_to_production",
+  action: "deployment.production",
   context: { service: "billing-api", commit: process.env.GIT_SHA },
 });
 
-if (evaluation.decision !== "ALLOW") {
+if (evaluation.decision !== "allow") {
   console.error("Deploy blocked:", evaluation.reason);
   process.exit(1);
 }
@@ -76,10 +78,10 @@ See [`examples/deploy-gate.ts`](./examples/deploy-gate.ts) for a complete CI-sha
 
 ```ts
 new AtlaSentClient({
-  apiKey: "ask_live_...",           // required
+  apiKey: "ask_live_...", // required
   baseUrl: "https://api.atlasent.io", // default
-  timeoutMs: 10_000,                  // default — per-request
-  fetch: customFetch,                 // default: globalThis.fetch
+  timeoutMs: 10_000, // default — per-request
+  fetch: customFetch, // default: globalThis.fetch
 });
 ```
 
@@ -99,16 +101,16 @@ try {
 }
 ```
 
-| `err.code`         | When it's thrown                                        |
-|--------------------|---------------------------------------------------------|
-| `invalid_api_key`  | HTTP 401                                                |
-| `forbidden`        | HTTP 403                                                |
-| `rate_limited`     | HTTP 429 (check `err.retryAfterMs`)                     |
-| `bad_request`      | HTTP 4xx (other than 401/403/429)                       |
-| `server_error`     | HTTP 5xx                                                |
-| `timeout`          | `timeoutMs` exceeded                                    |
-| `network`          | DNS / connection failure, fetch threw                   |
-| `bad_response`     | non-JSON body or missing required fields                |
+| `err.code`        | When it's thrown                         |
+| ----------------- | ---------------------------------------- |
+| `invalid_api_key` | HTTP 401                                 |
+| `forbidden`       | HTTP 403                                 |
+| `rate_limited`    | HTTP 429 (check `err.retryAfterMs`)      |
+| `bad_request`     | HTTP 4xx (other than 401/403/429)        |
+| `server_error`    | HTTP 5xx                                 |
+| `timeout`         | `timeoutMs` exceeded                     |
+| `network`         | DNS / connection failure, fetch threw    |
+| `bad_response`    | non-JSON body or missing required fields |
 
 Every `AtlaSentError` carries `err.requestId` — the UUID the SDK sent as `X-Request-ID`, correlatable in your server logs.
 

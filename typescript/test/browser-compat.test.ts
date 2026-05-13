@@ -45,10 +45,13 @@ describe("browser-compat — process stubbed to undefined", () => {
     vi.stubGlobal("process", undefined);
 
     let capturedUA = "";
-    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-      capturedUA = (init?.headers as Record<string, string>)?.["User-Agent"] ?? "";
-      return jsonResponse(EVALUATE_ALLOW_WIRE);
-    });
+    const fetchMock = vi.fn(
+      async (_url: string | URL | Request, init?: RequestInit) => {
+        capturedUA =
+          (init?.headers as Record<string, string>)?.["User-Agent"] ?? "";
+        return jsonResponse(EVALUATE_ALLOW_WIRE);
+      },
+    );
 
     const client = new AtlaSentClient({
       apiKey: "ask_test_browser",
@@ -56,7 +59,7 @@ describe("browser-compat — process stubbed to undefined", () => {
     });
 
     const result = await client.evaluate({ agent: "user:1", action: "read" });
-    expect(result.decision).toBe("ALLOW");
+    expect(result.decision).toBe("allow");
     expect(result.permitId).toBe("dec_browser_test");
     expect(capturedUA).toMatch(/^@atlasent\/sdk\/\S+ browser$/);
     expect(capturedUA).not.toContain("node/");
@@ -64,10 +67,13 @@ describe("browser-compat — process stubbed to undefined", () => {
 
   it("evaluate() emits a node User-Agent when process is present", async () => {
     let capturedUA = "";
-    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-      capturedUA = (init?.headers as Record<string, string>)?.["User-Agent"] ?? "";
-      return jsonResponse(EVALUATE_ALLOW_WIRE);
-    });
+    const fetchMock = vi.fn(
+      async (_url: string | URL | Request, init?: RequestInit) => {
+        capturedUA =
+          (init?.headers as Record<string, string>)?.["User-Agent"] ?? "";
+        return jsonResponse(EVALUATE_ALLOW_WIRE);
+      },
+    );
 
     const client = new AtlaSentClient({
       apiKey: "ask_test_node",

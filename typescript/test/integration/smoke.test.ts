@@ -24,7 +24,9 @@ describe.skipIf(!apiKey)("AtlaSentClient @ staging", () => {
         action: "integration_test",
         context: { ci: true, repo: "atlasent-sdk" },
       });
-      expect(result.decision === "ALLOW" || result.decision === "DENY").toBe(true);
+      expect(result.decision === "allow" || result.decision === "deny").toBe(
+        true,
+      );
       expect(typeof result.permitId).toBe("string");
       expect(result.permitId.length).toBeGreaterThan(0);
     } catch (err) {

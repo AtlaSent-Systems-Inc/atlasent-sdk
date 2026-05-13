@@ -1,5 +1,5 @@
 /**
- * CI deploy-gate: evaluate, then verifyPermitById before deploying.
+ * CI deploy-gate: evaluate, then verifyPermit before deploying.
  *
  * Wires AtlaSent into a production deploy pipeline. The deploy is
  * blocked unless (a) the policy engine allows it AND (b) the
@@ -33,7 +33,7 @@ async function main(): Promise<void> {
   try {
     evaluation = await client.evaluate({
       agent: "ci-deploy-bot",
-      action: "deploy_to_production",
+      action: "deployment.production",
       context: deployContext,
     });
   } catch (err) {
@@ -46,26 +46,30 @@ async function main(): Promise<void> {
     throw err;
   }
 
-  if (evaluation.decision !== "ALLOW") {
+  if (evaluation.decision !== "allow") {
     console.error(`Deploy blocked: ${evaluation.reason}`);
     console.error(`  permitId:   ${evaluation.permitId}`);
     console.error(`  auditHash:  ${evaluation.auditHash}`);
     process.exit(1);
   }
 
-  const verification = await client.verifyPermitById(evaluation.permitId);
+  const verification = await client.verifyPermit({
+    permitId: evaluation.permitId,
+    agent: "ci-deploy-bot",
+    action: "deployment.production",
+  });
 
-  if (!verification.valid) {
+  if (!verification.verified) {
     console.error(
-      `Permit ${evaluation.permitId} failed verification: ${verification.reason ?? "unknown"}`,
+      `Permit ${evaluation.permitId} failed verification: ${verification.outcome || "unknown"}`,
     );
     process.exit(1);
   }
 
   console.log(
-    `Deploy approved — permitId=${evaluation.permitId} payloadHash=${verification.evidence.payload_hash ?? "n/a"}`,
+    `Deploy approved — permitId=${evaluation.permitId} permitHash=${verification.permitHash || "n/a"}`,
   );
-  console.log(`  verifiedAt: ${verification.verified_at}`);
+  console.log(`  verifiedAt: ${verification.timestamp || "n/a"}`);
   console.log(`  auditHash:  ${evaluation.auditHash}`);
   // runDeploy();
 }

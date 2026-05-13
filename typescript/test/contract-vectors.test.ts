@@ -20,12 +20,16 @@ const API_KEY = "ask_live_test_key";
 
 interface EvaluateVector {
   name: string;
-  sdk_input: { agent: string; action: string; context?: Record<string, unknown> };
+  sdk_input: {
+    agent: string;
+    action: string;
+    context?: Record<string, unknown>;
+  };
   api_key: string;
   wire_request: Record<string, unknown>;
   wire_response: Record<string, unknown>;
   sdk_output?: {
-    decision: "ALLOW" | "DENY";
+    decision: "allow" | "deny";
     permit_id: string;
     reason: string;
     audit_hash: string;
@@ -96,20 +100,22 @@ describe("evaluate vectors", () => {
   for (const vector of loadVectors<EvaluateVector>("evaluate.json")) {
     it(vector.name, async () => {
       let captured: { url: string; init: RequestInit } | undefined;
-      const fetchImpl = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-        const url =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.toString()
-              : input.url;
-        captured = { url, init: init ?? {} };
-        if (vector.sdk_error) {
-          // bad_response vectors: still serve the body, the SDK MUST raise.
+      const fetchImpl = vi.fn(
+        async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+          const url =
+            typeof input === "string"
+              ? input
+              : input instanceof URL
+                ? input.toString()
+                : input.url;
+          captured = { url, init: init ?? {} };
+          if (vector.sdk_error) {
+            // bad_response vectors: still serve the body, the SDK MUST raise.
+            return jsonResponse(vector.wire_response);
+          }
           return jsonResponse(vector.wire_response);
-        }
-        return jsonResponse(vector.wire_response);
-      }) as unknown as typeof fetch;
+        },
+      ) as unknown as typeof fetch;
 
       const client = makeClient(fetchImpl);
 
@@ -155,16 +161,18 @@ describe("verify vectors", () => {
   for (const vector of loadVectors<VerifyVector>("verify.json")) {
     it(vector.name, async () => {
       let captured: { url: string; init: RequestInit } | undefined;
-      const fetchImpl = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-        const url =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.toString()
-              : input.url;
-        captured = { url, init: init ?? {} };
-        return jsonResponse(vector.wire_response);
-      }) as unknown as typeof fetch;
+      const fetchImpl = vi.fn(
+        async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+          const url =
+            typeof input === "string"
+              ? input
+              : input instanceof URL
+                ? input.toString()
+                : input.url;
+          captured = { url, init: init ?? {} };
+          return jsonResponse(vector.wire_response);
+        },
+      ) as unknown as typeof fetch;
 
       const client = makeClient(fetchImpl);
 
@@ -174,9 +182,12 @@ describe("verify vectors", () => {
         agent?: string;
         context?: Record<string, unknown>;
       } = { permitId: vector.sdk_input.permit_id };
-      if (vector.sdk_input.action !== undefined) verifyInput.action = vector.sdk_input.action;
-      if (vector.sdk_input.agent !== undefined) verifyInput.agent = vector.sdk_input.agent;
-      if (vector.sdk_input.context !== undefined) verifyInput.context = vector.sdk_input.context;
+      if (vector.sdk_input.action !== undefined)
+        verifyInput.action = vector.sdk_input.action;
+      if (vector.sdk_input.agent !== undefined)
+        verifyInput.agent = vector.sdk_input.agent;
+      if (vector.sdk_input.context !== undefined)
+        verifyInput.context = vector.sdk_input.context;
 
       if (vector.sdk_error) {
         await expect(client.verifyPermit(verifyInput)).rejects.toMatchObject({

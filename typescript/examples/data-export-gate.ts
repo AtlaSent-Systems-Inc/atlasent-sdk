@@ -57,7 +57,7 @@ async function main(): Promise<void> {
     throw err;
   }
 
-  if (evaluation.decision !== "ALLOW") {
+  if (evaluation.decision !== "allow") {
     console.error(`Export blocked: ${evaluation.reason}`);
     console.error(`  permitId:  ${evaluation.permitId}`);
     console.error(`  auditHash: ${evaluation.auditHash}`);

@@ -376,7 +376,7 @@ class AsyncAtlaSentClient:
             async with AsyncAtlaSentClient(api_key="ask_live_...") as client:
                 permit = await client.protect(
                     agent="deploy-bot",
-                    action="deploy_to_production",
+                    action="deployment.production",
                     context={"commit": commit},
                 )
         """
@@ -401,7 +401,9 @@ class AsyncAtlaSentClient:
         # noise from its own internal implementation.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            verify_result = await self.verify(eval_result.permit_token, action, agent, ctx)
+            verify_result = await self.verify(
+                eval_result.permit_token, action, agent, ctx
+            )
 
         if not verify_result.valid:
             raise AtlaSentDeniedError(
@@ -509,10 +511,7 @@ class AsyncAtlaSentClient:
                         _on_event_id,
                     ):
                         yield event
-                        if (
-                            isinstance(event, StreamDecisionEvent)
-                            and event.is_final
-                        ):
+                        if isinstance(event, StreamDecisionEvent) and event.is_final:
                             stream_done = True
 
                     last_event_id = last_event_id_container[0]

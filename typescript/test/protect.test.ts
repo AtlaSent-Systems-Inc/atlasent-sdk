@@ -95,7 +95,7 @@ describe("atlasent.protect (default export API)", () => {
 
     const permit = await atlasent.protect({
       agent: "deploy-bot",
-      action: "deploy_to_production",
+      action: "deployment.production",
       context: { commit: "abc123" },
     });
 
@@ -182,9 +182,9 @@ describe("atlasent.protect (default export API)", () => {
       expect(caught).toBeInstanceOf(AtlaSentDeniedError);
       const denied = caught as AtlaSentDeniedError;
       expect(denied.outcome).toBe(wireOutcome);
-      expect(
-        (denied as unknown as Record<string, boolean>)[predicate],
-      ).toBe(true);
+      expect((denied as unknown as Record<string, boolean>)[predicate]).toBe(
+        true,
+      );
     },
   );
 
@@ -192,7 +192,11 @@ describe("atlasent.protect (default export API)", () => {
     const fetchImpl = mockFetchSequence([
       new Response("server boom", { status: 500 }),
     ]);
-    configure({ apiKey: "ask_live_test", fetch: fetchImpl, retryPolicy: { maxAttempts: 1 } });
+    configure({
+      apiKey: "ask_live_test",
+      fetch: fetchImpl,
+      retryPolicy: { maxAttempts: 1 },
+    });
 
     let caught: unknown;
     try {
@@ -275,7 +279,11 @@ describe("atlasent.protect (default export API)", () => {
     configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
     const ctx = { commit: "abc123", approver: "alice" };
-    await atlasent.protect({ agent: "deploy-bot", action: "deploy", context: ctx });
+    await atlasent.protect({
+      agent: "deploy-bot",
+      action: "deploy",
+      context: ctx,
+    });
 
     const [, evalInit] = fetchImpl.mock.calls[0]!;
     const evalBody = JSON.parse(evalInit!.body as string);

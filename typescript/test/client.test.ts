@@ -38,22 +38,28 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 function mockFetch(
   impl: (url: string, init: RequestInit) => Response | Promise<Response>,
 ): FetchMock {
-  return vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input.url;
-    return impl(url, init ?? {});
-  }) as unknown as FetchMock;
+  return vi.fn(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      return impl(url, init ?? {});
+    },
+  ) as unknown as FetchMock;
 }
 
-function makeClient(fetchImpl: FetchMock, overrides: Partial<ConstructorParameters<typeof AtlaSentClient>[0]> = {}) {
+function makeClient(
+  fetchImpl: FetchMock,
+  overrides: Partial<ConstructorParameters<typeof AtlaSentClient>[0]> = {},
+) {
   return new AtlaSentClient({
     apiKey: "ask_live_test",
     fetch: fetchImpl,
     timeoutMs: 5_000,
+    retryPolicy: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 },
     ...overrides,
   });
 }
@@ -66,23 +72,31 @@ describe("AtlaSentClient constructor", () => {
   });
 
   it("rejects malformed apiKey", () => {
-    expect(() => new AtlaSentClient({ apiKey: "not_a_real_key" })).toThrow(/ask_/);
+    expect(() => new AtlaSentClient({ apiKey: "not_a_real_key" })).toThrow(
+      /ask_/,
+    );
   });
 
   it("rejects whitespace-padded apiKey", () => {
-    expect(
-      () => new AtlaSentClient({ apiKey: " ask_test_xxxxxxxx " }),
-    ).toThrow(/ask_/);
+    expect(() => new AtlaSentClient({ apiKey: " ask_test_xxxxxxxx " })).toThrow(
+      /ask_/,
+    );
   });
 
   it("accepts ask_live_ and ask_test_ prefixes", () => {
-    expect(() => new AtlaSentClient({ apiKey: "ask_live_abc123" })).not.toThrow();
-    expect(() => new AtlaSentClient({ apiKey: "ask_test_abc123" })).not.toThrow();
+    expect(
+      () => new AtlaSentClient({ apiKey: "ask_live_abc123" }),
+    ).not.toThrow();
+    expect(
+      () => new AtlaSentClient({ apiKey: "ask_test_abc123" }),
+    ).not.toThrow();
   });
 
   it("strips trailing slashes from baseUrl", () => {
     const fetchImpl = mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE));
-    const client = makeClient(fetchImpl, { baseUrl: "https://staging.atlasent.io///" });
+    const client = makeClient(fetchImpl, {
+      baseUrl: "https://staging.atlasent.io///",
+    });
     return client.evaluate({ agent: "a", action: "b" }).then(() => {
       const [url] = fetchImpl.mock.calls[0]!;
       expect(url).toBe("https://staging.atlasent.io/v1-evaluate");
@@ -91,7 +105,11 @@ describe("AtlaSentClient constructor", () => {
 
   it("rejects http:// baseUrl", () => {
     expect(
-      () => new AtlaSentClient({ apiKey: "ask_test_xxxxxxxx", baseUrl: "http://api.atlasent.io" }),
+      () =>
+        new AtlaSentClient({
+          apiKey: "ask_test_xxxxxxxx",
+          baseUrl: "http://api.atlasent.io",
+        }),
     ).toThrow(/https/);
   });
 
@@ -99,7 +117,10 @@ describe("AtlaSentClient constructor", () => {
     const prev = process.env.ATLASENT_ALLOW_INSECURE_HTTP;
     process.env.ATLASENT_ALLOW_INSECURE_HTTP = "1";
     try {
-      const c = new AtlaSentClient({ apiKey: "ask_test_xxxxxxxx", baseUrl: "http://localhost:8000" });
+      const c = new AtlaSentClient({
+        apiKey: "ask_test_xxxxxxxx",
+        baseUrl: "http://localhost:8000",
+      });
       expect(c).toBeDefined();
     } finally {
       if (prev === undefined) delete process.env.ATLASENT_ALLOW_INSECURE_HTTP;
@@ -110,14 +131,16 @@ describe("AtlaSentClient constructor", () => {
 
 describe("evaluate()", () => {
   it("returns decision: ALLOW on permitted response", async () => {
-    const client = makeClient(mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE)));
+    const client = makeClient(
+      mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE)),
+    );
     const result = await client.evaluate({
       agent: "clinical-data-agent",
       action: "modify_patient_record",
       context: { user: "dr_smith", environment: "production" },
     });
     expect(result).toEqual({
-      decision: "ALLOW",
+      decision: "allow",
       decision_canonical: "allow",
       permitId: "dec_alpha",
       reason: "Operator authorized under GxP policy",
@@ -129,9 +152,11 @@ describe("evaluate()", () => {
   });
 
   it("returns decision: DENY on non-permitted response (does not throw)", async () => {
-    const client = makeClient(mockFetch(() => jsonResponse(EVALUATE_DENY_WIRE)));
+    const client = makeClient(
+      mockFetch(() => jsonResponse(EVALUATE_DENY_WIRE)),
+    );
     const result = await client.evaluate({ agent: "a", action: "b" });
-    expect(result.decision).toBe("DENY");
+    expect(result.decision).toBe("deny");
     expect(result.permitId).toBe("dec_beta");
     expect(result.reason).toBe("Missing change_reason for critical field");
   });
@@ -162,8 +187,12 @@ describe("evaluate()", () => {
     const [, init] = fetchImpl.mock.calls[0]!;
     const headers = init!.headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer ask_live_test");
-    expect(headers["User-Agent"]).toMatch(/^@atlasent\/sdk\/\d+\.\d+\.\d+ node\//);
-    expect(headers["X-Request-ID"]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(headers["User-Agent"]).toMatch(
+      /^@atlasent\/sdk\/\d+\.\d+\.\d+ node\//,
+    );
+    expect(headers["X-Request-ID"]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
     expect(headers["Content-Type"]).toBe("application/json");
     expect(headers.Accept).toBe("application/json");
   });
@@ -184,7 +213,7 @@ describe("evaluate()", () => {
     };
     const client = makeClient(mockFetch(() => jsonResponse(wire)));
     const result = await client.evaluate({ agent: "a", action: "b" });
-    expect(result.decision).toBe("ALLOW");
+    expect(result.decision).toBe("allow");
     expect(result.decision_canonical).toBe("allow");
   });
 
@@ -196,7 +225,7 @@ describe("evaluate()", () => {
     };
     const client = makeClient(mockFetch(() => jsonResponse(wire)));
     const result = await client.evaluate({ agent: "a", action: "b" });
-    expect(result.decision).toBe("DENY");
+    expect(result.decision).toBe("deny");
     expect(result.decision_canonical).toBe("deny");
     expect(result.reason).toBe("policy denied");
   });
@@ -209,9 +238,8 @@ describe("evaluate()", () => {
     };
     const client = makeClient(mockFetch(() => jsonResponse(wire)));
     const result = await client.evaluate({ agent: "a", action: "b" });
-    // Legacy 2-value collapses hold → DENY (deprecated behavior)
-    expect(result.decision).toBe("DENY");
-    // Canonical 4-value preserves the distinct hold state
+    // Canonical 4-value preserves the distinct hold state on both fields.
+    expect(result.decision).toBe("hold");
     expect(result.decision_canonical).toBe("hold");
     expect(result.reason).toBe("awaiting reviewer");
   });
@@ -224,9 +252,8 @@ describe("evaluate()", () => {
     };
     const client = makeClient(mockFetch(() => jsonResponse(wire)));
     const result = await client.evaluate({ agent: "a", action: "b" });
-    // Legacy 2-value collapses escalate → DENY (deprecated behavior)
-    expect(result.decision).toBe("DENY");
-    // Canonical 4-value preserves the distinct escalate state
+    // Canonical 4-value preserves the distinct escalate state on both fields.
+    expect(result.decision).toBe("escalate");
     expect(result.decision_canonical).toBe("escalate");
     expect(result.reason).toBe("queued for human review");
   });
@@ -310,10 +337,8 @@ describe("evaluatePreflight()", () => {
     });
     // Does NOT throw on a deny — preflight returns the outcome so the
     // caller can branch on it and render the trace.
-    expect(result.evaluation.decision).toBe("DENY");
-    expect(result.evaluation.reason).toBe(
-      "preflight: change_reason missing",
-    );
+    expect(result.evaluation.decision).toBe("deny");
+    expect(result.evaluation.reason).toBe("preflight: change_reason missing");
     expect(result.constraintTrace).not.toBeNull();
     expect(result.constraintTrace!.matching_policy_id).toBe(
       "pol_close_window_v3",
@@ -340,7 +365,7 @@ describe("evaluatePreflight()", () => {
       agent: "agent-1",
       action: "close_period",
     });
-    expect(result.evaluation.decision).toBe("ALLOW");
+    expect(result.evaluation.decision).toBe("allow");
     expect(result.evaluation.permitId).toBe("dec_pf_42");
     expect(result.constraintTrace).toBeNull();
   });
@@ -375,9 +400,9 @@ describe("evaluatePreflight()", () => {
       action: "act",
     });
     expect(result.constraintTrace).not.toBeNull();
-    expect(
-      result.constraintTrace!.rules_evaluated[0]!.stages[0]!.matched,
-    ).toBe(true);
+    expect(result.constraintTrace!.rules_evaluated[0]!.stages[0]!.matched).toBe(
+      true,
+    );
   });
 });
 
@@ -420,12 +445,108 @@ describe("verifyPermit()", () => {
   });
 });
 
+describe("deployGate()", () => {
+  it("defaults action to deployment.production and uses /v1-evaluate then /v1-verify-permit", async () => {
+    const fetchImpl = mockFetch((url) =>
+      url.endsWith("/v1-evaluate")
+        ? jsonResponse({
+            decision: "allow",
+            permit_token: "pt_deploy_1",
+            request_id: "req_deploy_1",
+            reason: "approved",
+            audit_hash: "audit_deploy_1",
+          })
+        : jsonResponse({
+            valid: true,
+            verified: true,
+            outcome: "allow",
+            permit_hash: "hash_deploy_1",
+            timestamp: "2026-05-13T00:00:00Z",
+          }),
+    );
+    const client = makeClient(fetchImpl);
+
+    const result = await client.deployGate({
+      context: { repo: "atlasent/api", commit: "abc123" },
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.evidence).toEqual({
+      permitId: "pt_deploy_1",
+      permitHash: "hash_deploy_1",
+      auditHash: "audit_deploy_1",
+      verifiedAt: "2026-05-13T00:00:00Z",
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    const [evaluateUrl, evaluateInit] = fetchImpl.mock.calls[0]!;
+    expect(evaluateUrl).toBe("https://api.atlasent.io/v1-evaluate");
+    expect(JSON.parse(evaluateInit!.body as string)).toEqual({
+      action_type: "deployment.production",
+      actor_id: "ci-deploy-bot",
+      context: { repo: "atlasent/api", commit: "abc123" },
+    });
+
+    const [verifyUrl, verifyInit] = fetchImpl.mock.calls[1]!;
+    expect(verifyUrl).toBe("https://api.atlasent.io/v1-verify-permit");
+    expect(JSON.parse(verifyInit!.body as string)).toEqual({
+      permit_token: "pt_deploy_1",
+      action_type: "deployment.production",
+      actor_id: "ci-deploy-bot",
+    });
+  });
+
+  it("blocks if server-side verifyPermit fails", async () => {
+    const fetchImpl = mockFetch((url) =>
+      url.endsWith("/v1-evaluate")
+        ? jsonResponse({
+            decision: "allow",
+            permit_token: "pt_deploy_2",
+            request_id: "req_deploy_2",
+            audit_hash: "audit_deploy_2",
+          })
+        : jsonResponse({
+            valid: false,
+            verified: false,
+            outcome: "deny",
+            reason: "permit revoked",
+          }),
+    );
+    const client = makeClient(fetchImpl);
+
+    const result = await client.deployGate();
+
+    expect(result.allowed).toBe(false);
+    expect(result.verification?.verified).toBe(false);
+    expect(result.reason).toContain("permit verification");
+  });
+
+  it("blocks without calling verifyPermit when evaluate denies", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({
+        decision: "deny",
+        request_id: "req_deploy_3",
+        denial: { reason: "change window closed" },
+      }),
+    );
+    const client = makeClient(fetchImpl);
+
+    const result = await client.deployGate();
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe("change window closed");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("HTTP error mapping", () => {
   it("401 → AtlaSentError(code: invalid_api_key)", async () => {
     const client = makeClient(
       mockFetch(() => new Response("unauthorized", { status: 401 })),
     );
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       name: "AtlaSentError",
       status: 401,
       code: "invalid_api_key",
@@ -436,7 +557,9 @@ describe("HTTP error mapping", () => {
     const client = makeClient(
       mockFetch(() => new Response("nope", { status: 403 })),
     );
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       status: 403,
       code: "forbidden",
     });
@@ -444,15 +567,18 @@ describe("HTTP error mapping", () => {
 
   it("429 → AtlaSentError(code: rate_limited) with retryAfterMs from Retry-After header", async () => {
     const client = makeClient(
-      mockFetch(() =>
-        new Response("too many", {
-          status: 429,
-          headers: { "Retry-After": "30" },
-        }),
+      mockFetch(
+        () =>
+          new Response("too many", {
+            status: 429,
+            headers: { "Retry-After": "30" },
+          }),
       ),
       { retryPolicy: { maxAttempts: 1 } },
     );
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       status: 429,
       code: "rate_limited",
       retryAfterMs: 30_000,
@@ -462,11 +588,12 @@ describe("HTTP error mapping", () => {
   it("429 → retryAfterMs parsed from HTTP-date Retry-After header", async () => {
     const future = new Date(Date.now() + 45_000).toUTCString();
     const client = makeClient(
-      mockFetch(() =>
-        new Response("too many", {
-          status: 429,
-          headers: { "Retry-After": future },
-        }),
+      mockFetch(
+        () =>
+          new Response("too many", {
+            status: 429,
+            headers: { "Retry-After": future },
+          }),
       ),
       { retryPolicy: { maxAttempts: 1 } },
     );
@@ -486,14 +613,17 @@ describe("HTTP error mapping", () => {
   it("429 → Retry-After HTTP-date in the past clamps to 0", async () => {
     const past = new Date(Date.now() - 10_000).toUTCString();
     const client = makeClient(
-      mockFetch(() =>
-        new Response("too many", {
-          status: 429,
-          headers: { "Retry-After": past },
-        }),
+      mockFetch(
+        () =>
+          new Response("too many", {
+            status: 429,
+            headers: { "Retry-After": past },
+          }),
       ),
     );
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       code: "rate_limited",
       retryAfterMs: 0,
     });
@@ -512,7 +642,9 @@ describe("HTTP error mapping", () => {
         return response;
       }),
     );
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       status: 500,
       code: "server_error",
     });
@@ -522,7 +654,9 @@ describe("HTTP error mapping", () => {
     const client = makeClient(
       mockFetch(() => new Response("oops", { status: 500 })),
     );
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       status: 500,
       code: "server_error",
     });
@@ -538,7 +672,9 @@ describe("HTTP error mapping", () => {
           }),
       ),
     );
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       status: 422,
       code: "bad_request",
       message: "bad field: agent",
@@ -553,7 +689,9 @@ describe("Network / transport errors", () => {
         throw new TypeError("fetch failed: ECONNREFUSED");
       }),
     );
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       code: "network",
     });
   });
@@ -565,7 +703,9 @@ describe("Network / transport errors", () => {
         throw err;
       }),
     );
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       code: "timeout",
     });
   });
@@ -580,7 +720,9 @@ describe("Network / transport errors", () => {
         throw err;
       }),
     );
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       code: "timeout",
     });
   });
@@ -595,14 +737,18 @@ describe("Network / transport errors", () => {
           }),
       ),
     );
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       code: "bad_response",
     });
   });
 
   it("JSON object missing required evaluate fields → code: bad_response", async () => {
     const client = makeClient(mockFetch(() => jsonResponse({ foo: "bar" })));
-    await expect(client.evaluate({ agent: "a", action: "b" })).rejects.toMatchObject({
+    await expect(
+      client.evaluate({ agent: "a", action: "b" }),
+    ).rejects.toMatchObject({
       code: "bad_response",
     });
   });
@@ -681,7 +827,9 @@ describe("X-RateLimit-* header parsing", () => {
   });
 
   it("rateLimit === null when headers absent (older deployments)", async () => {
-    const client = makeClient(mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE)));
+    const client = makeClient(
+      mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE)),
+    );
     const result = await client.evaluate({ agent: "a", action: "b" });
     expect(result.rateLimit).toBeNull();
   });
@@ -769,16 +917,17 @@ describe("keySelf()", () => {
   });
 
   it("surfaces rateLimit when X-RateLimit-* headers are present", async () => {
-    const fetchImpl = mockFetch(() =>
-      new Response(JSON.stringify(KEY_SELF_WIRE), {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "X-RateLimit-Limit": "1000",
-          "X-RateLimit-Remaining": "987",
-          "X-RateLimit-Reset": "1714068060",
-        },
-      }),
+    const fetchImpl = mockFetch(
+      () =>
+        new Response(JSON.stringify(KEY_SELF_WIRE), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-RateLimit-Limit": "1000",
+            "X-RateLimit-Remaining": "987",
+            "X-RateLimit-Reset": "1714068060",
+          },
+        }),
     );
     const client = makeClient(fetchImpl);
     const result = await client.keySelf();
@@ -818,11 +967,12 @@ describe("keySelf()", () => {
   });
 
   it("propagates 401 as a typed AtlaSentError", async () => {
-    const fetchImpl = mockFetch(() =>
-      new Response(JSON.stringify({ error: "invalid_api_key" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      }),
+    const fetchImpl = mockFetch(
+      () =>
+        new Response(JSON.stringify({ error: "invalid_api_key" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }),
     );
     const client = makeClient(fetchImpl);
     await expect(client.keySelf()).rejects.toBeInstanceOf(AtlaSentError);
@@ -912,16 +1062,17 @@ describe("listAuditEvents()", () => {
   });
 
   it("surfaces rateLimit when X-RateLimit-* headers are present", async () => {
-    const fetchImpl = mockFetch(() =>
-      new Response(JSON.stringify(EVENTS_PAGE_WIRE), {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "X-RateLimit-Limit": "500",
-          "X-RateLimit-Remaining": "499",
-          "X-RateLimit-Reset": "1714070000",
-        },
-      }),
+    const fetchImpl = mockFetch(
+      () =>
+        new Response(JSON.stringify(EVENTS_PAGE_WIRE), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-RateLimit-Limit": "500",
+            "X-RateLimit-Remaining": "499",
+            "X-RateLimit-Reset": "1714070000",
+          },
+        }),
     );
     const client = makeClient(fetchImpl);
     const result = await client.listAuditEvents();
@@ -1023,16 +1174,17 @@ describe("createAuditExport()", () => {
   });
 
   it("surfaces rateLimit when X-RateLimit-* headers are present", async () => {
-    const fetchImpl = mockFetch(() =>
-      new Response(JSON.stringify(BUNDLE_WIRE), {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "X-RateLimit-Limit": "10",
-          "X-RateLimit-Remaining": "9",
-          "X-RateLimit-Reset": "1714070000",
-        },
-      }),
+    const fetchImpl = mockFetch(
+      () =>
+        new Response(JSON.stringify(BUNDLE_WIRE), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-RateLimit-Limit": "10",
+            "X-RateLimit-Remaining": "9",
+            "X-RateLimit-Reset": "1714070000",
+          },
+        }),
     );
     const client = makeClient(fetchImpl);
     const result = await client.createAuditExport();
@@ -1167,16 +1319,13 @@ describe("revokePermit()", () => {
   });
 
   it("throws bad_response when decision_id is missing", async () => {
-    const fetchImpl = mockFetch(() =>
-      jsonResponse({ revoked: true }),
-    );
+    const fetchImpl = mockFetch(() => jsonResponse({ revoked: true }));
     const client = makeClient(fetchImpl);
     await expect(
       client.revokePermit({ permitId: "dec_to_revoke" }),
     ).rejects.toMatchObject({ code: "bad_response" });
   });
 });
-
 
 describe("getPermit()", () => {
   const PERMIT_WIRE = {
@@ -1345,11 +1494,15 @@ describe("revokePermitById()", () => {
   it("hits POST /v1/permits/:id/revoke and returns updated permit", async () => {
     const fetchImpl = mockFetch(() => jsonResponse(REVOKED_WIRE));
     const client = makeClient(fetchImpl);
-    const result = await client.revokePermitById("pt_alpha", { reason: "approval rescinded" });
+    const result = await client.revokePermitById("pt_alpha", {
+      reason: "approval rescinded",
+    });
     const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toBe("https://api.atlasent.io/v1/permits/pt_alpha/revoke");
     expect(init!.method).toBe("POST");
-    expect(JSON.parse(init!.body as string)).toEqual({ reason: "approval rescinded" });
+    expect(JSON.parse(init!.body as string)).toEqual({
+      reason: "approval rescinded",
+    });
     expect(result.permit.status).toBe("revoked");
     expect(result.permit.revoked_at).toBe("2026-05-07T01:10:00Z");
     expect(result.permit.revoked_by).toBe("user_admin");
@@ -1360,7 +1513,7 @@ describe("revokePermitById()", () => {
     const fetchImpl = mockFetch(() => jsonResponse(REVOKED_WIRE));
     const client = makeClient(fetchImpl);
     await client.revokePermitById("pt_alpha");
-    const body = JSON.parse((fetchImpl.mock.calls[0]![1]!.body) as string);
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1]!.body as string);
     expect(body).toEqual({});
   });
 
@@ -1369,12 +1522,16 @@ describe("revokePermitById()", () => {
     const client = makeClient(fetchImpl);
     await client.revokePermitById("pt with spaces");
     const [url] = fetchImpl.mock.calls[0]!;
-    expect(url).toBe("https://api.atlasent.io/v1/permits/pt%20with%20spaces/revoke");
+    expect(url).toBe(
+      "https://api.atlasent.io/v1/permits/pt%20with%20spaces/revoke",
+    );
   });
 
   it("throws bad_request when permitId is empty", async () => {
     const client = makeClient(mockFetch(() => jsonResponse({})));
-    await expect(client.revokePermitById("")).rejects.toMatchObject({ code: "bad_request" });
+    await expect(client.revokePermitById("")).rejects.toMatchObject({
+      code: "bad_request",
+    });
   });
 });
 
@@ -1427,12 +1584,16 @@ describe("verifyPermitById()", () => {
     const client = makeClient(fetchImpl);
     await client.verifyPermitById("pt with spaces");
     const [url] = fetchImpl.mock.calls[0]!;
-    expect(url).toBe("https://api.atlasent.io/v1/permits/pt%20with%20spaces/verify");
+    expect(url).toBe(
+      "https://api.atlasent.io/v1/permits/pt%20with%20spaces/verify",
+    );
   });
 
   it("throws bad_request when permitId is empty", async () => {
     const client = makeClient(mockFetch(() => jsonResponse({})));
-    await expect(client.verifyPermitById("")).rejects.toMatchObject({ code: "bad_request" });
+    await expect(client.verifyPermitById("")).rejects.toMatchObject({
+      code: "bad_request",
+    });
   });
 });
 
@@ -1444,14 +1605,18 @@ describe("AtlaSentClient retry", () => {
     const fetchImpl = mockFetch(() => {
       calls++;
       if (calls === 1) return new Response("boom", { status: 500 });
-      return jsonResponse({ decision: "allow", permit_token: "pt_retry", request_id: "r1" });
+      return jsonResponse({
+        decision: "allow",
+        permit_token: "pt_retry",
+        request_id: "r1",
+      });
     });
     const client = makeClient(fetchImpl, {
       retryPolicy: { maxAttempts: 2, baseDelayMs: 0, maxDelayMs: 0 },
     });
     const result = await client.evaluate({ agent: "agent_1", action: "write" });
     expect(calls).toBe(2);
-    expect(result.decision).toBe("ALLOW");
+    expect(result.decision).toBe("allow");
     expect(result.permitId).toBe("pt_retry");
   });
 
@@ -1465,14 +1630,18 @@ describe("AtlaSentClient retry", () => {
           headers: { "Retry-After": "0" },
         });
       }
-      return jsonResponse({ decision: "allow", permit_token: "pt_429", request_id: "r2" });
+      return jsonResponse({
+        decision: "allow",
+        permit_token: "pt_429",
+        request_id: "r2",
+      });
     });
     const client = makeClient(fetchImpl, {
       retryPolicy: { maxAttempts: 2, baseDelayMs: 0, maxDelayMs: 0 },
     });
     const result = await client.evaluate({ agent: "agent_1", action: "write" });
     expect(calls).toBe(2);
-    expect(result.decision).toBe("ALLOW");
+    expect(result.decision).toBe("allow");
   });
 
   it("retries on network error and succeeds", async () => {
@@ -1480,14 +1649,18 @@ describe("AtlaSentClient retry", () => {
     const fetchImpl = mockFetch(() => {
       calls++;
       if (calls === 1) throw new TypeError("fetch failed");
-      return jsonResponse({ decision: "deny", permit_token: "", request_id: "r3" });
+      return jsonResponse({
+        decision: "deny",
+        permit_token: "",
+        request_id: "r3",
+      });
     });
     const client = makeClient(fetchImpl, {
       retryPolicy: { maxAttempts: 2, baseDelayMs: 0, maxDelayMs: 0 },
     });
     const result = await client.evaluate({ agent: "agent_2", action: "read" });
     expect(calls).toBe(2);
-    expect(result.decision).toBe("DENY");
+    expect(result.decision).toBe("deny");
   });
 
   it("exhausts attempts and throws on persistent 500", async () => {
