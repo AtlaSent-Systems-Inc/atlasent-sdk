@@ -63,12 +63,12 @@ export interface RateLimitState {
 }
 
 /** Canonical Deploy Gate V1 protected action. */
-export const DEPLOYMENT_PRODUCTION_ACTION = "deployment.production" as const;
+export const DEPLOYMENT_PRODUCTION_ACTION = "production.deploy" as const;
 
 // ── Deploy Gate V1 context types ──────────────────────────────────────────────
 
 /**
- * Permit claim for `deployment.production` evaluations (Rule 3).
+ * Permit claim for `production.deploy` evaluations (Rule 3).
  *
  * Pass as `permit` inside {@link DeployGateContext}.
  * The `verified` flag is set by the verify-permit service after a
@@ -85,7 +85,7 @@ export interface DeployPermitClaim {
 }
 
 /**
- * Override claim for `deployment.production` evaluations (Rule 8).
+ * Override claim for `production.deploy` evaluations (Rule 8).
  *
  * Both `override_reason` and `authority_basis` must be non-empty to
  * receive `OVERRIDE_APPROVED`. Missing or blank fields return `DENY_POLICY`.
@@ -100,7 +100,7 @@ export interface DeployOverrideClaim {
 }
 
 /**
- * Typed context shape for `deployment.production` evaluations.
+ * Typed context shape for `production.deploy` evaluations.
  *
  * Pass as `context` to `protect()`, `deployGate()`, or
  * {@link AtlaSentClient.evaluate} for the Deploy Gate V1 flow.
@@ -148,7 +148,7 @@ export interface DeployGateContext {
 }
 
 /**
- * Canonical deploy gate decision codes emitted for `deployment.production`.
+ * Canonical deploy gate decision codes emitted for `production.deploy`.
  *
  * Appears as `deny_code` / `matchedRuleId` on evaluation responses.
  * Pin dashboards, alerting, and routing logic to these codes — not to
@@ -180,9 +180,9 @@ export const DEPLOY_GATE_CODES = Object.freeze({
 export interface DeployGateRequest {
   /** CI/repo actor performing the deployment. Defaults to `ci-deploy-bot`. */
   agent?: string;
-  /** Protected action. Defaults to `deployment.production`. */
+  /** Protected action. Defaults to `production.deploy`. */
   action?: typeof DEPLOYMENT_PRODUCTION_ACTION | string;
-  /** Typed deploy gate context for `deployment.production`. */
+  /** Typed deploy gate context for `production.deploy`. */
   context?: DeployGateContext | Record<string, unknown>;
 }
 

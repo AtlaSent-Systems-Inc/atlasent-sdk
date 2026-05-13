@@ -161,7 +161,7 @@ class TestWebhookPayload:
             "event_type": "enforcement.blocked",
             "source_id": "eval_01",
             "data": {
-                "action": "production_deploy",
+                "action": "production.deploy",
                 "actor": "github:alice",
                 "deny_reason": "outside deployment window",
             },
