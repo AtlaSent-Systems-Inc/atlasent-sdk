@@ -65,14 +65,125 @@ export interface RateLimitState {
 /** Canonical Deploy Gate V1 protected action. */
 export const DEPLOYMENT_PRODUCTION_ACTION = "deployment.production" as const;
 
+// ── Deploy Gate V1 context types ──────────────────────────────────────────────
+
+/**
+ * Permit claim for `deployment.production` evaluations (Rule 3).
+ *
+ * Pass as `permit` inside {@link DeployGateContext}.
+ * The `verified` flag is set by the verify-permit service after a
+ * successful `/v1-verify-permit` call — do not self-assert it.
+ */
+export interface DeployPermitClaim {
+  permit_id?: string;
+  environment?: string;
+  action_type?: string;
+  /** ISO-8601 timestamp when the permit was issued. */
+  issued_at?: string;
+  /** Set server-side by the verify-permit service. Do not self-assert. */
+  verified?: boolean;
+}
+
+/**
+ * Override claim for `deployment.production` evaluations (Rule 8).
+ *
+ * Both `override_reason` and `authority_basis` must be non-empty to
+ * receive `OVERRIDE_APPROVED`. Missing or blank fields return `DENY_POLICY`.
+ */
+export interface DeployOverrideClaim {
+  /** Human-readable reason. Required and non-empty. */
+  override_reason?: string;
+  /** Authoritative basis — runbook section, incident ticket, etc. Required and non-empty. */
+  authority_basis?: string;
+  /** Approver actor ID (audit record; does not gate the decision). */
+  approver_actor_id?: string;
+}
+
+/**
+ * Typed context shape for `deployment.production` evaluations.
+ *
+ * Pass as `context` to `protect()`, `deployGate()`, or
+ * {@link AtlaSentClient.evaluate} for the Deploy Gate V1 flow.
+ *
+ * @example
+ * ```ts
+ * const permit = await atlasent.protect({
+ *   agent: "deploy-bot",
+ *   action: DEPLOYMENT_PRODUCTION_ACTION,
+ *   context: {
+ *     environment: "production",
+ *     evaluation_confirmed: true,
+ *     actorMetadata: { role: "deploy_engineer" },
+ *     permit: {
+ *       permit_id: permitToken,
+ *       environment: "production",
+ *       action_type: DEPLOYMENT_PRODUCTION_ACTION,
+ *       issued_at: new Date().toISOString(),
+ *       verified: true,
+ *     },
+ *   } satisfies DeployGateContext,
+ * });
+ * ```
+ */
+export interface DeployGateContext {
+  /** Must be `"production"` for the production gate to apply. */
+  environment?: "production" | "staging" | "development";
+  /**
+   * When `true`, all rule failures are shadowed to `allow` (fail-open).
+   * Malformed-timestamp inconsistencies still escalate.
+   * Use for initial rollout before locking enforcement.
+   */
+  pilot_mode?: boolean;
+  /** Must be `true` — confirms an evaluation record exists before proceeding. */
+  evaluation_confirmed?: boolean;
+  /** ISO-8601 timestamp of when evaluation was confirmed. */
+  evaluation_confirmed_at?: string;
+  /** Actor role metadata. `role` must be one of the approved deploy roles. */
+  actorMetadata?: { role?: string };
+  /** Signed permit claim — required for non-pilot production deployments. */
+  permit?: DeployPermitClaim;
+  /** Override claim — short-circuits all rules when both fields are non-empty. */
+  override?: DeployOverrideClaim;
+  [key: string]: unknown;
+}
+
+/**
+ * Canonical deploy gate decision codes emitted for `deployment.production`.
+ *
+ * Appears as `deny_code` / `matchedRuleId` on evaluation responses.
+ * Pin dashboards, alerting, and routing logic to these codes — not to
+ * `deny_reason` strings, which may change.
+ */
+export type DeployGateDenyCode =
+  | "ALLOW"
+  | "DENY_POLICY"
+  | "DENY_AUTHORITY"
+  | "DENY_ENVIRONMENT"
+  | "PERMIT_EXPIRED"
+  | "VERIFY_FAILED"
+  | "ESCALATE_REQUIRED"
+  | "OVERRIDE_APPROVED";
+
+/** Typed constants for {@link DeployGateDenyCode}. */
+export const DEPLOY_GATE_CODES = Object.freeze({
+  ALLOW: "ALLOW",
+  DENY_POLICY: "DENY_POLICY",
+  DENY_AUTHORITY: "DENY_AUTHORITY",
+  DENY_ENVIRONMENT: "DENY_ENVIRONMENT",
+  PERMIT_EXPIRED: "PERMIT_EXPIRED",
+  VERIFY_FAILED: "VERIFY_FAILED",
+  ESCALATE_REQUIRED: "ESCALATE_REQUIRED",
+  OVERRIDE_APPROVED: "OVERRIDE_APPROVED",
+} satisfies Record<DeployGateDenyCode, DeployGateDenyCode>);
+
 /** Input to {@link AtlaSentClient.deployGate}. */
 export interface DeployGateRequest {
   /** CI/repo actor performing the deployment. Defaults to `ci-deploy-bot`. */
   agent?: string;
   /** Protected action. Defaults to `deployment.production`. */
   action?: typeof DEPLOYMENT_PRODUCTION_ACTION | string;
-  /** Deployment evidence context: repo, commit, run id, approver, etc. */
-  context?: Record<string, unknown>;
+  /** Typed deploy gate context for `deployment.production`. */
+  context?: DeployGateContext | Record<string, unknown>;
 }
 
 /** Evidence metadata returned by {@link AtlaSentClient.deployGate}. */

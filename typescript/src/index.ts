@@ -37,7 +37,7 @@ import { requirePermit, classifyCommand } from "./requirePermit.js";
 import { DEPLOYMENT_PRODUCTION_ACTION } from "./types.js";
 
 export { AtlaSentClient } from "./client.js";
-export { DEPLOYMENT_PRODUCTION_ACTION } from "./types.js";
+export { DEPLOY_GATE_CODES, DEPLOYMENT_PRODUCTION_ACTION } from "./types.js";
 export {
   AtlaSentDeniedError,
   AtlaSentError,
@@ -74,9 +74,13 @@ export type {
   ConstraintTraceStage,
   Decision,
   DecisionCanonical,
+  DeployGateContext,
+  DeployGateDenyCode,
   DeployGateEvidence,
   DeployGateRequest,
   DeployGateResponse,
+  DeployOverrideClaim,
+  DeployPermitClaim,
   EvaluatePreflightResponse,
   EvaluateRequest,
   EvaluateResponse,
