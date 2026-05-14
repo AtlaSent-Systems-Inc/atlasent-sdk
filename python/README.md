@@ -17,7 +17,7 @@ from atlasent import protect
 
 permit = protect(
     agent="deploy-bot",
-    action="deployment.production",
+    action="production.deploy",
     context={"commit": commit, "approver": approver},
 )
 # If we got here, the action is authorized end-to-end.

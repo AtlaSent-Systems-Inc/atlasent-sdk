@@ -33,7 +33,7 @@ async function main(): Promise<void> {
   try {
     evaluation = await client.evaluate({
       agent: "ci-deploy-bot",
-      action: "deployment.production",
+      action: "production.deploy",
       context: deployContext,
     });
   } catch (err) {
@@ -56,7 +56,7 @@ async function main(): Promise<void> {
   const verification = await client.verifyPermit({
     permitId: evaluation.permitId,
     agent: "ci-deploy-bot",
-    action: "deployment.production",
+    action: "production.deploy",
   });
 
   if (!verification.verified) {

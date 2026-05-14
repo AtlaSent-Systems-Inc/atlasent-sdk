@@ -7,7 +7,7 @@
  *
  * const permit = await atlasent.protect({
  *   agent: "deploy-bot",
- *   action: "deployment.production",
+ *   action: "production.deploy",
  *   context: { commit, approver },
  * });
  * // …run the action. If we got here, AtlaSent authorized it
@@ -86,7 +86,7 @@ export function configure(options: ConfigureOptions): void {
 
 /**
  * Run the canonical Deploy Gate V1 helper using the process-wide client.
- * Defaults to action `deployment.production`; execution is allowed only after
+ * Defaults to action `production.deploy`; execution is allowed only after
  * server-side `/v1-evaluate` and `/v1-verify-permit` both pass.
  */
 export async function deployGate(

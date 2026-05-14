@@ -95,7 +95,7 @@ describe("atlasent.protect (default export API)", () => {
 
     const permit = await atlasent.protect({
       agent: "deploy-bot",
-      action: "deployment.production",
+      action: "production.deploy",
       context: { commit: "abc123" },
     });
 

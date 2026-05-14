@@ -8,7 +8,7 @@
  *
  * const permit = await atlasent.protect({
  *   agent: "deploy-bot",
- *   action: "deployment.production",
+ *   action: "production.deploy",
  *   context: { commit, approver },
  * });
  * ```
@@ -34,10 +34,17 @@ import { verifyBundle } from "./auditBundle.js";
 import { AtlaSentDeniedError, AtlaSentError } from "./errors.js";
 import { configure, deployGate, protect } from "./protect.js";
 import { requirePermit, classifyCommand } from "./requirePermit.js";
-import { DEPLOYMENT_PRODUCTION_ACTION } from "./types.js";
+import {
+  DEPLOYMENT_PRODUCTION_ACTION,
+  PRODUCTION_DEPLOY_ACTION,
+} from "./types.js";
 
 export { AtlaSentClient } from "./client.js";
-export { DEPLOY_GATE_CODES, DEPLOYMENT_PRODUCTION_ACTION } from "./types.js";
+export {
+  DEPLOY_GATE_CODES,
+  DEPLOYMENT_PRODUCTION_ACTION,
+  PRODUCTION_DEPLOY_ACTION,
+} from "./types.js";
 export {
   AtlaSentDeniedError,
   AtlaSentError,
@@ -538,6 +545,7 @@ const atlasent = {
   requirePermit,
   classifyCommand,
   verifyBundle,
+  PRODUCTION_DEPLOY_ACTION,
   DEPLOYMENT_PRODUCTION_ACTION,
   AtlaSentClient,
   AtlaSentError,

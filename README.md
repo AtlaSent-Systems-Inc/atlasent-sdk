@@ -17,7 +17,7 @@ from atlasent import protect
 
 permit = protect(
     agent="ci-deploy-bot",
-    action="deployment.production",
+    action="production.deploy",
     context={"repo": "atlasent/api", "commit": commit, "environment": "production"},
 )
 # If protect() returns, /v1-evaluate allowed and /v1-verify-permit verified.

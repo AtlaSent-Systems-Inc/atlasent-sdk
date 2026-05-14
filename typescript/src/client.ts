@@ -22,7 +22,7 @@ import {
   type AtlaSentErrorCode,
   type AtlaSentErrorInit,
 } from "./errors.js";
-import { DEPLOYMENT_PRODUCTION_ACTION } from "./types.js";
+import { PRODUCTION_DEPLOY_ACTION } from "./types.js";
 import type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
@@ -594,7 +594,7 @@ export class AtlaSentClient {
 
   /**
    * Run the canonical Deploy Gate V1 flow:
-   * evaluate `deployment.production`, verify the issued permit server-side,
+   * evaluate `production.deploy`, verify the issued permit server-side,
    * and return allow/block plus audit/evidence metadata.
    *
    * This helper never treats a signed/offline permit artifact as sufficient
@@ -604,7 +604,7 @@ export class AtlaSentClient {
    */
   async deployGate(input: DeployGateRequest = {}): Promise<DeployGateResponse> {
     const agent = input.agent ?? "ci-deploy-bot";
-    const action = input.action ?? DEPLOYMENT_PRODUCTION_ACTION;
+    const action = input.action ?? PRODUCTION_DEPLOY_ACTION;
     const context = input.context ?? {};
 
     const evaluation = await this.evaluate({ agent, action, context });

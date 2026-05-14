@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.4.0 — 2026-05-14 — canonical Deploy Gate action: `production.deploy`
+
+### Added
+
+- **`PRODUCTION_DEPLOY_ACTION` constant** — exported from `atlasent`
+  (value `"production.deploy"`). The new V1 canonical Deploy Gate
+  action string, mirroring the TypeScript SDK's
+  `PRODUCTION_DEPLOY_ACTION`.
+
+### Changed
+
+- **All quickstart examples and docstrings now use `"production.deploy"`** —
+  top-level `README.md`, `python/README.md`, `python/examples/protect.py`,
+  and the docstrings in `atlasent/__init__.py`, `atlasent/client.py`,
+  `atlasent/async_client.py`, `atlasent/with_permit.py`, and
+  `atlasent/authorize.py`. The underlying server-side canonical was
+  renamed in atlasent-api PR #662 (`action_classes.slug`) and
+  atlasent-console PR #432 (`protected_actions.key`). The server
+  alias-tolerates the legacy `"deployment.production"` during the V1
+  alias window, so callers that explicitly pass
+  `action="deployment.production"` continue to work.
+
 ## 2.3.1 — Unreleased — permit observability surface + entrypoint canonicalization
 
 ### Canonical SDK surface (Tier 3 of pilot-readiness plan)
