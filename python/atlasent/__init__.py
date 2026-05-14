@@ -9,7 +9,7 @@ Quick start::
 
     permit = protect(
         agent="deploy-bot",
-        action="deployment.production",
+        action="production.deploy",
         context={"commit": commit, "approver": approver},
     )
     # If we got here, the action is authorized end-to-end.
@@ -173,8 +173,16 @@ from .require_permit import ProtectedAction, classify_command, require_permit
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
 
+#: Canonical Deploy Gate V1 protected action. Mirrors the TypeScript
+#: SDK's ``PRODUCTION_DEPLOY_ACTION``. Use this string (or the constant)
+#: when calling ``protect()``/``evaluate()`` for the production deploy
+#: gate; the server alias-tolerates the legacy ``deployment.production``
+#: during the V1 alias window.
+PRODUCTION_DEPLOY_ACTION = "production.deploy"
+
 __all__ = [
     "__version__",
+    "PRODUCTION_DEPLOY_ACTION",
     "AtlaSentClient",
     "AsyncAtlaSentClient",
     "configure",

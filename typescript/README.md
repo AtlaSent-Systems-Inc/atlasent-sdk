@@ -25,7 +25,7 @@ if (!gate.allowed) {
 // runDeploy();
 ```
 
-That's it. `deployGate()` performs the V1 Deploy Gate sequence against `deployment.production`: `evaluate()` calls `POST /v1-evaluate`, receives a permit when allowed, then `verifyPermit()` calls `POST /v1-verify-permit` before your deployment can run. A clean `deny` is returned as a block result — network / server / auth failures are thrown.
+That's it. `deployGate()` performs the V1 Deploy Gate sequence against `production.deploy`: `evaluate()` calls `POST /v1-evaluate`, receives a permit when allowed, then `verifyPermit()` calls `POST /v1-verify-permit` before your deployment can run. A clean `deny` is returned as a block result — network / server / auth failures are thrown.
 
 ## Simple V1 surface
 
@@ -37,7 +37,7 @@ client.verifyPermit({ permitId, agent?, action?, context? })
   // → { verified, outcome, permitHash, timestamp }
 
 client.deployGate({ agent?, action?, context? })
-  // defaults action to "deployment.production" and returns { allowed, reason, evidence }
+  // defaults action to "production.deploy" and returns { allowed, reason, evidence }
 ```
 
 `verifyPermit()` confirms a previously-issued permit server-side. Signed/offline permit artifacts never imply deployment authorization by themselves.
@@ -51,7 +51,7 @@ const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
 
 const evaluation = await client.evaluate({
   agent: "ci-deploy-bot",
-  action: "deployment.production",
+  action: "production.deploy",
   context: { service: "billing-api", commit: process.env.GIT_SHA },
 });
 

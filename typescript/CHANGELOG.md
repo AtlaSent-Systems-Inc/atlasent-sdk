@@ -4,6 +4,38 @@ All notable changes to `@atlasent/sdk` are documented here. The SDK
 follows [semver](https://semver.org/): breaking changes bump the major
 (or minor while on 0.x).
 
+## [2.3.0] — 2026-05-14
+
+### Added
+
+- **`PRODUCTION_DEPLOY_ACTION` constant** — exported from `@atlasent/sdk`
+  (value `"production.deploy"`). The new V1 canonical Deploy Gate
+  action string. Use this on new code; existing imports of
+  `DEPLOYMENT_PRODUCTION_ACTION` continue to compile.
+
+### Changed
+
+- **`deployGate()` default action is now `"production.deploy"`** — the
+  underlying server-side canonical was renamed in atlasent-api PR #662
+  (`action_classes.slug`) and atlasent-console PR #432
+  (`protected_actions.key`). The server alias-tolerates the legacy
+  `"deployment.production"` during the V1 alias window, so callers
+  that explicitly pin `action: "deployment.production"` continue to
+  work; the SDK default just stops emitting the legacy literal.
+- **Docs / examples / JSDocs updated** — README quickstart,
+  `examples/deploy-gate.ts`, `examples/protect.ts`, and inline JSDoc
+  snippets across `src/types.ts`, `src/client.ts`, `src/protect.ts`,
+  `src/hono.ts`, and `src/index.ts` now show `"production.deploy"`.
+- **`test/deploy-gate-v1.test.ts`** — the example-lock guard now
+  enforces `production.deploy` and rejects `deployment.production`
+  (previously inverted).
+
+### Deprecated
+
+- **`DEPLOYMENT_PRODUCTION_ACTION`** — still exported, value still
+  `"deployment.production"`. Marked `@deprecated`; please migrate to
+  `PRODUCTION_DEPLOY_ACTION`. Removal target: next minor release.
+
 ## [2.2.0] — 2026-05-07
 
 ### Added

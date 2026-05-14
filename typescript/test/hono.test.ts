@@ -80,7 +80,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
     const app = new Hono<AppEnv>();
     app.post(
       "/deploy",
-      atlaSentGuard({ agent: "deploy-bot", action: "deployment.production" }),
+      atlaSentGuard({ agent: "deploy-bot", action: "production.deploy" }),
       (c) => {
         const permit = c.get("atlasent");
         return c.json({ ok: true, permitId: permit.permitId });

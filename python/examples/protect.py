@@ -26,7 +26,7 @@ def deploy(commit: str, approver: str) -> None:
     try:
         permit = protect(
             agent="deploy-bot",
-            action="deployment.production",
+            action="production.deploy",
             context={"commit": commit, "approver": approver},
         )
     except AtlaSentDeniedError as exc:

@@ -11,7 +11,7 @@
  * app.post(
  *   "/deploy",
  *   atlaSentGuard({
- *     action: "deployment.production",
+ *     action: "production.deploy",
  *     agent: (c) => c.req.header("x-agent-id") ?? "anonymous",
  *     context: async (c) => ({ commit: (await c.req.json()).commit }),
  *   }),
@@ -52,7 +52,7 @@ type Resolver<T extends string | Record<string, unknown>> =
 /** Options for {@link atlaSentGuard}. */
 export interface AtlaSentGuardOptions {
   /**
-   * Action being authorized (e.g. `"deployment.production"`). A string
+   * Action being authorized (e.g. `"production.deploy"`). A string
    * fixes the action; a function lets you derive it per-request (e.g.
    * from route params or the HTTP verb).
    */

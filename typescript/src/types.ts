@@ -62,13 +62,30 @@ export interface RateLimitState {
   resetAt: Date;
 }
 
-/** Canonical Deploy Gate V1 protected action. */
+/**
+ * Canonical Deploy Gate V1 protected action.
+ *
+ * Use this constant (or its string value `"production.deploy"`) on all
+ * new code. Server-side `action_classes.slug` was canonicalised to
+ * `production.deploy` in atlasent-api PR #662 / atlasent-console
+ * PR #432; the SDK default now matches.
+ */
+export const PRODUCTION_DEPLOY_ACTION = "production.deploy" as const;
+
+/**
+ * Legacy alias for {@link PRODUCTION_DEPLOY_ACTION}.
+ *
+ * @deprecated since 2.3.0 — use {@link PRODUCTION_DEPLOY_ACTION}. The
+ * server alias-tolerates `deployment.production` during the V1 alias
+ * window, so existing callers continue to work unchanged; please
+ * migrate by the next minor release.
+ */
 export const DEPLOYMENT_PRODUCTION_ACTION = "deployment.production" as const;
 
 // ── Deploy Gate V1 context types ──────────────────────────────────────────────
 
 /**
- * Permit claim for `deployment.production` evaluations (Rule 3).
+ * Permit claim for `production.deploy` evaluations (Rule 3).
  *
  * Pass as `permit` inside {@link DeployGateContext}.
  * The `verified` flag is set by the verify-permit service after a
@@ -85,7 +102,7 @@ export interface DeployPermitClaim {
 }
 
 /**
- * Override claim for `deployment.production` evaluations (Rule 8).
+ * Override claim for `production.deploy` evaluations (Rule 8).
  *
  * Both `override_reason` and `authority_basis` must be non-empty to
  * receive `OVERRIDE_APPROVED`. Missing or blank fields return `DENY_POLICY`.
@@ -100,7 +117,7 @@ export interface DeployOverrideClaim {
 }
 
 /**
- * Typed context shape for `deployment.production` evaluations.
+ * Typed context shape for `production.deploy` evaluations.
  *
  * Pass as `context` to `protect()`, `deployGate()`, or
  * {@link AtlaSentClient.evaluate} for the Deploy Gate V1 flow.
@@ -109,7 +126,7 @@ export interface DeployOverrideClaim {
  * ```ts
  * const permit = await atlasent.protect({
  *   agent: "deploy-bot",
- *   action: DEPLOYMENT_PRODUCTION_ACTION,
+ *   action: PRODUCTION_DEPLOY_ACTION,
  *   context: {
  *     environment: "production",
  *     evaluation_confirmed: true,
@@ -117,7 +134,7 @@ export interface DeployOverrideClaim {
  *     permit: {
  *       permit_id: permitToken,
  *       environment: "production",
- *       action_type: DEPLOYMENT_PRODUCTION_ACTION,
+ *       action_type: PRODUCTION_DEPLOY_ACTION,
  *       issued_at: new Date().toISOString(),
  *       verified: true,
  *     },
@@ -148,7 +165,7 @@ export interface DeployGateContext {
 }
 
 /**
- * Canonical deploy gate decision codes emitted for `deployment.production`.
+ * Canonical deploy gate decision codes emitted for `production.deploy`.
  *
  * Appears as `deny_code` / `matchedRuleId` on evaluation responses.
  * Pin dashboards, alerting, and routing logic to these codes — not to
@@ -180,9 +197,12 @@ export const DEPLOY_GATE_CODES = Object.freeze({
 export interface DeployGateRequest {
   /** CI/repo actor performing the deployment. Defaults to `ci-deploy-bot`. */
   agent?: string;
-  /** Protected action. Defaults to `deployment.production`. */
-  action?: typeof DEPLOYMENT_PRODUCTION_ACTION | string;
-  /** Typed deploy gate context for `deployment.production`. */
+  /** Protected action. Defaults to `production.deploy`. */
+  action?:
+    | typeof PRODUCTION_DEPLOY_ACTION
+    | typeof DEPLOYMENT_PRODUCTION_ACTION
+    | string;
+  /** Typed deploy gate context for `production.deploy`. */
   context?: DeployGateContext | Record<string, unknown>;
 }
 

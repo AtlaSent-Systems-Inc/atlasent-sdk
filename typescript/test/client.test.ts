@@ -446,7 +446,7 @@ describe("verifyPermit()", () => {
 });
 
 describe("deployGate()", () => {
-  it("defaults action to deployment.production and uses /v1-evaluate then /v1-verify-permit", async () => {
+  it("defaults action to production.deploy and uses /v1-evaluate then /v1-verify-permit", async () => {
     const fetchImpl = mockFetch((url) =>
       url.endsWith("/v1-evaluate")
         ? jsonResponse({
@@ -482,7 +482,7 @@ describe("deployGate()", () => {
     const [evaluateUrl, evaluateInit] = fetchImpl.mock.calls[0]!;
     expect(evaluateUrl).toBe("https://api.atlasent.io/v1-evaluate");
     expect(JSON.parse(evaluateInit!.body as string)).toEqual({
-      action_type: "deployment.production",
+      action_type: "production.deploy",
       actor_id: "ci-deploy-bot",
       context: { repo: "atlasent/api", commit: "abc123" },
     });
@@ -491,7 +491,7 @@ describe("deployGate()", () => {
     expect(verifyUrl).toBe("https://api.atlasent.io/v1-verify-permit");
     expect(JSON.parse(verifyInit!.body as string)).toEqual({
       permit_token: "pt_deploy_1",
-      action_type: "deployment.production",
+      action_type: "production.deploy",
       actor_id: "ci-deploy-bot",
     });
   });

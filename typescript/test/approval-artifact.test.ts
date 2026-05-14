@@ -7,7 +7,7 @@ describe("ApprovalArtifactV1 type contract", () => {
       version: "approval_artifact.v1",
       approval_id: "apr_123",
       tenant_id: "tnt_1",
-      action_type: "deployment.production",
+      action_type: "production.deploy",
       resource_id: "release:abc123",
       action_hash: "f".repeat(64),
       reviewer: {

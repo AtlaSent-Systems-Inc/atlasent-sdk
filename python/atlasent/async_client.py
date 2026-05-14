@@ -376,7 +376,7 @@ class AsyncAtlaSentClient:
             async with AsyncAtlaSentClient(api_key="ask_live_...") as client:
                 permit = await client.protect(
                     agent="deploy-bot",
-                    action="deployment.production",
+                    action="production.deploy",
                     context={"commit": commit},
                 )
         """
