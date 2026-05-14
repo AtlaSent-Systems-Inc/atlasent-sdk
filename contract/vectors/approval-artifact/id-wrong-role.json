@@ -22,7 +22,7 @@
         }
       }
     },
-    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "expected_tenant_id": "tnt_test",
     "required_role": "qa_reviewer",
     "expected_environment": "production",
@@ -35,9 +35,9 @@
     "version": "approval_artifact.v1",
     "approval_id": "apr_fixture_id_wrong_role",
     "tenant_id": "tnt_test",
-    "action_type": "deployment.production.deploy",
+    "action_type": "production.deploy",
     "resource_id": "release:abc123",
-    "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "reviewer": {
       "principal_id": "okta|00u_test_alice",
       "principal_kind": "human",
@@ -54,7 +54,7 @@
     "issued_at": "2026-04-16T11:59:00.000Z",
     "expires_at": "2026-04-16T13:00:00.000Z",
     "nonce": "n_fixture_id_wrong_role",
-    "signature": "1f9398e4dbdb76db1facb622c95fad1952ca44feac87acc98a113db2b986dbe5",
+    "signature": "9e5cc1bd7e2e8ea15ddd623e120e0db0cd3d7bf238bcbc18d647a0f396fb86b7",
     "identity_assertion": {
       "version": "identity_assertion.v1",
       "subject": {
@@ -64,7 +64,7 @@
       "role": "security_lead",
       "binding": {
         "approval_id": "apr_fixture_id_wrong_role",
-        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
         "tenant_id": "tnt_test",
         "environment": "production"
       },
@@ -75,7 +75,7 @@
       },
       "issued_at": "2026-04-16T11:59:30.000Z",
       "expires_at": "2026-04-16T12:30:00.000Z",
-      "signature": "cb5a9ca76dc36aefc5ce4d555f86cbde1a4a46afe515410e77a3c491e187371f"
+      "signature": "4e5ffb858348d8d6768cec8543ceee3aab9de872e365fbfdfc177fd241d4451b"
     }
   }
 }
