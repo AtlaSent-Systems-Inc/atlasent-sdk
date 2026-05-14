@@ -22,7 +22,7 @@
         }
       }
     },
-    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "expected_tenant_id": "tnt_test",
     "required_role": "qa_reviewer",
     "expected_environment": "production",
@@ -33,7 +33,7 @@
   "package": {
     "version": "approval_quorum.v1",
     "tenant_id": "tnt_test",
-    "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "environment": "staging",
     "issued_at": "2026-04-16T11:59:55.000Z",
     "policy": {
@@ -44,9 +44,9 @@
         "version": "approval_artifact.v1",
         "approval_id": "apr_q_env",
         "tenant_id": "tnt_test",
-        "action_type": "deployment.production.deploy",
+        "action_type": "production.deploy",
         "resource_id": "release:abc123",
-        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
         "reviewer": {
           "principal_id": "okta|alice",
           "principal_kind": "human",
@@ -62,7 +62,7 @@
         "issued_at": "2026-04-16T11:59:00.000Z",
         "expires_at": "2026-04-16T13:00:00.000Z",
         "nonce": "n_apr_q_env",
-        "signature": "4311a09ed5bf151379646bc9f2951ce2333bf9026c4196bcdc0e0fceea45626a",
+        "signature": "91e90fa01f7a1a92772cb81fdd3f82e47def6072ba1881d5129ae71b89b4228b",
         "identity_assertion": {
           "version": "identity_assertion.v1",
           "subject": {
@@ -72,7 +72,7 @@
           "role": "qa_reviewer",
           "binding": {
             "approval_id": "apr_q_env",
-            "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+            "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
             "tenant_id": "tnt_test",
             "environment": "production"
           },
@@ -83,7 +83,7 @@
           },
           "issued_at": "2026-04-16T11:59:30.000Z",
           "expires_at": "2026-04-16T12:30:00.000Z",
-          "signature": "30d7e605bcceed43e2fe5e9be5c7e48ab1cd98b945dee4a5e4ffd93c497a297b"
+          "signature": "51dd278836287d6f956baf9e7add5101106703972d757810d168eaeca85c19dc"
         }
       }
     ]

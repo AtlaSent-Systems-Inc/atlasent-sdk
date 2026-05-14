@@ -22,7 +22,7 @@
         }
       }
     },
-    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "expected_tenant_id": "tnt_test",
     "required_role": "qa_reviewer",
     "expected_environment": "production",
@@ -33,7 +33,7 @@
   "package": {
     "version": "approval_quorum.v1",
     "tenant_id": "tnt_test",
-    "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "environment": "production",
     "issued_at": "2026-04-16T11:59:55.000Z",
     "policy": {
@@ -44,9 +44,9 @@
         "version": "approval_artifact.v1",
         "approval_id": "apr_q_alice",
         "tenant_id": "tnt_test",
-        "action_type": "deployment.production.deploy",
+        "action_type": "production.deploy",
         "resource_id": "release:abc123",
-        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
         "reviewer": {
           "principal_id": "okta|alice",
           "principal_kind": "human",
@@ -62,7 +62,7 @@
         "issued_at": "2026-04-16T11:59:00.000Z",
         "expires_at": "2026-04-16T13:00:00.000Z",
         "nonce": "n_apr_q_alice",
-        "signature": "bb2e92c609b710eab918c4ce74ad68e705e099e400f4e8aa6d14e5ed780685a3",
+        "signature": "65230185fdb18c7ca1846b521f2419bed0d3f6219796edc38d3644f21e096304",
         "identity_assertion": {
           "version": "identity_assertion.v1",
           "subject": {
@@ -72,7 +72,7 @@
           "role": "qa_reviewer",
           "binding": {
             "approval_id": "apr_q_alice",
-            "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+            "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
             "tenant_id": "tnt_test",
             "environment": "production"
           },
@@ -83,16 +83,16 @@
           },
           "issued_at": "2026-04-16T11:59:30.000Z",
           "expires_at": "2026-04-16T12:30:00.000Z",
-          "signature": "7fe7aa7632ea3ed62e3177398963ae440f3b70b1f91c7bd905d2847393fd78b1"
+          "signature": "180a1e229024b2db4581925aa8cbeb280c9461c05b09bab2e8a8cad2fff7f1f7"
         }
       },
       {
         "version": "approval_artifact.v1",
         "approval_id": "apr_q_bob",
         "tenant_id": "tnt_test",
-        "action_type": "deployment.production.deploy",
+        "action_type": "production.deploy",
         "resource_id": "release:abc123",
-        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
         "reviewer": {
           "principal_id": "okta|bob",
           "principal_kind": "human",
@@ -108,7 +108,7 @@
         "issued_at": "2026-04-16T11:59:00.000Z",
         "expires_at": "2026-04-16T13:00:00.000Z",
         "nonce": "n_apr_q_bob",
-        "signature": "03255432263da479e8da745a9e159d621e585b9653376e6301435fa63176d085",
+        "signature": "c73d3d3b7d070de6e88b0842f503e88fbcc3acf5f12e81d5caea72a45182c81c",
         "identity_assertion": {
           "version": "identity_assertion.v1",
           "subject": {
@@ -118,7 +118,7 @@
           "role": "qa_reviewer",
           "binding": {
             "approval_id": "apr_q_bob",
-            "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+            "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
             "tenant_id": "tnt_test",
             "environment": "production"
           },
@@ -129,7 +129,7 @@
           },
           "issued_at": "2026-04-16T11:59:30.000Z",
           "expires_at": "2026-04-16T12:30:00.000Z",
-          "signature": "087ea871f9d43c307f88f9a83f57c6e71841b90511e05e17165ee7325982b5d7"
+          "signature": "d3cb82712f40ad14de856ba1e7ef1c21c1771e17dc7f6da73e622748c4b40527"
         }
       }
     ]

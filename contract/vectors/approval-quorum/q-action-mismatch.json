@@ -22,7 +22,7 @@
         }
       }
     },
-    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "expected_tenant_id": "tnt_test",
     "required_role": "qa_reviewer",
     "expected_environment": "production",
@@ -44,9 +44,9 @@
         "version": "approval_artifact.v1",
         "approval_id": "apr_q_act",
         "tenant_id": "tnt_test",
-        "action_type": "deployment.production.deploy",
+        "action_type": "production.deploy",
         "resource_id": "release:abc123",
-        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
         "reviewer": {
           "principal_id": "okta|alice",
           "principal_kind": "human",
@@ -62,7 +62,7 @@
         "issued_at": "2026-04-16T11:59:00.000Z",
         "expires_at": "2026-04-16T13:00:00.000Z",
         "nonce": "n_apr_q_act",
-        "signature": "62abaa5e5c48e1641c71f9122eb9b03a955e3798685deef8a07aa19a876242e2",
+        "signature": "09a5ce4df58777a43f0b1f5e5287517c023f336a883ca7f8aad7c68be7f17fe7",
         "identity_assertion": {
           "version": "identity_assertion.v1",
           "subject": {
@@ -72,7 +72,7 @@
           "role": "qa_reviewer",
           "binding": {
             "approval_id": "apr_q_act",
-            "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+            "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
             "tenant_id": "tnt_test",
             "environment": "production"
           },
@@ -83,7 +83,7 @@
           },
           "issued_at": "2026-04-16T11:59:30.000Z",
           "expires_at": "2026-04-16T12:30:00.000Z",
-          "signature": "c858b25adabf1e821afb570a5d5a767a002be6c3a8062fb7aea8cbf6ee639516"
+          "signature": "a4f18b9e4c407905c38a6c9064227104bf65a75e87a36738478eff04203d8c5c"
         }
       }
     ]

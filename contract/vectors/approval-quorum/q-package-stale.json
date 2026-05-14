@@ -22,7 +22,7 @@
         }
       }
     },
-    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "expected_tenant_id": "tnt_test",
     "required_role": "qa_reviewer",
     "expected_environment": "production",
@@ -33,7 +33,7 @@
   "package": {
     "version": "approval_quorum.v1",
     "tenant_id": "tnt_test",
-    "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "environment": "production",
     "issued_at": "2026-04-16T11:50:00.000Z",
     "policy": {
@@ -45,9 +45,9 @@
         "version": "approval_artifact.v1",
         "approval_id": "apr_q_st1",
         "tenant_id": "tnt_test",
-        "action_type": "deployment.production.deploy",
+        "action_type": "production.deploy",
         "resource_id": "release:abc123",
-        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
         "reviewer": {
           "principal_id": "okta|alice",
           "principal_kind": "human",
@@ -63,7 +63,7 @@
         "issued_at": "2026-04-16T11:59:00.000Z",
         "expires_at": "2026-04-16T13:00:00.000Z",
         "nonce": "n_apr_q_st1",
-        "signature": "3263f08890cf9ddc0571fb884f6dd9b9412a852ea47f3f570a2b1f34be61ccbd",
+        "signature": "ef7327c0ea295b1ab4d31ede8f1e26e7809d851e6ff26d8faec70eaf5426238b",
         "identity_assertion": {
           "version": "identity_assertion.v1",
           "subject": {
@@ -73,7 +73,7 @@
           "role": "qa_reviewer",
           "binding": {
             "approval_id": "apr_q_st1",
-            "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+            "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
             "tenant_id": "tnt_test",
             "environment": "production"
           },
@@ -84,16 +84,16 @@
           },
           "issued_at": "2026-04-16T11:59:30.000Z",
           "expires_at": "2026-04-16T12:30:00.000Z",
-          "signature": "605a417931a03fd6a6de5ccb9fff17db5b35ef84f448f5530672a19b68dbf7aa"
+          "signature": "c95c385962689c65910f921d4db685a5c8ec38312d8e3768e90be10137e543af"
         }
       },
       {
         "version": "approval_artifact.v1",
         "approval_id": "apr_q_st2",
         "tenant_id": "tnt_test",
-        "action_type": "deployment.production.deploy",
+        "action_type": "production.deploy",
         "resource_id": "release:abc123",
-        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
         "reviewer": {
           "principal_id": "okta|bob",
           "principal_kind": "human",
@@ -109,7 +109,7 @@
         "issued_at": "2026-04-16T11:59:00.000Z",
         "expires_at": "2026-04-16T13:00:00.000Z",
         "nonce": "n_apr_q_st2",
-        "signature": "81642a30a96034a51a6031a871769f3383dac1682a54378963b781b17b2e65d0",
+        "signature": "e9d42938a7d61bac38d158d1af14e803c26f38c79f10b541bd3be90971602124",
         "identity_assertion": {
           "version": "identity_assertion.v1",
           "subject": {
@@ -119,7 +119,7 @@
           "role": "qa_reviewer",
           "binding": {
             "approval_id": "apr_q_st2",
-            "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+            "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
             "tenant_id": "tnt_test",
             "environment": "production"
           },
@@ -130,7 +130,7 @@
           },
           "issued_at": "2026-04-16T11:59:30.000Z",
           "expires_at": "2026-04-16T12:30:00.000Z",
-          "signature": "ef5ae6af80dead416858725dd96b805fa4e941a9553efa2fbe5253879eee321a"
+          "signature": "c0ff9385e5f4c7963600d18498526136cd569509ea78f835b9bf877fc0ab691a"
         }
       }
     ]

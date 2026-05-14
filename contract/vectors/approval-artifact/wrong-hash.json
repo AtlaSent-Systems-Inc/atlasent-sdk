@@ -22,7 +22,7 @@
         }
       }
     },
-    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "expected_tenant_id": "tnt_test",
     "required_role": "qa_reviewer",
     "expected_environment": "production",
@@ -34,7 +34,7 @@
     "version": "approval_artifact.v1",
     "approval_id": "apr_fixture_wrong_hash",
     "tenant_id": "tnt_test",
-    "action_type": "deployment.production.deploy",
+    "action_type": "production.deploy",
     "resource_id": "release:abc123",
     "action_hash": "0000000000000000000000000000000000000000000000000000000000000000",
     "reviewer": {
@@ -53,6 +53,6 @@
     "issued_at": "2026-04-16T11:59:00.000Z",
     "expires_at": "2026-04-16T13:00:00.000Z",
     "nonce": "n_fixture_wrong_hash",
-    "signature": "1464a6adad87f3fb7a22620027abe56bea6d9b25684417f88030a5f09c9ad898"
+    "signature": "0e7e8df6633192718cc8230e0b7250fc380ceda23fc70b8d0df2f1c94b08303e"
   }
 }

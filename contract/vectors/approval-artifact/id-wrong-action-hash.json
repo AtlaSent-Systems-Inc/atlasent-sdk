@@ -22,7 +22,7 @@
         }
       }
     },
-    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "expected_tenant_id": "tnt_test",
     "required_role": "qa_reviewer",
     "expected_environment": "production",
@@ -35,9 +35,9 @@
     "version": "approval_artifact.v1",
     "approval_id": "apr_fixture_id_wrong_hash",
     "tenant_id": "tnt_test",
-    "action_type": "deployment.production.deploy",
+    "action_type": "production.deploy",
     "resource_id": "release:abc123",
-    "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "reviewer": {
       "principal_id": "okta|00u_test_alice",
       "principal_kind": "human",
@@ -54,7 +54,7 @@
     "issued_at": "2026-04-16T11:59:00.000Z",
     "expires_at": "2026-04-16T13:00:00.000Z",
     "nonce": "n_fixture_id_wrong_hash",
-    "signature": "7181fec8a71359f79def766e36544f2e551a0a4a900963a353e829cfe4c7e358",
+    "signature": "06b08f150b6c311837ff1d8ae62ae748398039ae18756380a7f07c14ec6c5eb3",
     "identity_assertion": {
       "version": "identity_assertion.v1",
       "subject": {

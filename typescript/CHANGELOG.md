@@ -4,6 +4,24 @@ All notable changes to `@atlasent/sdk` are documented here. The SDK
 follows [semver](https://semver.org/): breaking changes bump the major
 (or minor while on 0.x).
 
+## [2.3.1] — 2026-05-14
+
+### Changed
+
+- **Contract vectors regenerated against `production.deploy`** — the
+  `contract/tools/gen_approval_artifact_vectors.mjs` generator was
+  pinning `ACTION_TYPE = "deployment.production.deploy"`, which left
+  every signed approval-artifact and approval-quorum fixture binding
+  HMAC signatures and action_hash values to the legacy 3-part literal.
+  Regenerated all 16 approval-artifact + 11 approval-quorum vectors
+  with `ACTION_TYPE = "production.deploy"`; signatures, action_hash,
+  and expected_action_hash all reflect the canonical wire identity.
+  No verifier or schema changes — drift tests
+  (`test/approval-artifact-vectors.test.ts`,
+  `test/approval-quorum-vectors.test.ts`) continue to pass byte-for-byte
+  against the in-memory generator output. Internal-only; no SDK API
+  surface change.
+
 ## [2.3.0] — 2026-05-14
 
 ### Added

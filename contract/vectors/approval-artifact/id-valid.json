@@ -23,7 +23,7 @@
         }
       }
     },
-    "expected_action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "expected_action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "expected_tenant_id": "tnt_test",
     "required_role": "qa_reviewer",
     "expected_environment": "production",
@@ -36,9 +36,9 @@
     "version": "approval_artifact.v1",
     "approval_id": "apr_fixture_id_valid",
     "tenant_id": "tnt_test",
-    "action_type": "deployment.production.deploy",
+    "action_type": "production.deploy",
     "resource_id": "release:abc123",
-    "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+    "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
     "reviewer": {
       "principal_id": "okta|00u_test_alice",
       "principal_kind": "human",
@@ -55,7 +55,7 @@
     "issued_at": "2026-04-16T11:59:00.000Z",
     "expires_at": "2026-04-16T13:00:00.000Z",
     "nonce": "n_fixture_id_valid",
-    "signature": "f8554bd63cd7931eb68ea90b931684c43a6cd237f9d5c9344575e5a242bb0d51",
+    "signature": "2f145be1f9d7b400415410b92f62545d47054e87e5ff333d21e0d377cdf2cddd",
     "identity_assertion": {
       "version": "identity_assertion.v1",
       "subject": {
@@ -65,7 +65,7 @@
       "role": "qa_reviewer",
       "binding": {
         "approval_id": "apr_fixture_id_valid",
-        "action_hash": "17bdd246cd661d8a0f36a78a0b8a8ed95f9c915fbfa5cf0d0778d74da4deeeee",
+        "action_hash": "24f8ec148467d5199b81211ef77e2ccbf02b2485e6a57e8222d1af02c7aedf0b",
         "tenant_id": "tnt_test",
         "environment": "production"
       },
@@ -76,7 +76,7 @@
       },
       "issued_at": "2026-04-16T11:59:30.000Z",
       "expires_at": "2026-04-16T12:30:00.000Z",
-      "signature": "fc5d6adb83ffc55de3c9317440b8a683788b6b4b851e17525c8d13cb3cd3c71a"
+      "signature": "60bbe2227ee8106887f702a86695af9df69e9d76a0124a16e1124122d72491ab"
     }
   }
 }
