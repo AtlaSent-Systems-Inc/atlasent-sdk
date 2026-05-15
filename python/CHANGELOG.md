@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Contract test for ADR-0002 invariant I-6** — `tests/test_policy_mutation_guard.py`
+  scans `AtlaSentClient` and `AsyncAtlaSentClient` and fails CI if any
+  method matches a governance-policy mutation shape. Test-only; no API
+  surface change. See `atlasent-internal/architecture/ADR-0002` and
+  atlasent-sdk#230.
+
 ## 2.4.0 — 2026-05-14 — canonical Deploy Gate action: `production.deploy`
 
 ### Added

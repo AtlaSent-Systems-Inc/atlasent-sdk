@@ -4,6 +4,15 @@ All notable changes to `@atlasent/sdk` are documented here. The SDK
 follows [semver](https://semver.org/): breaking changes bump the major
 (or minor while on 0.x).
 
+## [Unreleased]
+
+### Added
+
+- **Contract test for ADR-0002 invariant I-6** — `test/policy-mutation-guard.test.ts`
+  scans `AtlaSentClient.prototype` and fails CI if any method matches a
+  governance-policy mutation shape. Test-only; no API surface change.
+  See `atlasent-internal/architecture/ADR-0002` and atlasent-sdk#230.
+
 ## [2.3.1] — 2026-05-14
 
 ### Changed
