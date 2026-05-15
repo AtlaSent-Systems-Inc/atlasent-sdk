@@ -1,0 +1,28 @@
+{
+  "name": "@atlasent/behavior-preview",
+  "version": "0.0.0-preview.0",
+  "description": "Preview package for @atlasent/behavior — the aggregate-only Behavior Conditioning Layer client. DO NOT USE IN PRODUCTION — surfaces here are stubs until behavior-insights ships BI2 (pattern_entries read API) and BI4 (frozen BvsSnapshot wire shape).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vitest": "^1.5.0"
+  },
+  "keywords": [
+    "atlasent",
+    "behavior-preview",
+    "behavior-conditioning",
+    "bvs"
+  ]
+}
