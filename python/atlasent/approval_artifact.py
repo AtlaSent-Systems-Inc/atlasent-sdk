@@ -264,7 +264,7 @@ class TrustedIssuerKey(BaseModel):
     allowed_action_types: Optional[list[str]] = None
     """Per-issuer scope: ``action_types`` this kid may approve.
     Entries match exactly OR with a trailing ``.*`` wildcard (e.g.
-    ``deployment.*`` matches ``deployment.production``).
+    ``production.*`` matches ``production.deploy``).
     Empty / missing = unscoped on action types."""
 
     allowed_environments: Optional[list[str]] = None
@@ -289,7 +289,7 @@ class ApprovalTrustedIssuersConfig(BaseModel):
             "kid-1": {
               "alg": "HS256",
               "key": "<hex>",
-              "allowed_action_types": ["deployment.production.*"],
+              "allowed_action_types": ["production.deploy.*"],
               "allowed_environments": ["production"],
               "required_role": "qa_reviewer"
             }
