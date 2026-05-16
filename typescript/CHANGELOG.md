@@ -6,6 +6,14 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## [Unreleased]
 
+### Changed
+- `withPermit` now always sends `environment` in the verify request.
+  Defaults to `"production"` with a console warning if not set on the
+  evaluate payload. Set `context.environment` explicitly to suppress.
+- `withPermit` now computes and sends `execution_hash` (SHA-256 of
+  canonical evaluate payload) on permit consume. Required by the API
+  for production permits as of 2026-05-14.
+
 ### Added
 
 - **Contract test for ADR-0002 invariant I-6** — `test/policy-mutation-guard.test.ts`
