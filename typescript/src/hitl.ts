@@ -39,7 +39,7 @@ export interface HitlEscalation {
   sandbox_run_id: string | null;
   status: HitlStatus;
   escalation_reason: string;
-  proposed_action: Record<string, unknown>;
+  proposed_action: Record<string, unknown> | null;
   risk_score: number | null;
   assigned_to_user_id: string | null;
   assigned_to_role: string | null;
@@ -58,6 +58,12 @@ export interface HitlEscalation {
   fallback_decision: HitlFallbackDecision;
   governance_advisory_id: string | null;
   expired_reason: "sla_expired" | "escalation_chain_exhausted" | "manual_expire" | null;
+
+  /**
+   * Arbitrary key/value metadata attached at creation time.
+   * `null` when none was provided.
+   */
+  metadata: Record<string, unknown> | null;
 
   quorum_progress?: HitlQuorumProgress;
 
@@ -142,6 +148,9 @@ export interface HitlCreateRequest {
   quorum_threshold?: number;
   ai_unavailable_fallback?: HitlAiUnavailableFallback;
   fallback_human_role?: string;
+
+  /** Arbitrary key/value metadata to attach to the escalation record. */
+  metadata?: Record<string, unknown>;
 }
 
 export interface HitlApproveRequest {
@@ -156,6 +165,18 @@ export interface HitlEscalateRequest {
   to_role?: string;
   to_user_id?: string;
   reason?: string;
+}
+
+/**
+ * Wire shape for `POST /v1/escalations/:id/respond` — cast a vote on an
+ * existing escalation. Mirrors the `RespondBody` schema in
+ * atlasent-control-plane `api/src/routes/hitl.ts`.
+ */
+export interface HitlRespondRequest {
+  /** The approver's decision. */
+  decision: "approve" | "reject";
+  /** Optional human-readable note attached to the approval record. */
+  note?: string;
 }
 
 /**
@@ -236,4 +257,27 @@ export interface HitlHeterogeneousQuorumTally {
   meets_threshold: boolean;
   any_required_reject: boolean;
   any_required_missing: boolean;
+}
+
+/**
+ * Detail response returned by `GET /v1/escalations/:id`.
+ *
+ * Mirrors `HitlDetailResponse` in atlasent-control-plane
+ * `api/src/schemas/hitl.ts`.
+ */
+export interface HitlDetailResponse {
+  escalation: HitlEscalation;
+  approval_records: HitlApprovalRecord[];
+}
+
+/**
+ * Paginated list response returned by `GET /v1/escalations`.
+ *
+ * Mirrors `HitlListResponse` in atlasent-control-plane
+ * `api/src/schemas/hitl.ts`.
+ */
+export interface HitlListResponse {
+  escalations: HitlEscalation[];
+  total: number;
+  next_cursor: string | null;
 }
