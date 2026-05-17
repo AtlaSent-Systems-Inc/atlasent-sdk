@@ -529,6 +529,36 @@ export {
   type ImpersonationValidationResult,
 } from "./crossOrgImpersonation.js";
 
+// ── V2 Wave-A endpoints (V2-D3 batch, V2-D4 stream, V2-D8 graphql) ─────────────
+// Additive on top of the frozen v1 substrate. Each is close-by-default per
+// tenant flag; the SDK surfaces the 404 fall-back path as
+// FeatureNotEnabledError so callers can branch deterministically without
+// silent semantic drift (billing/audit). See ./v2.ts.
+export {
+  FeatureNotEnabledError,
+  V2_BATCH_PATH,
+  V2_GRAPHQL_MAX_DEPTH,
+  V2_GRAPHQL_PATH,
+  V2_MAX_BATCH_ITEMS,
+  V2_MAX_BODY_BYTES,
+  V2_STREAM_PATH,
+  authorizeStream,
+  evaluateMany,
+  graphql,
+  type AuthorizeStreamHandlers,
+  type EvaluateBatchItem,
+  type EvaluateBatchResponse,
+  type EvaluateManyRequest,
+  type FeatureNotEnabledErrorInit,
+  type GraphQLRequest,
+  type GraphQLResponse,
+  type StreamComplete,
+  type StreamDecisionFrame,
+  type StreamErrorFrame,
+  type V2Feature,
+  type V2Transport,
+} from "./v2.js";
+
 /**
  * Default export. The opinionated, category-defining entry point:
  *
