@@ -1,0 +1,30 @@
+name: api-parity
+
+on:
+  pull_request:
+    paths:
+      - "typescript/src/**"
+      - "python/atlasent_sdk/**"
+      - "docs/api-parity.md"
+      - "scripts/check-api-parity.mjs"
+      - ".github/workflows/api-parity.yml"
+  push:
+    branches: [main]
+    paths:
+      - "typescript/src/**"
+      - "python/atlasent_sdk/**"
+      - "docs/api-parity.md"
+      - "scripts/check-api-parity.mjs"
+      - ".github/workflows/api-parity.yml"
+
+jobs:
+  check:
+    name: SDK <-> API parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run parity check
+        run: node scripts/check-api-parity.mjs
