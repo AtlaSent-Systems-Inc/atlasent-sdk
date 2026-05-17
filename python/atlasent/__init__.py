@@ -170,6 +170,30 @@ from .policy_sync import (
     is_policy_sync_terminal,
 )
 from .require_permit import ProtectedAction, classify_command, require_permit
+from .v2_endpoints import (
+    BATCH_PATH as V2_BATCH_PATH,
+)
+from .v2_endpoints import (
+    GRAPHQL_PATH as V2_GRAPHQL_PATH,
+)
+from .v2_endpoints import (
+    MAX_BATCH_ITEMS as V2_MAX_BATCH_ITEMS,
+)
+from .v2_endpoints import (
+    STREAM_PATH as V2_STREAM_PATH,
+)
+from .v2_endpoints import (
+    EvaluateBatchItem,
+    EvaluateBatchResponse,
+    FeatureNotEnabledError,
+    GraphQLResponse,
+    StreamComplete,
+    StreamDecision,
+    StreamErrorFrame,
+    authorize_stream,
+    evaluate_many,
+    graphql,
+)
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
 
@@ -318,4 +342,21 @@ __all__ = [
     "verify_webhook",
     "assert_webhook",
     "WebhookVerificationError",
+    # V2 Wave-A endpoints (V2-D3 batch, V2-D4 stream, V2-D8 graphql).
+    # V1 substrate is frozen — these are additive and close-by-default
+    # per tenant (FeatureNotEnabledError surfaces the 404 fall-back path).
+    "FeatureNotEnabledError",
+    "EvaluateBatchItem",
+    "EvaluateBatchResponse",
+    "StreamComplete",
+    "StreamDecision",
+    "StreamErrorFrame",
+    "GraphQLResponse",
+    "V2_BATCH_PATH",
+    "V2_STREAM_PATH",
+    "V2_GRAPHQL_PATH",
+    "V2_MAX_BATCH_ITEMS",
+    "evaluate_many",
+    "authorize_stream",
+    "graphql",
 ]
