@@ -4,6 +4,16 @@ All notable changes to `@atlasent/sdk` are documented here. The SDK
 follows [semver](https://semver.org/): breaking changes bump the major
 (or minor while on 0.x).
 
+## [2.4.0] — 2026-05-17
+
+### Added
+
+- `EvaluateResponse`: `evaluationId`, `permit` (EvaluateResponsePermit), `permitToken`, `reasons[]`; `reason` and `permitId` marked `@deprecated`
+- `ProofResponse` with `algorithm: "none" | "hmac-sha256"` and nullable `signature`
+- `OverrideV1`, `CreateOverrideRequest`, `OverrideEvent`, `OverrideEventsResponse`, `OverrideListResponse`, `OverrideStatus`, `OverrideEventType`
+- `HitlRespondRequest`, `HitlDetailResponse`, `HitlListResponse`; `HitlEscalation.metadata` field
+- `GovernanceEvent`, `PermitV1` wire types
+
 ## [Unreleased]
 
 ### Added
