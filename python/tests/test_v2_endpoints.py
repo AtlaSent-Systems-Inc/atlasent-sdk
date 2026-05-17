@@ -77,7 +77,7 @@ class TestFeatureNotEnabledError:
         assert err.feature == "batch"
         assert err.endpoint == "/v1/evaluate/batch"
         assert err.status_code == 404
-        assert err.code == "forbidden"
+        assert err.code == "feature_disabled"
         assert "batch" in err.message
         assert "/v1/evaluate/batch" in err.message
         assert "v2_batch" in err.message

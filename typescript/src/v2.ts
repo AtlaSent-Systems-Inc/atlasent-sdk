@@ -76,7 +76,11 @@ export class FeatureNotEnabledError extends AtlaSentError {
       `AtlaSent V2 feature '${init.feature}' is not enabled for this tenant ` +
       `(POST ${init.endpoint} returned 404). Enable the v2_${init.feature} ` +
       `flag or fall back to the v1 per-item /v1-evaluate loop.`;
-    const errInit: AtlaSentErrorInit = { status: 404, code: "forbidden" };
+    // `feature_disabled` (not `forbidden`): the request was not denied
+    // on authorization grounds — the tenant lacks the v2_<feature> flag.
+    // Callers branching on `err.code === "forbidden"` would otherwise
+    // conflate this with real 403 auth failures.
+    const errInit: AtlaSentErrorInit = { status: 404, code: "feature_disabled" };
     if (init.requestId !== undefined) errInit.requestId = init.requestId;
     super(message, errInit);
     this.feature = init.feature;
