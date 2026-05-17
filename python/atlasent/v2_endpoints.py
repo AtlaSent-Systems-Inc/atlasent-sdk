@@ -69,8 +69,13 @@ class FeatureNotEnabledError(AtlaSentError):
             f"AtlaSent V2 feature {feature!r} is not enabled for this tenant "
             f"(POST {endpoint} returned 404). Enable the v2_{feature} flag "
             f"or fall back to the v1 per-item /v1-evaluate loop.",
+            # `feature_disabled` (not `forbidden`): the request was not
+            # denied on authorization grounds — the tenant lacks the
+            # `v2_<feature>` flag. Callers branching on
+            # `err.code == "forbidden"` would otherwise conflate this
+            # with real 403 auth failures.
             status_code=404,
-            code="forbidden",
+            code="feature_disabled",
             request_id=request_id,
         )
 

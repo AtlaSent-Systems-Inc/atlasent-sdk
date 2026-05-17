@@ -82,7 +82,7 @@ describe("FeatureNotEnabledError", () => {
     expect(err.feature).toBe("batch");
     expect(err.endpoint).toBe(V2_BATCH_PATH);
     expect(err.status).toBe(404);
-    expect(err.code).toBe("forbidden");
+    expect(err.code).toBe("feature_disabled");
     expect(err.name).toBe("FeatureNotEnabledError");
     expect(err.message).toContain("v2_batch");
   });
