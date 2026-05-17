@@ -2,6 +2,15 @@
 
 **Status:** plan · **Wave:** B (SDKs + MCP) · **Updated:** 2026-05-15
 
+> **V1 GA — 2026-05-17.** V1 substrate frozen — the canonical foundation
+> this V2 plan extends. The `/v1/*` wire surface, schema, audit chain,
+> and Ed25519-signed export envelope are stable; V2 work in this plan is
+> **additive** on V1 (no V1 wire/schema/audit-chain changes ship under V2).
+> V2 implementation is unblocked pending umbrella
+> [`V2_DECISIONS.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/V2_DECISIONS.md) sign-off.
+> Canonical V1 reference: [`atlasent-api/docs/runtime/golden-path-v1.md`](https://github.com/AtlaSent-Systems-Inc/atlasent-api/blob/main/docs/runtime/golden-path-v1.md).
+> V1 GA closeout PRs: see umbrella [`ROADMAP.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/ROADMAP.md) "V1 GA — what closed" section.
+
 SDK cut of the [umbrella v2 rollout](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/claude/plan-v2-rollout-5IPGF/V2_ROLLOUT.md). This repo is the **publish-gating fan-out point** — `atlasent-action`, `langchain-llamaindex-integration`, `atlasent-mcp-server`, `atlasent-examples`, `gxp-starter`, and three downstream apps all pin against the 2.x tag that ships from here.
 
 ## Position
