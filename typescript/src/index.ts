@@ -91,6 +91,7 @@ export type {
   EvaluatePreflightResponse,
   EvaluateRequest,
   EvaluateResponse,
+  EvaluateResponsePermit,
   GetPermitResponse,
   ListPermitsRequest,
   ListPermitsResponse,
@@ -152,14 +153,17 @@ export {
   type HitlApproverType,
   type HitlChainHop,
   type HitlCreateRequest,
+  type HitlDetailResponse,
   type HitlEscalateRequest,
   type HitlEscalation,
   type HitlFallbackDecision,
   type HitlHeterogeneousQuorumExtension,
   type HitlHeterogeneousQuorumTally,
+  type HitlListResponse,
   type HitlQuorumProgress,
   type HitlQuorumTier,
   type HitlRejectRequest,
+  type HitlRespondRequest,
   type HitlStatus,
   type ListHitlEscalationsRequest,
   type ListHitlEscalationsResponse,
@@ -201,6 +205,28 @@ export type {
   QuorumProof,
   QuorumRoleRequirement,
 } from "./approvalQuorum.js";
+
+// ── V1 Proof bundle ───────────────────────────────────────────────────────────
+export type {
+  GovernanceEvent,
+  PermitV1,
+} from "./v1Types.js";
+export type {
+  ProofEvaluationSummary,
+  ProofPayload,
+  ProofResponse,
+} from "./proof.js";
+
+// ── V1 Override types ─────────────────────────────────────────────────────────
+export type {
+  CreateOverrideRequest,
+  OverrideEvent,
+  OverrideEventsResponse,
+  OverrideListResponse,
+  OverrideStatus,
+  OverrideEventType,
+  OverrideV1,
+} from "./overrides.js";
 
 // ── Economic Governance & Liability Attribution ──────────────────────────────────
 

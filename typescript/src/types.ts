@@ -238,6 +238,31 @@ export interface EvaluateRequest {
   context?: Record<string, unknown>;
 }
 
+/**
+ * Slim permit object embedded in {@link EvaluateResponse} when the decision
+ * is `"allow"`. Contains the essential fields needed to act on the permit
+ * immediately without a separate `GET /v1/permits/:id` round-trip.
+ *
+ * Mirrors the `Permit` schema in atlasent-control-plane
+ * `api/src/schemas/permits.ts`.
+ */
+export interface EvaluateResponsePermit {
+  id: string;
+  orgId: string;
+  subject: string;
+  scope: string;
+  status: "active" | "revoked" | "expired";
+  /** The evaluation that produced this permit. */
+  evaluationId: string | null;
+  issuedBy: string;
+  revokedBy: string | null;
+  /** ISO-8601 issuance timestamp. */
+  issuedAt: string;
+  revokedAt: string | null;
+  expiresAt: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
 /** Result of {@link AtlaSentClient.evaluate}. */
 export interface EvaluateResponse {
   /**
@@ -261,9 +286,47 @@ export interface EvaluateResponse {
    * are not equivalent to a `deny`.
    */
   decision_canonical: DecisionCanonical;
-  /** Opaque permit identifier, passed to {@link AtlaSentClient.verifyPermit}. */
+  /**
+   * Server-assigned identifier for this evaluation decision.
+   *
+   * Stable across retries and used as the key for proof retrieval
+   * (`GET /v1/proof/:evaluationId`) and override requests. Also
+   * available as the legacy `permitId` field for backward compatibility.
+   */
+  evaluationId: string;
+  /** Opaque permit identifier, passed to {@link AtlaSentClient.verifyPermit}.
+   *
+   * @deprecated Prefer `evaluationId`. This field is kept for backward
+   * compatibility and points to the same server-assigned ID.
+   */
   permitId: string;
-  /** Human-readable explanation from the policy engine. */
+  /**
+   * Slim permit object issued when `decision === "allow"`.
+   * `null` on deny, hold, or escalate decisions.
+   *
+   * Mirrors the `Permit` schema from the control-plane.
+   */
+  permit: EvaluateResponsePermit | null;
+  /**
+   * Opaque HMAC-signed permit token issued when `decision === "allow"`.
+   * Pass to `POST /v1/verify-permit` to verify the permit server-side.
+   * `null` on deny, hold, or escalate decisions.
+   */
+  permitToken: string | null;
+  /**
+   * Machine-readable reasons emitted by the policy engine.
+   *
+   * The array may be empty. For deny/hold/escalate decisions the array
+   * typically contains a single human-readable explanation; for allow
+   * decisions it is often empty. Do not parse these strings — use
+   * `decision` for branching.
+   */
+  reasons: string[];
+  /** Human-readable explanation from the policy engine.
+   *
+   * @deprecated Prefer `reasons[0]` or `reasons`. This field is the
+   * first element of `reasons` (or an empty string) for backward compat.
+   */
   reason: string;
   /** Hash-chained audit-trail entry (21 CFR Part 11 / GxP-ready). */
   auditHash: string;
