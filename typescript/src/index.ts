@@ -47,12 +47,14 @@ export {
 } from "./types.js";
 export {
   AtlaSentDeniedError,
+  AtlaSentEscalateError,
   AtlaSentError,
   StreamParseError,
   StreamTimeoutError,
   normalizePermitOutcome,
   type AtlaSentDecision,
   type AtlaSentDeniedErrorInit,
+  type AtlaSentEscalateErrorInit,
   type AtlaSentErrorCode,
   type AtlaSentErrorInit,
   type PermitOutcome,
