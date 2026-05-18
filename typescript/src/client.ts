@@ -40,6 +40,7 @@ import type {
   ListPermitsRequest,
   ListPermitsResponse,
   PermitRecord,
+  PermitValidResponse,
   RateLimitState,
   RevokePermitByIdInput,
   RevokePermitByIdResponse,
@@ -805,6 +806,27 @@ export class AtlaSentClient {
       `/v1/permits/${encodeURIComponent(permitId)}`,
     );
     return { permit: wire, rateLimit };
+  }
+
+  /**
+   * Poll whether a permit is currently valid.
+   *
+   * Calls `GET /v1/permits/{permitId}/valid` — a lightweight read
+   * returning only the status snapshot optimised for guard heartbeat
+   * polling. Guards with `permitRevalidationIntervalMs` set race this
+   * against `tool.execute()` and throw {@link PermitRevoked} when
+   * `status === "revoked"` arrives.
+   *
+   * Throws {@link AtlaSentError} on transport / auth failures.
+   */
+  async checkPermitValid(permitId: string): Promise<PermitValidResponse> {
+    if (!permitId) {
+      throw new AtlaSentError("permitId is required", { code: "bad_request" });
+    }
+    const { body } = await this.get<PermitValidResponse>(
+      `/v1/permits/${encodeURIComponent(permitId)}/valid`,
+    );
+    return body;
   }
 
   /**
