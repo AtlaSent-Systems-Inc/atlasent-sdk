@@ -1,5 +1,21 @@
 # atlasent-sdk — V2 Rollout
 
+> **Reframing normalization header (2026-05-18).** This document
+> remains in scope and is preserved unchanged per the "do not rewrite
+> history" doctrine ([`atlasent/VERSIONING_DOCTRINE.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/VERSIONING_DOCTRINE.md)
+> doctrine 4). Under the 2026-05-18 platform-generation reframing,
+> the work described here is reclassified as the **v1.x capability
+> layer** — additive cash-flowing capabilities on top of the V1 GA
+> substrate. The platform-generation label **v2** now refers to the
+> full enterprise surface, planned in
+> [`atlasent/ENTERPRISE_V2_ROLLOUT.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/ENTERPRISE_V2_ROLLOUT.md).
+> Filename and `V2-D#` identifiers are retained for reference
+> stability; "V2" in this document refers to the historical pre-reframing
+> framing, not the post-reframing platform-generation v2. New
+> decisions use the **`PROD-D#`** namespace. See
+> [`atlasent/ROADMAP.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/ROADMAP.md)
+> for the current generation matrix.
+
 **Status:** plan · **Wave:** B (SDKs + MCP) · **Updated:** 2026-05-15
 
 > **V1 GA — 2026-05-17.** V1 substrate frozen — the canonical foundation
