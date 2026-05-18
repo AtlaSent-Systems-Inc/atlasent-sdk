@@ -49,6 +49,7 @@ export {
   AtlaSentDeniedError,
   AtlaSentEscalateError,
   AtlaSentError,
+  PermitRevoked,
   StreamParseError,
   StreamTimeoutError,
   normalizePermitOutcome,

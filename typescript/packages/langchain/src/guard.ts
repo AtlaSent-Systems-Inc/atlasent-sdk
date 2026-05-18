@@ -8,13 +8,18 @@
  *   2. verifyPermit — confirm the permit cryptographically
  *   3. execute — run the tool only if both pass
  *
+ * When `permitRevalidationIntervalMs` is set, the guard also runs a
+ * continuous-authorization heartbeat (PROD-D9): it polls
+ * `GET /v1/permits/:id/valid` at the configured interval and throws
+ * `PermitRevoked` if the permit is revoked mid-execution.
+ *
  * The package is zero-dependency on @langchain/core — it operates on
  * plain objects. Pass the wrapped `execute` to whichever LangChain
  * tool constructor you prefer.
  */
 
 import type { AtlaSentClient } from "@atlasent/sdk";
-import { AtlaSentDeniedError } from "@atlasent/sdk";
+import { AtlaSentDeniedError, PermitRevoked } from "@atlasent/sdk";
 
 // ── LangChain tool shapes (duck-typed) ────────────────────────────────────────
 
@@ -87,6 +92,20 @@ export interface LangChainGuardOptions {
    *   so the LLM can adapt its behaviour.
    */
   onDeny?: "throw" | "tool-result";
+  /**
+   * Continuous-authorization heartbeat interval in milliseconds (PROD-D9).
+   *
+   * When set (minimum 1000 ms), the guard polls `GET /v1/permits/:id/valid`
+   * at this interval during tool execution. If the permit is revoked
+   * mid-execution, `PermitRevoked` is thrown immediately regardless of
+   * `onDeny`. Requires the `AtlaSentClient` to expose `checkPermitValid`
+   * (available once atlasent-api ships `GET /v1/permits/:id/valid`).
+   *
+   * Recommended range: 1000–10 000 ms. Enterprise minimum sweep interval
+   * is 5000 ms (PROD-D9); setting this below the sweep interval provides
+   * no additional latency reduction.
+   */
+  permitRevalidationIntervalMs?: number;
 }
 
 /** Returned (as a JSON string) instead of throwing when `onDeny: "tool-result"`. */
@@ -96,6 +115,67 @@ export interface DenialResult {
   evaluationId: string;
   reason: string;
   auditHash?: string;
+}
+
+// ── Heartbeat (PROD-D9 continuous-authorization) ──────────────────────────────
+
+interface PermitValidResponse {
+  valid: boolean;
+  status: "active" | "expired" | "revoked" | "consumed";
+  revoked_at?: string;
+  revocation_id?: string;
+}
+
+// Extended client type — activates when atlasent-api ships GET /v1/permits/:id/valid.
+type ClientWithHeartbeat = AtlaSentClient & {
+  checkPermitValid?: (permitId: string) => Promise<PermitValidResponse>;
+};
+
+interface HeartbeatHandle {
+  revocationSignal: Promise<never>;
+  stop: () => void;
+}
+
+function startHeartbeat(
+  client: AtlaSentClient,
+  permitId: string,
+  intervalMs: number,
+): HeartbeatHandle {
+  const clampedMs = Math.max(intervalMs, 1000);
+  let stopped = false;
+  let rejectFn: ((e: PermitRevoked) => void) | undefined;
+  const revocationSignal = new Promise<never>((_, reject) => {
+    rejectFn = reject;
+  });
+
+  const extended = client as ClientWithHeartbeat;
+  if (!extended.checkPermitValid) {
+    // Heartbeat is a no-op until atlasent-api ships the endpoint.
+    return { revocationSignal, stop: () => { stopped = true; } };
+  }
+
+  const timer = setInterval(() => {
+    if (stopped) return;
+    void (extended.checkPermitValid!(permitId)
+      .then((resp) => {
+        if (!stopped && resp.status === "revoked") {
+          stopped = true;
+          clearInterval(timer);
+          rejectFn!(new PermitRevoked(permitId, resp.revocation_id));
+        }
+      })
+      .catch(() => {
+        // Network error during heartbeat poll — continue polling.
+      }));
+  }, clampedMs);
+
+  return {
+    revocationSignal,
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
 }
 
 // ── withLangChainGuard ────────────────────────────────────────────────────────
@@ -117,7 +197,7 @@ export interface DenialResult {
  * const defs = withLangChainGuard(
  *   [{ name: "query_db", description: "...", execute: async ({ sql }) => db.run(sql) }],
  *   atlasent,
- *   { agent: "service:analytics-bot" },
+ *   { agent: "service:analytics-bot", permitRevalidationIntervalMs: 5000 },
  * );
  *
  * const tools = defs.map((d) =>
@@ -178,7 +258,18 @@ export function withLangChainGuard<T extends LangChainGuardedTool>(
           });
         }
 
-        const result = await tool.execute(input as Parameters<T["execute"]>[0]);
+        // Start continuous-authorization heartbeat (PROD-D9).
+        const hb =
+          options.permitRevalidationIntervalMs != null
+            ? startHeartbeat(client, evalResp.permitId, options.permitRevalidationIntervalMs)
+            : null;
+
+        const result = await (hb
+          ? Promise.race([
+              tool.execute(input as Parameters<T["execute"]>[0]),
+              hb.revocationSignal,
+            ]).finally(() => hb.stop())
+          : tool.execute(input as Parameters<T["execute"]>[0]));
 
         // Annotate JSON string results with permit metadata.
         try {
@@ -196,6 +287,7 @@ export function withLangChainGuard<T extends LangChainGuardedTool>(
         return result;
       } catch (err) {
         if (err instanceof AtlaSentDeniedError) throw err;
+        if (err instanceof PermitRevoked) throw err;
         if ((options.onDeny ?? "throw") === "tool-result") {
           return JSON.stringify({
             denied: true,
