@@ -14,4 +14,6 @@ export type {
   StreamingHourlyMetric,
   InsightsDailyMetric,
   WebhookQueueItem,
+  RevokePermitOptions,
+  RevokePermitResult,
 } from './types.js';

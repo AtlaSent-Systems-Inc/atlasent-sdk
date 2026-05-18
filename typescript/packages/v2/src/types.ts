@@ -126,3 +126,18 @@ export interface WebhookQueueItem {
   createdAt: string;
   updatedAt: string;
 }
+
+// Permits
+export interface RevokePermitOptions {
+  orgId: string;
+  /** The raw permit token string (will be hashed server-side). */
+  permitToken: string;
+  reason?: string;
+  revokedBy?: string;
+}
+
+export interface RevokePermitResult {
+  revoked: boolean;
+  newlyRevoked: boolean;
+  alreadyRevoked: boolean;
+}

@@ -5,6 +5,7 @@ import type {
   InsightsEvaluateOptions, InsightsEvaluateResult, InsightsCampaign,
   AnalyticsSummary, BatchDailyMetric, StreamingHourlyMetric, InsightsDailyMetric,
   WebhookQueueItem,
+  RevokePermitOptions, RevokePermitResult,
 } from './types.js';
 
 export interface AtlasentV2ClientOptions {
@@ -138,5 +139,24 @@ export class AtlasentV2Client {
 
   drainDeadLetter(orgId: string): Promise<{ queued: number }> {
     return this.request('POST', `/v1/orgs/${orgId}/webhooks/queue/dead-letter/drain`, {});
+  }
+
+  // ── Permits ───────────────────────────────────────────────────────────────
+
+  async revokePermit(opts: RevokePermitOptions): Promise<RevokePermitResult> {
+    const raw = await this.request<{
+      revoked: boolean;
+      newly_revoked: boolean;
+      already_revoked: boolean;
+    }>('POST', `/v1/orgs/${opts.orgId}/permits/revoke`, {
+      permit_token: opts.permitToken,
+      reason: opts.reason,
+      revoked_by: opts.revokedBy,
+    });
+    return {
+      revoked: raw.revoked,
+      newlyRevoked: raw.newly_revoked,
+      alreadyRevoked: raw.already_revoked,
+    };
   }
 }
