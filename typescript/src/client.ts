@@ -1,3 +1,4 @@
+/**
  * AtlaSent HTTP client.
  *
  * Two public methods, both backed by native `fetch`:
