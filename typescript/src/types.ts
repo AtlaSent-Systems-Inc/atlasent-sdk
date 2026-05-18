@@ -555,6 +555,31 @@ export interface GetPermitResponse {
   rateLimit: RateLimitState | null;
 }
 
+/**
+ * Response from {@link AtlaSentClient.checkPermitValid}.
+ *
+ * Lightweight validity snapshot returned by
+ * `GET /v1/permits/{permitId}/valid`. Designed for guard heartbeat
+ * polling — returns only the fields needed to determine whether to
+ * abort a running permit mid-execution (via {@link PermitRevoked}).
+ */
+export interface PermitValidResponse {
+  /** True iff the permit is currently valid (active). */
+  valid: boolean;
+  /**
+   * Current lifecycle status of the permit.
+   * - `"active"` — permit is valid and in-flight.
+   * - `"expired"` — TTL elapsed before revocation or consumption.
+   * - `"revoked"` — administratively revoked (see `revocation_id`).
+   * - `"consumed"` — single-use permit already consumed.
+   */
+  status: "active" | "expired" | "revoked" | "consumed";
+  /** ISO-8601 timestamp when the permit was revoked. Populated only when `status === "revoked"`. */
+  revoked_at?: string;
+  /** Opaque identifier of the revocation record. Populated only when `status === "revoked"`. */
+  revocation_id?: string;
+}
+
 // ── Canonical revoke / verify (REST) ──────────────────────────────────────────
 
 /** Input for {@link AtlaSentClient.revokePermitById}. */

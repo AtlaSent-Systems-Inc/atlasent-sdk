@@ -100,6 +100,7 @@ export type {
   ListPermitsResponse,
   PermitRecord,
   PermitStatus,
+  PermitValidResponse,
   RateLimitState,
   RevokePermitByIdInput,
   RevokePermitByIdResponse,
