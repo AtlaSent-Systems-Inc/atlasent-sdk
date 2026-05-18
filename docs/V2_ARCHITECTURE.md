@@ -1,11 +1,40 @@
-# V2.0.0 — atlasent-sdk deliverables
+# V2 Architecture — atlasent-sdk deliverables (historical filename)
 
-**Status**: design · **Target**: AtlaSent v2.0.0 · **Canonical plan**:
+**Status**: design · **Canonical plan**:
 [`atlasent-docs/docs/V2_ARCHITECTURE.md`](https://github.com/AtlaSent-Systems-Inc/atlasent-docs/blob/main/docs/V2_ARCHITECTURE.md)
 
+> **Reframing normalization header (2026-05-18).** Per
+> [`atlasent/VERSIONING_DOCTRINE.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/claude/normalize-roadmap-versioning-NWPuP/VERSIONING_DOCTRINE.md)
+> the platform-generation `v2 / v3` framing has been retired. There is
+> no "AtlaSent v2.0.0" platform release. The SDK work captured here
+> ships **additively on the stable AtlaSent v1 contract** and is
+> sequenced across **Phase 1 — Stabilization & Pilot Readiness**
+> (`recordExecutionResult`, `replayDecision`, `guard` wrapper, framework
+> guards), **Phase 2 — Enterprise Hardening** (compliance / evidence
+> tooling, AI gate composition), and **Phase 3 — Execution Assurance**
+> (deterministic-replay verifier extensions, mTLS / SPIFFE workload
+> identity).
+>
+> **Per-package SemVer is independent of platform phases** per
+> Doctrine 5. References below to "`@atlasent/sdk@2.0.0`",
+> "`atlasent==2.0.0`", "v2.0.0 tag", and "Version 2.0.0 tag on both
+> `@atlasent/sdk` and `atlasent` (pypi)" are **per-language SDK
+> SemVer majors** — they are an SDK ergonomics/typing change, not an
+> "AtlaSent v2" platform release. Contract schema directories
+> (`contract/schemas/`), code-level wire-type identifiers
+> (`ExecutionResultWire`, `DecisionReplayWire`, etc.), preview
+> package names (`@atlasent/anthropic-middleware`,
+> `@atlasent/openai-middleware`, `@atlasent/claude-code`,
+> `@atlasent/cursor`, `@atlasent/langchain`, `@atlasent/llamaindex`),
+> and references to `Phases 1–5` in the rollout-order section
+> (which are SDK-internal phase numbers, not the platform-wide
+> Phase 1 / 2 / 3) are all code-level / SDK-local identifiers
+> preserved per Doctrines 3, 4, and 5.
+
 This doc is the SDK-specific task list — TypeScript + Python parity —
-for v2.0.0. Vision, phases, and cross-repo contract live in the
-canonical plan; read that first.
+for the additive SDK capabilities that ship on the `v1` contract.
+Vision, phases, and cross-repo contract live in the canonical plan;
+read that first.
 
 ---
 

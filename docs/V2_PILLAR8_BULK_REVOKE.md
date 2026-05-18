@@ -1,10 +1,27 @@
-# Pillar 8 — Temporal Bulk Permit Revocation: Server Implementation Spec
+# Pillar 8 — Temporal Bulk Permit Revocation: Server Implementation Spec (historical filename)
 
-**Status:** ready to implement  
-**Endpoint:** `POST /v2/permits:bulk-revoke`  
-**Contract:** `contract/schemas/v2/bulk-revoke-{request,response}.schema.json`  
-**OpenAPI:** `contract/openapi-v2.yaml` — `bulkRevokePermits` operation  
-**SDK activity:** `@atlasent/temporal-preview` / `atlasent-temporal-preview`  
+> **Reframing normalization header (2026-05-18).** Per
+> [`atlasent/VERSIONING_DOCTRINE.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/claude/normalize-roadmap-versioning-NWPuP/VERSIONING_DOCTRINE.md),
+> the platform-generation `v2 / v3` framing has been retired. This
+> spec describes additive Temporal-integration tooling on top of the
+> stable **AtlaSent v1** contract; sequence it as **Phase 1 — Pilot
+> Readiness** (Temporal bulk-revoke is part of the Temporal-preview
+> SDK capability set). The endpoint path (`POST /v2/permits:bulk-revoke`),
+> schema directory (`contract/schemas/v2/`), OpenAPI artifact
+> (`contract/openapi-v2.yaml`), and SDK package names
+> (`@atlasent/temporal-preview`, `atlasent-temporal-preview`) are
+> **code-level identifiers** — they are schema-history artifacts
+> (Doctrine 3) and published-package identifiers (Doctrine 5) and are
+> preserved as-is. The public wire surface for the stable contract is
+> `/v1/*` per Doctrine 3; the `/v2/permits:bulk-revoke` path here is an
+> internal-build identifier in the current schema, not a public v2
+> namespace.
+
+**Status:** ready to implement
+**Endpoint:** `POST /v2/permits:bulk-revoke` (code-level path; see header above)
+**Contract:** `contract/schemas/v2/bulk-revoke-{request,response}.schema.json`
+**OpenAPI:** `contract/openapi-v2.yaml` — `bulkRevokePermits` operation
+**SDK activity:** `@atlasent/temporal-preview` / `atlasent-temporal-preview`
 
 ---
 

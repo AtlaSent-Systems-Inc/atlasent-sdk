@@ -1,20 +1,28 @@
-# atlasent-sdk — V2 Rollout
+# atlasent-sdk — V2 Rollout (historical filename)
 
-> **Reframing normalization header (2026-05-18).** This document
-> remains in scope and is preserved unchanged per the "do not rewrite
-> history" doctrine ([`atlasent/VERSIONING_DOCTRINE.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/VERSIONING_DOCTRINE.md)
-> doctrine 4). Under the 2026-05-18 platform-generation reframing,
-> the work described here is reclassified as the **v1.x capability
-> layer** — additive cash-flowing capabilities on top of the V1 GA
-> substrate. The platform-generation label **v2** now refers to the
-> full enterprise surface, planned in
-> [`atlasent/ENTERPRISE_V2_ROLLOUT.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/ENTERPRISE_V2_ROLLOUT.md).
-> Filename and `V2-D#` identifiers are retained for reference
-> stability; "V2" in this document refers to the historical pre-reframing
-> framing, not the post-reframing platform-generation v2. New
-> decisions use the **`PROD-D#`** namespace. See
-> [`atlasent/ROADMAP.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/ROADMAP.md)
-> for the current generation matrix.
+> **Reframing normalization header (2026-05-18, second-pass).** This
+> document is preserved per the "do not rewrite history" doctrine
+> ([`atlasent/VERSIONING_DOCTRINE.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/claude/normalize-roadmap-versioning-NWPuP/VERSIONING_DOCTRINE.md)
+> Doctrine 4). Under the 2026-05-18 normalization pass, the
+> platform-generation `v2 / v3` framing has been retired: there is no
+> "v2 product" and no "v3 product." There is only **AtlaSent v1** (the
+> stable public contract) plus **Phase 1 / Phase 2 / Phase 3** of
+> additive evolution on top of `v1`.
+>
+> The substantive SDK work below — batch evaluate, streaming evaluate,
+> GraphQL client, framework guards, behavior-conditioning helper —
+> ships additively on the `v1` contract and is sequenced as **Phase 1
+> — Stabilization & Pilot Readiness** (with the offline-replay client
+> belonging to Phase 3). The "V2", "Wave B", `v2_*` tenant-flag
+> identifiers, `@atlasent/sdk@2.x` SemVer references, and
+> `@atlasent/behavior@1.0.0` references in this document are historical
+> pre-reframing labels and **code-level identifiers** — per Doctrines 4
+> and 5, the filename, decision IDs, package names, and per-package
+> SemVer (which evolves independently of platform phases) are all
+> preserved. New decisions use the **`PROD-D#`** namespace. See
+> [`atlasent/ROADMAP.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/claude/normalize-roadmap-versioning-NWPuP/ROADMAP.md)
+> for the current phase matrix and `ROADMAP.md` in this repo for the
+> SDK slice.
 
 **Status:** plan · **Wave:** B (SDKs + MCP) · **Updated:** 2026-05-15
 
