@@ -1,6 +1,7 @@
 {
   "name": "@atlasent/behavior-preview",
   "version": "0.0.0-preview.0",
+  "deprecated": "Use @atlasent/behavior instead. This preview package will be removed in a future release.",
   "description": "Preview package for @atlasent/behavior — the aggregate-only Behavior Conditioning Layer client. DO NOT USE IN PRODUCTION — surfaces here are stubs until behavior-insights ships BI2 (pattern_entries read API) and BI4 (frozen BvsSnapshot wire shape).",
   "license": "Apache-2.0",
   "type": "module",

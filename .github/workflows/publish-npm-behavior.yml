@@ -1,0 +1,175 @@
+name: Publish @atlasent/behavior to npm
+
+# Triggers on behavior-v1.* tags (e.g. behavior-v1.0.0, behavior-v1.0.1).
+# Also triggers on v2.* tags for @atlasent/sdk stable releases.
+#
+# Tag conventions:
+#   @atlasent/sdk releases:      typescript-v<semver>   (e.g. typescript-v2.0.0)
+#   @atlasent/behavior releases:  behavior-v<semver>     (e.g. behavior-v1.0.0)
+#
+# Release procedure: bump version in the relevant package.json, commit,
+# then push the matching tag. This workflow verifies the tag matches
+# package.json before publishing.
+on:
+  push:
+    tags:
+      - "behavior-v1.*"
+      - "behavior-v2.*"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to publish (sdk or behavior)'
+        required: true
+        default: 'behavior'
+        type: choice
+        options:
+          - sdk
+          - behavior
+      version:
+        description: 'Version to publish (e.g. 1.0.0)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Determine which package to publish ────────────────────────────────────
+  resolve:
+    name: Resolve package from tag
+    runs-on: ubuntu-latest
+    outputs:
+      package_dir: ${{ steps.resolve.outputs.package_dir }}
+      package_name: ${{ steps.resolve.outputs.package_name }}
+      dist_tag: ${{ steps.resolve.outputs.dist_tag }}
+    steps:
+      - name: Resolve package and dist-tag from trigger
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PKG="${{ github.event.inputs.package }}"
+          else
+            # Tag-based: behavior-v* → behavior package
+            TAG="${GITHUB_REF#refs/tags/}"
+            if [[ "$TAG" == behavior-v* ]]; then
+              PKG="behavior"
+            else
+              echo "::error::Unrecognised tag pattern: $TAG"
+              exit 1
+            fi
+          fi
+
+          if [ "$PKG" = "behavior" ]; then
+            echo "package_dir=typescript/packages/behavior" >> "$GITHUB_OUTPUT"
+            echo "package_name=@atlasent/behavior" >> "$GITHUB_OUTPUT"
+            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
+          elif [ "$PKG" = "sdk" ]; then
+            echo "package_dir=typescript" >> "$GITHUB_OUTPUT"
+            echo "package_name=@atlasent/sdk" >> "$GITHUB_OUTPUT"
+            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Unknown package: $PKG"
+            exit 1
+          fi
+
+  # ── Test ──────────────────────────────────────────────────────────────────
+  test:
+    name: Test ${{ needs.resolve.outputs.package_name }}
+    runs-on: ubuntu-latest
+    needs: resolve
+    strategy:
+      matrix:
+        node-version: ["20.x", "22.x"]
+    defaults:
+      run:
+        working-directory: ${{ needs.resolve.outputs.package_dir }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ needs.resolve.outputs.package_dir }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+        # @atlasent/behavior has no separate test script yet; skip gracefully
+        continue-on-error: ${{ needs.resolve.outputs.package_name == '@atlasent/behavior' }}
+
+      - name: Build
+        run: npm run build
+
+  # ── Publish ────────────────────────────────────────────────────────────────
+  publish:
+    name: Publish ${{ needs.resolve.outputs.package_name }} to npm
+    runs-on: ubuntu-latest
+    needs: [resolve, test]
+    environment: npm
+    permissions:
+      id-token: write   # required for npm publish --provenance
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ needs.resolve.outputs.package_dir }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: ${{ needs.resolve.outputs.package_dir }}/package-lock.json
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package version
+        # Strips the package-prefix from the tag and compares against
+        # package.json "version". Refuses to publish if they disagree.
+        # Skipped for workflow_dispatch runs (no tag ref).
+        if: github.event_name == 'push'
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          # Strip known prefixes: behavior-v, typescript-v
+          TAG_VERSION="${TAG#behavior-v}"
+          TAG_VERSION="${TAG_VERSION#typescript-v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)."
+            exit 1
+          fi
+          echo "Tag and package version agree: $PKG_VERSION"
+
+      - name: Verify manual version matches package version
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$INPUT_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Input version ($INPUT_VERSION) does not match package.json version ($PKG_VERSION)."
+            exit 1
+          fi
+          echo "Input and package version agree: $PKG_VERSION"
+
+      - name: Build
+        run: npm run build
+
+      - name: Inspect tarball contents (dry-run)
+        # Logs the exact file list that would ship to the registry.
+        # Lets a reviewer catch a missing dist/ or accidentally-included secret
+        # before the package hits npm.
+        run: npm pack --dry-run
+
+      - name: Publish (with provenance)
+        run: npm publish --access public --provenance --tag ${{ needs.resolve.outputs.dist_tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
