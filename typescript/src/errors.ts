@@ -314,3 +314,47 @@ export class AtlaSentEscalateError extends AtlaSentError {
     this.userId = opts?.userId;
   }
 }
+
+// ── Permit revocation error (PROD-D9 continuous-authorization) ────────────────
+
+/**
+ * Thrown by an SDK guard heartbeat when `GET /v1/permits/:id/valid`
+ * returns `status: 'revoked'` during tool execution (PROD-D9
+ * continuous-authorization lease model).
+ *
+ * This error is **always re-thrown** — it is never serialized as a
+ * `tool-result` denial because it represents a live enforcement action,
+ * not a policy evaluation at request time. Callers should treat it as
+ * an immediate halt signal.
+ *
+ * ```ts
+ * catch (e) {
+ *   if (e instanceof PermitRevoked) {
+ *     // log e.permitId and e.revocationId for incident correlation
+ *     await incidentLog.record({ permitId: e.permitId, revocationId: e.revocationId });
+ *   }
+ * }
+ * ```
+ *
+ * Guard heartbeat is configured via `permitRevalidationIntervalMs` in
+ * the guard options (minimum 1000 ms). The heartbeat activates only
+ * when the {@link AtlaSentClient} exposes `checkPermitValid` — i.e.
+ * when `atlasent-api` has deployed `GET /v1/permits/:id/valid`.
+ */
+export class PermitRevoked extends AtlaSentError {
+  override name: string = 'PermitRevoked';
+  /** The id of the permit that was revoked mid-execution. */
+  readonly permitId: string;
+  /** The `scope_revocations.id` that triggered the revocation, when available. */
+  readonly revocationId: string | undefined;
+
+  constructor(permitId: string, revocationId?: string) {
+    super(
+      revocationId
+        ? `AtlaSent: permit ${permitId} revoked (revocation: ${revocationId}) — guard heartbeat halted execution`
+        : `AtlaSent: permit ${permitId} revoked — guard heartbeat halted execution`,
+    );
+    this.permitId = permitId;
+    this.revocationId = revocationId;
+  }
+}

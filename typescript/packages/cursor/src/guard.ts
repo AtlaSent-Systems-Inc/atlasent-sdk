@@ -10,13 +10,18 @@
  *   2. verifyPermit — confirm the permit cryptographically
  *   3. execute      — run the tool only if both pass
  *
+ * When `permitRevalidationIntervalMs` is set, the guard also runs a
+ * continuous-authorization heartbeat (PROD-D9): it polls
+ * `GET /v1/permits/:id/valid` at the configured interval and throws
+ * `PermitRevoked` if the permit is revoked mid-execution.
+ *
  * The returned objects are drop-in replacements for your existing tool
  * array: pass them to your Cursor MCP server's `ListToolsResult` and
  * call `execute` from your `CallToolResult` handler.
  */
 
 import type { AtlaSentClient } from "@atlasent/sdk";
-import { AtlaSentDeniedError } from "@atlasent/sdk";
+import { AtlaSentDeniedError, PermitRevoked } from "@atlasent/sdk";
 
 // ── Cursor tool shape (MCP-compatible, duck-typed) ────────────────────────────
 
@@ -90,6 +95,16 @@ export interface CursorGuardOptions {
    *   so the agent can observe and adapt.
    */
   onDeny?: "throw" | "tool-result";
+  /**
+   * Continuous-authorization heartbeat interval in milliseconds (PROD-D9).
+   *
+   * When set (minimum 1000 ms), the guard polls `GET /v1/permits/:id/valid`
+   * at this interval during tool execution. If the permit is revoked
+   * mid-execution, `PermitRevoked` is thrown immediately regardless of
+   * `onDeny`. Requires the `AtlaSentClient` to expose `checkPermitValid`
+   * (available once atlasent-api ships `GET /v1/permits/:id/valid`).
+   */
+  permitRevalidationIntervalMs?: number;
 }
 
 /** Returned (as a JSON string) instead of throwing when `onDeny: "tool-result"`. */
@@ -99,6 +114,65 @@ export interface DenialResult {
   evaluationId: string;
   reason: string;
   auditHash?: string;
+}
+
+// ── Heartbeat (PROD-D9 continuous-authorization) ──────────────────────────────
+
+interface PermitValidResponse {
+  valid: boolean;
+  status: "active" | "expired" | "revoked" | "consumed";
+  revoked_at?: string;
+  revocation_id?: string;
+}
+
+type ClientWithHeartbeat = AtlaSentClient & {
+  checkPermitValid?: (permitId: string) => Promise<PermitValidResponse>;
+};
+
+interface HeartbeatHandle {
+  revocationSignal: Promise<never>;
+  stop: () => void;
+}
+
+function startHeartbeat(
+  client: AtlaSentClient,
+  permitId: string,
+  intervalMs: number,
+): HeartbeatHandle {
+  const clampedMs = Math.max(intervalMs, 1000);
+  let stopped = false;
+  let rejectFn: ((e: PermitRevoked) => void) | undefined;
+  const revocationSignal = new Promise<never>((_, reject) => {
+    rejectFn = reject;
+  });
+
+  const extended = client as ClientWithHeartbeat;
+  if (!extended.checkPermitValid) {
+    return { revocationSignal, stop: () => { stopped = true; } };
+  }
+
+  const timer = setInterval(() => {
+    if (stopped) return;
+    void (extended.checkPermitValid!(permitId)
+      .then((resp) => {
+        if (!stopped && resp.status === "revoked") {
+          stopped = true;
+          clearInterval(timer);
+          rejectFn!(new PermitRevoked(permitId, resp.revocation_id));
+        }
+      })
+      .catch(() => {
+        // Network error during heartbeat poll — continue polling.
+      }));
+  }, clampedMs);
+
+  return {
+    revocationSignal,
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
 }
 
 // ── withCursorGuard ───────────────────────────────────────────────────────────
@@ -119,7 +193,7 @@ export interface DenialResult {
  * const guardedTools = withCursorGuard(
  *   [editFileTool, runCommandTool],
  *   atlasent,
- *   { agent: "cursor:my-project" },
+ *   { agent: "cursor:my-project", permitRevalidationIntervalMs: 5000 },
  * );
  *
  * // In your MCP server's CallToolRequestSchema handler:
@@ -176,12 +250,20 @@ export function withCursorGuard<T extends CursorGuardedTool>(
           });
         }
 
-        const result = await tool.execute(input as Parameters<T["execute"]>[0]);
+        // Start continuous-authorization heartbeat (PROD-D9).
+        const hb =
+          options.permitRevalidationIntervalMs != null
+            ? startHeartbeat(client, evalResp.permitId, options.permitRevalidationIntervalMs)
+            : null;
 
-        // Append permit metadata as a JSON trailer the agent can parse.
-        // The result string is returned intact; metadata is appended only
-        // when the result is already a JSON object string so as not to
-        // corrupt plain-text results.
+        const result = await (hb
+          ? Promise.race([
+              tool.execute(input as Parameters<T["execute"]>[0]),
+              hb.revocationSignal,
+            ]).finally(() => hb.stop())
+          : tool.execute(input as Parameters<T["execute"]>[0]));
+
+        // Append permit metadata when the result is a JSON object string.
         try {
           const parsed = JSON.parse(result) as unknown;
           if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
@@ -197,6 +279,7 @@ export function withCursorGuard<T extends CursorGuardedTool>(
         return result;
       } catch (err) {
         if (err instanceof AtlaSentDeniedError) throw err;
+        if (err instanceof PermitRevoked) throw err;
         if ((options.onDeny ?? "throw") === "tool-result") {
           return JSON.stringify({
             denied: true,

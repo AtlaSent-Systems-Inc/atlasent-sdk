@@ -10,6 +10,11 @@
  *   2. verifyPermit — confirm the permit cryptographically
  *   3. execute    — run the tool only if both pass
  *
+ * When `permitRevalidationIntervalMs` is set, the guard also runs a
+ * continuous-authorization heartbeat (PROD-D9): it polls
+ * `GET /v1/permits/:id/valid` at the configured interval and throws
+ * `PermitRevoked` if the permit is revoked mid-execution.
+ *
  * Zero dependency on `llamaindex` — duck-typed so the wrapped `execute`
  * (or the whole returned tool object) works with any LlamaIndex version.
  * Pass the result directly to `FunctionTool.from(guarded.execute, guarded.metadata)`
@@ -17,7 +22,7 @@
  */
 
 import type { AtlaSentClient } from "@atlasent/sdk";
-import { AtlaSentDeniedError } from "@atlasent/sdk";
+import { AtlaSentDeniedError, PermitRevoked } from "@atlasent/sdk";
 
 // ── LlamaIndex tool shapes (duck-typed) ───────────────────────────────────────
 
@@ -89,6 +94,16 @@ export interface LlamaIndexGuardOptions {
    *   can observe and adapt.
    */
   onDeny?: "throw" | "tool-result";
+  /**
+   * Continuous-authorization heartbeat interval in milliseconds (PROD-D9).
+   *
+   * When set (minimum 1000 ms), the guard polls `GET /v1/permits/:id/valid`
+   * at this interval during tool execution. If the permit is revoked
+   * mid-execution, `PermitRevoked` is thrown immediately regardless of
+   * `onDeny`. Requires the `AtlaSentClient` to expose `checkPermitValid`
+   * (available once atlasent-api ships `GET /v1/permits/:id/valid`).
+   */
+  permitRevalidationIntervalMs?: number;
 }
 
 /** Returned instead of throwing when `onDeny: "tool-result"`. */
@@ -98,6 +113,65 @@ export interface DenialResult {
   evaluationId: string;
   reason: string;
   auditHash?: string;
+}
+
+// ── Heartbeat (PROD-D9 continuous-authorization) ──────────────────────────────
+
+interface PermitValidResponse {
+  valid: boolean;
+  status: "active" | "expired" | "revoked" | "consumed";
+  revoked_at?: string;
+  revocation_id?: string;
+}
+
+type ClientWithHeartbeat = AtlaSentClient & {
+  checkPermitValid?: (permitId: string) => Promise<PermitValidResponse>;
+};
+
+interface HeartbeatHandle {
+  revocationSignal: Promise<never>;
+  stop: () => void;
+}
+
+function startHeartbeat(
+  client: AtlaSentClient,
+  permitId: string,
+  intervalMs: number,
+): HeartbeatHandle {
+  const clampedMs = Math.max(intervalMs, 1000);
+  let stopped = false;
+  let rejectFn: ((e: PermitRevoked) => void) | undefined;
+  const revocationSignal = new Promise<never>((_, reject) => {
+    rejectFn = reject;
+  });
+
+  const extended = client as ClientWithHeartbeat;
+  if (!extended.checkPermitValid) {
+    return { revocationSignal, stop: () => { stopped = true; } };
+  }
+
+  const timer = setInterval(() => {
+    if (stopped) return;
+    void (extended.checkPermitValid!(permitId)
+      .then((resp) => {
+        if (!stopped && resp.status === "revoked") {
+          stopped = true;
+          clearInterval(timer);
+          rejectFn!(new PermitRevoked(permitId, resp.revocation_id));
+        }
+      })
+      .catch(() => {
+        // Network error during heartbeat poll — continue polling.
+      }));
+  }, clampedMs);
+
+  return {
+    revocationSignal,
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
 }
 
 // ── withLlamaIndexGuard ───────────────────────────────────────────────────────
@@ -117,6 +191,7 @@ export interface DenialResult {
  *
  * const guarded = withLlamaIndexGuard([searchTool], atlasent, {
  *   agent: "service:knowledge-bot",
+ *   permitRevalidationIntervalMs: 5000,
  * });
  *
  * const tools = guarded.map((t) =>
@@ -174,7 +249,18 @@ export function withLlamaIndexGuard<
           });
         }
 
-        const result = await tool.execute(input as Parameters<T["execute"]>[0]);
+        // Start continuous-authorization heartbeat (PROD-D9).
+        const hb =
+          options.permitRevalidationIntervalMs != null
+            ? startHeartbeat(client, evalResp.permitId, options.permitRevalidationIntervalMs)
+            : null;
+
+        const result = await (hb
+          ? Promise.race([
+              tool.execute(input as Parameters<T["execute"]>[0]),
+              hb.revocationSignal,
+            ]).finally(() => hb.stop())
+          : tool.execute(input as Parameters<T["execute"]>[0]));
 
         if (result !== null && typeof result === "object" && !Array.isArray(result)) {
           return {
@@ -186,6 +272,7 @@ export function withLlamaIndexGuard<
         return result;
       } catch (err) {
         if (err instanceof AtlaSentDeniedError) throw err;
+        if (err instanceof PermitRevoked) throw err;
         if ((options.onDeny ?? "throw") === "tool-result") {
           return {
             denied: true,
