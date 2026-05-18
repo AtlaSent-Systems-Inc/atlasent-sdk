@@ -268,3 +268,49 @@ export class AtlaSentDeniedError extends AtlaSentError {
     return this.outcome === "permit_not_found";
   }
 }
+
+/** Initialization options for {@link AtlaSentEscalateError}. */
+export interface AtlaSentEscalateErrorInit {
+  requestId?: string;
+  userId?: string;
+  cause?: unknown;
+}
+
+/**
+ * Thrown when an evaluate response carries `decision: "escalate"`.
+ *
+ * Distinct from {@link AtlaSentDeniedError} — an escalation does not
+ * constitute a hard denial. It signals that the policy engine has
+ * deferred the authorization decision to a human review queue.
+ * Middleware and agent orchestrators should catch this specifically
+ * and route the pending action to the appropriate HITL channel.
+ *
+ * ```ts
+ * catch (e) {
+ *   if (e instanceof AtlaSentEscalateError) {
+ *     await humanReviewQueue.submit({ userId: e.userId, requestId: e.requestId });
+ *   }
+ * }
+ * ```
+ *
+ * Extends {@link AtlaSentError} so `instanceof AtlaSentError` catches
+ * escalations alongside other SDK errors; use
+ * `instanceof AtlaSentEscalateError` to branch specifically.
+ */
+export class AtlaSentEscalateError extends AtlaSentError {
+  override name: string = "AtlaSentEscalateError";
+
+  /** Always `"escalate"` — discriminates this error from other AtlaSent errors. */
+  readonly decision = "escalate" as const;
+
+  /** The user whose action triggered the escalation, if available. */
+  readonly userId: string | undefined;
+
+  constructor(message: string, opts?: AtlaSentEscalateErrorInit) {
+    super(message, {
+      requestId: opts?.requestId,
+      cause: opts?.cause,
+    });
+    this.userId = opts?.userId;
+  }
+}
