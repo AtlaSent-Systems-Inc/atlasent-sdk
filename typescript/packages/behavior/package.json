@@ -2,20 +2,59 @@
   "name": "@atlasent/behavior",
   "version": "1.0.0",
   "private": false,
-  "description": "AtlaSent behavior conditioning helpers",
+  "description": "AtlaSent Behavior Verification System (BVS) integration — state summary, category aggregates, and evaluate context enrichment",
+  "license": "Apache-2.0",
+  "keywords": [
+    "atlasent",
+    "behavior",
+    "bvs",
+    "authorization",
+    "ai",
+    "agents",
+    "gxp",
+    "compliance"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AtlaSent-Systems-Inc/atlasent-sdk.git",
+    "directory": "typescript/packages/behavior"
+  },
+  "homepage": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/tree/main/typescript/packages/behavior#readme",
+  "bugs": {
+    "url": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run build"
   },
   "peerDependencies": {
     "@atlasent/sdk": "^2.0.0"

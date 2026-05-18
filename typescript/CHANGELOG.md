@@ -4,6 +4,206 @@ All notable changes to `@atlasent/sdk` are documented here. The SDK
 follows [semver](https://semver.org/): breaking changes bump the major
 (or minor while on 0.x).
 
+---
+
+## @atlasent/sdk 2.0.0 (2026-05-18)
+
+### New features
+
+#### `evaluateMany` — batch evaluation (V2-D3)
+
+One round-trip for up to 100 `evaluate` items via `POST /v1/evaluate/batch`.
+Returns items in input order; per-item failures carry `errorCode`/`errorMessage`
+rather than tearing down the whole batch.
+
+```ts
+import { evaluateMany } from "@atlasent/sdk/v2";
+
+const result = await evaluateMany(transport, {
+  items: [
+    { action_type: "production.deploy", actor_id: "bot-1", context: {} },
+    { action_type: "production.deploy", actor_id: "bot-2", context: {} },
+  ],
+});
+for (const item of result.items) {
+  console.log(item.index, item.decision); // "allow" | "deny" | ...
+}
+```
+
+Throws `FeatureNotEnabledError` when the tenant `v2_batch` flag is off.
+
+#### `authorizeStream` — SSE streaming authorization (V2-D4)
+
+Streams `event: decision` frames for each item via `POST /v1/evaluate/stream`.
+Per-item failures arrive as `event: error` frames without closing the stream.
+Resolves with the terminal `event: complete` payload.
+
+```ts
+import { authorizeStream } from "@atlasent/sdk/v2";
+
+const complete = await authorizeStream(
+  transport,
+  { items },
+  {
+    onDecision: (frame) => console.log(frame.index, frame.decision),
+    onError:    (frame) => console.error(frame.index, frame.errorCode),
+  },
+);
+console.log(`processed ${complete.count} items, partial=${complete.partial}`);
+```
+
+Throws `FeatureNotEnabledError` when the tenant `v2_streaming` flag is off.
+
+#### `graphql` — read-only GraphQL endpoint (V2-D2 + V2-D8)
+
+Bearer-authenticated `POST /v1/graphql`. Wave A schema exposes
+`recentEvaluations(limit)` and `activeBundle`. Resolver errors surface
+on `response.errors`; the SDK does not throw on them so callers can
+inspect partial data.
+
+```ts
+import { graphql } from "@atlasent/sdk/v2";
+
+const { data, errors } = await graphql(transport, {
+  query: `{ recentEvaluations(limit: 10) { decisionId decision actorId } }`,
+});
+```
+
+Throws `FeatureNotEnabledError` when the tenant `v2_graphql` flag is off.
+
+#### `AtlaSentEscalateError` — new error class for escalate decisions
+
+Distinct from `AtlaSentDeniedError`. An escalation signals that the policy
+engine deferred the authorization decision to a human review queue — it is
+not a hard denial. Middleware and agent orchestrators should catch this
+specifically.
+
+```ts
+import { AtlaSentEscalateError } from "@atlasent/sdk";
+
+try {
+  await protect({ agent, action, context });
+} catch (e) {
+  if (e instanceof AtlaSentEscalateError) {
+    await humanReviewQueue.submit({ userId: e.userId, requestId: e.requestId });
+  } else if (e instanceof AtlaSentDeniedError) {
+    throw new Error(`Denied: ${e.reason}`);
+  }
+}
+```
+
+### Breaking changes from 1.x
+
+| Area | 1.x | 2.x |
+|---|---|---|
+| Wire request body | `{ action, agent, context, api_key }` | `{ action_type, actor_id, context }` — `api_key` removed from body; `Authorization: Bearer` header only |
+| Wire response | `{ permitted, decision_id }` legacy fields | Canonical `{ decision, permit_token, request_id, expires_at, denial }` (legacy fields still parsed via `src/compat.ts` shims) |
+| `verifyPermit` body | sends `context` field | `context` no longer sent (verify handler does not consult it) |
+| Error on escalate | `AtlaSentDeniedError` with `decision: "escalate"` | `AtlaSentEscalateError` (distinct class, `instanceof AtlaSentError` still catches it) |
+| `decision` field | `'ALLOW' \| 'DENY'` (2-value uppercase) | Deprecated in favour of `decision_canonical: 'allow' \| 'deny' \| 'hold' \| 'escalate'` |
+
+The compat shims in `src/compat.ts` (`normalizeEvaluateRequest`,
+`normalizeEvaluateResponse`) accept the 1.x `{ action, agent }` shape and
+emit `console.warn`. Both shims are removed in v3.0.0.
+
+### Migration guide (1.x → 2.x)
+
+See [`docs/migration-2x.md`](../docs/migration-2x.md) for the full guide.
+Quick summary:
+
+```ts
+// Before (1.x)
+const result = await client.evaluate({ agent: "bot", action: "production.deploy", context });
+if (!result.permitted) throw new Error(result.reason);
+
+// After (2.x) — recommended
+const result = await client.evaluate({ actorId: "bot", actionType: "production.deploy", context });
+if (result.decision_canonical !== "allow") throw new Error(result.denial?.message);
+```
+
+---
+
+## @atlasent/behavior 1.0.0 (2026-05-18)
+
+First stable release of `@atlasent/behavior` — the BVS (Behavior Verification
+System) integration layer. Graduates from `@atlasent/behavior-preview` which
+is now deprecated.
+
+### Functions
+
+#### `getStateSummary(userId, clientOpts, opts?)`
+
+Fetches a rolling event-count summary from the behavior-insights service.
+Returns `StateSummary` with `event_count`, `category_counts`, and window
+boundaries. Returns `null`-safe — callers should treat low-confidence
+summaries as advisory only.
+
+```ts
+import { getStateSummary } from "@atlasent/behavior";
+
+const summary = await getStateSummary("user-123", {
+  baseUrl: process.env.BEHAVIOR_INSIGHTS_URL!,
+  apiKey:  process.env.BEHAVIOR_API_KEY!,
+});
+console.log(summary?.event_count); // number of events in the window
+```
+
+#### `getCategoryAggregate(userId, category, clientOpts, opts?)`
+
+Returns a `CategoryAggregate` for a specific `BehaviorCategory`
+(`"behavior.health.mental"`, `"behavior.health.adherence"`,
+`"behavior.financial"`, `"behavior.minor"`). Useful for fine-grained
+policy context before calling `evaluate`.
+
+```ts
+import { getCategoryAggregate } from "@atlasent/behavior";
+
+const agg = await getCategoryAggregate("user-123", "behavior.financial", clientOpts);
+console.log(agg.count, agg.confidence_low);
+```
+
+#### `attachToEvaluate(userId, clientOpts)`
+
+Convenience helper — fetches the behavior summary and returns a
+`behavior_context` metadata object ready to merge into the AtlaSent
+`evaluate` request context. Fails silently (returns `{}`) so a
+behavior-insights outage never blocks an authorization call.
+
+```ts
+import { attachToEvaluate } from "@atlasent/behavior";
+import { AtlaSentClient } from "@atlasent/sdk";
+
+const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
+const behaviorContext = await attachToEvaluate("user-123", behaviorClientOpts);
+
+const result = await client.evaluate({
+  actionType: "production.deploy",
+  actorId:    "user-123",
+  context:    { ...appContext, ...behaviorContext },
+});
+```
+
+### Package details
+
+- Peer dependency: `@atlasent/sdk@^2.0.0`
+- Zero runtime dependencies beyond the peer
+- ESM + CJS dual build via tsup
+- `"private": false` — publishable to npm
+
+### Migration from `@atlasent/behavior-preview`
+
+`@atlasent/behavior-preview` is now deprecated. Replace imports:
+
+```diff
+- import { getStateSummary } from "@atlasent/behavior-preview";
++ import { getStateSummary } from "@atlasent/behavior";
+```
+
+All three functions (`getStateSummary`, `getCategoryAggregate`,
+`attachToEvaluate`) have the same signatures as the preview.
+
+---
+
 ## [unreleased] — 2026-05-18
 
 ### Platform-generation reframing (doc-only, no code change)
