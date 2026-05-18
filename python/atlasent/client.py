@@ -1,3 +1,5 @@
+"""Synchronous AtlaSent API client (httpx-based)."""
+
 from __future__ import annotations
 
 import hashlib
@@ -215,7 +217,7 @@ class AtlaSentClient:
             timeout=self._timeout,
         )
 
-    # ── public API ────────────────────────────────────────────
+    # ── public API ───────────────────────────────────────────
 
     def evaluate(
         self,
@@ -742,7 +744,7 @@ class AtlaSentClient:
             raw=eval_result.model_dump(by_alias=True),
         )
 
-    # ── lifecycle ─────────────────────────────────────────────
+    # ── lifecycle ─────────────────────────────────────────────────
 
     def close(self) -> None:
         """Close the underlying HTTP client and release resources."""
@@ -1156,7 +1158,7 @@ class AtlaSentClient:
 
         return AuditExportResult(bundle=data, rate_limit=rate_limit)
 
-    # ── internals ─────────────────────────────────────────────
+    # ── internals ─────────────────────────────────────────────────
 
     def _post(
         self,
