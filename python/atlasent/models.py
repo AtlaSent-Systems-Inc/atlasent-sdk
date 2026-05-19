@@ -87,7 +87,7 @@ def _warn_oversize_context(value: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
-# ── Rate-limit state (shared by evaluate + verify) ─────────────────────
+# ── Rate-limit state (shared by evaluate + verify) ───────────────────
 
 
 @dataclass(frozen=True)
@@ -137,7 +137,7 @@ def _warn_legacy(label: str, mapping: str) -> None:
     )
 
 
-# ── Evaluate ──────────────────────────────────────────────────
+# ── Evaluate ──────────────────────────────────────────────────────────
 
 
 class EvaluateRequest(BaseModel):
@@ -314,7 +314,7 @@ class EvaluateResult(BaseModel):
         return out
 
 
-# ── Constraint trace (preflight) ───────────────────────────────────
+# ── Constraint trace (preflight) ──────────────────────────────────────
 
 
 class ConstraintTraceStage(BaseModel):
@@ -428,7 +428,7 @@ class EvaluatePreflightResult:
     constraint_trace: ConstraintTrace | None = None
 
 
-# ── Verify ────────────────────────────────────────────────────
+# ── Verify ────────────────────────────────────────────────────────────
 
 
 class VerifyRequest(BaseModel):
@@ -574,7 +574,7 @@ class VerifyResult(BaseModel):
         return out
 
 
-# ── Key self-introspection ────────────────────────────────────────
+# ── Key self-introspection ────────────────────────────────────────────
 
 
 class ApiKeySelfResult(BaseModel):
@@ -622,7 +622,7 @@ class ApiKeySelfResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
 
 
-# ── Gate (convenience) ──────────────────────────────────────────
+# ── Gate (convenience) ────────────────────────────────────────────────
 
 
 class GateResult(BaseModel):
@@ -636,7 +636,7 @@ class GateResult(BaseModel):
     verification: VerifyResult
 
 
-# ── Authorize (public top-level API) ─────────────────────────────
+# ── Authorize (public top-level API) ─────────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -696,7 +696,7 @@ class AuthorizationResult:
         return self.permitted
 
 
-# ── Revoke permit ─────────────────────────────────────────────
+# ── Revoke permit ─────────────────────────────────────────────────────
 
 
 class RevokePermitResult(BaseModel):
@@ -711,7 +711,7 @@ class RevokePermitResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
-# ── Permit lifecycle (canonical REST shapes) ────────────────────────
+# ── Permit lifecycle (canonical REST shapes) ──────────────────────────
 
 
 class PermitRecord(BaseModel):
@@ -762,7 +762,7 @@ class ListPermitsResult(BaseModel):
     rate_limit: RateLimitState | None = None
 
 
-# ── Canonical revoke / verify (REST) ─────────────────────────────
+# ── Canonical revoke / verify (REST) ──────────────────────────────────
 
 
 class RevokePermitByIdResult(BaseModel):
@@ -814,7 +814,7 @@ class VerifyPermitByIdResult(BaseModel):
     rate_limit: RateLimitState | None = None
 
 
-# ── Streaming evaluate events ─────────────────────────────────────
+# ── Streaming evaluate events ─────────────────────────────────────────
 
 
 class StreamDecisionEvent(BaseModel):
@@ -863,7 +863,7 @@ StreamEvent = Annotated[
 ]
 
 
-# ── Phase 7 typed models (provisional) ────────────────────────────────────
+# ── Phase 7 typed models (provisional) ────────────────────────────────────────
 #
 # These shapes are SDK-side projections of cross-endpoint concepts:
 #   - GovernanceDecision: a uniform decision envelope across
