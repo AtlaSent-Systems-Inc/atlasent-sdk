@@ -41,6 +41,8 @@ before reaching ``fn``.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -48,6 +50,27 @@ from .authorize import protect
 from .models import Permit
 
 T = TypeVar("T")
+
+
+def _compute_execution_hash(payload: dict) -> str:
+    """SHA-256 of RFC-8785-style canonical JSON (keys sorted recursively).
+
+    Used as ``execution_hash`` on the permit-consume (verify) request so
+    the server can validate the evaluate payload was not tampered with
+    between evaluate and consume.
+
+    P1-5: Required by the API for production permits as of 2026-05-14.
+    """
+
+    def sort_deep(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            return {k: sort_deep(v) for k, v in sorted(obj.items())}
+        if isinstance(obj, list):
+            return [sort_deep(i) for i in obj]
+        return obj
+
+    canonical = json.dumps(sort_deep(payload), separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def with_permit(

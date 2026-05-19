@@ -349,6 +349,20 @@ export interface VerifyPermitRequest {
   agent?: string;
   /** Optional: re-state the context for cross-check with the server. */
   context?: Record<string, unknown>;
+  /**
+   * Environment of the permit being verified. Sourced from the evaluate
+   * payload (context.environment → top-level environment → "production").
+   * Required by the server for production permits as of 2026-05-14.
+   * P1-1 fix: withPermit/protect now always populates this field.
+   */
+  environment?: string;
+  /**
+   * SHA-256 hex digest of the recursively key-sorted canonical JSON of the
+   * original evaluate payload. Required by the server for production permits
+   * as of 2026-05-14.
+   * P1-5 fix: withPermit/protect now always computes and sends this field.
+   */
+  execution_hash?: string;
 }
 
 /**

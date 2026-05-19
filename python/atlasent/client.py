@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import re
@@ -70,6 +72,28 @@ DEFAULT_TIMEOUT = 10
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RETRY_BACKOFF = 2.0
 _RETRY_MAX_DELAY = 16.0
+
+
+def _compute_execution_hash(payload: dict) -> str:
+    """SHA-256 of RFC-8785-style canonical JSON (keys sorted recursively).
+
+    Used as ``execution_hash`` on the permit-consume (verify) request so
+    the server can validate the evaluate payload was not tampered with
+    between evaluate and consume.
+
+    P1-5: Required by the API for production permits as of 2026-05-14.
+    """
+
+    def _sort_deep(obj):
+        if isinstance(obj, dict):
+            return {k: _sort_deep(v) for k, v in sorted(obj.items())}
+        if isinstance(obj, list):
+            return [_sort_deep(i) for i in obj]
+        return obj
+
+    canonical = json.dumps(_sort_deep(payload), separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
 
 # API-key prefix contract per atlasent-api/supabase/functions/_shared/auth.ts:
 #   "ask_live_<entropy>" — production keys
@@ -193,7 +217,7 @@ class AtlaSentClient:
             timeout=self._timeout,
         )
 
-    # ── public API ────────────────────────────────────────────────
+    # ── public API ───────────────────────────────────────────
 
     def evaluate(
         self,
@@ -417,6 +441,8 @@ class AtlaSentClient:
         context: dict[str, Any] | None = None,
         *,
         require_approval: bool | None = None,
+        environment: str | None = None,
+        execution_hash: str | None = None,
     ) -> VerifyResult:
         """Verify a previously issued permit token.
 
@@ -469,6 +495,8 @@ class AtlaSentClient:
             action_type=action_type,
             actor_id=actor_id,
             require_approval=require_approval,
+            environment=environment,
+            execution_hash=execution_hash if execution_hash else None,
         )
         logger.debug("verify token=%s", _redact_token(permit_token))
         data, rate_limit, request_id = self._post(
@@ -544,9 +572,31 @@ class AtlaSentClient:
                 audit_hash=audit_hash,
             ) from None
 
+        # P1-1: Extract environment from context. Priority:
+        #   ctx["environment"] → "production" (with warning).
+        _ctx_env = ctx.get("environment") if isinstance(ctx.get("environment"), str) else None
+        if not _ctx_env:
+            logger.warning(
+                "environment not set on evaluate request context — "
+                "defaulting to 'production'. Set context['environment'] explicitly to suppress."
+            )
+            _ctx_env = "production"
+
+        # P1-5: Compute execution_hash over the evaluate payload.
+        _eval_payload: dict[str, Any] = {
+            "action_type": action,
+            "actor_id": agent,
+            "context": ctx,
+        }
+        _execution_hash = _compute_execution_hash(_eval_payload)
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            verify_result = self.verify(eval_result.permit_token, action, agent, ctx)
+            verify_result = self.verify(
+                eval_result.permit_token, action, agent, ctx,
+                environment=_ctx_env,
+                execution_hash=_execution_hash,
+            )
 
         if not verify_result.valid:
             raise AtlaSentDeniedError(

@@ -138,6 +138,73 @@ function wireDecisionToDenied(serverDecision: string): AtlaSentDecision {
   return "deny";
 }
 
+// ── Execution-hash helpers ────────────────────────────────────────────────────
+
+/**
+ * Sort all object keys recursively so the JSON serialization is
+ * deterministic (RFC-8785-style canonical form). Arrays are preserved
+ * in insertion order; only object keys are sorted.
+ */
+function sortKeysDeep(val: unknown): unknown {
+  if (Array.isArray(val)) return val.map(sortKeysDeep);
+  if (val !== null && typeof val === "object") {
+    return Object.keys(val as object)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, k) => {
+        acc[k] = sortKeysDeep((val as Record<string, unknown>)[k]);
+        return acc;
+      }, {});
+  }
+  return val;
+}
+
+/**
+ * Compute a SHA-256 hex digest of the recursively key-sorted canonical
+ * JSON of `payload`. Used as `execution_hash` on the permit-consume
+ * (verify) request so the server can validate the evaluate payload
+ * was not tampered with between evaluate and consume.
+ *
+ * Falls back to `node:crypto` when `crypto.subtle` is unavailable
+ * (Node < 20 without the Web Crypto global).
+ */
+async function computeExecutionHash(payload: unknown): Promise<string> {
+  const sorted = sortKeysDeep(payload);
+  const canonical = JSON.stringify(sorted);
+
+  // Prefer the Web Crypto API (available in browsers, Node 20+,
+  // Cloudflare Workers, Deno, etc.).
+  if (
+    typeof globalThis !== "undefined" &&
+    globalThis.crypto?.subtle?.digest
+  ) {
+    const bytes = new TextEncoder().encode(canonical);
+    const buf = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(buf))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  // Fallback: node:crypto (Node < 20 or environments without crypto.subtle).
+  try {
+    // Dynamic import so bundlers that target browsers don't pull in
+    // node internals. The `node:` prefix avoids any user-land shim.
+    const { createHash } =
+      await import(/* @vite-ignore */ /* webpackIgnore: true */ "node:crypto");
+    return createHash("sha256").update(canonical, "utf8").digest("hex");
+  } catch {
+    // Last-resort: if neither crypto.subtle nor node:crypto is available
+    // (very old Node, restricted runtime), return an empty string so the
+    // verify call still proceeds — the server will reject if execution_hash
+    // is required for production permits.
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[atlasent] Could not compute execution_hash: neither crypto.subtle " +
+        "nor node:crypto is available in this runtime.",
+    );
+    return "";
+  }
+}
+
 /**
  * Authorize an action end-to-end. On allow, returns a verified
  * {@link Permit}. On anything else, throws:
@@ -162,15 +229,42 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
     });
   }
 
+  // P1-1: Extract environment from the evaluate payload. Priority:
+  //   context.environment → (no top-level environment on EvaluateRequest)
+  //   → default "production" with a console warning.
+  const environment =
+    (request.context?.environment as string | undefined) ??
+    (() => {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[atlasent] environment not set on evaluate request — " +
+          "defaulting to 'production'. Set context.environment explicitly to suppress.",
+      );
+      return "production";
+    })();
+
+  // P1-5: Compute execution_hash over the original evaluate payload so
+  //   the server can validate integrity on permit consume.
+  const evaluatePayload = {
+    action_type: request.action,
+    actor_id: request.agent,
+    context: request.context ?? {},
+  };
+  const execution_hash = await computeExecutionHash(evaluatePayload);
+
   const verifyRequest: {
     permitId: string;
     agent: string;
     action: string;
     context?: Record<string, unknown>;
+    environment: string;
+    execution_hash?: string;
   } = {
     permitId: evaluation.permitId,
     agent: request.agent,
     action: request.action,
+    environment,
+    ...(execution_hash ? { execution_hash } : {}),
   };
   if (request.context !== undefined) verifyRequest.context = request.context;
   const verification = await client.verifyPermit(verifyRequest);

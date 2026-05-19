@@ -464,6 +464,14 @@ class VerifyRequest(BaseModel):
     # human-approval requirement isn't covered by the server-side
     # action_type-prefix heuristic.
     require_approval: bool | None = Field(default=None)
+    # P1-1: Environment of the permit being verified. Source priority:
+    #   context["environment"] → top-level environment → "production".
+    # Required by the server for production permits as of 2026-05-14.
+    environment: str | None = Field(default=None)
+    # P1-5: SHA-256 hex digest of the recursively key-sorted canonical JSON
+    # of the original evaluate payload. Required by the server for production
+    # permits as of 2026-05-14.
+    execution_hash: str | None = Field(default=None)
     # Legacy fields, excluded from wire serialization.
     context: dict[str, Any] = Field(default_factory=dict, exclude=True)
     api_key: str = Field(default="", exclude=True)

@@ -564,11 +564,17 @@ export class AtlaSentClient {
     // Canonical wire shape per handler.ts: only permit_token is required.
     // action_type / actor_id are optional cross-checks; context / api_key
     // are NOT consulted by the verify handler.
-    const body = {
+    const body: Record<string, unknown> = {
       permit_token: input.permitId,
       action_type: input.action ?? "",
       actor_id: input.agent ?? "",
     };
+    if (input.environment !== undefined) {
+      body.environment = input.environment;
+    }
+    if (input.execution_hash !== undefined) {
+      body.execution_hash = input.execution_hash;
+    }
     const { body: wire, rateLimit } = await this.post<VerifyPermitWire>(
       "/v1-verify-permit",
       body,
