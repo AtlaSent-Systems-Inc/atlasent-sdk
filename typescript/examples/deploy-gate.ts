@@ -1,77 +1,76 @@
 /**
- * CI deploy-gate: evaluate, then verifyPermit before deploying.
+ * Production deploy gate — end-to-end evaluate → permit → deploy → verify.
  *
- * Wires AtlaSent into a production deploy pipeline. The deploy is
- * blocked unless (a) the policy engine allows it AND (b) the
- * resulting permit verifies end-to-end.
+ * Mirrors the GitHub Actions gate flow in a standalone Node.js script.
+ * Drop this into any CI runner that doesn't use GitHub Actions.
  *
- * Run with:
- *   ATLASENT_API_KEY=ask_live_... GIT_SHA=$(git rev-parse HEAD) \
- *     APPROVER=$USER npx tsx examples/deploy-gate.ts
+ * Run:
+ *   ATLASENT_API_KEY=<key> npx ts-node typescript/examples/deploy-gate.ts
  */
 
-import { AtlaSentClient, AtlaSentError } from "@atlasent/sdk";
+import {
+  configure,
+  withPermit,
+  AuthorizationDeniedError,
+  AuthorizationUnavailableError,
+} from '@atlasent/sdk';
 
-const apiKey = process.env.ATLASENT_API_KEY;
-if (!apiKey) {
-  console.error("ATLASENT_API_KEY env var is required");
-  process.exit(2);
-}
+configure({ apiKey: process.env.ATLASENT_API_KEY! });
 
-const client = new AtlaSentClient({ apiKey, timeoutMs: 5_000 });
+const SERVICE    = process.env.SERVICE    ?? 'checkout-api';
+const COMMIT     = process.env.COMMIT     ?? 'abc123';
+const ACTOR      = process.env.ACTOR      ?? 'agent:ci-bot';
+const APPROVER   = process.env.APPROVER   ?? '';
 
-const deployContext = {
-  service: process.env.SERVICE ?? "billing-api",
-  environment: process.env.TARGET_ENV ?? "production",
-  commit: process.env.GIT_SHA ?? "unknown",
-  approver: process.env.APPROVER ?? "unknown",
-  ci: process.env.GITHUB_RUN_ID ?? process.env.BUILDKITE_BUILD_ID ?? "local",
-};
+async function main() {
+  console.log(`\nAtlaSent deploy gate: ${SERVICE} @ ${COMMIT}`);
+  console.log(`Actor: ${ACTOR}`);
 
-async function main(): Promise<void> {
-  let evaluation;
   try {
-    evaluation = await client.evaluate({
-      agent: "ci-deploy-bot",
-      action: "production.deploy",
-      context: deployContext,
-    });
+    await withPermit(
+      {
+        actor:  { id: ACTOR, type: 'agent' },
+        action: { id: `deploy-${COMMIT}`, type: 'deployment.production' },
+        target: { id: SERVICE, type: 'service', environment: 'production' },
+        context: {
+          commit:             COMMIT,
+          signed_attestation: true,
+          ...(APPROVER ? { approvals: [APPROVER] } : {}),
+        },
+      },
+      async ({ result, verification }) => {
+        console.log(`✓ authorized`);
+        console.log(`  permit:     ${result.permitToken}`);
+        console.log(`  audit hash: ${verification.auditHash}`);
+
+        // --- your actual deployment command here ---
+        console.log(`  deploying ${SERVICE} @ ${COMMIT} to production ...`);
+        await deploy(SERVICE, COMMIT);
+        console.log('  deployment complete');
+      },
+    );
   } catch (err) {
-    if (err instanceof AtlaSentError) {
-      console.error(
-        `AtlaSent unavailable (code=${err.code} status=${err.status ?? "?"}): ${err.message}`,
-      );
-      process.exit(3); // fail-closed: cannot confirm → do not deploy
+    if (err instanceof AuthorizationDeniedError) {
+      console.error(`\n✗ BLOCKED by AtlaSent`);
+      console.error(`  decision: ${err.decision}`);
+      console.error(`  reason:   ${err.reason}`);
+      process.exit(1);
+    }
+    if (err instanceof AuthorizationUnavailableError) {
+      console.error('\n✗ BLOCKED: AtlaSent unreachable (fail-closed)');
+      process.exit(1);
     }
     throw err;
   }
-
-  if (evaluation.decision !== "allow") {
-    console.error(`Deploy blocked: ${evaluation.reason}`);
-    console.error(`  permitId:   ${evaluation.permitId}`);
-    console.error(`  auditHash:  ${evaluation.auditHash}`);
-    process.exit(1);
-  }
-
-  const verification = await client.verifyPermit({
-    permitId: evaluation.permitId,
-    agent: "ci-deploy-bot",
-    action: "production.deploy",
-  });
-
-  if (!verification.verified) {
-    console.error(
-      `Permit ${evaluation.permitId} failed verification: ${verification.outcome || "unknown"}`,
-    );
-    process.exit(1);
-  }
-
-  console.log(
-    `Deploy approved — permitId=${evaluation.permitId} permitHash=${verification.permitHash || "n/a"}`,
-  );
-  console.log(`  verifiedAt: ${verification.timestamp || "n/a"}`);
-  console.log(`  auditHash:  ${evaluation.auditHash}`);
-  // runDeploy();
 }
 
-void main();
+async function deploy(service: string, commit: string) {
+  // Replace with: kubectl, helm, aws-deploy, etc.
+  await new Promise(resolve => setTimeout(resolve, 20));
+  console.log(`  kubectl rollout restart deployment/${service} --image=${commit}`);
+}
+
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});
