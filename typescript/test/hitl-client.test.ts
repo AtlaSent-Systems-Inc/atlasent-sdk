@@ -65,6 +65,7 @@ const ESCALATION: HitlEscalation = {
   fallback_decision: "reject",
   governance_advisory_id: null,
   expired_reason: null,
+  metadata: null,
 };
 
 describe("hitlRequiredApproverCount", () => {

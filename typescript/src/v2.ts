@@ -211,7 +211,7 @@ function assertBodyWithinCap(raw: string): void {
   }
 }
 
-function commonHeaders(apiKey: string): HeadersInit {
+function commonHeaders(apiKey: string): Record<string, string> {
   return {
     "Content-Type": "application/json",
     Accept: "application/json",

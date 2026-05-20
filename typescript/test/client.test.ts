@@ -142,7 +142,11 @@ describe("evaluate()", () => {
     expect(result).toEqual({
       decision: "allow",
       decision_canonical: "allow",
+      evaluationId: "dec_alpha",
       permitId: "dec_alpha",
+      permit: null,
+      permitToken: "dec_alpha",
+      reasons: ["Operator authorized under GxP policy"],
       reason: "Operator authorized under GxP policy",
       auditHash: "hash_alpha",
       timestamp: "2026-04-17T10:00:00Z",
