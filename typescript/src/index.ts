@@ -637,6 +637,28 @@ export {
   type WhyTrace,
 } from "./evidenceEngine.js";
 
+// ── Approval / Override Runtime ───────────────────────────────────────────────
+// `hold`/`escalate` policy outcomes → HITL escalation queue → human approval.
+// No permit, no execution — but approval flows don't block the gate, they route it.
+export {
+  configureApprovalRuntime,
+  createEscalation,
+  EscalationDeniedError,
+  EscalationTimeoutError,
+  protectOrEscalate,
+  requestOverride,
+  waitForEscalationApproval,
+  type ApprovalPermit,
+  type ApprovalRuntimeConfig,
+  type ApprovalStatus,
+  type CreateEscalationOptions,
+  type EscalationHandle,
+  type EscalationOutcome,
+  type ProtectOrEscalateOptions,
+  type RequestOverrideOptions,
+  type WaitForApprovalOptions,
+} from "./approvalRuntime.js";
+
 /**
  * Default export. The opinionated, category-defining entry point:
  *
