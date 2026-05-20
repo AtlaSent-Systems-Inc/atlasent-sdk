@@ -49,6 +49,40 @@ def _validate(
     return errors
 
 
+def _validate_claim_evidence_links() -> list[str]:
+    """Validate each file in vectors/claim-evidence-link/ against the schema.
+
+    Files whose name starts with ``INVALID-`` must fail validation; all
+    others must pass.  ``_comment`` keys are stripped before checking so
+    the fixtures can carry human-readable annotations without polluting the
+    ``additionalProperties: false`` boundary.
+    """
+    errors: list[str] = []
+    vector_dir = VECTORS / "claim-evidence-link"
+    if not vector_dir.is_dir():
+        return errors
+    schema = _schema("claim-evidence-link.schema.json")
+
+    for path in sorted(vector_dir.glob("*.json")):
+        doc = json.loads(path.read_text())
+        # Strip top-level _comment before validating
+        clean: dict[str, Any] = {k: v for k, v in doc.items() if not k.startswith("_")}
+        schema_errors = list(schema.iter_errors(clean))
+
+        if path.stem.startswith("INVALID"):
+            if not schema_errors:
+                errors.append(
+                    f"claim-evidence-link::{path.name}: expected schema errors but got none"
+                )
+        else:
+            for e in schema_errors:
+                errors.append(
+                    f"claim-evidence-link::{path.name}: {e.message} at {list(e.absolute_path)}"
+                )
+
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
 
@@ -71,6 +105,8 @@ def main() -> int:
             source="verify.json",
         )
     )
+
+    errors.extend(_validate_claim_evidence_links())
 
     if errors:
         print("Vector validation FAILED:")

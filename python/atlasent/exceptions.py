@@ -28,6 +28,7 @@ AtlaSentErrorCode = Literal[
     "bad_response",
     "bad_request",
     "server_error",
+    "claim_evidence_incomplete",
 ]
 """Coarse error category — shared across AtlaSent SDKs.
 
