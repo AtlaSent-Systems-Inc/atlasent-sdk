@@ -85,3 +85,20 @@ export {
   type ShadowOptions,
   type ShadowOutcome,
 } from "./shadow.js";
+
+// ── Enterprise Control Surface ───────────────────────────────────────────────
+export {
+  checkIntegrationHealth,
+  configureControlSurface,
+  getEnforcementStatus,
+  getOrgSummary,
+  reportProtectedAction,
+  type ControlSurfaceConfig,
+  type EnforcementMode,
+  type EnforcementStatus,
+  type HealthReport,
+  type OrgSummary,
+  type ProtectedActionEntry,
+  type ReportProtectedActionOptions,
+  type GetEnforcementStatusOptions,
+} from "./controlSurface.js";
