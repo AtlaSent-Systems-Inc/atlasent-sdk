@@ -102,6 +102,13 @@ describe("verifyBundle against shared fixtures", () => {
     expect(r.reason).toContain("no signing keys");
   });
 
+  it("accepts an already-parsed bundle object (else branch)", async () => {
+    const bundle = loadBundle("valid.json");
+    const r = await verifyBundle(bundle, { publicKeysPem: [PUBLIC_PEM] });
+    expect(r.chainIntegrityOk).toBe(true);
+    expect(r.signatureValid).toBe(true);
+  });
+
   it("malformed PEM is skipped, real PEM still verifies", async () => {
     const r = await verifyBundle(bundlePath("valid.json"), {
       publicKeysPem: [

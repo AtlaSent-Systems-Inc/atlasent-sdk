@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSignableContent,
+  canonicalizeForEvidence,
   serializeSignableContent,
   verifyEvidenceBundleStructure,
   type EconomicEvidenceBundle,
@@ -181,5 +182,20 @@ describe("verifyEvidenceBundleStructure", () => {
     };
     const result = verifyEvidenceBundleStructure(bad);
     expect(result.liability_chain_hash_matches).toBe(false);
+  });
+});
+
+describe("canonicalizeForEvidence", () => {
+  it("returns 'null' for null and undefined", () => {
+    expect(canonicalizeForEvidence(null)).toBe("null");
+    expect(canonicalizeForEvidence(undefined)).toBe("null");
+  });
+
+  it("returns 'null' for non-finite numbers", () => {
+    expect(canonicalizeForEvidence(Infinity)).toBe("null");
+  });
+
+  it("returns 'null' for non-serializable types (Symbol)", () => {
+    expect(canonicalizeForEvidence(Symbol("x"))).toBe("null");
   });
 });
