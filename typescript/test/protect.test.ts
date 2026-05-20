@@ -364,3 +364,82 @@ describe("AtlaSentDeniedError", () => {
     expect(escalate.decision).toBe("escalate");
   });
 });
+
+import { protectWithEvidence } from "../src/protect.js";
+
+describe("protectWithEvidence", () => {
+  beforeEach(() => {
+    __resetSharedClientForTests();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    __resetSharedClientForTests();
+  });
+
+  it("returns PermitWithEvidence on allow (no signing)", async () => {
+    const fetchMock = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_test_protect_evidence_k1", fetch: fetchMock, retryPolicy: { maxAttempts: 1 } });
+
+    const result = await protectWithEvidence({ agent: "bot", action: "deploy", context: { environment: "staging" } });
+    expect(result.permitId).toBe("dec_alpha");
+    expect(result.receipt).toBeDefined();
+    expect(result.receipt.decision).toBe("allow");
+    expect(result.receipt.algorithm).toBe("none");
+    expect(result.receipt.signature).toBeNull();
+  });
+
+  it("signs the receipt when signingSecret is provided", async () => {
+    const fetchMock = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_test_protect_evidence_k1", fetch: fetchMock, retryPolicy: { maxAttempts: 1 } });
+
+    const result = await protectWithEvidence(
+      { agent: "bot", action: "deploy", context: { environment: "staging" } },
+      { signingSecret: "super-secret-key", signingKeyId: "key-v1" },
+    );
+    expect(result.receipt.algorithm).toBe("hmac-sha256");
+    expect(result.receipt.signature).not.toBeNull();
+    expect(result.receipt.signing_key_id).toBe("key-v1");
+  });
+
+  it("throws AtlaSentDeniedError on deny", async () => {
+    const fetchMock = mockFetchSequence([jsonResponse(EVALUATE_DENY_WIRE)]);
+    configure({ apiKey: "ask_test_protect_evidence_k1", fetch: fetchMock, retryPolicy: { maxAttempts: 1 } });
+
+    await expect(
+      protectWithEvidence({ agent: "bot", action: "deploy" }),
+    ).rejects.toBeInstanceOf(AtlaSentDeniedError);
+  });
+
+  it("includes why_trace when constraintTrace is provided", async () => {
+    const fetchMock = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_test_protect_evidence_k1", fetch: fetchMock, retryPolicy: { maxAttempts: 1 } });
+
+    const constraintTrace = { stages: [], rules_evaluated: [] } as const;
+    const result = await protectWithEvidence(
+      { agent: "bot", action: "deploy", context: { environment: "staging" } },
+      { constraintTrace },
+    );
+    expect(result.receipt.why_trace).not.toBeNull();
+  });
+
+  it("sets why_trace to null when constraintTrace is not provided", async () => {
+    const fetchMock = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_test_protect_evidence_k1", fetch: fetchMock, retryPolicy: { maxAttempts: 1 } });
+
+    const result = await protectWithEvidence({ agent: "bot", action: "deploy", context: { environment: "staging" } });
+    expect(result.receipt.why_trace).toBeNull();
+  });
+});

@@ -87,7 +87,10 @@ export {
   protect,
   type ConfigureOptions,
   type Permit,
+  type PermitWithEvidence,
   type ProtectRequest,
+  type ProtectWithEvidenceOptions,
+  protectWithEvidence,
 } from "./protect.js";
 export {
   requirePermit,
@@ -180,7 +183,6 @@ export {
   type HitlChainHop,
   type HitlCreateRequest,
   type HitlDetailResponse,
-  type HitlEscalateRequest,
   type HitlEscalation,
   type HitlFallbackDecision,
   type HitlHeterogeneousQuorumExtension,
@@ -232,7 +234,7 @@ export type {
   QuorumRoleRequirement,
 } from "./approvalQuorum.js";
 
-// ── V1 Proof bundle ───────────────────────────────────────────────────────────
+// ── V1 Proof bundle ───────────────────────────────────────────────────────────────────────
 export type {
   GovernanceEvent,
   PermitV1,
@@ -243,7 +245,7 @@ export type {
   ProofResponse,
 } from "./proof.js";
 
-// ── V1 Override types ─────────────────────────────────────────────────────────
+// ── V1 Override types ────────────────────────────────────────────────────────────────────
 export type {
   CreateOverrideRequest,
   OverrideEvent,
@@ -254,8 +256,7 @@ export type {
   OverrideV1,
 } from "./overrides.js";
 
-// ── Economic Governance & Liability Attribution ──────────────────────────────────
-
+// ── Economic Governance & Liability Attribution ────────────────────────────────────────────
 export {
   DEFAULT_RISK_TIER_THRESHOLDS,
   classifyRiskTier,
@@ -384,7 +385,7 @@ export {
   type RiskTimelinePoint,
 } from "./financialDashboard.js";
 
-// ── Governance enforcement layer (fail-closed helpers on top of the advisory primitives) ──
+// ── Governance enforcement layer ───────────────────────────────────────────────────────────────
 export {
   GovernanceEnforcementError,
   enforceAutonomousBounds,
@@ -398,8 +399,7 @@ export {
   type GovernanceGate,
 } from "./governanceEnforcement.js";
 
-// ── Governance Webhooks, Compliance Evidence & Policy Sync ───────────────────────────────
-
+// ── Governance Webhooks, Compliance Evidence & Policy Sync ────────────────────────────────────
 export {
   verifyWebhookSignature,
   type CreateWebhookSubscriptionRequest,
@@ -448,8 +448,7 @@ export {
   WebhookVerificationError,
 } from "./webhook.js";
 
-// ── Governance Graph & Incident Reconstruction ──────────────────────────────
-
+// ── Governance Graph & Incident Reconstruction ────────────────────────────────────────────
 export type {
   GovernanceGraphQueryType,
   GovernanceGraphQueryParams,
@@ -478,8 +477,7 @@ export type {
   IncidentTimelineResponse,
 } from "./incidentReconstruction.js";
 
-// ── Connector Management & Organizational Risk Graph ────────────────────────────
-
+// ── Connector Management & Organizational Risk Graph ──────────────────────────────────────────
 export type {
   ConnectorType,
   ConnectorStatus,
@@ -514,8 +512,8 @@ export type {
   GetLatestOrgRiskResponse,
   ListOrgRiskHistoryResponse,
 } from "./orgRiskGraph.js";
-// ── Cross-Org Permission Negotiation ─────────────────────────────────
 
+// ── Cross-Org Permission Negotiation ───────────────────────────────────────────────────────
 export {
   summarizeCrossOrgPermission,
   type CrossOrgPermissionCheckListParams,
@@ -524,8 +522,7 @@ export {
   type CrossOrgTrustHop,
 } from "./crossOrgPermission.js";
 
-// ── Anomaly Response Automation ───────────────────────────────────
-
+// ── Anomaly Response Automation ───────────────────────────────────────────────────────────────
 export {
   highestSeverityAction,
   matchAnomalyRules,
@@ -536,8 +533,7 @@ export {
   type TriggerAnomalyResponseRequest,
 } from "./anomalyResponse.js";
 
-// ── Budget Exception Workflows ───────────────────────────────────────
-
+// ── Budget Exception Workflows ───────────────────────────────────────────────────────────────────
 export {
   isBudgetExceptionActive,
   isBudgetExceptionTerminal,
@@ -547,8 +543,7 @@ export {
   type CreateBudgetExceptionRequest,
 } from "./budgetExceptions.js";
 
-// ── Regulatory Escalation Chain ────────────────────────────────────
-
+// ── Regulatory Escalation Chain ────────────────────────────────────────────────────────────────
 export {
   isEscalationSlaBreached,
   isRegulatoryEscalationTerminal,
@@ -558,8 +553,7 @@ export {
   type RegulatoryEscalationStatus,
 } from "./regulatoryEscalation.js";
 
-// ── Incentive Signal Feedback Loop ──────────────────────────────────
-
+// ── Incentive Signal Feedback Loop ─────────────────────────────────────────────────────────────
 export {
   computeSignalEngagementRate,
   isSubstantiveSignalResponse,
@@ -570,8 +564,7 @@ export {
   type SignalActionType,
 } from "./incentiveSignalFeedback.js";
 
-// ── Cross-Org Impersonation ──────────────────────────────────────
-
+// ── Cross-Org Impersonation ──────────────────────────────────────────────────────────────────
 export {
   clampTokenDuration,
   isImpersonationGrantUsable,
@@ -581,11 +574,7 @@ export {
   type ImpersonationValidationResult,
 } from "./crossOrgImpersonation.js";
 
-// ── V2 Wave-A endpoints (V2-D3 batch, V2-D4 stream, V2-D8 graphql) ─────────────
-// Additive on top of the frozen v1 substrate. Each is close-by-default per
-// tenant flag; the SDK surfaces the 404 fall-back path as
-// FeatureNotEnabledError so callers can branch deterministically without
-// silent semantic drift (billing/audit). See ./v2.ts.
+// ── V2 Wave-A endpoints ───────────────────────────────────────────────────────────────────────
 export {
   FeatureNotEnabledError,
   V2_BATCH_PATH,
@@ -610,6 +599,93 @@ export {
   type V2Feature,
   type V2Transport,
 } from "./v2.js";
+
+// ── Approval / Override Runtime ────────────────────────────────────────────────────────────
+export {
+  configureApprovalRuntime,
+  createEscalation,
+  EscalationDeniedError,
+  EscalationTimeoutError,
+  protectOrEscalate,
+  requestOverride,
+  waitForEscalationApproval,
+  type ApprovalPermit,
+  type ApprovalRuntimeConfig,
+  type ApprovalStatus,
+  type CreateEscalationOptions,
+  type EscalationHandle,
+  type EscalationOutcome,
+  type ProtectOrEscalateOptions,
+  type RequestOverrideOptions,
+  type WaitForApprovalOptions,
+} from "./approvalRuntime.js";
+
+// ── Context Layer ───────────────────────────────────────────────────────────────────────
+export {
+  DEFAULT_REDACTION_RULES,
+  buildActionContext,
+  flattenActionContext,
+  redactContext,
+  validateActionContext,
+  type ActionContext,
+  type ActionMetaContext,
+  type ActorContext,
+  type BuildActionContextInput,
+  type ContextValidationError,
+  type ContextValidationResult,
+  type ContextValidationWarning,
+  type EnvironmentContext,
+  type HistoricalContext,
+  type RedactionMode,
+  type RedactionRule,
+  type ResourceContext,
+  type ValidateContextOptions,
+} from "./actionContext.js";
+
+// ── Shadow Mode ──────────────────────────────────────────────────────────────────────────
+export {
+  configureShadow,
+  protectShadow,
+  reportShadowEvent,
+  type ShadowConfig,
+  type ShadowEventPayload,
+  type ShadowMode,
+  type ShadowOptions,
+  type ShadowOutcome,
+} from "./shadow.js";
+
+// ── Enterprise Control Surface ────────────────────────────────────────────────────────────
+export {
+  checkIntegrationHealth,
+  configureControlSurface,
+  getEnforcementStatus,
+  getOrgSummary,
+  reportProtectedAction,
+  type ControlSurfaceConfig,
+  type EnforcementMode,
+  type EnforcementStatus,
+  type HealthReport,
+  type GetEnforcementStatusOptions,
+  type OrgSummary,
+  type ProtectedActionEntry,
+  type ReportProtectedActionOptions,
+} from "./controlSurface.js";
+
+// ── Pilot Verticals ────────────────────────────────────────────────────────────────────────
+export {
+  protectDeploy,
+  type DeployGateOptions,
+  type DeployEnvironment,
+  protectCloseAction,
+  type CloseGovernanceOptions,
+  type CloseActionType,
+  protectPaymentRelease,
+  type PaymentReleaseOptions,
+  protectToolCall,
+  classifyToolRisk,
+  type AgentToolOptions,
+  type AgentToolMode,
+} from "./verticals/index.js";
 
 /**
  * Default export. The opinionated, category-defining entry point:
