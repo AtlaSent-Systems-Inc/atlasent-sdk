@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://atlasent.io/contract/v1/claim-evidence-link.schema.json",
   "title": "ClaimEvidenceLinkV1",
-  "description": "Machine-auditable lineage record tying a canonical claim to its runtime evidence, deploy evidence, integration evidence, approval artifact, policy delta, and verification checklist. Wire-stable as claim_evidence_link.v1. See contract/PROPOSALS/004-claims-evidence-links.md.",
+  "description": "Machine-auditable lineage record tying a canonical claim to its full evidence chain: runtime authorization receipt, deploy gate record, compliance run summary, approval artifact, policy/schema delta, and a machine-readable verification checklist. Wire-stable as claim_evidence_link.v1. See contract/PROPOSALS/004-claims-evidence-links.md for design rationale and team sign-offs.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -11,6 +11,11 @@
     "claim_id",
     "org_id",
     "linked_at",
+    "updated_at",
+    "revision",
+    "link_algorithm",
+    "link_hash",
+    "link_signature",
     "runtime_evidence",
     "deploy_evidence",
     "integration_evidence",
@@ -19,38 +24,71 @@
     "verification_checklist"
   ],
   "properties": {
+
     "version": {
       "type": "string",
       "const": "claim_evidence_link.v1",
-      "description": "Discriminator. Must be exactly 'claim_evidence_link.v1'. Breaking changes bump this value and live alongside v1."
+      "description": "Wire discriminator. Must be exactly 'claim_evidence_link.v1'. Breaking changes bump this value and live alongside v1 until migration is complete."
     },
+
     "link_id": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 256,
-      "description": "Server-assigned stable identifier for this link (e.g. 'cel_01j9...')."
+      "pattern": "^cel_[0-9a-zA-Z_-]{1,220}$",
+      "description": "Client-generated stable identifier with 'cel_' prefix, e.g. 'cel_01j9...' (UUID v7 recommended for time-ordering). Fixed at creation; never changes across revisions."
     },
+
     "claim_id": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "description": "The canonical claim row this link annotates."
+      "description": "The canonical claim row this link annotates. One link per claim; the link is mutated in-place (revision increments) rather than replaced."
     },
+
     "org_id": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256
     },
+
     "linked_at": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 timestamp when this link was created."
+      "description": "ISO 8601 UTC timestamp when this link was first created. Immutable."
+    },
+
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of the most recent mutation (delta recomputation, permit re-verification, slot backfill). Equal to linked_at on first creation."
+    },
+
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonically increasing integer. Starts at 1. Incremented on every mutation. Used for optimistic locking in CDC pipelines: a write with revision N is rejected if the stored revision >= N."
+    },
+
+    "link_algorithm": {
+      "type": "string",
+      "enum": ["hmac-sha256", "ed25519", "none"],
+      "description": "Algorithm used to sign link_hash. 'none' when no signing secret is configured; link_signature is null in that case."
+    },
+
+    "link_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 hex digest of the canonical JSON serialization of this link, computed over all fields except link_hash and link_signature themselves. Canonical form: sorted keys, no whitespace, same algorithm as economicEvidence.ts canonicalizeForEvidence(). Tamper-evident: any mutation to any slot changes this hash."
+    },
+
+    "link_signature": {
+      "type": ["string", "null"],
+      "description": "Signature over link_hash using link_algorithm. Base64url-encoded for hmac-sha256/ed25519; null when link_algorithm is 'none'."
     },
 
     "runtime_evidence": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Required. Summary of the DecisionReceipt produced by protectWithEvidence(). Contains the minimum fields needed to re-verify the permit offline.",
+      "description": "Required; never null. Derived from the DecisionReceipt produced by protectWithEvidence(). Contains the minimum fields needed to re-verify the permit offline and to answer both temporal verification questions.",
       "required": [
         "permit_token",
         "audit_hash",
@@ -58,18 +96,21 @@
         "decision_id",
         "evaluated_at",
         "algorithm",
-        "signature"
+        "signature",
+        "permit_revoked_at",
+        "verified_at_claim_time",
+        "verified_at_link_creation"
       ],
       "properties": {
         "permit_token": {
           "type": "string",
           "minLength": 1,
-          "description": "Opaque token returned by /v1-verify-permit. Used to re-verify the permit."
+          "description": "Opaque token returned by /v1-verify-permit. Used for re-verification calls."
         },
         "audit_hash": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$",
-          "description": "SHA-256 hex digest of the canonical decision payload."
+          "description": "SHA-256 hex digest of the canonical decision payload as returned by /v1-evaluate."
         },
         "decision": {
           "type": "string",
@@ -79,26 +120,40 @@
         "decision_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Server-issued stable identifier for the decision."
+          "description": "Server-issued stable identifier for the decision event."
         },
         "evaluated_at": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "description": "When /v1-evaluate was called and the decision was made. This is the authoritative 'claim time'."
         },
         "algorithm": {
           "type": "string",
           "enum": ["hmac-sha256", "ed25519", "none"],
-          "description": "Signing algorithm used for the DecisionReceipt. 'none' when no signing secret was configured."
+          "description": "Signing algorithm used for the DecisionReceipt."
         },
         "signature": {
           "type": ["string", "null"],
           "description": "Base64url-encoded signature over the receipt payload. Null when algorithm is 'none'."
+        },
+        "permit_revoked_at": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "ISO 8601 UTC timestamp when the permit was revoked, if it has been. Null when the permit is still valid or has only expired (not explicitly revoked). Populated by the SDK when it receives a PermitRevoked event or detects revocation during re-verification."
+        },
+        "verified_at_claim_time": {
+          "type": "boolean",
+          "description": "Immutable. True when decision is 'allow' — the action was authorized at evaluated_at. False for 'deny' or 'escalate'. Derived from the DecisionReceipt at link creation and never changes thereafter, even if the permit is subsequently revoked."
+        },
+        "verified_at_link_creation": {
+          "type": "boolean",
+          "description": "True when permit_token was successfully re-verified via /v1-verify-permit at linked_at. May become false on a later revision if the permit has expired or been revoked. Updated by verifyClaimEvidenceLink() each time it runs."
         }
       }
     },
 
     "deploy_evidence": {
-      "description": "Summary of the deploy gate record from protectDeploy(). Null when this claim does not relate to a deployment action.",
+      "description": "Null when this claim does not relate to a deployment action. Populated from the protectDeploy() gate output.",
       "oneOf": [
         { "type": "null" },
         {
@@ -113,10 +168,7 @@
             "gate_permit_token"
           ],
           "properties": {
-            "deploy_id": {
-              "type": "string",
-              "minLength": 1
-            },
+            "deploy_id": { "type": "string", "minLength": 1 },
             "environment": {
               "type": "string",
               "minLength": 1,
@@ -132,10 +184,7 @@
               "minLength": 1,
               "description": "Identity of the agent or user that triggered the deployment."
             },
-            "deployed_at": {
-              "type": "string",
-              "format": "date-time"
-            },
+            "deployed_at": { "type": "string", "format": "date-time" },
             "gate_permit_token": {
               "type": "string",
               "minLength": 1,
@@ -147,7 +196,7 @@
     },
 
     "integration_evidence": {
-      "description": "Summary of the most recent ComplianceEvidenceRun covering the claim period. Null when no compliance run is linked to this claim.",
+      "description": "Null when no compliance run is linked to this claim. Summary of the most recent ComplianceEvidenceRun covering the claim period.",
       "oneOf": [
         { "type": "null" },
         {
@@ -164,48 +213,27 @@
             "run_completed_at"
           ],
           "properties": {
-            "run_id": {
-              "type": "string",
-              "minLength": 1
-            },
+            "run_id": { "type": "string", "minLength": 1 },
             "framework": {
               "type": "string",
-              "enum": ["soc2", "iso27001", "hipaa", "pci_dss", "gdpr", "fedramp"],
-              "description": "Compliance framework under which the run was executed."
+              "enum": ["soc2", "iso27001", "hipaa", "pci_dss", "gdpr", "fedramp"]
             },
-            "period_start": {
-              "type": "string",
-              "format": "date",
-              "description": "ISO 8601 date (YYYY-MM-DD)."
-            },
-            "period_end": {
-              "type": "string",
-              "format": "date"
-            },
+            "period_start": { "type": "string", "format": "date" },
+            "period_end": { "type": "string", "format": "date" },
             "status": {
               "type": "string",
-              "enum": ["pending", "running", "completed", "failed"],
-              "description": "Terminal status of the compliance run."
+              "enum": ["pending", "running", "completed", "failed"]
             },
-            "passing_control_count": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "failing_control_count": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "run_completed_at": {
-              "type": "string",
-              "format": "date-time"
-            }
+            "passing_control_count": { "type": "integer", "minimum": 0 },
+            "failing_control_count": { "type": "integer", "minimum": 0 },
+            "run_completed_at": { "type": "string", "format": "date-time" }
           }
         }
       ]
     },
 
     "approval_artifact": {
-      "description": "Summary of the HITL chain or ApprovalArtifact that authorised this claim. Null when no human approval was required.",
+      "description": "Null when no human approval was required. Summary of the HITL chain or ApprovalArtifact, plus an integrity hash binding this summary to the full artifact.",
       "oneOf": [
         { "type": "null" },
         {
@@ -217,33 +245,27 @@
             "quorum_type",
             "approver_count",
             "approver_ids",
-            "approved_at"
+            "approved_at",
+            "artifact_hash"
           ],
           "properties": {
             "approval_id": {
               "type": "string",
               "minLength": 1,
-              "description": "Stable identifier of the approval artifact or HITL chain."
+              "description": "Stable identifier of the full ApprovalArtifact or HITL chain."
             },
             "approval_kind": {
               "type": "string",
-              "enum": ["hitl_chain", "approval_artifact"],
-              "description": "'hitl_chain' for approvals via /v1/hitl; 'approval_artifact' for out-of-band signed artifacts."
+              "enum": ["hitl_chain", "approval_artifact"]
             },
             "quorum_type": {
               "type": "string",
-              "enum": [
-                "single_approver",
-                "simple_majority",
-                "two_thirds",
-                "unanimous"
-              ],
-              "description": "Quorum type required and satisfied."
+              "enum": ["single_approver", "simple_majority", "two_thirds", "unanimous"]
             },
             "approver_count": {
               "type": "integer",
               "minimum": 1,
-              "description": "Number of distinct approvers who signed off."
+              "description": "Number of distinct approvers who satisfied quorum."
             },
             "approver_ids": {
               "type": "array",
@@ -254,7 +276,12 @@
             "approved_at": {
               "type": "string",
               "format": "date-time",
-              "description": "Timestamp of the final (quorum-completing) approval."
+              "description": "Timestamp of the final quorum-completing approval."
+            },
+            "artifact_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "SHA-256 hex digest of the canonical encoding of the full ApprovalArtifact or HitlChain object. Allows an auditor to re-fetch the full artifact and verify this summary was not tampered with."
             }
           }
         }
@@ -264,8 +291,9 @@
     "delta": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Policy and schema drift since the claim was asserted. Server-computed; callers must not populate this field themselves.",
+      "description": "Policy and schema drift since the claim was asserted. Schema drift (SDK package version) is computed client-side at link creation. Policy drift requires server-side computation and may be pending.",
       "required": [
+        "status",
         "computed_at",
         "policy_version_at_claim",
         "policy_version_current",
@@ -276,41 +304,85 @@
         "drift_details"
       ],
       "properties": {
-        "computed_at": {
+        "status": {
           "type": "string",
+          "enum": ["pending", "computing", "computed", "failed"],
+          "description": "'pending': server has not yet computed policy drift (schema drift may still be present). 'computing': async computation in flight. 'computed': all fields populated. 'failed': computation failed; policy_drift_detected is null."
+        },
+        "computed_at": {
+          "type": ["string", "null"],
           "format": "date-time",
-          "description": "When this delta was computed. Re-computing after a policy change produces a fresh delta."
+          "description": "When the delta reached 'computed' status. Null when status is 'pending' or 'computing'."
         },
         "policy_version_at_claim": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Policy version identifier active when the claim was made."
+          "type": ["string", "null"],
+          "description": "Policy version identifier active at evaluated_at. Null until status is 'computed'."
         },
         "policy_version_current": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Policy version identifier at delta-computation time."
+          "type": ["string", "null"],
+          "description": "Policy version identifier at delta-computation time. Null until status is 'computed'."
         },
         "policy_drift_detected": {
-          "type": "boolean",
-          "description": "True when policy_version_at_claim != policy_version_current AND the change affects the rules governing this claim's action_type."
+          "type": ["boolean", "null"],
+          "description": "True when the policy changed between claim time and computation time in ways that affect this claim's action_type. Null until status is 'computed'."
         },
         "schema_version_at_claim": {
           "type": "string",
           "minLength": 1,
-          "description": "OpenAPI / wire-schema version active when the claim was made (e.g. 'openapi-2.14.0')."
+          "description": "SDK / OpenAPI schema version active when the link was created (e.g. '@atlasent/sdk@1.4.2'). Always populated by the client at link creation."
         },
         "schema_version_current": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "SDK / OpenAPI schema version at the time this revision was written."
         },
         "schema_drift_detected": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "True when schema_version_at_claim differs from schema_version_current. Computable by the client; always populated."
         },
         "drift_details": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "description": "Human-readable change summaries when any drift is detected. Empty array when no drift. Note: open question whether these should become structured objects — see proposal OQ 6."
+          "description": "Structured change records when any drift is detected. Empty array when no drift.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["change_type", "severity", "description"],
+            "properties": {
+              "change_type": {
+                "type": "string",
+                "enum": [
+                  "rule_added",
+                  "rule_removed",
+                  "rule_modified",
+                  "threshold_changed",
+                  "policy_updated",
+                  "schema_field_added",
+                  "schema_field_removed",
+                  "schema_field_type_changed"
+                ],
+                "description": "Machine-parseable change classifier. Enables SIEM and PagerDuty routing without regex parsing."
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["info", "warning", "critical"],
+                "description": "'critical': a rule that could have changed the decision was removed or tightened. 'warning': additive change or threshold relaxation. 'info': metadata-only or schema additions."
+              },
+              "rule_id": {
+                "type": ["string", "null"],
+                "description": "Affected policy rule identifier. Null for schema-level changes."
+              },
+              "changed_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When this specific change took effect. Null when timestamp is unavailable."
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Human-readable summary for display in audit UIs. Not the machine key — use change_type for programmatic routing."
+              }
+            }
+          }
         }
       }
     },
@@ -318,62 +390,75 @@
     "verification_checklist": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Machine-auditable pass/fail summary across all evidence slots. all_pass is the single boolean a downstream auditor queries first.",
+      "description": "Machine-auditable pass/fail summary. all_pass is the single boolean a downstream auditor or automated system queries first.",
       "required": [
         "runtime_evidence_present",
-        "runtime_evidence_verified",
-        "deploy_evidence_present",
-        "integration_evidence_present",
-        "approval_artifact_present",
+        "verified_at_claim_time",
+        "verified_at_link_creation",
+        "deploy_evidence_status",
+        "integration_evidence_status",
+        "approval_artifact_status",
         "delta_computed",
         "policy_drift_clean",
         "schema_drift_clean",
         "all_pass",
+        "last_verified_at",
         "computed_at"
       ],
       "properties": {
         "runtime_evidence_present": {
           "type": "boolean",
-          "description": "Always true for a well-formed link (runtime_evidence is required non-null)."
+          "description": "Always true for a schema-valid link (runtime_evidence is required non-null). Retained as an explicit field so automated checks don't need to understand the schema to assert it."
         },
-        "runtime_evidence_verified": {
+        "verified_at_claim_time": {
           "type": "boolean",
-          "description": "True when permit_token was successfully re-verified via /v1-verify-permit at computed_at. May become false after permit TTL elapses."
+          "description": "Mirrors runtime_evidence.verified_at_claim_time. Immutable once set."
         },
-        "deploy_evidence_present": {
+        "verified_at_link_creation": {
           "type": "boolean",
-          "description": "True when deploy_evidence is non-null. False means 'not applicable or missing' — see proposal OQ 5 for the distinction."
+          "description": "Mirrors runtime_evidence.verified_at_link_creation. Updated on each revision."
         },
-        "integration_evidence_present": {
-          "type": "boolean",
-          "description": "True when integration_evidence is non-null."
+        "deploy_evidence_status": {
+          "type": "string",
+          "enum": ["present", "not_applicable", "missing"],
+          "description": "'present': slot is populated. 'not_applicable': caller explicitly declared this evidence type does not apply to this claim. 'missing': evidence was expected but the caller could not supply it. Only 'missing' gates all_pass."
         },
-        "approval_artifact_present": {
-          "type": "boolean",
-          "description": "True when approval_artifact is non-null."
+        "integration_evidence_status": {
+          "type": "string",
+          "enum": ["present", "not_applicable", "missing"]
+        },
+        "approval_artifact_status": {
+          "type": "string",
+          "enum": ["present", "not_applicable", "missing"]
         },
         "delta_computed": {
           "type": "boolean",
-          "description": "True when the delta slot was successfully computed by the server."
+          "description": "True when delta.status is 'computed'. False when 'pending', 'computing', or 'failed'."
         },
         "policy_drift_clean": {
-          "type": "boolean",
-          "description": "True when delta.policy_drift_detected is false."
+          "type": ["boolean", "null"],
+          "description": "True when delta.policy_drift_detected is false. Null when delta.status is not 'computed' (drift unknown)."
         },
         "schema_drift_clean": {
           "type": "boolean",
-          "description": "True when delta.schema_drift_detected is false."
+          "description": "True when delta.schema_drift_detected is false. Always populated (schema drift is client-computable)."
         },
         "all_pass": {
           "type": "boolean",
-          "description": "True when runtime_evidence_present, runtime_evidence_verified, delta_computed, policy_drift_clean, and schema_drift_clean are all true. deploy_evidence_present, integration_evidence_present, and approval_artifact_present do NOT gate all_pass — their absence may be intentional (null = not applicable)."
+          "description": "True when ALL of the following hold: runtime_evidence_present=true, verified_at_claim_time=true, verified_at_link_creation=true, delta_computed=true, policy_drift_clean=true, schema_drift_clean=true, deploy_evidence_status!='missing', integration_evidence_status!='missing', approval_artifact_status!='missing'. 'not_applicable' slots do NOT fail all_pass — only 'missing' does."
+        },
+        "last_verified_at": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Timestamp of the most recent successful /v1-verify-permit call against runtime_evidence.permit_token. Separate from computed_at: a checklist refresh may recompute drift without re-verifying the permit (e.g. when the permit is known to have expired). Null if permit re-verification has never been attempted for this link."
         },
         "computed_at": {
           "type": "string",
           "format": "date-time",
-          "description": "Timestamp when the checklist was computed. Permit verification freshness is relative to this value."
+          "description": "When this checklist revision was computed. Not necessarily when the permit was last verified — use last_verified_at for that."
         }
       }
     }
+
   }
 }
