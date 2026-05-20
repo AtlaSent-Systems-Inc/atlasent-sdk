@@ -2,7 +2,7 @@ import { protectOrEscalate } from "../approvalRuntime.js";
 import { protect } from "../protect.js";
 import { buildActionContext, flattenActionContext } from "../actionContext.js";
 import type { ApprovalPermit } from "../approvalRuntime.js";
-import type { Permit } from "../types.js";
+import type { Permit } from "../protect.js";
 import type { EscalationHandle } from "../approvalRuntime.js";
 
 export interface PaymentReleaseOptions {
@@ -67,8 +67,7 @@ export async function protectPaymentRelease(
 
   const request = {
     action: "payment.release",
-    resourceId: opts.vendorId,
-    agentId: opts.authorizedBy,
+    agent: opts.authorizedBy,
     context: flattenActionContext(ctx),
   };
 

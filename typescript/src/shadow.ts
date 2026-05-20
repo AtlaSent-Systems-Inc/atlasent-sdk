@@ -1,6 +1,6 @@
 import { protect } from "./protect.js";
 import { AtlaSentDeniedError } from "./errors.js";
-import type { ProtectRequest, Permit } from "./types.js";
+import type { ProtectRequest, Permit } from "./protect.js";
 
 export type ShadowMode = "observe" | "warn" | "enforce";
 
@@ -47,7 +47,7 @@ export async function protectShadow(
       error: null,
       would_have_blocked: false,
       latencyMs: Date.now() - start,
-      evaluationId: permit.evaluationId ?? null,
+      evaluationId: permit.permitId,
       request,
       mode,
     };
@@ -64,7 +64,7 @@ export async function protectShadow(
       error: null,
       would_have_blocked: false,
       latencyMs: Date.now() - start,
-      evaluationId: permit.evaluationId ?? null,
+      evaluationId: permit.permitId,
       request,
       mode,
     };
@@ -86,8 +86,9 @@ export async function protectShadow(
         mode,
       };
       if (mode === "warn") {
+        // eslint-disable-next-line no-console
         console.warn(
-          `[AtlaSent shadow:warn] Action '${request.action}' on '${request.resourceId}' would have been blocked (decision=${err.decision}, evaluationId=${err.evaluationId ?? "unknown"})`,
+          `[AtlaSent shadow:warn] Action '${request.action}' would have been blocked (decision=${err.decision}, evaluationId=${err.evaluationId ?? "unknown"})`,
         );
       }
       await _notify(outcome, merged);
@@ -115,8 +116,7 @@ async function _notify(
 
 export interface ShadowEventPayload {
   action: string;
-  resourceId: string;
-  agentId?: string;
+  agentId: string | null;
   decision: ShadowOutcome["decision"];
   would_have_blocked: boolean;
   latencyMs: number;
@@ -137,8 +137,7 @@ export async function reportShadowEvent(
 
   const payload: ShadowEventPayload = {
     action: outcome.request.action,
-    resourceId: outcome.request.resourceId,
-    agentId: outcome.request.agentId,
+    agentId: outcome.request.agent ?? null,
     decision: outcome.decision,
     would_have_blocked: outcome.would_have_blocked,
     latencyMs: outcome.latencyMs,

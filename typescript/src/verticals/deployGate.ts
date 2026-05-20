@@ -2,7 +2,7 @@ import { protectOrEscalate } from "../approvalRuntime.js";
 import { protect } from "../protect.js";
 import { buildActionContext, flattenActionContext } from "../actionContext.js";
 import type { ApprovalPermit } from "../approvalRuntime.js";
-import type { Permit } from "../types.js";
+import type { Permit } from "../protect.js";
 import type { EscalationHandle } from "../approvalRuntime.js";
 
 export type DeployEnvironment = "production" | "staging" | "development" | string;
@@ -86,11 +86,8 @@ export async function protectDeploy(
 
   const request = {
     action: "production.deploy",
-    resourceId: opts.service,
-    agentId: actorId,
+    agent: actorId,
     context: flattenActionContext(ctx),
-    ...(opts.apiKey ? { apiKey: opts.apiKey } : {}),
-    ...(opts.baseUrl ? { baseUrl: opts.baseUrl } : {}),
   };
 
   if (opts.requireApproval || isProduction) {

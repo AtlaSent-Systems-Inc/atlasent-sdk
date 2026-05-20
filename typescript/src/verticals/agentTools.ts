@@ -3,7 +3,7 @@ import { protect } from "../protect.js";
 import { protectShadow } from "../shadow.js";
 import { buildActionContext, flattenActionContext } from "../actionContext.js";
 import type { ApprovalPermit } from "../approvalRuntime.js";
-import type { Permit } from "../types.js";
+import type { Permit } from "../protect.js";
 import type { ShadowOutcome } from "../shadow.js";
 import type { EscalationHandle } from "../approvalRuntime.js";
 
@@ -84,8 +84,7 @@ export async function protectToolCall(
 
   const request = {
     action: `agent_tool.${opts.toolName}`,
-    resourceId: opts.toolName,
-    agentId: opts.agentId,
+    agent: opts.agentId,
     context: flattenActionContext(ctx),
   };
 
