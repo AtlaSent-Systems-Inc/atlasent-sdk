@@ -102,3 +102,19 @@ export {
   type ReportProtectedActionOptions,
   type GetEnforcementStatusOptions,
 } from "./controlSurface.js";
+
+// ── Pilot Verticals ──────────────────────────────────────────────────────────────
+export {
+  protectDeploy,
+  type DeployGateOptions,
+  type DeployEnvironment,
+  protectCloseAction,
+  type CloseGovernanceOptions,
+  type CloseActionType,
+  protectPaymentRelease,
+  type PaymentReleaseOptions,
+  protectToolCall,
+  classifyToolRisk,
+  type AgentToolOptions,
+  type AgentToolMode,
+} from "./verticals/index.js";
