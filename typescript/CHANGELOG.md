@@ -6,6 +6,66 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.5.0 (2026-05-20)
+
+### New features
+
+#### `withPermit` — lexically-scoped execution-boundary form
+
+TypeScript mirror of the Python SDK's `atlasent.with_permit(...)`.
+Same end-to-end contract as `protect` (evaluate + verifyPermit, fail
+closed on anything other than `allow`), but binds the action body to
+the permit's lifetime via a callback so the call site reads as
+"execute this body under a permit":
+
+```ts
+import atlasent from "@atlasent/sdk";
+
+const result = await atlasent.withPermit(
+  {
+    agent: "deploy-bot",
+    action: "production.deploy",
+    context: { commit, approver },
+  },
+  async (permit) => {
+    return runDeploy(commit, { permitId: permit.permitId });
+  },
+);
+```
+
+The body is invoked exactly when `protect()` would return — never on
+deny, hold, escalate, verification failure, or transport error. Errors
+thrown inside the body propagate untouched; the permit has already
+been consumed by the verify step in v1, so there is no compensating
+revoke.
+
+Pick the form that fits the call site:
+
+- **`protect`** when the caller wants the verified `Permit` as a value
+  — to pass it across a process boundary, persist it alongside their
+  own record, or interleave it with non-trivial control flow.
+- **`withPermit`** when the action body is a single lexical scope and
+  "no permit, no execution" is the only thing the call site needs to
+  express.
+- **`requirePermit`** for dangerous operations described by a richer
+  `ProtectedAction` descriptor (`resource_id`, `environment`).
+
+All three resolve to the same wire contract and produce the same
+audit-chain entry. Brings the TypeScript SDK to parity with the
+Python SDK's canonical surface (Python ships `with_permit` since
+2.4.0).
+
+Exported as a named import and on the default export:
+
+```ts
+import { withPermit } from "@atlasent/sdk";
+// or
+import atlasent from "@atlasent/sdk";
+await atlasent.withPermit(req, fn);
+```
+
+---
+
 ## @atlasent/sdk 2.0.0 (2026-05-18)
 
 ### New features
