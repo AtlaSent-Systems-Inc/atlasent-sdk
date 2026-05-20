@@ -14,6 +14,8 @@ from dataclasses import asdict
 import pytest
 
 from atlasent.claim_lineage import (
+    ActionBundleInput,
+    ActionBundleReceipt,
     ApprovalArtifactSlot,
     ClaimEvidenceLink,
     DeployEvidenceInput,
@@ -36,6 +38,7 @@ from atlasent.claim_lineage import (
     _link_body_dict,
     _sha256_hex,
     build_claim_evidence_link,
+    build_claim_evidence_link_from_action_bundle,
     verify_claim_evidence_link,
 )
 from atlasent.exceptions import AtlaSentError
@@ -626,3 +629,163 @@ def test_exported_from_atlasent():
     assert hasattr(atlasent, "verify_claim_evidence_link")
     assert hasattr(atlasent, "NOT_APPLICABLE")
     assert hasattr(atlasent, "ClaimEvidenceLink")
+    assert hasattr(atlasent, "build_claim_evidence_link_from_action_bundle")
+
+
+# ---------------------------------------------------------------------------
+# build_claim_evidence_link_from_action_bundle
+# ---------------------------------------------------------------------------
+
+BUNDLE_RECEIPT_ID = "r-" + "a" * 34
+BUNDLE_EVAL_ID = "e-" + "b" * 34
+BUNDLE_PERMIT_ID = "pt_live_" + "c" * 24
+BUNDLE_AUDIT_HASH = "d" * 64
+BUNDLE_SIGNING_SECRET = "s" * 32
+
+
+def make_action_bundle(**overrides: object) -> ActionBundleInput:
+    receipt: ActionBundleReceipt = {
+        "receipt_id": BUNDLE_RECEIPT_ID,
+        "evaluation_id": BUNDLE_EVAL_ID,
+        "permit_id": BUNDLE_PERMIT_ID,
+        "audit_hash": BUNDLE_AUDIT_HASH,
+        "issued_at": "2026-01-01T00:00:00.000Z",
+        "algorithm": "hmac-sha256",
+        "signature": "sig-" + "f" * 60,
+        "decision": "allow",
+    }
+    bundle: ActionBundleInput = {
+        "bundle_id": "bnd-" + "1" * 32,
+        "action": "deploy:production",
+        "actor": "github-actions[bot]",
+        "environment": "production",
+        "repository": "acme/app",
+        "sha": "abc1234",
+        "run_id": "run-999",
+        "generated_at": "2026-01-01T00:00:00.000Z",
+        "receipt": receipt,
+    }
+    bundle.update(overrides)  # type: ignore[typeddict-item]
+    return bundle
+
+
+def test_from_action_bundle_claim_id():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="claim-123"
+    )
+    assert link.claim_id == "claim-123"
+
+
+def test_from_action_bundle_runtime_evidence_fields():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="c"
+    )
+    # permit_token = permit_id ?? receipt_id; decision_id = evaluation_id
+    assert link.runtime_evidence.permit_token == BUNDLE_PERMIT_ID
+    assert link.runtime_evidence.decision_id == BUNDLE_EVAL_ID
+    assert link.runtime_evidence.audit_hash == BUNDLE_AUDIT_HASH
+    assert link.runtime_evidence.decision == "allow"
+    assert link.runtime_evidence.evaluated_at == "2026-01-01T00:00:00.000Z"
+
+
+def test_from_action_bundle_deploy_evidence_auto_populated():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="c"
+    )
+    assert link.deploy_evidence is not None
+    assert link.deploy_evidence.sha == "abc1234"
+    assert link.deploy_evidence.environment == "production"
+    assert link.deploy_evidence.actor_id == "github-actions[bot]"
+    assert link.deploy_evidence.deployed_at == "2026-01-01T00:00:00.000Z"
+    assert link.verification_checklist.deploy_evidence_status == "present"
+
+
+def test_from_action_bundle_deploy_not_applicable():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="c", deploy_not_applicable=True
+    )
+    assert link.deploy_evidence is None
+    assert link.verification_checklist.deploy_evidence_status == "not_applicable"
+
+
+def test_from_action_bundle_gate_permit_token_uses_permit_id():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="c"
+    )
+    assert link.deploy_evidence is not None
+    assert link.deploy_evidence.gate_permit_token == BUNDLE_PERMIT_ID
+
+
+def test_from_action_bundle_gate_permit_token_falls_back_to_receipt_id():
+    bundle = make_action_bundle()
+    bundle["receipt"] = dict(bundle["receipt"], permit_id=None)  # type: ignore[arg-type]
+    link = build_claim_evidence_link_from_action_bundle(bundle, claim_id="c")
+    assert link.deploy_evidence is not None
+    assert link.deploy_evidence.gate_permit_token == BUNDLE_RECEIPT_ID
+
+
+def test_from_action_bundle_org_id():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="c", org_id="org-xyz"
+    )
+    assert link.org_id == "org-xyz"
+
+
+def test_from_action_bundle_org_id_default_empty():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="c"
+    )
+    assert link.org_id == ""
+
+
+def test_from_action_bundle_signed():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="c", signing_secret=BUNDLE_SIGNING_SECRET
+    )
+    assert link.link_signature is not None
+    assert link.link_algorithm == "hmac-sha256"
+
+
+def test_from_action_bundle_unsigned():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="c"
+    )
+    assert link.link_signature is None
+    assert link.link_algorithm == "none"
+
+
+def test_from_action_bundle_wrong_secret_fails_verify():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="c", signing_secret=BUNDLE_SIGNING_SECRET
+    )
+    import pytest
+    with pytest.raises(AtlaSentError, match="ClaimEvidenceLink verification failed"):
+        verify_claim_evidence_link(link, signing_secret="wrong-secret" + "x" * 20)
+
+
+def test_from_action_bundle_audit_hash_null_becomes_empty():
+    bundle = make_action_bundle()
+    bundle["receipt"] = dict(bundle["receipt"], audit_hash=None)  # type: ignore[arg-type]
+    link = build_claim_evidence_link_from_action_bundle(bundle, claim_id="c")
+    assert link.runtime_evidence.audit_hash == ""
+
+
+def test_from_action_bundle_none_algorithm():
+    bundle = make_action_bundle()
+    bundle["receipt"] = dict(bundle["receipt"], algorithm="none", signature=None)  # type: ignore[arg-type]
+    link = build_claim_evidence_link_from_action_bundle(bundle, claim_id="c")
+    assert link.runtime_evidence.algorithm == "none"
+
+
+def test_from_action_bundle_delta_pending():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="c"
+    )
+    assert link.delta.status == "pending"
+
+
+def test_from_action_bundle_version():
+    link = build_claim_evidence_link_from_action_bundle(
+        make_action_bundle(), claim_id="c"
+    )
+    assert link.version == "claim_evidence_link.v1"
