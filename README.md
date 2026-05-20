@@ -1,7 +1,15 @@
 # AtlaSent SDKs
 
-Execution-time authorization for AI agents in GxP-regulated environments.
-Fail-closed by design — no action proceeds without an explicit permit.
+Execution-time authorization for AI agents and automated systems.
+Fail-closed by design — no protected action proceeds without an
+explicit, server-verified permit.
+
+> AtlaSent is **not** a feature flag platform. A flag controls
+> whether a behavior is enabled; AtlaSent controls whether an action
+> is authorized to execute. See
+> [Runtime control vs. feature flags](https://github.com/AtlaSent-Systems-Inc/atlasent-docs/blob/main/architecture/runtime-control-vs-feature-flags.md)
+> and the
+> [Protected actions catalog](https://github.com/AtlaSent-Systems-Inc/atlasent-docs/blob/main/guides/protected-actions-catalog.md).
 
 | Language   | Package           | Install                    | Source                                   |
 |------------|-------------------|----------------------------|------------------------------------------|
@@ -41,6 +49,29 @@ if (!gate.allowed) {
 
 runDeploy();
 ```
+
+Both snippets perform `evaluate → permit → verify` in one call. The
+mutation (`run_deploy()` / `runDeploy()`) is unreachable unless the
+policy allowed the action *and* the issued permit verified
+server-side. On any other outcome (`deny`, `hold`, `escalate`, or any
+non-verified permit) the SDK raises `AtlaSentDeniedError` and the
+mutation never runs. See
+[Execution binding](https://github.com/AtlaSent-Systems-Inc/atlasent-docs/blob/main/guides/execution-binding.md).
+
+## Canonical protected actions
+
+The SDK and examples target this catalog of canonical actions:
+
+| Action | Used for |
+|---|---|
+| `production.deploy` | Service deploys from CI to production. |
+| `vendor.payment.release` | Outbound payments from accounts payable. |
+| `customer.data.export` | Exports of customer records out of the system of record. |
+| `reconciliation.certify` | Period-end reconciliation certification. |
+| `model.agent.execute_tool` | Agent invocations of tools whose effect leaves the model sandbox. |
+
+A runnable example wiring all five end to end lives in
+[`atlasent-examples/protected-actions-catalog/`](https://github.com/AtlaSent-Systems-Inc/atlasent-examples/tree/main/protected-actions-catalog).
 
 ## API endpoints
 
