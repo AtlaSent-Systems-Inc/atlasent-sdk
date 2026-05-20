@@ -1,7 +1,13 @@
 /**
  * @atlasent/sdk — execution-time authorization for AI agents.
  *
- * Primary API is the default export:
+ * The canonical execution-boundary surface is two forms of the same
+ * contract. Both mint and verify a Permit end-to-end; both fail closed.
+ * Pick the form that fits the call site.
+ *
+ * `protect` — the primitive. Returns the verified {@link Permit} so
+ * the caller can pass it across a boundary, persist it alongside
+ * their own record, or interleave it with non-trivial control flow:
  *
  * ```ts
  * import atlasent from "@atlasent/sdk";
@@ -11,10 +17,24 @@
  *   action: "production.deploy",
  *   context: { commit, approver },
  * });
+ * // permit is verified end-to-end. Execute the action.
  * ```
  *
- * For dangerous operations use `requirePermit` — the executor only
- * runs when AtlaSent authorizes it end-to-end:
+ * `withPermit` — the lexically-scoped form. Binds the action body to
+ * the permit's lifetime via a callback so the call site reads as
+ * "execute this body under a permit":
+ *
+ * ```ts
+ * const result = await atlasent.withPermit(
+ *   { agent: "deploy-bot", action: "production.deploy",
+ *     context: { commit, approver } },
+ *   async (permit) => runDeploy(commit, { permitId: permit.permitId }),
+ * );
+ * ```
+ *
+ * `requirePermit` — descriptor form for dangerous operations carrying
+ * `resource_id` + `environment`. The executor only runs when AtlaSent
+ * authorizes it end-to-end:
  *
  * ```ts
  * await atlasent.requirePermit(
@@ -34,6 +54,7 @@ import { verifyBundle } from "./auditBundle.js";
 import { AtlaSentDeniedError, AtlaSentError } from "./errors.js";
 import { configure, deployGate, protect } from "./protect.js";
 import { requirePermit, classifyCommand } from "./requirePermit.js";
+import { withPermit } from "./withPermit.js";
 import {
   DEPLOYMENT_PRODUCTION_ACTION,
   PRODUCTION_DEPLOY_ACTION,
@@ -73,6 +94,7 @@ export {
   classifyCommand,
   type ProtectedAction,
 } from "./requirePermit.js";
+export { withPermit } from "./withPermit.js";
 export type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
@@ -594,12 +616,14 @@ export {
  *
  * ```ts
  * import atlasent from "@atlasent/sdk";
- * await atlasent.protect({ ... });
- * await atlasent.requirePermit({ ... }, executor);
+ * const permit = await atlasent.protect({ ... });        // primitive
+ * await atlasent.withPermit({ ... }, async (permit) => …); // scoped form
+ * await atlasent.requirePermit({ ... }, executor);         // descriptor form
  * ```
  */
 const atlasent = {
   protect,
+  withPermit,
   deployGate,
   configure,
   requirePermit,
