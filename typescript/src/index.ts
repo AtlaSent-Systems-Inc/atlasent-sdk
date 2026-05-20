@@ -659,6 +659,30 @@ export {
   type WaitForApprovalOptions,
 } from "./approvalRuntime.js";
 
+// ── Context Layer ─────────────────────────────────────────────────────────────
+// Typed, validated, redaction-aware context schema for protect() / evaluate().
+// Replaces the anonymous `context?: Record<string, unknown>` black box.
+export {
+  DEFAULT_REDACTION_RULES,
+  buildActionContext,
+  flattenActionContext,
+  redactContext,
+  validateActionContext,
+  type ActionContext,
+  type ActionMetaContext,
+  type ActorContext,
+  type BuildActionContextInput,
+  type ContextValidationError,
+  type ContextValidationResult,
+  type ContextValidationWarning,
+  type EnvironmentContext,
+  type HistoricalContext,
+  type RedactionMode,
+  type RedactionRule,
+  type ResourceContext,
+  type ValidateContextOptions,
+} from "./actionContext.js";
+
 /**
  * Default export. The opinionated, category-defining entry point:
  *
