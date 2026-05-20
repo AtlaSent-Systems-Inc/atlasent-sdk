@@ -1,0 +1,60 @@
+{
+  "version": "claim_evidence_link.v1",
+  "link_id": "cel_01j9ddd000",
+  "claim_id": "claim_01j8ddd000",
+  "org_id": "org-acme",
+  "linked_at": "2026-05-20T10:00:00Z",
+  "updated_at": "2026-05-20T11:00:00Z",
+  "revision": 2,
+  "link_algorithm": "hmac-sha256",
+  "link_hash": "d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
+  "link_signature": "dGhpcyBpcyBhIHRlc3Q",
+  "runtime_evidence": {
+    "permit_token": "tok_01j9ddd",
+    "audit_hash": "d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
+    "decision": "allow",
+    "decision_id": "dec_01j8ddd",
+    "evaluated_at": "2026-05-20T09:59:55Z",
+    "algorithm": "hmac-sha256",
+    "signature": "dGhpcyBpcyBhIHRlc3Q",
+    "permit_revoked_at": null,
+    "verified_at_claim_time": true,
+    "verified_at_link_creation": true
+  },
+  "deploy_evidence": null,
+  "integration_evidence": null,
+  "approval_artifact": null,
+  "delta": {
+    "status": "computed",
+    "computed_at": "2026-05-20T11:00:00Z",
+    "policy_version_at_claim": "pol_v42",
+    "policy_version_current": "pol_v43",
+    "policy_drift_detected": true,
+    "schema_version_at_claim": "@atlasent/sdk@1.4.2",
+    "schema_version_current": "@atlasent/sdk@1.4.2",
+    "schema_drift_detected": false,
+    "drift_details": [
+      {
+        "change_type": "rule_removed",
+        "severity": "critical",
+        "rule_id": "deny_unvetted_agent",
+        "changed_at": "2026-05-20T08:00:00Z",
+        "description": "Rule 'deny_unvetted_agent' was removed in pol_v43. This rule governed the action_type involved in this claim and its removal changes the effective policy."
+      }
+    ]
+  },
+  "verification_checklist": {
+    "runtime_evidence_present": true,
+    "verified_at_claim_time": true,
+    "verified_at_link_creation": true,
+    "deploy_evidence_status": "not_applicable",
+    "integration_evidence_status": "not_applicable",
+    "approval_artifact_status": "not_applicable",
+    "delta_computed": true,
+    "policy_drift_clean": false,
+    "schema_drift_clean": true,
+    "all_pass": false,
+    "last_verified_at": "2026-05-20T10:00:00Z",
+    "computed_at": "2026-05-20T11:00:00Z"
+  }
+}
