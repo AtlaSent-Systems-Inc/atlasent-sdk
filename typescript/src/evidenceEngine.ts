@@ -318,9 +318,9 @@ export function buildWhyTrace(
           foundTerminal = true;
           terminalStage = {
             stage: s.stage,
-            rule: s.rule,
+            ...(s.rule !== undefined ? { rule: s.rule } : {}),
             matched: s.matched,
-            detail: s.detail,
+            ...(s.detail !== undefined ? { detail: s.detail } : {}),
             impact: "terminal",
           };
         } else if (s.matched) {
@@ -329,9 +329,9 @@ export function buildWhyTrace(
 
         return {
           stage: s.stage,
-          rule: s.rule,
+          ...(s.rule !== undefined ? { rule: s.rule } : {}),
           matched: s.matched,
-          detail: s.detail,
+          ...(s.detail !== undefined ? { detail: s.detail } : {}),
           impact,
         };
       },
@@ -341,7 +341,7 @@ export function buildWhyTrace(
       policy_id: policy.policy_id,
       decision: policy.decision,
       fingerprint: policy.fingerprint,
-      risk_score: policy.risk_score,
+      ...(policy.risk_score !== undefined ? { risk_score: policy.risk_score } : {}),
       stages,
       was_decisive: wasDecisive,
     };
@@ -350,9 +350,9 @@ export function buildWhyTrace(
   return {
     decision,
     summary: formatSummary(decision, reasons, matchedPolicyId, terminalStage),
-    matched_policy_id: matchedPolicyId,
+    ...(matchedPolicyId !== undefined ? { matched_policy_id: matchedPolicyId } : {}),
     policy_evaluations: policyEvaluations,
-    terminal_stage: terminalStage,
+    ...(terminalStage !== undefined ? { terminal_stage: terminalStage } : {}),
     total_stages_evaluated: totalStages,
   };
 }

@@ -64,7 +64,7 @@ export async function protectToolCall(
     actor: {
       id: opts.agentId,
       type: "agent",
-      session_id: opts.sessionId,
+      ...(opts.sessionId !== undefined ? { session_id: opts.sessionId } : {}),
     },
     resource: {
       type: "agent_tool",
@@ -98,9 +98,9 @@ export async function protectToolCall(
       assignedToRole: opts.assignedToRole ?? "agent-supervisor",
       riskScore: inferredRisk === "critical" ? 1.0 : inferredRisk === "high" ? 0.75 : 0.5,
       waitMs: opts.waitMs ?? 15 * 60 * 1000,
-      onEscalationCreated: opts.onEscalationCreated,
-      apiKey: opts.apiKey,
-      baseUrl: opts.baseUrl,
+      ...(opts.onEscalationCreated !== undefined ? { onEscalationCreated: opts.onEscalationCreated } : {}),
+      ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
+      ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
     });
   }
 

@@ -65,8 +65,8 @@ export async function protectDeploy(
   const ctx = buildActionContext({
     actor: {
       id: actorId,
-      label: opts.actorLabel,
       type: "service_account",
+      ...(opts.actorLabel !== undefined ? { label: opts.actorLabel } : {}),
     },
     resource: {
       id: opts.service,
@@ -76,7 +76,11 @@ export async function protectDeploy(
     action_meta: {
       risk_level: isProduction ? "critical" : "medium",
       reversibility: "partial",
-      description: opts.description ?? (sha ? `Deploy ${sha.slice(0, 8)} to ${environment}` : undefined),
+      ...(opts.description !== undefined
+        ? { description: opts.description }
+        : sha !== undefined
+          ? { description: `Deploy ${sha.slice(0, 8)} to ${environment}` }
+          : {}),
     },
     extra: {
       sha,
@@ -95,9 +99,9 @@ export async function protectDeploy(
       escalationReason: `Production deployment of ${opts.service} requires human approval`,
       assignedToRole: opts.assignedToRole ?? "release-manager",
       waitMs: opts.waitMs ?? 30 * 60 * 1000,
-      onEscalationCreated: opts.onEscalationCreated,
-      apiKey: opts.apiKey,
-      baseUrl: opts.baseUrl,
+      ...(opts.onEscalationCreated !== undefined ? { onEscalationCreated: opts.onEscalationCreated } : {}),
+      ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
+      ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
     });
   }
   return protect(request);

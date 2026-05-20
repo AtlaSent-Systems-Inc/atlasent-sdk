@@ -46,9 +46,9 @@ export async function protectCloseAction(
     },
     resource: {
       id: opts.entityId,
-      name: opts.entityName,
       type: "accounting_entity",
       sensitivity: opts.dataClassification ?? "confidential",
+      ...(opts.entityName !== undefined ? { name: opts.entityName } : {}),
     },
     environment: "production",
     action_meta: {
@@ -65,18 +65,17 @@ export async function protectCloseAction(
   return protectOrEscalate(
     {
       action: opts.action,
-      resourceId: opts.entityId,
-      agentId: opts.closedBy,
+      agent: opts.closedBy,
       context: flattenActionContext(ctx),
     },
     {
       escalationReason: `Accounting ${opts.action} for period '${opts.periodLabel}' requires approval`,
       assignedToRole: opts.assignedToRole ?? "controller",
-      quorumRequired: opts.requireDualApproval ?? opts.action === "period.close" ? "dual" : "single",
+      quorumRequired: (opts.requireDualApproval ?? opts.action === "period.close") ? "simple_majority" : "single_approver",
       waitMs: opts.waitMs ?? 24 * 60 * 60 * 1000,
-      onEscalationCreated: opts.onEscalationCreated,
-      apiKey: opts.apiKey,
-      baseUrl: opts.baseUrl,
+      ...(opts.onEscalationCreated !== undefined ? { onEscalationCreated: opts.onEscalationCreated } : {}),
+      ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
+      ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
     },
   );
 }

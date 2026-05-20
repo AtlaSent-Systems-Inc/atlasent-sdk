@@ -49,8 +49,8 @@ export async function protectPaymentRelease(
     },
     resource: {
       id: opts.vendorId,
-      name: opts.vendorName,
       type: "vendor",
+      ...(opts.vendorName !== undefined ? { name: opts.vendorName } : {}),
     },
     environment: "production",
     action_meta: {
@@ -75,11 +75,11 @@ export async function protectPaymentRelease(
     return protectOrEscalate(request, {
       escalationReason: `Payment of ${opts.currency} ${opts.amount.toLocaleString()} to ${opts.vendorName ?? opts.vendorId} exceeds auto-approval threshold of ${opts.currency} ${escalateThreshold.toLocaleString()}`,
       assignedToRole: opts.assignedToRole ?? "finance-approver",
-      quorumRequired: needsDual ? "dual" : "single",
+      quorumRequired: needsDual ? "simple_majority" : "single_approver",
       waitMs: opts.waitMs ?? 4 * 60 * 60 * 1000,
-      onEscalationCreated: opts.onEscalationCreated,
-      apiKey: opts.apiKey,
-      baseUrl: opts.baseUrl,
+      ...(opts.onEscalationCreated !== undefined ? { onEscalationCreated: opts.onEscalationCreated } : {}),
+      ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
+      ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
     });
   }
   return protect(request);

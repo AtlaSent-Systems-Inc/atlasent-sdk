@@ -245,7 +245,10 @@ export async function createEscalation(
   opts: CreateEscalationOptions,
 ): Promise<EscalationHandle> {
   const { apiKey, baseUrl, ...hitlBody } = opts;
-  const cfg = resolveConfig({ apiKey, baseUrl });
+  const cfg = resolveConfig({
+    ...(apiKey !== undefined ? { apiKey } : {}),
+    ...(baseUrl !== undefined ? { baseUrl } : {}),
+  });
 
   const body: HitlCreateRequest = {
     agent_id: hitlBody.agent_id ?? "unknown",
@@ -285,7 +288,10 @@ export interface WaitForApprovalOptions {
 export async function waitForEscalationApproval(
   opts: WaitForApprovalOptions,
 ): Promise<EscalationOutcome> {
-  const cfg = resolveConfig({ apiKey: opts.apiKey, baseUrl: opts.baseUrl });
+  const cfg = resolveConfig({
+    ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
+    ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
+  });
   const waitMs = opts.waitMs ?? 600_000;
   const pollIntervalMs = Math.max(opts.pollIntervalMs ?? 5_000, 1_000);
   const deadline = Date.now() + waitMs;
@@ -449,22 +455,22 @@ export async function protectOrEscalate(
   }
 
   // Create HITL escalation
+  const proposedAction =
+    opts.proposedAction ?? (request.context as Record<string, unknown> | undefined);
   const handle = await createEscalation({
     agent_id: opts.agentId ?? request.agent,
     escalation_reason:
       opts.escalationReason ??
       `Policy hold for "${request.action}" by "${request.agent}"`,
-    proposed_action:
-      opts.proposedAction ??
-      (request.context as Record<string, unknown> | undefined),
-    risk_score: opts.riskScore,
-    assigned_to_role: opts.assignedToRole,
-    quorum_required: opts.quorumRequired,
-    fallback_decision: opts.fallbackDecision,
-    timeout_at: opts.timeoutAt,
-    metadata: opts.metadata,
-    apiKey: opts.apiKey,
-    baseUrl: opts.baseUrl,
+    ...(proposedAction !== undefined ? { proposed_action: proposedAction } : {}),
+    ...(opts.riskScore !== undefined ? { risk_score: opts.riskScore } : {}),
+    ...(opts.assignedToRole !== undefined ? { assigned_to_role: opts.assignedToRole } : {}),
+    ...(opts.quorumRequired !== undefined ? { quorum_required: opts.quorumRequired } : {}),
+    ...(opts.fallbackDecision !== undefined ? { fallback_decision: opts.fallbackDecision } : {}),
+    ...(opts.timeoutAt !== undefined ? { timeout_at: opts.timeoutAt } : {}),
+    ...(opts.metadata !== undefined ? { metadata: opts.metadata } : {}),
+    ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
+    ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
   });
 
   opts.onEscalationCreated?.(handle);
@@ -472,10 +478,10 @@ export async function protectOrEscalate(
   // Wait for human decision
   const outcome = await waitForEscalationApproval({
     escalationId: handle.escalationId,
-    waitMs: opts.waitMs,
-    pollIntervalMs: opts.pollIntervalMs,
-    apiKey: opts.apiKey,
-    baseUrl: opts.baseUrl,
+    ...(opts.waitMs !== undefined ? { waitMs: opts.waitMs } : {}),
+    ...(opts.pollIntervalMs !== undefined ? { pollIntervalMs: opts.pollIntervalMs } : {}),
+    ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
+    ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
   });
 
   if (outcome.status === "rejected") throw new EscalationDeniedError(outcome);
@@ -523,7 +529,10 @@ export interface RequestOverrideOptions {
 export async function requestOverride(
   opts: RequestOverrideOptions,
 ): Promise<OverrideV1> {
-  const cfg = resolveConfig({ apiKey: opts.apiKey, baseUrl: opts.baseUrl });
+  const cfg = resolveConfig({
+    ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
+    ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
+  });
 
   const body: CreateOverrideRequest = {
     reason: opts.reason,

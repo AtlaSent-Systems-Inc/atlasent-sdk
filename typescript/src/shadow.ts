@@ -143,7 +143,7 @@ export async function reportShadowEvent(
     latencyMs: outcome.latencyMs,
     evaluationId: outcome.evaluationId,
     mode: outcome.mode,
-    deniedReason: outcome.error?.message,
+    ...(outcome.error ? { deniedReason: outcome.error.message } : {}),
     timestamp: new Date().toISOString(),
   };
 

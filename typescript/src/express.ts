@@ -114,7 +114,7 @@ export function atlaSentGuard(options: AtlaSentGuardOptions): RequestHandler {
       const request: ProtectRequest = { agent, action };
       if (ctx !== undefined) request.context = ctx;
       const permit: Permit = await protect(request);
-      (req as Record<string, unknown>)[contextKey] = permit;
+      (req as unknown as Record<string, unknown>)[contextKey] = permit;
       next();
     } catch (err) {
       next(err);
