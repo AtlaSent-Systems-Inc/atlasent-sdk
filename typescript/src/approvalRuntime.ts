@@ -424,8 +424,6 @@ export async function protectOrEscalate(
   request: ProtectRequest,
   opts: ProtectOrEscalateOptions = {},
 ): Promise<ApprovalPermit> {
-  let needsEscalation = false;
-
   try {
     const permit = await protect(request);
     return {
@@ -438,20 +436,11 @@ export async function protectOrEscalate(
     };
   } catch (err) {
     if (
-      err instanceof AtlaSentDeniedError &&
-      (err.decision === "hold" || err.decision === "escalate")
+      !(err instanceof AtlaSentDeniedError) ||
+      (err.decision !== "hold" && err.decision !== "escalate")
     ) {
-      needsEscalation = true;
-    } else {
       throw err;
     }
-  }
-
-  if (!needsEscalation) {
-    // TypeScript exhaustiveness guard — never reached
-    throw new AtlaSentError("Unexpected state in protectOrEscalate", {
-      code: "bad_request",
-    });
   }
 
   // Create HITL escalation

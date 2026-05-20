@@ -540,11 +540,13 @@ function redactObject(
       const redacted = redactValue(value, matchingRule.mode);
       if (redacted !== undefined) result[key] = redacted;
       // If mode === "remove", the key is omitted (undefined not assigned)
-    } else if (
-      value !== null &&
-      typeof value === "object" &&
-      !Array.isArray(value)
-    ) {
+    } else if (Array.isArray(value)) {
+      result[key] = value.map((item) =>
+        item !== null && typeof item === "object" && !Array.isArray(item)
+          ? redactObject(item as Record<string, unknown>, rules, fieldPath)
+          : item,
+      );
+    } else if (value !== null && typeof value === "object") {
       result[key] = redactObject(
         value as Record<string, unknown>,
         rules,
@@ -621,12 +623,12 @@ export function flattenActionContext(
     flat[key] = value;
   }
 
-  // Ensure the top-level `environment` field (the string name) is present
-  // because protect() reads `context.environment` as a string when extracting
-  // the environment name for verifyPermit().
+  // Expose a flat string shorthand for environment name alongside the full
+  // nested object. Using a separate key preserves nested fields (region,
+  // pipeline, etc.) that were already copied above.
   const envName = ctx.environment?.name ?? ctx.environment_name;
   if (envName !== undefined) {
-    flat["environment"] = envName;
+    flat["environment_name"] = envName;
   }
 
   return flat;
