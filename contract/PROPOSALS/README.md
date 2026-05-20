@@ -81,6 +81,7 @@ status `REJECTED`.
 | [001](./001-streaming-evaluate.md) | Streaming `/v1-evaluate` | DRAFT | API team + streaming engineer |
 | [002](./002-audit-bundle.md)       | Offline audit-bundle format | DRAFT | API team + security team |
 | [003](./003-atlasent-types.md)     | `@atlasent/types` npm package | DRAFT | `@atlasent` npm scope owner |
+| [004](./004-claims-evidence-links.md) | Claims → evidence lineage | DRAFT | API team + security team + data team |
 
 ## Adding a new proposal
 
