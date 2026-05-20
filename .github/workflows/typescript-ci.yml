@@ -23,9 +23,6 @@ defaults:
   run:
     working-directory: typescript
 
-permissions:
-  contents: read
-
 jobs:
   test:
     runs-on: ubuntu-latest
