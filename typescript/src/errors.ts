@@ -74,7 +74,8 @@ export type AtlaSentErrorCode =
   // Tenant lacks a v2_<feature> flag — server returned 404. Distinct
   // from "forbidden" (403 authorization denial) so callers can branch
   // on the failure mode.
-  | "feature_disabled";
+  | "feature_disabled"
+  | "claim_evidence_incomplete";
 
 /** Initialization options for {@link AtlaSentError}. */
 export interface AtlaSentErrorInit {

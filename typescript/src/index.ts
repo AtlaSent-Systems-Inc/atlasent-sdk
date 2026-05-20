@@ -713,3 +713,28 @@ const atlasent = {
 } as const;
 
 export default atlasent;
+
+export {
+  buildClaimEvidenceLink,
+  verifyClaimEvidenceLink,
+  NOT_APPLICABLE,
+  type BuildClaimEvidenceLinkOpts,
+  type VerifyClaimEvidenceLinkOpts,
+  type VerifyClaimEvidenceLinkResult,
+  type ClaimEvidenceLink,
+  type RuntimeEvidenceSlot,
+  type DeployEvidenceSlot,
+  type IntegrationEvidenceSlot,
+  type ApprovalArtifactSlot,
+  type DeltaSlot,
+  type DriftDetail,
+  type DriftChangeType,
+  type DriftSeverity,
+  type DeltaStatus,
+  type EvidenceSlotStatus,
+  type VerificationChecklist,
+  type NotApplicable,
+  type DeployEvidenceInput,
+  type HitlChainSummary,
+  type SignedApprovalArtifact,
+} from "./claimLineage.js";
