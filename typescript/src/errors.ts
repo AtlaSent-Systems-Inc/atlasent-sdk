@@ -308,7 +308,7 @@ export class AtlaSentEscalateError extends AtlaSentError {
 
   constructor(message: string, opts?: AtlaSentEscalateErrorInit) {
     super(message, {
-      requestId: opts?.requestId,
+      ...(opts?.requestId !== undefined ? { requestId: opts.requestId } : {}),
       cause: opts?.cause,
     });
     this.userId = opts?.userId;

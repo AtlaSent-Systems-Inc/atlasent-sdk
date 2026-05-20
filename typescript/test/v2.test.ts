@@ -33,7 +33,7 @@ function makeFetch(
 ): typeof fetch {
   // Cast through `unknown` because the global `fetch` type
   // signature varies slightly between Node versions.
-  return ((url: RequestInfo | URL, init?: RequestInit) =>
+  return ((url: string | URL | Request, init?: RequestInit) =>
     Promise.resolve(responder(String(url), init ?? {}))) as unknown as typeof fetch;
 }
 

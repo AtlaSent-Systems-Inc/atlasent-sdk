@@ -442,11 +442,19 @@ export class AtlaSentClient {
       );
     }
 
+    const reason = wire.denial?.reason ?? wire.reason ?? "";
+    const permitId = permitToken ?? "";
     return {
       decision,
       decision_canonical: decision,
-      permitId: permitToken ?? "",
-      reason: wire.denial?.reason ?? wire.reason ?? "",
+      evaluationId: permitId,
+      permitId,
+      // /v1-evaluate does not return a control-plane-shaped Permit body;
+      // callers needing the full record fetch GET /v1/permits/:id.
+      permit: null,
+      permitToken: decision === "allow" ? (permitToken ?? null) : null,
+      reasons: reason ? [reason] : [],
+      reason,
       auditHash: wire.audit_hash ?? "",
       timestamp: wire.timestamp ?? "",
       rateLimit,
@@ -519,11 +527,19 @@ export class AtlaSentClient {
     }
     const permitToken = wire.permit_token ?? wire.decision_id;
 
+    const reason = wire.denial?.reason ?? wire.reason ?? "";
+    const permitId = permitToken ?? "";
     const evaluation: EvaluateResponse = {
       decision,
       decision_canonical: decision,
-      permitId: permitToken ?? "",
-      reason: wire.denial?.reason ?? wire.reason ?? "",
+      evaluationId: permitId,
+      permitId,
+      // /v1-evaluate does not return a control-plane-shaped Permit body;
+      // callers needing the full record fetch GET /v1/permits/:id.
+      permit: null,
+      permitToken: decision === "allow" ? (permitToken ?? null) : null,
+      reasons: reason ? [reason] : [],
+      reason,
       auditHash: wire.audit_hash ?? "",
       timestamp: wire.timestamp ?? "",
       rateLimit,
