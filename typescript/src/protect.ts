@@ -20,6 +20,11 @@
  * {@link AtlaSentError}. The action cannot execute unless a valid
  * {@link Permit} is returned — this is the SDK's category boundary,
  * not a helper.
+ *
+ * `protectWithEvidence` is the same contract plus a signed
+ * {@link DecisionReceipt} minted on the way out. Use it when you need
+ * tamper-evident proof of authorization stored alongside the action
+ * record (deploy logs, payment records, close workflows).
  */
 
 import { AtlaSentClient } from "./client.js";
@@ -30,7 +35,17 @@ import {
   normalizePermitOutcome,
   type AtlaSentDecision,
 } from "./errors.js";
-import type { AtlaSentClientOptions } from "./types.js";
+import type { AtlaSentClientOptions, ConstraintTrace } from "./types.js";
+import {
+  buildDecisionReceiptPayload,
+  buildWhyTrace,
+  computeContextHash,
+  signDecisionReceiptHmac,
+} from "./evidenceEngine.js";
+import type {
+  DecisionReceipt,
+  DecisionReceiptAlgorithm,
+} from "./evidenceEngine.js";
 
 /** Input to {@link protect}. Same shape as `EvaluateRequest`. */
 export interface ProtectRequest {
@@ -205,6 +220,16 @@ async function computeExecutionHash(payload: unknown): Promise<string> {
   }
 }
 
+function generateReceiptId(): string {
+  if (
+    typeof globalThis !== "undefined" &&
+    typeof globalThis.crypto?.randomUUID === "function"
+  ) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `rcpt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /**
  * Authorize an action end-to-end. On allow, returns a verified
  * {@link Permit}. On anything else, throws:
@@ -286,5 +311,213 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
     auditHash: evaluation.auditHash,
     reason: evaluation.reason,
     timestamp: verification.timestamp,
+  };
+}
+
+// ── Evidence-enhanced protect ─────────────────────────────────────────────────
+
+/**
+ * A verified {@link Permit} with an embedded signed {@link DecisionReceipt}.
+ *
+ * Returned by {@link protectWithEvidence}. Store `receipt` alongside
+ * your action record (deploy logs, payment records, close workflows)
+ * to give auditors a self-contained proof of authorization.
+ */
+export interface PermitWithEvidence extends Permit {
+  /** Signed per-decision receipt. `algorithm: "none"` when no signing secret was supplied. */
+  receipt: DecisionReceipt;
+}
+
+/** Options for {@link protectWithEvidence}. */
+export interface ProtectWithEvidenceOptions {
+  /**
+   * HMAC-SHA256 signing secret. When provided, the receipt is signed
+   * and can be verified offline with `verifyDecisionReceiptHmac`.
+   * Recommend `process.env.ATLASENT_RECEIPT_SIGNING_SECRET`.
+   */
+  signingSecret?: string;
+  /**
+   * Registry key ID recorded on the receipt, paired with `signingSecret`.
+   * Used for key rotation: store the ID alongside the receipt so
+   * verifiers know which key to use.
+   */
+  signingKeyId?: string;
+  /**
+   * If you have already called `client.evaluatePreflight()` for this
+   * request, pass `constraintTrace` here to populate
+   * `receipt.why_trace` with the full stage-by-stage "why" trace.
+   * When omitted, `why_trace` is `null` on the receipt.
+   */
+  constraintTrace?: ConstraintTrace | null;
+}
+
+/**
+ * Authorize an action end-to-end and mint a signed {@link DecisionReceipt}.
+ *
+ * Same fail-closed contract as {@link protect} — throws
+ * {@link AtlaSentDeniedError} on deny, {@link AtlaSentError} on
+ * transport failure. The action MUST NOT proceed if this throws.
+ *
+ * On allow, returns the verified `Permit` plus a signed `DecisionReceipt`
+ * that captures:
+ * - The evaluation ID and decision
+ * - Human-readable reasons
+ * - Permit ID and hash
+ * - Audit-trail hash (hash-chain link)
+ * - SHA-256 of the evaluate context (tamper-evidence for the inputs)
+ * - Optional "why" trace (pass `constraintTrace` from `evaluatePreflight`)
+ *
+ * ```ts
+ * const { permit, receipt } = await protectWithEvidence(
+ *   { agent: "deploy-bot", action: "production.deploy", context },
+ *   {
+ *     signingSecret: process.env.ATLASENT_RECEIPT_SIGNING_SECRET,
+ *     signingKeyId: "key-v1",
+ *   },
+ * );
+ * // Store alongside the deployment record.
+ * await db.deployments.create({ commitSha, permit, receipt });
+ * ```
+ */
+export async function protectWithEvidence(
+  request: ProtectRequest,
+  opts: ProtectWithEvidenceOptions = {},
+): Promise<PermitWithEvidence> {
+  const client = getClient();
+
+  // 1. Evaluate (same logic as protect()).
+  const evaluation = await client.evaluate(request);
+
+  if (evaluation.decision !== "allow") {
+    throw new AtlaSentDeniedError({
+      decision: wireDecisionToDenied(evaluation.decision),
+      evaluationId: evaluation.permitId,
+      reason: evaluation.reason,
+      auditHash: evaluation.auditHash,
+    });
+  }
+
+  // 2. Extract environment, compute execution_hash, verify permit.
+  const environment =
+    (request.context?.environment as string | undefined) ??
+    (() => {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[atlasent] environment not set on evaluate request — " +
+          "defaulting to 'production'. Set context.environment explicitly to suppress.",
+      );
+      return "production";
+    })();
+
+  const evaluatePayload = {
+    action_type: request.action,
+    actor_id: request.agent,
+    context: request.context ?? {},
+  };
+  const execution_hash = await computeExecutionHash(evaluatePayload);
+
+  const verifyRequest: {
+    permitId: string;
+    agent: string;
+    action: string;
+    context?: Record<string, unknown>;
+    environment: string;
+    execution_hash?: string;
+  } = {
+    permitId: evaluation.permitId,
+    agent: request.agent,
+    action: request.action,
+    environment,
+    ...(execution_hash ? { execution_hash } : {}),
+  };
+  if (request.context !== undefined) verifyRequest.context = request.context;
+  const verification = await client.verifyPermit(verifyRequest);
+
+  if (!verification.verified) {
+    const outcome = normalizePermitOutcome(verification.outcome);
+    throw new AtlaSentDeniedError({
+      decision: "deny",
+      evaluationId: evaluation.permitId,
+      reason: `Permit failed verification (${verification.outcome})`,
+      auditHash: evaluation.auditHash,
+      ...(outcome !== undefined && { outcome }),
+    });
+  }
+
+  // 3. Build the receipt.
+  const contextHash = await computeContextHash(request.context ?? {});
+
+  const whyTrace = buildWhyTrace(
+    "allow",
+    evaluation.reasons,
+    opts.constraintTrace ?? null,
+  );
+
+  const issuedAt = new Date().toISOString();
+  const receiptId = generateReceiptId();
+  const orgId = evaluation.permit?.orgId ?? "";
+
+  const payload = buildDecisionReceiptPayload({
+    receipt_id: receiptId,
+    evaluation_id: evaluation.evaluationId,
+    org_id: orgId,
+    decision: "allow",
+    action: request.action,
+    actor: request.agent,
+    resource_type:
+      (request.context?.resource_type as string | undefined) ?? null,
+    resource_id:
+      (request.context?.resource_id as string | undefined) ?? null,
+    reasons: evaluation.reasons,
+    why_summary: whyTrace.summary,
+    permit_id: evaluation.permitId,
+    permit_hash: verification.permitHash,
+    audit_hash: evaluation.auditHash,
+    context_hash: contextHash,
+    issued_at: issuedAt,
+  });
+
+  // 4. Sign if secret is provided.
+  let signature: string | null = null;
+  let algorithm: DecisionReceiptAlgorithm = "none";
+
+  if (opts.signingSecret) {
+    signature = await signDecisionReceiptHmac(payload, opts.signingSecret);
+    algorithm = "hmac-sha256";
+  }
+
+  const receipt: DecisionReceipt = {
+    receipt_id: receiptId,
+    evaluation_id: evaluation.evaluationId,
+    org_id: orgId,
+    decision: "allow",
+    action: request.action,
+    actor: request.agent,
+    resource_type:
+      (request.context?.resource_type as string | undefined) ?? null,
+    resource_id:
+      (request.context?.resource_id as string | undefined) ?? null,
+    reasons: evaluation.reasons,
+    why_trace:
+      opts.constraintTrace !== undefined ? whyTrace : null,
+    permit_id: evaluation.permitId,
+    permit_hash: verification.permitHash,
+    audit_hash: evaluation.auditHash,
+    context_hash: contextHash,
+    issued_at: issuedAt,
+    expires_at: null,
+    algorithm,
+    signature,
+    signing_key_id: opts.signingKeyId ?? null,
+    payload,
+  };
+
+  return {
+    permitId: evaluation.permitId,
+    permitHash: verification.permitHash,
+    auditHash: evaluation.auditHash,
+    reason: evaluation.reason,
+    timestamp: verification.timestamp,
+    receipt,
   };
 }

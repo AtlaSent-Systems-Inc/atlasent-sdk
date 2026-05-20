@@ -52,7 +52,7 @@
 import { AtlaSentClient } from "./client.js";
 import { verifyBundle } from "./auditBundle.js";
 import { AtlaSentDeniedError, AtlaSentError } from "./errors.js";
-import { configure, deployGate, protect } from "./protect.js";
+import { configure, deployGate, protect, protectWithEvidence } from "./protect.js";
 import { requirePermit, classifyCommand } from "./requirePermit.js";
 import { withPermit } from "./withPermit.js";
 import {
@@ -85,9 +85,12 @@ export {
   configure,
   deployGate,
   protect,
+  protectWithEvidence,
   type ConfigureOptions,
   type Permit,
+  type PermitWithEvidence,
   type ProtectRequest,
+  type ProtectWithEvidenceOptions,
 } from "./protect.js";
 export {
   requirePermit,
@@ -611,6 +614,29 @@ export {
   type V2Transport,
 } from "./v2.js";
 
+// ── Evidence Engine ───────────────────────────────────────────────────────────
+// Per-decision signed receipts, "why allowed / why denied" traces, and
+// compliance-ready bundles. The layer that makes every AtlaSent decision
+// tamper-evidently provable to auditors, regulators, and buyers.
+export {
+  buildWhyTrace,
+  buildDecisionReceiptPayload,
+  computeContextHash,
+  computeBundleHash,
+  receiptSigningInput,
+  signDecisionReceiptHmac,
+  verifyDecisionReceiptHmac,
+  soc2ControlCoverageForDecision,
+  type ActionEvidenceBundle,
+  type ComplianceControlCoverage,
+  type DecisionReceipt,
+  type DecisionReceiptAlgorithm,
+  type DecisionReceiptPayload,
+  type WhyPolicyEvaluation,
+  type WhyStage,
+  type WhyTrace,
+} from "./evidenceEngine.js";
+
 /**
  * Default export. The opinionated, category-defining entry point:
  *
@@ -619,6 +645,7 @@ export {
  * const permit = await atlasent.protect({ ... });        // primitive
  * await atlasent.withPermit({ ... }, async (permit) => …); // scoped form
  * await atlasent.requirePermit({ ... }, executor);         // descriptor form
+ * const { permit, receipt } = await atlasent.protectWithEvidence({ ... }, { signingSecret });
  * ```
  */
 const atlasent = {
@@ -629,6 +656,7 @@ const atlasent = {
   requirePermit,
   classifyCommand,
   verifyBundle,
+  protectWithEvidence,
   PRODUCTION_DEPLOY_ACTION,
   DEPLOYMENT_PRODUCTION_ACTION,
   AtlaSentClient,
