@@ -86,6 +86,8 @@ from .billing import (
 )
 from .cache import TTLCache
 from .claim_lineage import (
+    ActionBundleInput,
+    ActionBundleReceipt,
     ApprovalArtifactSlot,
     ClaimEvidenceLink,
     DeployEvidenceInput,
@@ -107,6 +109,7 @@ from .claim_lineage import (
     VerificationChecklist,
     VerifyClaimEvidenceLinkResult,
     build_claim_evidence_link,
+    build_claim_evidence_link_from_action_bundle,
     verify_claim_evidence_link,
 )
 from .client import AtlaSentClient
@@ -339,6 +342,8 @@ __all__ = [
     "DeployEvidenceSlot",
     "IntegrationEvidenceSlot",
     "ApprovalArtifactSlot",
+    "ActionBundleInput",
+    "ActionBundleReceipt",
     "DeltaSlot",
     "DeltaStatus",
     "DriftDetail",
@@ -355,6 +360,7 @@ __all__ = [
     "SignedApprovalArtifactInput",
     "VerifyClaimEvidenceLinkResult",
     "build_claim_evidence_link",
+    "build_claim_evidence_link_from_action_bundle",
     "verify_claim_evidence_link",
     # Compliance evidence (parity with the TS SDK).
     "SOC2ControlId",

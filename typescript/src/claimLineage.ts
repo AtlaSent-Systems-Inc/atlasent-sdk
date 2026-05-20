@@ -242,6 +242,58 @@ export interface VerifyClaimEvidenceLinkResult {
   readonly failedSlots: readonly string[];
 }
 
+// ── Action bundle input types ─────────────────────────────────────────────────
+
+/**
+ * Subset of an `ActionEvidenceBundle.receipt` produced by the AtlaSent
+ * GitHub Action (atlasent-action `evidenceBundle.ts`).
+ *
+ * Only the fields consumed by {@link buildClaimEvidenceLinkFromActionBundle}
+ * are required here; the full receipt shape lives in the action repo.
+ */
+export interface ActionBundleReceipt {
+  readonly receipt_id: string;
+  readonly evaluation_id: string;
+  readonly permit_id: string | null;
+  readonly audit_hash: string | null;
+  readonly issued_at: string;
+  readonly algorithm: "hmac-sha256" | "none";
+  readonly signature: string | null;
+  readonly decision: "allow";
+}
+
+/**
+ * Minimal shape of an `ActionEvidenceBundle` emitted by the AtlaSent
+ * GitHub Action as its `evidence-bundle` output. Pass the parsed JSON
+ * directly; no re-shaping needed.
+ */
+export interface ActionBundleInput {
+  readonly bundle_id: string;
+  readonly action: string;
+  readonly actor: string;
+  readonly environment: string;
+  readonly repository: string;
+  readonly sha: string;
+  readonly run_id: string;
+  readonly generated_at: string;
+  readonly receipt: ActionBundleReceipt;
+}
+
+export interface BuildFromActionBundleOpts {
+  /** The canonical claim ID this link annotates. */
+  readonly claimId: string;
+  /** Owning org. Defaults to `""` for v1 (no org context on the action). */
+  readonly orgId?: string;
+  /**
+   * Set to `true` when the bundle does NOT represent a deploy action.
+   * The deploy slot will be `NOT_APPLICABLE` instead of auto-populated
+   * from `bundle.sha` / `bundle.environment`.
+   */
+  readonly deployNotApplicable?: boolean;
+  readonly signingSecret?: string;
+  readonly schemaVersion?: string;
+}
+
 // ── SDK version ───────────────────────────────────────────────────────────────
 
 const SDK_VERSION = "@atlasent/sdk@1.4.2";
@@ -622,4 +674,88 @@ export function verifyClaimEvidenceLink(
   }
 
   return { link: updatedLink, valid, failedSlots };
+}
+
+/**
+ * Build a {@link ClaimEvidenceLink} directly from the `evidence-bundle`
+ * JSON emitted by the AtlaSent GitHub Action.
+ *
+ * ```ts
+ * import { buildClaimEvidenceLinkFromActionBundle } from "@atlasent/sdk";
+ *
+ * const bundle = JSON.parse(process.env.ATLASENT_EVIDENCE_BUNDLE!);
+ * const link = buildClaimEvidenceLinkFromActionBundle(bundle, {
+ *   claimId: myClaimId,
+ *   signingSecret: process.env.ATLASENT_SIGNING_SECRET,
+ * });
+ * ```
+ *
+ * The `receipt` fields map directly to the `runtime_evidence` slot. The
+ * `bundle.sha` / `bundle.environment` / `bundle.actor` are used to
+ * auto-populate the `deploy_evidence` slot — pass `deployNotApplicable: true`
+ * to suppress this for non-deploy actions.
+ */
+export function buildClaimEvidenceLinkFromActionBundle(
+  bundle: ActionBundleInput,
+  opts: BuildFromActionBundleOpts,
+): ClaimEvidenceLink {
+  const runtimeEvidence: DecisionReceipt = {
+    receipt_id: bundle.receipt.receipt_id,
+    evaluation_id: bundle.receipt.evaluation_id,
+    org_id: opts.orgId ?? "",
+    decision: bundle.receipt.decision as "allow",
+    action: bundle.action,
+    actor: bundle.actor,
+    resource_type: null,
+    resource_id: null,
+    reasons: [],
+    why_trace: null,
+    permit_id: bundle.receipt.permit_id,
+    permit_hash: null,
+    audit_hash: bundle.receipt.audit_hash ?? "",
+    context_hash: "",
+    issued_at: bundle.receipt.issued_at,
+    expires_at: null,
+    algorithm: bundle.receipt.algorithm as DecisionReceiptAlgorithm,
+    signature: bundle.receipt.signature,
+    signing_key_id: null,
+    payload: {
+      receipt_id: bundle.receipt.receipt_id,
+      evaluation_id: bundle.receipt.evaluation_id,
+      org_id: opts.orgId ?? "",
+      decision: bundle.receipt.decision as "allow",
+      action: bundle.action,
+      actor: bundle.actor,
+      resource_type: null,
+      resource_id: null,
+      reasons: [],
+      why_summary: "",
+      permit_id: bundle.receipt.permit_id,
+      permit_hash: null,
+      audit_hash: bundle.receipt.audit_hash ?? "",
+      context_hash: "",
+      issued_at: bundle.receipt.issued_at,
+      expires_at: null,
+    },
+  };
+
+  const deployEvidence: DeployEvidenceInput | NotApplicable = opts.deployNotApplicable
+    ? NOT_APPLICABLE
+    : {
+        deploy_id: bundle.bundle_id,
+        environment: bundle.environment,
+        sha: bundle.sha,
+        actor_id: bundle.actor,
+        deployed_at: bundle.generated_at,
+        gate_permit_token: bundle.receipt.permit_id ?? bundle.receipt.receipt_id,
+      };
+
+  return buildClaimEvidenceLink({
+    claimId: opts.claimId,
+    ...(opts.orgId !== undefined ? { orgId: opts.orgId } : {}),
+    runtimeEvidence,
+    deployEvidence,
+    ...(opts.signingSecret !== undefined ? { signingSecret: opts.signingSecret } : {}),
+    ...(opts.schemaVersion !== undefined ? { schemaVersion: opts.schemaVersion } : {}),
+  });
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   buildClaimEvidenceLink,
+  buildClaimEvidenceLinkFromActionBundle,
   verifyClaimEvidenceLink,
   NOT_APPLICABLE,
   type BuildClaimEvidenceLinkOpts,
@@ -8,6 +9,7 @@ import {
   type HitlChainSummary,
   type SignedApprovalArtifact,
   type DeployEvidenceInput,
+  type ActionBundleInput,
 } from "../src/claimLineage.js";
 import type { DecisionReceipt } from "../src/evidenceEngine.js";
 import type { ComplianceEvidenceRun } from "../src/complianceEvidence.js";
@@ -501,5 +503,159 @@ describe("NOT_APPLICABLE sentinel", () => {
     expect(link.deploy_evidence).toBeNull();
     expect(link.integration_evidence).toBeNull();
     expect(link.approval_artifact).toBeNull();
+  });
+});
+
+// ── buildClaimEvidenceLinkFromActionBundle ────────────────────────────────────
+
+const BUNDLE_RECEIPT_ID = "r-" + "a".repeat(34);
+const BUNDLE_EVAL_ID = "e-" + "b".repeat(34);
+const BUNDLE_PERMIT_ID = "pt_live_" + "c".repeat(24);
+const BUNDLE_AUDIT_HASH = "d".repeat(64);
+const BUNDLE_SIGNING_SECRET = "s".repeat(32);
+
+function makeActionBundle(overrides: Partial<ActionBundleInput> = {}): ActionBundleInput {
+  return {
+    bundle_id: "bnd-" + "1".repeat(32),
+    action: "deploy:production",
+    actor: "github-actions[bot]",
+    environment: "production",
+    repository: "acme/app",
+    sha: "abc1234",
+    run_id: "run-999",
+    generated_at: "2026-01-01T00:00:00.000Z",
+    receipt: {
+      receipt_id: BUNDLE_RECEIPT_ID,
+      evaluation_id: BUNDLE_EVAL_ID,
+      permit_id: BUNDLE_PERMIT_ID,
+      audit_hash: BUNDLE_AUDIT_HASH,
+      issued_at: "2026-01-01T00:00:00.000Z",
+      algorithm: "hmac-sha256",
+      signature: "sig-" + "f".repeat(60),
+      decision: "allow",
+    },
+    ...overrides,
+  };
+}
+
+describe("buildClaimEvidenceLinkFromActionBundle", () => {
+  it("returns a ClaimEvidenceLink with correct claim_id", () => {
+    const link = buildClaimEvidenceLinkFromActionBundle(makeActionBundle(), {
+      claimId: "claim-123",
+    });
+    expect(link.claim_id).toBe("claim-123");
+  });
+
+  it("populates runtime_evidence from bundle receipt fields", () => {
+    const bundle = makeActionBundle();
+    const link = buildClaimEvidenceLinkFromActionBundle(bundle, { claimId: "c" });
+    // permit_token = permit_id ?? receipt_id; decision_id = evaluation_id; evaluated_at = issued_at
+    expect(link.runtime_evidence.permit_token).toBe(BUNDLE_PERMIT_ID);
+    expect(link.runtime_evidence.decision_id).toBe(BUNDLE_EVAL_ID);
+    expect(link.runtime_evidence.audit_hash).toBe(BUNDLE_AUDIT_HASH);
+    expect(link.runtime_evidence.decision).toBe("allow");
+    expect(link.runtime_evidence.evaluated_at).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("auto-populates deploy_evidence from bundle fields", () => {
+    const bundle = makeActionBundle();
+    const link = buildClaimEvidenceLinkFromActionBundle(bundle, { claimId: "c" });
+    expect(link.deploy_evidence).not.toBeNull();
+    expect(link.deploy_evidence!.sha).toBe("abc1234");
+    expect(link.deploy_evidence!.environment).toBe("production");
+    expect(link.deploy_evidence!.actor_id).toBe("github-actions[bot]");
+    expect(link.deploy_evidence!.deployed_at).toBe("2026-01-01T00:00:00.000Z");
+    expect(link.verification_checklist.deploy_evidence_status).toBe("present");
+  });
+
+  it("marks deploy_evidence not_applicable when deployNotApplicable=true", () => {
+    const link = buildClaimEvidenceLinkFromActionBundle(makeActionBundle(), {
+      claimId: "c",
+      deployNotApplicable: true,
+    });
+    expect(link.deploy_evidence).toBeNull();
+    expect(link.verification_checklist.deploy_evidence_status).toBe("not_applicable");
+  });
+
+  it("uses permit_id as gate_permit_token when present", () => {
+    const link = buildClaimEvidenceLinkFromActionBundle(makeActionBundle(), { claimId: "c" });
+    expect(link.deploy_evidence!.gate_permit_token).toBe(BUNDLE_PERMIT_ID);
+  });
+
+  it("falls back to receipt_id as gate_permit_token when permit_id is null", () => {
+    const bundle = makeActionBundle({
+      receipt: { ...makeActionBundle().receipt, permit_id: null },
+    });
+    const link = buildClaimEvidenceLinkFromActionBundle(bundle, { claimId: "c" });
+    expect(link.deploy_evidence!.gate_permit_token).toBe(BUNDLE_RECEIPT_ID);
+  });
+
+  it("sets orgId on the link when provided", () => {
+    const link = buildClaimEvidenceLinkFromActionBundle(makeActionBundle(), {
+      claimId: "c",
+      orgId: "org-xyz",
+    });
+    expect(link.org_id).toBe("org-xyz");
+  });
+
+  it("defaults org_id to empty string when orgId omitted", () => {
+    const link = buildClaimEvidenceLinkFromActionBundle(makeActionBundle(), { claimId: "c" });
+    expect(link.org_id).toBe("");
+  });
+
+  it("produces a signed link when signingSecret is provided", () => {
+    const link = buildClaimEvidenceLinkFromActionBundle(makeActionBundle(), {
+      claimId: "c",
+      signingSecret: BUNDLE_SIGNING_SECRET,
+    });
+    expect(link.link_signature).not.toBeNull();
+    expect(link.link_algorithm).toBe("hmac-sha256");
+  });
+
+  it("produces an unsigned link when signingSecret is omitted", () => {
+    const link = buildClaimEvidenceLinkFromActionBundle(makeActionBundle(), { claimId: "c" });
+    expect(link.link_signature).toBeNull();
+    expect(link.link_algorithm).toBe("none");
+  });
+
+  it("link_hash is tamper-detectable (wrong secret fails verify)", () => {
+    const link = buildClaimEvidenceLinkFromActionBundle(makeActionBundle(), {
+      claimId: "c",
+      signingSecret: BUNDLE_SIGNING_SECRET,
+    });
+    // Wrong secret → signature mismatch → verify throws with link_signature in failed slots
+    expect(() =>
+      verifyClaimEvidenceLink(link, { signingSecret: "wrong-secret" + "x".repeat(20) }),
+    ).toThrow("ClaimEvidenceLink verification failed");
+  });
+
+  it("propagates audit_hash as empty string when receipt.audit_hash is null", () => {
+    const bundle = makeActionBundle({
+      receipt: { ...makeActionBundle().receipt, audit_hash: null },
+    });
+    const link = buildClaimEvidenceLinkFromActionBundle(bundle, { claimId: "c" });
+    expect(link.runtime_evidence.audit_hash).toBe("");
+  });
+
+  it("uses 'none' algorithm when bundle receipt algorithm is 'none'", () => {
+    const bundle = makeActionBundle({
+      receipt: {
+        ...makeActionBundle().receipt,
+        algorithm: "none",
+        signature: null,
+      },
+    });
+    const link = buildClaimEvidenceLinkFromActionBundle(bundle, { claimId: "c" });
+    expect(link.runtime_evidence.algorithm).toBe("none");
+  });
+
+  it("sets delta.status to pending", () => {
+    const link = buildClaimEvidenceLinkFromActionBundle(makeActionBundle(), { claimId: "c" });
+    expect(link.delta.status).toBe("pending");
+  });
+
+  it("link version is claim_evidence_link.v1", () => {
+    const link = buildClaimEvidenceLinkFromActionBundle(makeActionBundle(), { claimId: "c" });
+    expect(link.version).toBe("claim_evidence_link.v1");
   });
 });

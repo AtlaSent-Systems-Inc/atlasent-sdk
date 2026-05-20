@@ -704,3 +704,107 @@ def verify_claim_evidence_link(
         valid=True,
         failed_slots=(),
     )
+
+
+# ── Action bundle helper ──────────────────────────────────────────────────────
+
+
+class ActionBundleReceipt(TypedDict, total=False):
+    """Subset of EvidenceReceipt fields from atlasent-action's ActionEvidenceBundle."""
+
+    receipt_id: str
+    evaluation_id: str
+    permit_id: str | None
+    audit_hash: str | None
+    issued_at: str
+    algorithm: str
+    signature: str | None
+    decision: str
+
+
+class ActionBundleInput(TypedDict, total=False):
+    """Minimal ActionEvidenceBundle fields consumed by build_claim_evidence_link_from_action_bundle."""
+
+    bundle_id: str
+    action: str
+    actor: str
+    environment: str
+    repository: str
+    sha: str
+    run_id: str
+    generated_at: str
+    receipt: ActionBundleReceipt
+
+
+def build_claim_evidence_link_from_action_bundle(
+    bundle: ActionBundleInput,
+    *,
+    claim_id: str,
+    org_id: str | None = None,
+    deploy_not_applicable: bool = False,
+    signing_secret: str | None = None,
+    schema_version: str | None = None,
+) -> ClaimEvidenceLink:
+    """Build a :class:`ClaimEvidenceLink` from an ``ActionEvidenceBundle`` JSON blob.
+
+    The GitHub Action emits an ``ActionEvidenceBundle`` as a job output and
+    artifact after a successful ``enforce()``. This helper maps that bundle
+    to a ``ClaimEvidenceLink`` in one call, so Action users don't need to
+    construct the receipt manually.
+
+    The action bundle's ``receipt`` becomes ``runtime_evidence``. The bundle's
+    deploy context (``sha``, ``environment``, ``actor``, ``bundle_id``) is
+    auto-populated as ``deploy_evidence`` unless *deploy_not_applicable* is
+    ``True``.
+
+    Args:
+        bundle: Parsed ``ActionEvidenceBundle`` JSON from the action output.
+        claim_id: The canonical claim row ID this link is attached to.
+        org_id: Organisation ID. Defaults to ``""`` when omitted.
+        deploy_not_applicable: Pass ``True`` to mark the deploy slot as N/A
+            (e.g., for non-deployment actions).
+        signing_secret: HMAC-SHA256 key for :attr:`ClaimEvidenceLink.link_signature`.
+        schema_version: Override the ``delta.schema_version_at_claim_time`` field.
+    """
+    receipt: ActionBundleReceipt = bundle.get("receipt", {})  # type: ignore[assignment]
+    receipt_id: str = receipt.get("receipt_id", "")
+    permit_id: str | None = receipt.get("permit_id")
+
+    runtime_input: RuntimeEvidenceInput = {
+        "receipt_id": receipt_id,
+        "evaluation_id": receipt.get("evaluation_id", ""),
+        "permit_id": permit_id,
+        "audit_hash": receipt.get("audit_hash") or "",
+        "issued_at": receipt.get("issued_at", ""),
+        "decision": receipt.get("decision", "deny"),
+        "algorithm": receipt.get("algorithm", "none"),
+        "signature": receipt.get("signature"),
+        "org_id": org_id or "",
+    }
+
+    deploy_input: DeployEvidenceInput | NotApplicable
+    if deploy_not_applicable:
+        deploy_input = NOT_APPLICABLE
+    else:
+        deploy_input = DeployEvidenceInput(
+            deploy_id=bundle.get("bundle_id", ""),
+            environment=bundle.get("environment", ""),
+            sha=bundle.get("sha", ""),
+            actor_id=bundle.get("actor", ""),
+            deployed_at=bundle.get("generated_at", ""),
+            gate_permit_token=permit_id if permit_id else receipt_id,
+        )
+
+    kwargs: dict[str, object] = {
+        "claim_id": claim_id,
+        "runtime_evidence": runtime_input,
+        "deploy_evidence": deploy_input,
+    }
+    if org_id is not None:
+        kwargs["org_id"] = org_id
+    if signing_secret is not None:
+        kwargs["signing_secret"] = signing_secret
+    if schema_version is not None:
+        kwargs["schema_version"] = schema_version
+
+    return build_claim_evidence_link(**kwargs)  # type: ignore[arg-type]

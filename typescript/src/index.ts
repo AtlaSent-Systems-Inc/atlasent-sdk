@@ -737,4 +737,8 @@ export {
   type DeployEvidenceInput,
   type HitlChainSummary,
   type SignedApprovalArtifact,
+  buildClaimEvidenceLinkFromActionBundle,
+  type ActionBundleInput,
+  type ActionBundleReceipt,
+  type BuildFromActionBundleOpts,
 } from "./claimLineage.js";
