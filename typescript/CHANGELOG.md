@@ -6,6 +6,67 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.6.0 (2026-05-22)
+
+### New features
+
+#### Constrained governance agents — advisory read surface
+
+Three new client methods that wrap the `v1-governance-agents` edge
+function in atlasent-api, plus the wire types and a severity rollup
+helper. **Read-only by design** — there is no invocation method on
+the SDK. Agent invocation is a CI concern (atlasent-action's
+`governance-agents` mode), not an application concern.
+
+```ts
+import { AtlaSentClient, highestAgentFindingSeverity } from "@atlasent/sdk";
+
+const client = new AtlaSentClient({ apiKey });
+
+// Registry: who is allowed to evaluate?
+const agents = await client.listGovernanceAgents();
+// Every row has authority_class === "advisory" and can_authorize === false.
+
+// Findings against one governed change:
+const findings = await client.listGovernanceFindings({
+  change_id: "00000000-0000-0000-0000-000000000042",
+  agent_slug: "migration_review", // optional filter
+});
+const worst = highestAgentFindingSeverity(findings); // null | "info" | ... | "blocker"
+
+// Run records (including failed / timeout / completed-with-zero-findings):
+const evaluations = await client.listGovernanceEvaluations({
+  change_id: "00000000-0000-0000-0000-000000000042",
+});
+```
+
+**Doctrine — evaluation ≠ authorization ≠ execution.** Both
+`GovernanceAgent.can_authorize` and `GovernanceAgentFinding.can_authorize`
+are typed as the literal `false`, mirroring the structural invariant
+that no row in either table can ever satisfy a gate or clear a hold.
+TypeScript compilation enforces this at every consumer call site.
+
+### Types
+
+New exports from the package entry point:
+
+- `GovernanceAgent`, `GovernanceAgentFinding`, `GovernanceAgentEvaluation`
+- `AgentFindingSeverity`, `AgentEvaluationStatus`, `AgentAuthorityDomain`
+- `AgentInvokerKind`, `AgentSubjectKind`, `AgentEvidenceRef`
+- `ListGovernanceAgentsResponse`, `ListGovernanceFindingsResponse`,
+  `ListGovernanceEvaluationsResponse`
+- `ListGovernanceFindingsQuery`, `ListGovernanceEvaluationsQuery`
+- `highestAgentFindingSeverity` — pure helper
+
+Wire schema source of truth: `atlasent-api/packages/types/src/governance-agents.ts`.
+
+### Testing
+
+15 new tests in `test/governance-agents.test.ts`. `governanceAgents.ts`
+module is at 100% line / branch / function coverage.
+
+---
+
 ## @atlasent/sdk 2.5.0 (2026-05-20)
 
 ### New features
