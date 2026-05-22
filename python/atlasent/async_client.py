@@ -36,6 +36,16 @@ from .exceptions import (
     _normalize_permit_outcome,
 )
 from .approval_artifact import ApprovalReference
+from .governance_agents import (
+    AgentEvidenceRef,
+    GovernanceAgent,
+    GovernanceAgentEvaluation,
+    GovernanceAgentFinding,
+    ListGovernanceAgentsResult,
+    ListGovernanceEvaluationsResult,
+    ListGovernanceFindingsResult,
+    highest_agent_finding_severity,
+)
 from .models import (
     ApiKeySelfResult,
     AuthorizationResult,
@@ -123,7 +133,7 @@ class AsyncAtlaSentClient:
             timeout=self._timeout,
         )
 
-    # ── public API ────────────────────────────────────────────
+    # ── public API ─────────────────────────────────────────────
 
     async def evaluate(
         self,
@@ -733,7 +743,7 @@ class AsyncAtlaSentClient:
         result.rate_limit = rate_limit
         return result
 
-    # ── Canonical REST surface (parity with sync client) ───────────
+    # ── Canonical REST surface (parity with sync client) ──────────────────
 
     async def get_permit(self, permit_id: str) -> GetPermitResult:
         """Get a single permit's full lifecycle state
@@ -950,6 +960,127 @@ class AsyncAtlaSentClient:
 
         return AuditExportResult(bundle=data, rate_limit=rate_limit)
 
+    async def list_governance_agents(self) -> ListGovernanceAgentsResult:
+        """List advisory governance agents registered for this org
+        (``GET /v1/governance/agents``).
+
+        Every returned agent has ``authority_class == "advisory"`` and
+        ``can_authorize == False`` -- structural invariants enforced by the
+        runtime DB, not just convention.
+
+        Raises:
+            AtlaSentError: Network error, timeout, or malformed payload.
+            RateLimitError: HTTP 429.
+        """
+        logger.debug("list_governance_agents (async)")
+        data, rate_limit, request_id = await self._get("/v1/governance/agents")
+
+        agents_raw = data.get("agents")
+        if not isinstance(agents_raw, list):
+            raise AtlaSentError(
+                "Malformed /v1/governance/agents response: missing `agents` array",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+        return ListGovernanceAgentsResult(
+            agents=[GovernanceAgent.model_validate(a) for a in agents_raw],
+            rate_limit=rate_limit,
+        )
+
+    async def list_governance_findings(
+        self,
+        *,
+        change_id: str,
+        agent_slug: str | None = None,
+    ) -> ListGovernanceFindingsResult:
+        """List advisory findings produced against one governed change
+        (``GET /v1/governance/findings?change_id=...``).
+
+        All returned findings have ``can_authorize == False`` -- enforced
+        by a CHECK constraint on the runtime DB; no finding can ever
+        satisfy a gate.
+
+        Args:
+            change_id: The governed-change UUID to query against.
+            agent_slug: Optional filter to a single agent's findings.
+
+        Raises:
+            AtlaSentError: Network error, timeout, or malformed payload.
+            RateLimitError: HTTP 429.
+        """
+        if not change_id:
+            raise AtlaSentError("change_id is required", code="bad_request")
+        params: dict[str, str] = {"change_id": change_id}
+        if agent_slug is not None:
+            params["agent_slug"] = agent_slug
+
+        logger.debug("list_governance_findings change_id=%r (async)", change_id)
+        data, rate_limit, request_id = await self._get(
+            "/v1/governance/findings", params=params
+        )
+
+        findings_raw = data.get("findings")
+        if not isinstance(findings_raw, list):
+            raise AtlaSentError(
+                "Malformed /v1/governance/findings response: missing `findings` array",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+        return ListGovernanceFindingsResult(
+            findings=[GovernanceAgentFinding.model_validate(f) for f in findings_raw],
+            rate_limit=rate_limit,
+        )
+
+    async def list_governance_evaluations(
+        self,
+        *,
+        change_id: str,
+        agent_slug: str | None = None,
+    ) -> ListGovernanceEvaluationsResult:
+        """List agent run records for a governed change
+        (``GET /v1/governance/evaluations?change_id=...``).
+
+        Includes completed, failed, and timed-out runs. The same
+        (agent_slug, agent_version, input_hash) combination may produce
+        multiple rows -- the runtime DB does not dedupe.
+
+        Args:
+            change_id: The governed-change UUID to query against.
+            agent_slug: Optional filter to one agent's runs.
+
+        Raises:
+            AtlaSentError: Network error, timeout, or malformed payload.
+            RateLimitError: HTTP 429.
+        """
+        if not change_id:
+            raise AtlaSentError("change_id is required", code="bad_request")
+        params: dict[str, str] = {"change_id": change_id}
+        if agent_slug is not None:
+            params["agent_slug"] = agent_slug
+
+        logger.debug("list_governance_evaluations change_id=%r (async)", change_id)
+        data, rate_limit, request_id = await self._get(
+            "/v1/governance/evaluations", params=params
+        )
+
+        evals_raw = data.get("evaluations")
+        if not isinstance(evals_raw, list):
+            raise AtlaSentError(
+                "Malformed /v1/governance/evaluations response: "
+                "missing `evaluations` array",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+        return ListGovernanceEvaluationsResult(
+            evaluations=[
+                GovernanceAgentEvaluation.model_validate(e) for e in evals_raw
+            ],
+            rate_limit=rate_limit,
+        )
+
     # ── internals ─────────────────────────────────────────────
 
     async def _post(
@@ -1129,7 +1260,7 @@ class AsyncAtlaSentClient:
         await asyncio.sleep(delay)
 
 
-# ── SSE parser ─────────────────────────────────────────────────────────────────────────────────
+# ── SSE parser ─────────────────────────────────────────────────────────────────────────────────────────
 
 
 async def _parse_sse(
