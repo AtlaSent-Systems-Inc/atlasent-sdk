@@ -136,6 +136,16 @@ from .exceptions import (
     StreamParseError,
     StreamTimeoutError,
 )
+from .governance_agents import (
+    AgentEvidenceRef,
+    GovernanceAgent,
+    GovernanceAgentEvaluation,
+    GovernanceAgentFinding,
+    ListGovernanceAgentsResult,
+    ListGovernanceEvaluationsResult,
+    ListGovernanceFindingsResult,
+    highest_agent_finding_severity,
+)
 from .governance_webhooks import (
     EnforcementWebhookEvent,
     GovernanceWebhookEvent,
@@ -294,6 +304,15 @@ __all__ = [
     "GovernanceDecision",
     "AuthError",
     "EnforcementOutcome",
+    # Governance agents read surface (parity with @atlasent/sdk 2.6.0).
+    "GovernanceAgent",
+    "GovernanceAgentFinding",
+    "GovernanceAgentEvaluation",
+    "AgentEvidenceRef",
+    "ListGovernanceAgentsResult",
+    "ListGovernanceFindingsResult",
+    "ListGovernanceEvaluationsResult",
+    "highest_agent_finding_severity",
     # HITL orchestration surface (parity with the TS SDK).
     "HitlApprovalRecord",
     "HitlApprovalsResult",

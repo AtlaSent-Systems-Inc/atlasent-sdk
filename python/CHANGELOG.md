@@ -1,5 +1,51 @@
 # Changelog
 
+## 2.5.0 -- 2026-05-22 -- governance agents read surface (parity with @atlasent/sdk 2.6.0)
+
+### Added
+
+- **`python/atlasent/governance_agents.py`** -- new module with Pydantic
+  models ported from `typescript/src/governanceAgents.ts` (source of truth):
+  - `GovernanceAgent` -- advisory agent registry entry.
+    `authority_class == "advisory"` and `can_authorize == False` are
+    structural invariants; the DB enforces them with a CHECK constraint.
+  - `GovernanceAgentFinding` -- finding emitted by an agent run.
+    `can_authorize == False` enforced the same way.
+  - `GovernanceAgentEvaluation` -- agent run record (status, timings,
+    findings count).
+  - `AgentEvidenceRef` -- evidence artifact reference inside a finding.
+  - Result dataclasses: `ListGovernanceAgentsResult`,
+    `ListGovernanceFindingsResult`, `ListGovernanceEvaluationsResult`.
+  - `highest_agent_finding_severity(findings)` -- helper that returns
+    the highest severity string across a finding list
+    (`blocker` > `high` > `medium` > `low` > `info`).
+
+- **`AtlaSentClient.list_governance_agents()`** --
+  `GET /v1/governance/agents`. Returns all advisory agents for the
+  calling org.
+
+- **`AtlaSentClient.list_governance_findings(*, change_id, agent_slug=None)`** --
+  `GET /v1/governance/findings?change_id=...`. Returns findings for a
+  governed change; optional `agent_slug` filter.
+
+- **`AtlaSentClient.list_governance_evaluations(*, change_id, agent_slug=None)`** --
+  `GET /v1/governance/evaluations?change_id=...`. Returns run records
+  for a governed change; optional `agent_slug` filter.
+
+- **`AsyncAtlaSentClient`** gains the same three methods as async parity.
+
+- All seven types + helper re-exported from the `atlasent` top-level
+  namespace and added to `__all__`.
+
+### Doctrine
+
+- Governance agents are **advisory-only**. No invocation endpoint is
+  exposed in the SDK -- CI invocation is `atlasent-action`'s job (the
+  `governance-agents` mode). The SDK surfaces only the read side.
+- `can_authorize` is a literal `False` on both `GovernanceAgent` and
+  `GovernanceAgentFinding` models, matching the TS SDK's
+  `can_authorize: false` (not `boolean`).
+
 ## [unreleased] — 2026-05-18
 
 ### Platform-generation reframing (doc-only, no code change)
@@ -10,7 +56,7 @@ Mirrors the umbrella reframing in [`atlasent/CHANGELOG.md`](https://github.com/A
 
 ### Added
 
-- **Contract test for ADR-0002 invariant I-6** — `tests/test_policy_mutation_guard.py`
+- **Contract test for ADR-0002 invariant I-6** -- `tests/test_policy_mutation_guard.py`
   scans `AtlaSentClient` and `AsyncAtlaSentClient` and fails CI if any
   method matches a governance-policy mutation shape. Test-only; no API
   surface change. See `atlasent-internal/architecture/ADR-0002` and
@@ -20,14 +66,14 @@ Mirrors the umbrella reframing in [`atlasent/CHANGELOG.md`](https://github.com/A
 
 ### Added
 
-- **`PRODUCTION_DEPLOY_ACTION` constant** — exported from `atlasent`
+- **`PRODUCTION_DEPLOY_ACTION` constant** -- exported from `atlasent`
   (value `"production.deploy"`). The new V1 canonical Deploy Gate
   action string, mirroring the TypeScript SDK's
   `PRODUCTION_DEPLOY_ACTION`.
 
 ### Changed
 
-- **All quickstart examples and docstrings now use `"production.deploy"`** —
+- **All quickstart examples and docstrings now use `"production.deploy"`** --
   top-level `README.md`, `python/README.md`, `python/examples/protect.py`,
   and the docstrings in `atlasent/__init__.py`, `atlasent/client.py`,
   `atlasent/async_client.py`, `atlasent/with_permit.py`, and
@@ -57,12 +103,12 @@ distinct lifecycle. New code should pick one:
 ### Deprecated
 
 - `atlasent.authorize()` and `AtlaSentClient.authorize()` /
-  `AsyncAtlaSentClient.authorize()` — the data-not-exception variant
+  `AsyncAtlaSentClient.authorize()` -- the data-not-exception variant
   (returns `permitted: bool`). Migrate to `protect()` for
   fail-closed execution, or `evaluate()` to inspect the
   four-value decision.
 - `atlasent.gate()` and `AtlaSentClient.gate()` /
-  `AsyncAtlaSentClient.gate()` — evaluate + verify in one call,
+  `AsyncAtlaSentClient.gate()` -- evaluate + verify in one call,
   returning an inspectable `GateResult`. Migrate to `protect()`
   for fail-closed execution, or `evaluate()` + `verify()` for the
   two-step inspectable shape.
@@ -86,10 +132,10 @@ Same shapes / semantics as the sync versions; documented as parity.
 
 ### Async deprecations
 
-- `AsyncAtlaSentClient.revoke_permit()` — legacy
+- `AsyncAtlaSentClient.revoke_permit()` -- legacy
   `POST /v1-revoke-permit`. Emits `DeprecationWarning`. Migrate to
   `revoke_permit_by_id()`.
-- `AsyncAtlaSentClient.verify()` — legacy
+- `AsyncAtlaSentClient.verify()` -- legacy
   `POST /v1-verify-permit`. Emits `DeprecationWarning`. Migrate to
   `verify_permit_by_id()`.
 
@@ -98,12 +144,12 @@ deprecation state from this same release.
 
 ### Added — canonical REST migration for revoke / verify
 
-- `AtlaSentClient.revoke_permit_by_id(permit_id, *, reason=None)` —
+- `AtlaSentClient.revoke_permit_by_id(permit_id, *, reason=None)` --
   calls `POST /v1/permits/{id}/revoke`. Returns the full updated
   `PermitRecord` with `status == 'revoked'` and `revoked_at` /
   `revoked_by` / `revoke_reason` populated, instead of the legacy
   `{revoked, permit_id}` envelope.
-- `AtlaSentClient.verify_permit_by_id(permit_id)` — calls
+- `AtlaSentClient.verify_permit_by_id(permit_id)` -- calls
   `POST /v1/permits/{id}/verify`. Returns the unified verification
   envelope (`valid`, `verification_type='permit'`, `reason`,
   `verified_at`, `evidence`) plus the full `PermitRecord` preserved
@@ -113,10 +159,10 @@ deprecation state from this same release.
 
 ### Deprecated
 
-- `AtlaSentClient.revoke_permit()` and `RevokePermitResult` — legacy
+- `AtlaSentClient.revoke_permit()` and `RevokePermitResult` -- legacy
   `POST /v1-revoke-permit` (token-in-body). Migrate to
   `revoke_permit_by_id()`. Emits `DeprecationWarning` on use.
-- `AtlaSentClient.verify()` and `VerifyResult` — legacy
+- `AtlaSentClient.verify()` and `VerifyResult` -- legacy
   `POST /v1-verify-permit` (token-in-body). Migrate to
   `verify_permit_by_id()`. Emits `DeprecationWarning` on use.
 
@@ -125,14 +171,14 @@ The legacy methods continue to work for the rest of the
 
 ### Added — permit observability surface
 
-- `AtlaSentClient.get_permit(permit_id)` — calls the canonical
+- `AtlaSentClient.get_permit(permit_id)` -- calls the canonical
   `GET /v1/permits/{permit_id}` REST endpoint. Returns
   `GetPermitResult(permit: PermitRecord, rate_limit)` with full
   lifecycle state (status, all timestamps, `revoked_at` /
   `revoked_by` / `revoke_reason`, bound `payload_hash` /
   `decision_id`).
 - `AtlaSentClient.list_permits(status=, actor_id=, action_type=, from_=, to=, limit=, cursor=)`
-  — calls `GET /v1/permits` with cursor pagination.
+  -- calls `GET /v1/permits` with cursor pagination.
 - New types: `PermitRecord`, `GetPermitResult`, `ListPermitsResult`.
 
 ### Notes
@@ -152,8 +198,8 @@ The legacy methods continue to work for the rest of the
 > `atlasent-api`. **That caveat was wrong.** The deployed entry is a
 > thin shim that delegates to `handleEvaluate`, where the new gates
 > were wired (atlasent-api PRs #291 / #294 / #296). The split was
-> already collapsed by `4e502ae` on 2026-05-03 — before the
-> approval-artifact phase started — so the new gates are enforced
+> already collapsed by `4e502ae` on 2026-05-03 -- before the
+> approval-artifact phase started -- so the new gates are enforced
 > on the deployed entry today. See
 > `atlasent-api/docs/adr/ADR-evaluate-path.md` (Status: **Resolved**)
 > for the design record and the regression test that locks the shim
@@ -162,7 +208,7 @@ The legacy methods continue to work for the rest of the
 ### Added
 
 - `ApprovalQuorumV1`, `QuorumPolicy`, `QuorumRoleRequirement`,
-  `QuorumIndependence`, `QuorumProof` — Pydantic mirrors of the
+  `QuorumIndependence`, `QuorumProof` -- Pydantic mirrors of the
   wire-stable `approval_quorum.v1` schema published in
   `contract/schemas/approval-quorum.schema.json` and the TS SDK.
   Re-exported from `atlasent.*`. All `extra="forbid"`.
@@ -191,16 +237,16 @@ every binding) before quorum-level policy is evaluated.
 ### Added
 
 - `IdentityAssertionV1`, `IdentityAssertionBinding`, `IdentityIssuer`,
-  `IdentitySubject` — Pydantic mirrors of the wire-stable
+  `IdentitySubject` -- Pydantic mirrors of the wire-stable
   `identity_assertion.v1` schema published in
   `contract/schemas/identity-assertion.schema.json` and the TS SDK.
   Re-exported from `atlasent.*`.
-- `IdentityIssuerKey` + `IdentityTrustedIssuersConfig` — Pydantic
+- `IdentityIssuerKey` + `IdentityTrustedIssuersConfig` -- Pydantic
   shape of the `IDENTITY_TRUSTED_ISSUERS` env var, the second trust
   root the verifier consults (independent of
   `APPROVAL_TRUSTED_ISSUERS`). Includes `allowed_roles` and
   `allowed_environments` issuer-scope fields.
-- `ApprovalArtifactV1.identity_assertion` (optional) — the artifact
+- `ApprovalArtifactV1.identity_assertion` (optional) -- the artifact
   may now carry an independently-signed identity assertion. Required
   on the wire whenever `/v1-evaluate` calls the verifier with
   `requireIdentityAssertion: true` (i.e. when human approval is
@@ -210,7 +256,7 @@ every binding) before quorum-level policy is evaluated.
 
 ### No new behavior
 
-This release is contract parity only — no client-side enforcement
+This release is contract parity only -- no client-side enforcement
 was added. The verifier remains in the Deno edge functions; the
 Python SDK only carries the assertion. Quorum / multi-approval is
 explicitly out of scope.
@@ -220,35 +266,35 @@ explicitly out of scope.
 ### Added
 
 - `ApprovalArtifactV1`, `ApprovalReviewer`, `ApprovalIssuer`,
-  `ApprovalReference`, `PermitApprovalBinding`, `PrincipalKind` —
+  `ApprovalReference`, `PermitApprovalBinding`, `PrincipalKind` --
   Pydantic mirrors of the wire-stable types published in
   `contract/schemas/approval-artifact.schema.json` and the TS SDK
   (`approvalArtifact.ts`). Re-exported from `atlasent.*`.
-- `ApprovalTrustedIssuersConfig` + `TrustedIssuerKey` — Pydantic
+- `ApprovalTrustedIssuersConfig` + `TrustedIssuerKey` -- Pydantic
   shape of the `APPROVAL_TRUSTED_ISSUERS` env var read server-side
   by `/v1-evaluate`. Server config only; the SDK exposes the model
   so operators can construct / lint / round-trip the JSON in CI.
   Includes the `allowed_action_types`, `allowed_environments`, and
   `required_role` issuer-scope fields.
 - `EvaluateRequest.approval` (`ApprovalReference`) and
-  `EvaluateRequest.require_approval` — carried on
+  `EvaluateRequest.require_approval` -- carried on
   `POST /v1-evaluate` so callers can submit a signed approval and
   hard-assert the gate even when the action_type-prefix heuristic
   doesn't match server-side.
-- `EvaluateRequest.resource_id` and `EvaluateRequest.amount` —
+- `EvaluateRequest.resource_id` and `EvaluateRequest.amount` --
   documented inputs to the canonical action hash that approval
   artifacts cover.
-- `EvaluateResult.permit_approval` (`PermitApprovalBinding`) —
+- `EvaluateResult.permit_approval` (`PermitApprovalBinding`) --
   surfaces the cryptographic linkage minted at issuance. Populates
   from BOTH wire shapes the server may emit: `permit.approval`
   nested per PermitV2 (atlasent-console) and top-level
   `permit_approval` (atlasent-api).
-- `VerifyRequest.require_approval` — caller assertion that the
+- `VerifyRequest.require_approval` -- caller assertion that the
   consume must produce a permit row with a populated approval
   binding; missing binding triggers `APPROVAL_LINKAGE_MISSING`.
-- `VerifyResult.consumed` and `VerifyResult.approval` — surface
+- `VerifyResult.consumed` and `VerifyResult.approval` -- surface
   whether the atomic consume burned the permit (critically `True`
-  on `APPROVAL_LINKAGE_MISSING` — the permit is gone, do not retry)
+  on `APPROVAL_LINKAGE_MISSING` -- the permit is gone, do not retry)
   and the persisted approval binding.
 - `AtlaSentClient.evaluate(...)` and `AsyncAtlaSentClient.evaluate(...)`
   gained `resource_id`, `amount`, `approval`, `require_approval`
@@ -256,7 +302,7 @@ explicitly out of scope.
 - `AtlaSentClient.verify(...)` and `AsyncAtlaSentClient.verify(...)`
   gained `require_approval` kwarg.
 - 28 new tests in `tests/test_approval_artifact.py` mirror the
-  TS-SDK vector suite — all eight contract fixtures
+  TS-SDK vector suite -- all eight contract fixtures
   (`valid`, `expired`, `wrong-hash`, `agent-reviewer`,
   `missing-role`, `untrusted-issuer`, `wrong-signature`, `replay`)
   load via `ApprovalArtifactV1`; wire-shape parity checks for
@@ -265,7 +311,7 @@ explicitly out of scope.
 
 ### No new behavior
 
-This release is contract parity only — no server-side semantics or
+This release is contract parity only -- no server-side semantics or
 client-side enforcement was added. The verifier remains in the Deno
 edge functions; the Python SDK only carries the artifact and surfaces
 the binding on responses. Identity attestation and quorum are
@@ -285,7 +331,7 @@ deployed `atlasent-api/.../v1-{evaluate,verify-permit}/handler.ts`:
 - `POST /v1-verify-permit` body is `{ permit_token, action_type,
   actor_id }` (previously `{ decision_id, action, agent, context,
   api_key }`).
-- `api_key` is no longer echoed in the request body — the server
+- `api_key` is no longer echoed in the request body -- the server
   reads it from the `Authorization: Bearer ...` header (which the
   client has always sent).
 
@@ -320,14 +366,14 @@ handler.ts entry.
 ### Added — canonical attributes on result objects
 
 - `EvaluateResult.decision`: `Literal["allow", "deny", "hold",
-  "escalate"]` — replaces the bool that used to live under the same
+  "escalate"]` -- replaces the bool that used to live under the same
   name. (In the fail-closed `evaluate()` surface this is always
   `"allow"` when the result is returned; the other values appear
   when constructing or parsing the model directly.)
 - `EvaluateResult.permit_token`, `request_id`, `expires_at`,
   `denial: { reason, code }`.
 - `VerifyResult.valid: bool`, `outcome: Literal["allow", "deny"]`,
-  `verify_error_code: str | None` — surface the canonical handler.ts
+  `verify_error_code: str | None` -- surface the canonical handler.ts
   shape so SDK callers can branch on `verify_error_code` (e.g.
   `PERMIT_EXPIRED`, `PERMIT_REVOKED`, `RATE_LIMITED`) without parsing
   free-form `reason` strings.
@@ -352,7 +398,7 @@ The legacy boolean is preserved on `result.permitted` (`True` iff
 The deployed verify handler does not consult the `context` field;
 the client now omits it from the wire to keep the body honest. The
 public `verify(...)` keyword argument still exists for backward
-compat with callers — it is silently dropped. PR2 will add a
+compat with callers -- it is silently dropped. PR2 will add a
 `DeprecationWarning` for non-empty `context` passed to `verify()`
 specifically.
 
@@ -381,7 +427,7 @@ enum or read `result.permitted`.
 
 ### Added
 
-- **`AtlaSentDeniedError.outcome`** — discriminator that distinguishes
+- **`AtlaSentDeniedError.outcome`** -- discriminator that distinguishes
   permit-side denial reasons (D4 of `LAST_20_EXECUTION_PLAN`).
   Populated from `/v1-verify-permit` `outcome` and typed as
   `PermitOutcome` (`permit_consumed | permit_expired | permit_revoked
@@ -389,7 +435,7 @@ enum or read `result.permitted`.
   `is_consumed`, `is_not_found` map directly to the operator runbook
   matrix in `docs/REVOCATION_RUNBOOK.md` (atlasent meta).
 
-  Pre-existing callers are unaffected — `outcome` defaults to `None`
+  Pre-existing callers are unaffected -- `outcome` defaults to `None`
   and existing kwargs are unchanged. The error message and `reason`
   field still carry the raw outcome string for log debuggability.
 
@@ -438,8 +484,8 @@ enum or read `result.permitted`.
   dataclass that wraps the raw server JSON so signature verification
   round-trips byte-for-byte (re-serializing through a pydantic model
   could reorder nested event fields and break the Ed25519 signature).
-  Convenience accessors — `result.export_id`, `result.events`,
-  `result.signature`, etc. — read from the preserved dict. A snake_case
+  Convenience accessors -- `result.export_id`, `result.events`,
+  `result.signature`, etc. -- read from the preserved dict. A snake_case
   `from_` keyword sidesteps the Python reserved word without drifting
   from the wire.
 
@@ -466,7 +512,7 @@ enum or read `result.permitted`.
 
 ### Added
 
-- **`key_self()` — API-key self-introspection.** Both `AtlaSentClient`
+- **`key_self()` -- API-key self-introspection.** Both `AtlaSentClient`
   and `AsyncAtlaSentClient` gain a `key_self()` method that calls
   `GET /v1-api-key-self` and returns the server's description of the
   key this client was constructed with:
@@ -480,13 +526,13 @@ enum or read `result.permitted`.
         #                  expires_at='2026-12-31T23:59:59Z',
         #                  rate_limit=RateLimitState(...))
 
-  Never includes the raw key or its hash — introspection is
+  Never includes the raw key or its hash -- introspection is
   intentionally read-only and safe to surface in operator dashboards.
   Useful for:
 
-    - `IP_NOT_ALLOWED` debugging — `client_ip` is the IP the server
+    - `IP_NOT_ALLOWED` debugging -- `client_ip` is the IP the server
       observed (first hop of X-Forwarded-For).
-    - Proactive expiry warnings — `expires_at` is the server-stored
+    - Proactive expiry warnings -- `expires_at` is the server-stored
       expiry (`None` means the key does not auto-expire).
     - Verifying scopes before attempting a scope-gated action.
     - "Which key am I?" in multi-tenant dashboards juggling more than
@@ -511,7 +557,7 @@ enum or read `result.permitted`.
 ### Non-breaking
 
 Purely additive. Existing `evaluate` / `verify` / `gate` / `authorize`
-/ `protect` APIs are unchanged — same signatures, same return types,
+/ `protect` APIs are unchanged -- same signatures, same return types,
 same exception taxonomy.
 
 ## 1.3.0 — 2026-04-23
@@ -540,7 +586,7 @@ same exception taxonomy.
 
   `X-RateLimit-Reset` is accepted as either unix-seconds (the
   current server convention) or ISO 8601. `rate_limit` is `None`
-  when any of the three headers is missing or unparseable — covers
+  when any of the three headers is missing or unparseable -- covers
   older server deployments and internal endpoints that skip
   per-key limits.
 
@@ -555,7 +601,7 @@ same exception taxonomy.
 Adding `rate_limit: RateLimitState | None` to `EvaluateResult` and
 `VerifyResult` is additive. Existing attribute access
 (`result.decision`, `result.permit_token`, etc.) is unchanged. No
-wire-format change — the headers have been emitted by the server
+wire-format change -- the headers have been emitted by the server
 but previously ignored by the SDK.
 
 ## 1.2.0 — 2026-04-23
@@ -566,9 +612,9 @@ but previously ignored by the SDK.
   carries the `X-Request-ID` the client sent with the failing
   request. Paste it into support tickets to correlate with
   server-side log entries. The attribute is populated on every
-  raise site — transport errors, HTTP-status errors,
+  raise site -- transport errors, HTTP-status errors,
   `RateLimitError`, `AtlaSentDenied`, and the post-response
-  malformed-body `bad_response` check — so call sites can rely on
+  malformed-body `bad_response` check -- so call sites can rely on
   it without defensive `getattr`:
 
       try:
@@ -598,14 +644,14 @@ but previously ignored by the SDK.
 
 ### Notes
 
-- Additive only — no field renames, no removed exports, no wire
+- Additive only -- no field renames, no removed exports, no wire
   format change. Drop-in for 1.1.0 callers.
 
 ## 1.1.0 — 2026-04-23
 
 ### Added
 
-- **`atlasent.protect(...)` — the one-call authorization primitive.**
+- **`atlasent.protect(...)` -- the one-call authorization primitive.**
   Fail-closed by construction: on allow, returns a verified `Permit`;
   on deny (or verification failure, transport error, auth error,
   rate limit), raises. There is no `permitted=False` return path to
@@ -632,11 +678,11 @@ but previously ignored by the SDK.
   - Method: `AtlaSentClient.protect(...)` and
     `AsyncAtlaSentClient.protect(...)`.
 
-- **`Permit` dataclass** — the return type of `protect()`. Frozen
+- **`Permit` dataclass** -- the return type of `protect()`. Frozen
   dataclass with `permit_id`, `permit_hash`, `audit_hash`, `reason`,
   `timestamp`. Mirrors the TypeScript SDK's `Permit` interface.
 
-- **`AtlaSentDeniedError`** — new exception raised exclusively by
+- **`AtlaSentDeniedError`** -- new exception raised exclusively by
   `protect()` on policy denial or permit-verification failure.
   Subclass of the existing `AtlaSentDenied`, so
   `except AtlaSentDenied:` still catches `protect()` denials;
@@ -644,18 +690,18 @@ but previously ignored by the SDK.
   denial from the older `authorize()` / `evaluate()` denial surface.
 
   Attributes:
-  - `decision: "deny" | "hold" | "escalate"` — forward-compatible
+  - `decision: "deny" | "hold" | "escalate"` -- forward-compatible
     union; only `"deny"` is emitted against today's API
-  - `evaluation_id: str` — opaque decision id (also available as
+  - `evaluation_id: str` -- opaque decision id (also available as
     the inherited `permit_token` for backward compat)
-  - `reason: str` — policy engine's explanation
-  - `audit_hash: str` — hash-chained audit-trail entry
-  - `request_id: str | None` — correlation id, when available
+  - `reason: str` -- policy engine's explanation
+  - `audit_hash: str` -- hash-chained audit-trail entry
+  - `request_id: str | None` -- correlation id, when available
 
-- **`AtlaSentDecision` type alias** — `Literal["deny", "hold",
+- **`AtlaSentDecision` type alias** -- `Literal["deny", "hold",
   "escalate"]`, exported for type-checked `match` statements.
 
-- **`examples/protect.py`** — canonical quickstart showing error
+- **`examples/protect.py`** -- canonical quickstart showing error
   handling for both `AtlaSentDeniedError` and `AtlaSentError`.
 
 ### Notes
