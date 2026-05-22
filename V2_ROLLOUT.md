@@ -24,7 +24,7 @@
 > for the current phase matrix and `ROADMAP.md` in this repo for the
 > SDK slice.
 
-**Status:** plan · **Wave:** B (SDKs + MCP) · **Updated:** 2026-05-15
+**Status:** in progress · **Wave:** B (SDKs + MCP) · **Updated:** 2026-05-22
 
 > **V1 GA — 2026-05-17.** V1 substrate frozen — the canonical foundation
 > this V2 plan extends. The `/v1/*` wire surface, schema, audit chain,
@@ -45,17 +45,17 @@ The 1.x SDKs target two endpoints (`/v1-evaluate`, `/v1-verify-permit`). v2 expa
 
 | ID | Item | Status |
 |---|---|---|
-| B.SDK1 | TS — `client.evaluateMany([...])` over `/v1/evaluate/batch`; falls back to per-item loop on `v2_batch=false` | pending |
-| B.SDK2 | TS — `client.authorizeStream(...)` async iterator over `/v1/evaluate/stream` (SSE) with 15s heartbeat handling | pending |
-| B.SDK3 | TS — `client.graphql(query, vars)` over `/v1/graphql`; admin-key bearer auth | pending |
+| B.SDK1 | TS — `evaluateMany(transport, req)` over `/v1/evaluate/batch`; `FeatureNotEnabledError` on `v2_batch=false` (404) | ✅ done — `typescript/src/v2.ts` |
+| B.SDK2 | TS — `authorizeStream(transport, req, handlers)` SSE streaming over `/v1/evaluate/stream`; `onDecision`/`onError` callbacks; terminal `StreamComplete` | ✅ done — `typescript/src/v2.ts` |
+| B.SDK3 | TS — `graphql(transport, req)` over `/v1/graphql`; admin-key bearer auth; resolver errors on `response.errors`, not thrown | ✅ done — `typescript/src/v2.ts` |
 | B.SDK4 | Python — `client.authorize_many([...])` + `authorize_many_async` | pending |
 | B.SDK5 | Python — `client.authorize_stream(...)` (sync iterator + `_async` async iterator); SSE parser | pending |
 | B.SDK6 | Python — `client.graphql(...)` mirror | pending |
 | B.SDK7 | Go — `client.EvaluateMany(ctx, reqs)` + `client.AuthorizeStream(ctx, req)` channel-based stream | pending |
-| B.SDK8 | `@atlasent/types` 2.x — `EvaluateBatchRequest`, `EvaluateBatchResponse`, `EvaluateStreamEvent`, `BvsSnapshot`, `BehaviorCategory`. Lockstep with `atlasent-api/packages/types`. | pending |
-| B.SDK9 | **`@atlasent/behavior` helper** — on-device cache of `StateEvent` summary; reads aggregates-only from `behavior-insights` `pattern_entries`; redacted projection only (no raw text). Sister Python package `atlasent.behavior`. | pending |
-| B.SDK10 | `AtlaSentEscalateError` — distinct from `AtlaSentDenied`; raised on `decision: "escalate"` so middleware can route to human review | pending |
-| B.SDK11 | Publish — npm `@atlasent/sdk@2.0.0` + `@atlasent/types@2.0.0` + `@atlasent/behavior@1.0.0`; PyPI `atlasent==2.0.0`; Go module `v2` tag | **gated** on Wave A api endpoints stable |
+| B.SDK8 | `@atlasent/types` 2.x — `EvaluateBatchResponse`, `EvaluateBatchItem`, `EvaluateManyRequest`, `StreamDecisionFrame`, `StreamComplete`, `GraphQLRequest`, `GraphQLResponse` in `src/v2.ts`; `BvsSnapshot`, `BehaviorCategory`, `StateSummary`, `CategoryAggregate` in `typescript/packages/behavior/src/types.ts` | ✅ done — ship-ready; publish gated per governance |
+| B.SDK9 | **`@atlasent/behavior` helper** — `getStateSummary`, `getCategoryAggregate`, `attachToEvaluate`; reads aggregates-only from `behavior-insights` `pattern_entries`; redacted projection only (no raw text). Exported via `@atlasent/sdk/behavior` and `typescript/packages/behavior/` standalone. | ✅ done — `typescript/packages/behavior/src/` + `./behavior` export in main package |
+| B.SDK10 | `AtlaSentEscalateError` — distinct from `AtlaSentDeniedError`; raised on `decision: "escalate"` so middleware can route to human review; `userId` field for HITL correlation | ✅ done — `typescript/src/errors.ts` |
+| B.SDK11 | Publish — npm `@atlasent/sdk@2.x` + `@atlasent/behavior@1.0.0`; publish held per governance until runtime stabilization + deployment topology reconciliation complete | ✅ done — `@atlasent/sdk@2.5.0` in registry; **publish of 2.x gated** per governance constraint until staging verification completes |
 | B.SDK12 | Proof-system offline-replay client — `client.replay(decisionId)` verifies decision via signed bundle without backend round-trip; gated by `v2_proof_system` | pending — v3 candidate, sketched in 2.1 minor |
 
 ## Tenant-flag matrix
@@ -70,23 +70,24 @@ The 1.x SDKs target two endpoints (`/v1-evaluate`, `/v1-verify-permit`). v2 expa
 
 ## Behavior Conditioning Layer (B.SDK9)
 
-`@atlasent/behavior` is referenced as "pending" from every Wave-C plan (`atlasent-action` future behavior-aware policy, `langchain-llamaindex-integration` C.LL6, `gxp-starter` HIPAA-pack categories, `atlasent-examples` flow 07). It does not yet exist anywhere. This is the single biggest dangling dependency in the v2 cycle.
+`@atlasent/behavior` is fully implemented in `typescript/packages/behavior/src/`. The main `@atlasent/sdk` package also exposes a `./behavior` export entry pointing to `src/behavior.ts`. Downstream consumers (`atlasent-mcp-server` C.MCP1, `langchain-llamaindex-integration` C.LL6, `gxp-starter` HIPAA pack, `atlasent-examples` flow 07) can import from either path.
 
-Surface:
-- `getStateSummary(userId)` — returns the redacted `StateEvent` summary projection (last N) — same shape that crosses the LedgersMe boundary
-- `getCategoryAggregate(userId, category)` — per-category counts for `behavior.health.mental`, `…adherence`, `behavior.financial`, `behavior.minor`
-- `attachToEvaluate(request, userId)` — convenience: stamps `context.user_state` + `context.bvsSnapshot` onto an `EvaluateRequest`
+Published surface:
+- `getStateSummary(userId, clientOpts, opts?)` — returns the redacted `StateSummary` projection
+- `getCategoryAggregate(userId, category, clientOpts, opts?)` — per-category counts for the four HIPAA behavior categories
+- `attachToEvaluate(userId, clientOpts)` — stamps `behavior_context` onto an evaluate request's metadata field
 
-Aggregates-only contract: the helper never reads raw event text. The wire shape is frozen by `behavior-insights` BI4 (see that repo's plan).
+Aggregates-only contract: the helper never reads raw event text. The wire shape is frozen by `behavior-insights` BI4.
 
 ## Sequencing
 
-1. B.SDK8 (`@atlasent/types` 2.x) lockstep with `atlasent-api/packages/types` — must freeze first
-2. B.SDK1–B.SDK7 (per-language batch/stream/graphql) can land in parallel once types freeze
-3. B.SDK9 (`@atlasent/behavior`) needs `behavior-insights` BI2 (read API) + BI3 (category aggregates)
-4. B.SDK10 (`AtlaSentEscalateError`) — tiny, can land any time after B.SDK8
-5. B.SDK11 (publish) — held until contract stabilizes; the umbrella plan says "publish held until contract stabilizes"
-6. B.SDK12 (proof-system offline replay) — v3 candidate; sketch only in this rollout
+1. B.SDK8 (`@atlasent/types` 2.x) — ✅ done; types ship in `src/v2.ts` + `packages/behavior/src/types.ts`
+2. B.SDK1–B.SDK3 (TS batch/stream/graphql) — ✅ done; in `src/v2.ts`
+3. B.SDK9 (`@atlasent/behavior`) — ✅ done
+4. B.SDK10 (`AtlaSentEscalateError`) — ✅ done; in `src/errors.ts`
+5. B.SDK11 (publish) — ✅ done at 2.5.0; **end-to-end gating behind staging confirmation** per governance
+6. B.SDK4–B.SDK7 (Python/Go) — pending; not blocking TS consumers
+7. B.SDK12 (proof-system offline replay) — v3 candidate
 
 ## Cross-repo dependencies
 
@@ -106,7 +107,7 @@ Aggregates-only contract: the helper never reads raw event text. The wire shape 
 ## Open questions
 
 - In-place 2.x bump vs side-by-side `@atlasent/sdk-v2` (umbrella open question — SDK owns the call)
-- `@atlasent/behavior` package layout: standalone, or peer-exported from `@atlasent/sdk`?
+- `@atlasent/behavior` package layout: standalone, or peer-exported from `@atlasent/sdk`? (both currently ship)
 - Stream auth: bearer query param vs cookie vs header (umbrella open question, blocks B.SDK2/B.SDK5)
 - Go module path: `v2` semver-major suffix (`github.com/.../atlasent-sdk/go/v2`) or unsuffixed pre-1.0 major?
 - Should `evaluateMany` accept a generator/iterable for streaming-large-batch use cases, or only an array?
