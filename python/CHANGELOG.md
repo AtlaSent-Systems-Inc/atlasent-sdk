@@ -16,9 +16,7 @@ Mirrors the umbrella reframing in [`atlasent/CHANGELOG.md`](https://github.com/A
   surface change. See `atlasent-internal/architecture/ADR-0002` and
   atlasent-sdk#230.
 
-## 2.4.0 — Unreleased (prepared 2026-05-14) — canonical Deploy Gate action: `production.deploy`
-
-> Not yet published to PyPI — the latest published release is `2.0.0`.
+## 2.4.0 — 2026-05-14 — canonical Deploy Gate action: `production.deploy`
 
 ### Added
 
@@ -188,7 +186,7 @@ Every approval inside a quorum package must first pass the locked
 single-approval verifier (artifact signature + identity assertion +
 every binding) before quorum-level policy is evaluated.
 
-## 2.2.0 — Unreleased (prepared 2026-05-05) — identity attestation contract parity
+## 2.2.0 — 2026-05-05 — identity attestation contract parity
 
 ### Added
 
@@ -217,7 +215,7 @@ was added. The verifier remains in the Deno edge functions; the
 Python SDK only carries the assertion. Quorum / multi-approval is
 explicitly out of scope.
 
-## 2.1.0 — Unreleased (prepared 2026-05-05) — approval artifact contract parity
+## 2.1.0 — 2026-05-05 — approval artifact contract parity
 
 ### Added
 
@@ -272,6 +270,8 @@ client-side enforcement was added. The verifier remains in the Deno
 edge functions; the Python SDK only carries the artifact and surfaces
 the binding on responses. Identity attestation and quorum are
 explicitly out of scope here and tracked separately.
+
+## 2.0.0 — 2026-04-30 — wire-format reconciliation (BREAKING)
 
 ## 2.0.0 — 2026-04-30 — wire-format reconciliation (BREAKING)
 

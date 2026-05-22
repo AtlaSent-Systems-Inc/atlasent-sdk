@@ -25,12 +25,9 @@ on their own schedule.
   (canonical), so an SDK upgrade ahead of an `atlasent-api` deploy still parses.
 - Both shims removed in v3.0.0. Migrate to `action_type` / `actor_id` before then.
 
-### Python (`atlasent==2.0.0`)
+### Python (`atlasent==2.2.0`)
 
-`atlasent==2.0.0` is the wire-reconciliation release published to PyPI.
-The `2.1.0` and `2.2.0` entries below are contract-parity follow-ups —
-code-complete and documented in `python/CHANGELOG.md`, but **not yet
-published to PyPI**:
+Cumulative across three releases in the 2.x line:
 
 - **2.0.0 — Wire-format reconciliation (BREAKING):** Same field renames as TS.
   Backward-compat via `validation_alias` / `AliasChoices`; legacy mirror
@@ -53,7 +50,7 @@ published to PyPI**:
 
 ```bash
 npm install @atlasent/sdk@2.0.0
-pip install atlasent==2.0.0
+pip install atlasent==2.2.0
 ```
 
 ### Breaking changes
