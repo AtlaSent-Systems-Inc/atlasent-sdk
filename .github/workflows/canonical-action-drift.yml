@@ -1,0 +1,98 @@
+name: canonical-action-drift
+
+# Drift-prevention gate (atlasent-api#720).
+#
+# Fails if the bare legacy literal `deployment.production` (not followed
+# by a dot) appears in any *.ts, *.sql, or *.md file outside the explicit
+# allowlist below.
+#
+# The canonical action is `production.deploy`; `deployment.production` is
+# the legacy alias. The SDK exports DEPLOYMENT_PRODUCTION_ACTION (deprecated)
+# so existing callers continue to work during the alias window. Only the
+# types file that exports the constant and its test file are permitted to
+# contain the bare legacy string; all other new uses are drift.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-action-drift:
+    name: canonical-action-drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for unsanctioned bare deployment.production usage
+        run: |
+          set -euo pipefail
+
+          # ── Allowlisted files ────────────────────────────────────────────
+          # These are the ONLY files permitted to contain the bare legacy
+          # literal `deployment.production` (not followed by a dot).
+          # typescript/src/types.ts exports DEPLOYMENT_PRODUCTION_ACTION
+          # (deprecated since 2.3.0) so existing callers continue to work
+          # during the V1 alias window.
+          # The CHANGELOG files document the rename and are allowlisted as
+          # historical record.
+          ALLOWLIST=(
+            # Types file — exports DEPLOYMENT_PRODUCTION_ACTION (deprecated)
+            "typescript/src/types.ts"
+            # Test file for the deploy-gate V1 example (documents the rename)
+            "typescript/test/deploy-gate-v1.test.ts"
+            # CHANGELOG entries that document the alias window
+            "typescript/CHANGELOG.md"
+            "python/CHANGELOG.md"
+          )
+
+          # ── Grep for bare deployment.production (not sub-actions) ─────────
+          HITS=$(grep -rn \
+            --include='*.ts' \
+            --include='*.sql' \
+            --include='*.md' \
+            'deployment\.production' . 2>/dev/null \
+            | grep -v 'deployment\.production\.' \
+            || true)
+
+          if [ -z "$HITS" ]; then
+            echo "No bare deployment.production hits found."
+            exit 0
+          fi
+
+          # ── Filter out allowlisted files ──────────────────────────────────
+          UNSANCTIONED=""
+          while IFS= read -r line; do
+            filepath=$(echo "$line" | cut -d: -f1 | sed 's|^\./||')
+            allowed=false
+            for allowed_file in "${ALLOWLIST[@]}"; do
+              if [ "$filepath" = "$allowed_file" ]; then
+                allowed=true
+                break
+              fi
+            done
+            if ! $allowed; then
+              UNSANCTIONED+="$line\n"
+            fi
+          done <<< "$HITS"
+
+          if [ -n "$UNSANCTIONED" ]; then
+            echo "::error::Unsanctioned bare deployment.production literal found outside the alias-window allowlist."
+            echo ""
+            echo "Hits:"
+            echo -e "$UNSANCTIONED"
+            echo ""
+            echo "To fix: update the file to use the canonical 'production.deploy' string"
+            echo "or the PRODUCTION_DEPLOY_ACTION constant from typescript/src/types.ts."
+            echo "If this file is a new alias-window helper, add it to ALLOWLIST in"
+            echo ".github/workflows/canonical-action-drift.yml and get a review."
+            exit 1
+          fi
+
+          echo "All bare deployment.production hits are within the allowlist. Gate passed."
