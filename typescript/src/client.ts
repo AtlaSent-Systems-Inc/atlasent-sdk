@@ -67,6 +67,16 @@ import {
   type RetryPolicy,
 } from "./retry.js";
 import type {
+  GovernanceAgent,
+  GovernanceAgentEvaluation,
+  GovernanceAgentFinding,
+  ListGovernanceAgentsResponse,
+  ListGovernanceEvaluationsQuery,
+  ListGovernanceEvaluationsResponse,
+  ListGovernanceFindingsQuery,
+  ListGovernanceFindingsResponse,
+} from "./governanceAgents.js";
+import type {
   HitlApprovalRecord,
   HitlApproveRequest,
   HitlChainHop,
@@ -2017,6 +2027,77 @@ export class AtlaSentClient {
       { token },
     );
     return body;
+  }
+
+  // ── Constrained governance agents (read surface) ──────────────────────────
+  //
+  // Three GETs onto the v1-governance-agents edge function. Doctrine:
+  // findings produced by these endpoints are advisory signal, never
+  // authority. There is no `runGovernanceAgent` method on this client —
+  // invocation belongs in CI (atlasent-action `governance-agents` mode),
+  // not in application code.
+
+  /**
+   * List the advisory governance-agent registry for the calling org.
+   *
+   * Calls `GET /v1/governance/agents`. The registry is reference data
+   * seeded at runtime-DB migration time; every row has
+   * `authority_class = "advisory"` and `can_authorize = false` —
+   * structural invariants enforced by the schema, not policy.
+   */
+  async listGovernanceAgents(): Promise<GovernanceAgent[]> {
+    const { body } = await this.get<ListGovernanceAgentsResponse>(
+      "/v1/governance/agents",
+    );
+    return [...(body.agents ?? [])];
+  }
+
+  /**
+   * List advisory findings emitted against one governed change.
+   *
+   * Calls `GET /v1/governance/findings?change_id=…[&agent_slug=…]`.
+   * Returns the typed-finding rows in `created_at DESC` order, including
+   * `routed_gate_id` when the finding→gate trigger linked them. Findings
+   * with `can_authorize === false` (always) are advisory; rendering them
+   * never satisfies a gate.
+   */
+  async listGovernanceFindings(
+    query: ListGovernanceFindingsQuery,
+  ): Promise<GovernanceAgentFinding[]> {
+    if (!query?.change_id) {
+      throw new AtlaSentError("change_id is required", { code: "bad_request" });
+    }
+    const params = new URLSearchParams({ change_id: query.change_id });
+    if (query.agent_slug) params.set("agent_slug", query.agent_slug);
+    const { body } = await this.get<ListGovernanceFindingsResponse>(
+      "/v1/governance/findings",
+      params,
+    );
+    return [...(body.findings ?? [])];
+  }
+
+  /**
+   * List agent run records against one governed change.
+   *
+   * Calls `GET /v1/governance/evaluations?change_id=…[&agent_slug=…]`.
+   * Returns every persisted evaluation, including `failed` / `timeout`
+   * runs and `completed` runs with zero findings — the latter is the
+   * positive signal "the agent ran and found nothing", which the UI
+   * surfaces as `clear`.
+   */
+  async listGovernanceEvaluations(
+    query: ListGovernanceEvaluationsQuery,
+  ): Promise<GovernanceAgentEvaluation[]> {
+    if (!query?.change_id) {
+      throw new AtlaSentError("change_id is required", { code: "bad_request" });
+    }
+    const params = new URLSearchParams({ change_id: query.change_id });
+    if (query.agent_slug) params.set("agent_slug", query.agent_slug);
+    const { body } = await this.get<ListGovernanceEvaluationsResponse>(
+      "/v1/governance/evaluations",
+      params,
+    );
+    return [...(body.evaluations ?? [])];
   }
 }
 

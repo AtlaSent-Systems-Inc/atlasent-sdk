@@ -742,3 +742,28 @@ export {
   type ActionBundleReceipt,
   type BuildFromActionBundleOpts,
 } from "./claimLineage.js";
+
+// ── Constrained governance agents (advisory read surface) ───────────────────
+//
+// Doctrine: evaluation ≠ authorization ≠ execution. The exports below
+// are read-only types and the rollup helper. The client methods
+// (listGovernanceAgents / listGovernanceFindings / listGovernanceEvaluations)
+// live on AtlaSentClient. There is no invocation method on the SDK —
+// running an agent is a CI concern.
+export {
+  highestAgentFindingSeverity,
+  type AgentAuthorityDomain,
+  type AgentEvaluationStatus,
+  type AgentEvidenceRef,
+  type AgentFindingSeverity,
+  type AgentInvokerKind,
+  type AgentSubjectKind,
+  type GovernanceAgent,
+  type GovernanceAgentEvaluation,
+  type GovernanceAgentFinding,
+  type ListGovernanceAgentsResponse,
+  type ListGovernanceEvaluationsQuery,
+  type ListGovernanceEvaluationsResponse,
+  type ListGovernanceFindingsQuery,
+  type ListGovernanceFindingsResponse,
+} from "./governanceAgents.js";
