@@ -208,7 +208,7 @@ def test_anomaly_off_hours_above_mean() -> None:
     result = detect_autonomous_anomaly(
         action_value=5_000,
         historical_mean_value=1_000,
-        historical_std_dev=200,
+        historical_std_dev=2_000,  # z-score = 2.0 (< 3) so off-hours branch fires
         recent_execution_count=2,
         burst_threshold=20,
         is_off_hours=True,
