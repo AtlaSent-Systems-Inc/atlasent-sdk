@@ -1,8 +1,8 @@
 # AtlaSent SDKs
 
-Execution-time authorization for AI agents and automated systems.
-Fail-closed by design — no protected action proceeds without an
-explicit, server-verified permit.
+Client SDKs for **AtlaSent execution-time authorization infrastructure** — one runtime gating protected actions across CI/CD deployment, financial close, and AI agent execution.
+
+Fail-closed by design — no protected action proceeds without an explicit, server-verified permit.
 
 > AtlaSent is **not** a feature flag platform. A flag controls
 > whether a behavior is enabled; AtlaSent controls whether an action
