@@ -35,6 +35,22 @@ from .exceptions import (
     StreamTimeoutError,
     _normalize_permit_outcome,
 )
+from .scim import (
+    SCIM_GROUP_SCHEMA,
+    SCIM_PATCH_OP_SCHEMA,
+    SCIM_USER_SCHEMA,
+    _enc as _scim_enc,
+    _scim_qs,
+)
+from .siem import (
+    _VALID_AUTH_TYPES,
+    _VALID_FORMATS,
+    _enc as _siem_enc,
+)
+from .evidence_exports import (
+    _VALID_REGIMES,
+    _enc as _ev_enc,
+)
 from .approval_artifact import ApprovalReference
 from .governance_agents import (
     AgentEvidenceRef,
@@ -1131,6 +1147,298 @@ class AsyncAtlaSentClient:
         )
 
 
+    # ── SCIM 2.0 (async) ──────────────────────────────────────
+
+    async def async_scim_list_users(
+        self,
+        org_id: str,
+        *,
+        filter: str | None = None,
+        start_index: int | None = None,
+        count: int | None = None,
+    ) -> dict[str, Any]:
+        """``GET /v1/scim/v2/{orgId}/Users`` — list provisioned users (async)."""
+        qs = _scim_qs(filter=filter, start_index=start_index, count=count)
+        return await self._do_scim("GET", f"/v1/scim/v2/{_scim_enc(org_id)}/Users{qs}")
+
+    async def async_scim_create_user(
+        self,
+        org_id: str,
+        user: dict[str, Any],
+    ) -> dict[str, Any]:
+        """``POST /v1/scim/v2/{orgId}/Users`` — provision a new user (async)."""
+        if "schemas" not in user:
+            user = {**user, "schemas": [SCIM_USER_SCHEMA]}
+        return await self._do_scim("POST", f"/v1/scim/v2/{_scim_enc(org_id)}/Users", user)
+
+    async def async_scim_get_user(
+        self,
+        org_id: str,
+        user_id: str,
+    ) -> dict[str, Any]:
+        """``GET /v1/scim/v2/{orgId}/Users/{userId}`` — fetch a user by ID (async)."""
+        return await self._do_scim(
+            "GET", f"/v1/scim/v2/{_scim_enc(org_id)}/Users/{_scim_enc(user_id)}"
+        )
+
+    async def async_scim_replace_user(
+        self,
+        org_id: str,
+        user_id: str,
+        user: dict[str, Any],
+    ) -> dict[str, Any]:
+        """``PUT /v1/scim/v2/{orgId}/Users/{userId}`` — full replacement (async)."""
+        if "schemas" not in user:
+            user = {**user, "schemas": [SCIM_USER_SCHEMA]}
+        return await self._do_scim(
+            "PUT",
+            f"/v1/scim/v2/{_scim_enc(org_id)}/Users/{_scim_enc(user_id)}",
+            user,
+        )
+
+    async def async_scim_patch_user(
+        self,
+        org_id: str,
+        user_id: str,
+        operations: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """``PATCH /v1/scim/v2/{orgId}/Users/{userId}`` — partial update (async)."""
+        body = {"schemas": [SCIM_PATCH_OP_SCHEMA], "Operations": operations}
+        return await self._do_scim(
+            "PATCH",
+            f"/v1/scim/v2/{_scim_enc(org_id)}/Users/{_scim_enc(user_id)}",
+            body,
+        )
+
+    async def async_scim_delete_user(
+        self,
+        org_id: str,
+        user_id: str,
+    ) -> None:
+        """``DELETE /v1/scim/v2/{orgId}/Users/{userId}`` — deprovision a user (async)."""
+        await self._do_scim(
+            "DELETE", f"/v1/scim/v2/{_scim_enc(org_id)}/Users/{_scim_enc(user_id)}"
+        )
+
+    async def async_scim_list_groups(
+        self,
+        org_id: str,
+        *,
+        filter: str | None = None,
+        start_index: int | None = None,
+        count: int | None = None,
+    ) -> dict[str, Any]:
+        """``GET /v1/scim/v2/{orgId}/Groups`` — list provisioned groups (async)."""
+        qs = _scim_qs(filter=filter, start_index=start_index, count=count)
+        return await self._do_scim("GET", f"/v1/scim/v2/{_scim_enc(org_id)}/Groups{qs}")
+
+    async def async_scim_create_group(
+        self,
+        org_id: str,
+        group: dict[str, Any],
+    ) -> dict[str, Any]:
+        """``POST /v1/scim/v2/{orgId}/Groups`` — create a group (async)."""
+        if "schemas" not in group:
+            group = {**group, "schemas": [SCIM_GROUP_SCHEMA]}
+        return await self._do_scim("POST", f"/v1/scim/v2/{_scim_enc(org_id)}/Groups", group)
+
+    async def async_scim_get_group(
+        self,
+        org_id: str,
+        group_id: str,
+    ) -> dict[str, Any]:
+        """``GET /v1/scim/v2/{orgId}/Groups/{groupId}`` — fetch a group by ID (async)."""
+        return await self._do_scim(
+            "GET", f"/v1/scim/v2/{_scim_enc(org_id)}/Groups/{_scim_enc(group_id)}"
+        )
+
+    async def async_scim_replace_group(
+        self,
+        org_id: str,
+        group_id: str,
+        group: dict[str, Any],
+    ) -> dict[str, Any]:
+        """``PUT /v1/scim/v2/{orgId}/Groups/{groupId}`` — full replacement (async)."""
+        if "schemas" not in group:
+            group = {**group, "schemas": [SCIM_GROUP_SCHEMA]}
+        return await self._do_scim(
+            "PUT",
+            f"/v1/scim/v2/{_scim_enc(org_id)}/Groups/{_scim_enc(group_id)}",
+            group,
+        )
+
+    async def async_scim_patch_group(
+        self,
+        org_id: str,
+        group_id: str,
+        operations: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """``PATCH /v1/scim/v2/{orgId}/Groups/{groupId}`` — add/remove members (async)."""
+        body = {"schemas": [SCIM_PATCH_OP_SCHEMA], "Operations": operations}
+        return await self._do_scim(
+            "PATCH",
+            f"/v1/scim/v2/{_scim_enc(org_id)}/Groups/{_scim_enc(group_id)}",
+            body,
+        )
+
+    async def async_scim_delete_group(
+        self,
+        org_id: str,
+        group_id: str,
+    ) -> None:
+        """``DELETE /v1/scim/v2/{orgId}/Groups/{groupId}`` — delete a group (async)."""
+        await self._do_scim(
+            "DELETE", f"/v1/scim/v2/{_scim_enc(org_id)}/Groups/{_scim_enc(group_id)}"
+        )
+
+    # ── SIEM (async) ──────────────────────────────────────────
+
+    async def async_get_siem_config(self, org_id: str) -> dict[str, Any]:
+        """``GET /v1/orgs/{orgId}/siem-config`` — fetch current SIEM config (async)."""
+        return await self._do_scim("GET", f"/v1/orgs/{_siem_enc(org_id)}/siem-config")
+
+    async def async_upsert_siem_config(
+        self,
+        org_id: str,
+        *,
+        destination_url: str,
+        format: str = "json",
+        auth_type: str = "none",
+        credential: str | None = None,
+        enabled: bool = True,
+        included_event_types: list[str] | None = None,
+        batch_size: int = 100,
+        retry_count: int = 3,
+    ) -> dict[str, Any]:
+        """``PATCH /v1/orgs/{orgId}/siem-config`` — create or update SIEM config (async).
+
+        Args:
+            org_id: AtlaSent organisation ID.
+            destination_url: HTTPS endpoint that will receive events.
+                Must start with ``https://``.
+            format: Wire format — ``"splunk_hec"``, ``"elastic_ecs"``,
+                ``"qradar_cef"``, or ``"json"``.
+            auth_type: Auth method — ``"bearer"``, ``"basic"``,
+                ``"api_key"``, or ``"none"``.
+            credential: Write-only auth secret. Omit to keep existing value.
+            enabled: Whether to stream events (default ``True``).
+            included_event_types: Event types to stream.
+            batch_size: Events per delivery batch (1–1000, default 100).
+            retry_count: Retry attempts on delivery failure (0–10, default 3).
+
+        Raises:
+            ValueError: On invalid ``format``, ``auth_type``,
+                ``destination_url``, or out-of-range numeric bounds.
+        """
+        if not destination_url.startswith("https://"):
+            raise ValueError("destination_url must be an HTTPS URL")
+        if format not in _VALID_FORMATS:
+            raise ValueError(f"format must be one of: {', '.join(sorted(_VALID_FORMATS))}")
+        if auth_type not in _VALID_AUTH_TYPES:
+            raise ValueError(
+                f"auth_type must be one of: {', '.join(sorted(_VALID_AUTH_TYPES))}"
+            )
+        if not 1 <= batch_size <= 1000:
+            raise ValueError(f"batch_size must be between 1 and 1000, got {batch_size}")
+        if not 0 <= retry_count <= 10:
+            raise ValueError(f"retry_count must be between 0 and 10, got {retry_count}")
+
+        body: dict[str, Any] = {
+            "destinationUrl": destination_url,
+            "format": format,
+            "authType": auth_type,
+            "enabled": enabled,
+            "includedEventTypes": included_event_types
+            or ["permit", "deny", "override", "governance"],
+            "batchSize": batch_size,
+            "retryCount": retry_count,
+        }
+        if credential is not None:
+            body["credential"] = credential
+
+        return await self._do_scim(
+            "PATCH", f"/v1/orgs/{_siem_enc(org_id)}/siem-config", body
+        )
+
+    async def async_siem_test_delivery(self, org_id: str) -> dict[str, Any]:
+        """``POST /v1/orgs/{orgId}/siem-exports/test`` — send a test event (async)."""
+        return await self._do_scim(
+            "POST", f"/v1/orgs/{_siem_enc(org_id)}/siem-exports/test", {}
+        )
+
+    # ── Evidence exports (async) ──────────────────────────────
+
+    async def async_list_evidence_exports(
+        self,
+        org_id: str,
+        *,
+        regime: str | None = None,
+    ) -> dict[str, Any]:
+        """``GET /v1/orgs/{orgId}/evidence-exports`` — list past evidence exports (async).
+
+        Raises:
+            ValueError: When ``regime`` is not a recognised value.
+        """
+        if regime is not None and regime not in _VALID_REGIMES:
+            raise ValueError(
+                f"regime must be one of: {', '.join(sorted(_VALID_REGIMES))}"
+            )
+        path = f"/v1/orgs/{_ev_enc(org_id)}/evidence-exports"
+        if regime is not None:
+            path = f"{path}?regime={_ev_enc(regime)}"
+        return await self._do_scim("GET", path)
+
+    async def async_get_evidence_export(
+        self,
+        org_id: str,
+        export_id: str,
+    ) -> dict[str, Any]:
+        """``GET /v1/orgs/{orgId}/evidence-exports/{exportId}`` — fetch one export (async)."""
+        return await self._do_scim(
+            "GET",
+            f"/v1/orgs/{_ev_enc(org_id)}/evidence-exports/{_ev_enc(export_id)}",
+        )
+
+    async def async_create_evidence_export(
+        self,
+        org_id: str,
+        *,
+        regime: str,
+        window: dict[str, str] | None = None,
+        bundle_id: str | None = None,
+        evidence: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """``POST /v1/orgs/{orgId}/evidence-exports`` — build and persist an evidence bundle (async).
+
+        Args:
+            org_id: AtlaSent organisation ID.
+            regime: Compliance framework — ``"soc2_type_ii"``, ``"hipaa"``,
+                or ``"gdpr"``.
+            window: Optional time window dict with ``"from"`` and/or ``"to"``
+                ISO-8601 timestamp strings.
+            bundle_id: Optional deterministic bundle UUID.
+            evidence: Optional free-form supplementary evidence dict.
+
+        Raises:
+            ValueError: When ``regime`` is not a recognised value.
+        """
+        if regime not in _VALID_REGIMES:
+            raise ValueError(
+                f"regime must be one of: {', '.join(sorted(_VALID_REGIMES))}"
+            )
+
+        body: dict[str, Any] = {"regime": regime}
+        if window is not None:
+            body["window"] = window
+        if bundle_id is not None:
+            body["bundle_id"] = bundle_id
+        if evidence is not None:
+            body.update(evidence)
+
+        return await self._do_scim(
+            "POST", f"/v1/orgs/{_ev_enc(org_id)}/evidence-exports", body
+        )
+
     # ── internals ─────────────────────────────────────────────
 
     async def _post(
@@ -1308,6 +1616,52 @@ class AsyncAtlaSentClient:
         delay = min(_RETRY_MAX_DELAY, self._retry_backoff * (2**attempt))
         logger.debug("Retrying in %.1fs… (async)", delay)
         await asyncio.sleep(delay)
+
+    async def _do_scim(
+        self,
+        method: str,
+        path: str,
+        body: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Async helper for SCIM/SIEM/evidence-export calls.
+
+        Supports all HTTP verbs (GET, POST, PUT, PATCH, DELETE).
+        Returns parsed JSON or ``None`` for 204 No Content.
+        """
+        import json as _json
+
+        url = f"{self._base_url}{path}"
+        kwargs: dict[str, Any] = {}
+        if body is not None:
+            kwargs["content"] = _json.dumps(body, separators=(",", ":")).encode()
+            kwargs["headers"] = {"Content-Type": "application/json"}
+
+        response = await self._client.request(method, url, **kwargs)
+        request_id = response.headers.get("X-Request-ID")
+        if response.status_code == 204:
+            return None
+        if response.status_code >= 400:
+            msg = None
+            try:
+                err = response.json()
+                msg = err.get("error") or err.get("message")
+            except (ValueError, AttributeError):
+                pass
+            raise AtlaSentError(
+                msg or f"{method} {path} returned {response.status_code}",
+                status_code=response.status_code,
+                code="server_error" if response.status_code >= 500 else "bad_request",
+                request_id=request_id,
+            )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise AtlaSentError(
+                f"{method} {path}: malformed JSON response",
+                status_code=response.status_code,
+                code="bad_response",
+                request_id=request_id,
+            ) from exc
 
 
 # ── SSE parser ─────────────────────────────────────────────────────────────────────────────────────────
