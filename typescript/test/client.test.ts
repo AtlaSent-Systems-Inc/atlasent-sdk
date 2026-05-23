@@ -1952,4 +1952,57 @@ describe("subscribeDecisions()", () => {
       for await (const _ of client.subscribeDecisions()) { /* empty */ }
     }).rejects.toBeInstanceOf(AtlaSentError);
   });
+
+  it("throws AtlaSentError on network error during connect", async () => {
+    const fetchImpl: FetchMock = vi.fn(async () => {
+      throw new TypeError("network failure");
+    }) as unknown as FetchMock;
+    const client = makeClient(fetchImpl);
+
+    await expect(async () => {
+      for await (const _ of client.subscribeDecisions()) { /* empty */ }
+    }).rejects.toBeInstanceOf(AtlaSentError);
+  });
+
+  it("throws AtlaSentError when response body is null", async () => {
+    const fetchImpl: FetchMock = vi.fn(async () =>
+      ({ ok: true, status: 200, body: null }) as unknown as Response,
+    ) as unknown as FetchMock;
+    const client = makeClient(fetchImpl);
+
+    await expect(async () => {
+      for await (const _ of client.subscribeDecisions()) { /* empty */ }
+    }).rejects.toBeInstanceOf(AtlaSentError);
+  });
+
+  it("throws AtlaSentError on read error mid-stream", async () => {
+    const reader = {
+      read: vi.fn().mockRejectedValue(new TypeError("connection reset")),
+      releaseLock: vi.fn(),
+    };
+    const fetchImpl: FetchMock = vi.fn(async () =>
+      ({ ok: true, status: 200, body: { getReader: () => reader } }) as unknown as Response,
+    ) as unknown as FetchMock;
+    const client = makeClient(fetchImpl);
+
+    await expect(async () => {
+      for await (const _ of client.subscribeDecisions()) { /* empty */ }
+    }).rejects.toBeInstanceOf(AtlaSentError);
+  });
+
+  it("skips malformed JSON data lines", async () => {
+    const sse = [
+      "event: evaluate.allow\ndata: {not-json}\n\n",
+      "event: session_end\ndata: {}\n\n",
+    ];
+    const fetchImpl = mockFetch(() => sseResponse(sse));
+    const client = makeClient(fetchImpl);
+
+    const events = [];
+    for await (const ev of client.subscribeDecisions()) {
+      events.push(ev);
+    }
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: "session_end" });
+  });
 });

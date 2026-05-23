@@ -857,7 +857,7 @@ export type StreamEvent = StreamDecisionEvent | StreamProgressEvent;
  * A single item in a {@link AtlaSentClient.evaluateBatch} call.
  * Same shape as {@link EvaluateRequest}.
  */
-export interface EvaluateBatchItem {
+export interface BatchEvalItem {
   /** Identifier of the calling agent. */
   agent: string;
   /** The action being authorized. */
@@ -907,7 +907,7 @@ export interface EvaluateBatchResultItem {
  * - `replayed: true` means the response was served from the idempotency
  *   cache (a prior call with the same `batchId` completed within 24 h).
  */
-export interface EvaluateBatchResponse {
+export interface BatchEvalResponse {
   /** Server-assigned (or caller-supplied) batch identifier. */
   batchId: string;
   /** Per-item results, in input order. */

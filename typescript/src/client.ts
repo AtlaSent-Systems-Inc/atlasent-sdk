@@ -35,8 +35,8 @@ import type {
   DeployGateEvidence,
   DeployGateRequest,
   DeployGateResponse,
-  EvaluateBatchItem,
-  EvaluateBatchResponse,
+  BatchEvalItem,
+  BatchEvalResponse,
   EvaluateBatchResultItem,
   EvaluatePreflightResponse,
   SubscribeDecisionsOptions,
@@ -519,9 +519,9 @@ export class AtlaSentClient {
    *   returns the cached response within 24 h (`replayed: true`).
    */
   async evaluateBatch(
-    requests: EvaluateBatchItem[],
+    requests: BatchEvalItem[],
     batchId?: string,
-  ): Promise<EvaluateBatchResponse> {
+  ): Promise<BatchEvalResponse> {
     if (!Array.isArray(requests) || requests.length === 0) {
       throw new AtlaSentError(
         "evaluateBatch: requests must be a non-empty array",
@@ -637,7 +637,7 @@ export class AtlaSentClient {
     }
 
     if (!response.ok) {
-      const code = response.status === 401 ? "unauthorized" : "server_error";
+      const code = response.status === 401 ? "invalid_api_key" : "server_error";
       throw new AtlaSentError(
         `Decisions stream returned ${response.status}`,
         { code, status: response.status },
@@ -654,7 +654,7 @@ export class AtlaSentClient {
 
     try {
       while (true) {
-        let chunk: ReadableStreamReadResult<Uint8Array>;
+        let chunk: Awaited<ReturnType<typeof reader.read>>;
         try {
           chunk = await reader.read();
         } catch (err) {
@@ -699,7 +699,7 @@ export class AtlaSentClient {
           }
 
           if (eventType === "session_end") {
-            yield { id, type: "session_end", payload: parsed };
+            yield { ...(id !== undefined ? { id } : {}), type: "session_end", payload: parsed };
             return;
           }
 
