@@ -919,3 +919,61 @@ export interface EvaluateBatchResponse {
   /** Rate-limit state from the batch response headers. */
   rateLimit: RateLimitState | null;
 }
+
+// ── Decisions stream ──────────────────────────────────────────────────────────
+
+/**
+ * Options for {@link AtlaSentClient.subscribeDecisions}.
+ */
+export interface SubscribeDecisionsOptions {
+  /**
+   * Filter to specific event types (e.g. `["evaluate.allow", "evaluate.deny"]`).
+   * Omit to receive all types.
+   */
+  types?: string[];
+  /** Filter to a specific actor ID. */
+  actorId?: string;
+  /**
+   * Resume from a prior event. Pass the `id` of the last received event.
+   * The server replays everything after that sequence position, then
+   * transitions to live polling.
+   */
+  lastEventId?: string;
+  /**
+   * Maximum session duration in seconds. The server emits `session_end`
+   * and closes after this window; the caller should reconnect with the
+   * last received `lastEventId`. Defaults to 1800 (30 min), max 3600 (1 h).
+   */
+  maxSeconds?: number;
+  /** Abort signal to cancel the stream. */
+  signal?: AbortSignal;
+}
+
+/**
+ * A single event from {@link AtlaSentClient.subscribeDecisions}.
+ *
+ * The `type` field maps to the audit-event type emitted by the server
+ * (e.g. `"evaluate.allow"`, `"evaluate.deny"`, `"permit.verified"`).
+ * `"heartbeat"` is a synthetic type emitted by the SDK — not a server
+ * event — indicating the server sent a keepalive ping.
+ * `"session_end"` signals the server-side max-seconds limit was reached;
+ * reconnect with `lastEventId` to continue.
+ */
+export interface DecisionStreamEvent {
+  /** Stable server-assigned ID. Pass as `lastEventId` to resume. */
+  id?: string;
+  /**
+   * Audit-event type, e.g. `"evaluate.allow"`, `"evaluate.deny"`,
+   * `"evaluate.hold"`, `"permit.verified"`, `"permit.revoked"`,
+   * `"heartbeat"`, `"session_end"`.
+   */
+  type: string;
+  decision?: DecisionCanonical;
+  actorId?: string;
+  resourceType?: string;
+  resourceId?: string;
+  payload?: Record<string, unknown>;
+  hash?: string;
+  previousHash?: string;
+  occurredAt?: string;
+}

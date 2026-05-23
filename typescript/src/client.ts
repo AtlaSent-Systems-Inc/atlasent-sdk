@@ -31,6 +31,7 @@ import type {
   AuditExportResult,
   ConstraintTrace,
   DecisionCanonical,
+  DecisionStreamEvent,
   DeployGateEvidence,
   DeployGateRequest,
   DeployGateResponse,
@@ -38,6 +39,7 @@ import type {
   EvaluateBatchResponse,
   EvaluateBatchResultItem,
   EvaluatePreflightResponse,
+  SubscribeDecisionsOptions,
   EvaluateRequest,
   EvaluateResponse,
   GetPermitResponse,
@@ -582,6 +584,146 @@ export class AtlaSentClient {
       ...(wire.replayed ? { replayed: wire.replayed } : {}),
       rateLimit,
     };
+  }
+
+  /**
+   * Subscribe to a live stream of decisions for this org.
+   *
+   * Wraps `GET /v1-decisions-stream`. The server emits one SSE frame
+   * per audit event and sends a heartbeat every 15 s. The session
+   * auto-closes after `maxSeconds` (default 30 min); reconnect with
+   * the last received `event.id` to resume without replaying history.
+   *
+   * ```ts
+   * const controller = new AbortController();
+   * for await (const event of client.subscribeDecisions({ signal: controller.signal })) {
+   *   if (event.type === "heartbeat") continue;
+   *   console.log(event.type, event.decision, event.actorId);
+   *   if (event.type === "session_end") break; // reconnect
+   * }
+   * ```
+   *
+   * Requires scope `audit:read`. Requires the `v2_decisions_stream`
+   * tenant feature flag (returns 404 when off).
+   */
+  async *subscribeDecisions(
+    opts: SubscribeDecisionsOptions = {},
+  ): AsyncGenerator<DecisionStreamEvent> {
+    const url = new URL(`${this.baseUrl}/v1-decisions-stream`);
+    if (opts.types?.length) url.searchParams.set("types", opts.types.join(","));
+    if (opts.actorId) url.searchParams.set("actor_id", opts.actorId);
+    if (opts.maxSeconds !== undefined) url.searchParams.set("max_seconds", String(opts.maxSeconds));
+
+    const headers: Record<string, string> = {
+      Accept: "text/event-stream",
+      Authorization: `Bearer ${this.apiKey}`,
+      "User-Agent": this.userAgent,
+    };
+    if (opts.lastEventId) headers["Last-Event-ID"] = opts.lastEventId;
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url.toString(), {
+        method: "GET",
+        headers,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      throw new AtlaSentError(
+        `Failed to connect to decisions stream: ${err instanceof Error ? err.message : String(err)}`,
+        { code: "network" },
+      );
+    }
+
+    if (!response.ok) {
+      const code = response.status === 401 ? "unauthorized" : "server_error";
+      throw new AtlaSentError(
+        `Decisions stream returned ${response.status}`,
+        { code, status: response.status },
+      );
+    }
+
+    if (!response.body) {
+      throw new AtlaSentError("Decisions stream response has no body", { code: "bad_response" });
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+
+    try {
+      while (true) {
+        let chunk: ReadableStreamReadResult<Uint8Array>;
+        try {
+          chunk = await reader.read();
+        } catch (err) {
+          if (err instanceof Error && err.name === "AbortError") return;
+          throw new AtlaSentError(
+            `Decisions stream read error: ${err instanceof Error ? err.message : String(err)}`,
+            { code: "network" },
+          );
+        }
+        if (chunk.done) break;
+
+        buf += decoder.decode(chunk.value, { stream: true });
+        const rawBlocks = buf.split("\n\n");
+        buf = rawBlocks.pop() ?? "";
+
+        for (const block of rawBlocks) {
+          if (!block.trim()) continue;
+
+          // SSE comment / heartbeat line (": …")
+          if (block.trimStart().startsWith(":")) {
+            yield { type: "heartbeat" };
+            continue;
+          }
+
+          let id: string | undefined;
+          let eventType = "audit_event";
+          let dataLine = "";
+
+          for (const line of block.split("\n")) {
+            if (line.startsWith("id:")) id = line.slice(3).trim();
+            else if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataLine = line.slice(5).trim();
+          }
+
+          if (!dataLine) continue;
+
+          let parsed: Record<string, unknown>;
+          try {
+            parsed = JSON.parse(dataLine) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+
+          if (eventType === "session_end") {
+            yield { id, type: "session_end", payload: parsed };
+            return;
+          }
+
+          const decision = typeof parsed.decision === "string"
+            ? parsed.decision.toLowerCase() as DecisionCanonical
+            : undefined;
+
+          yield {
+            ...(id !== undefined ? { id } : {}),
+            type: eventType,
+            ...(decision ? { decision } : {}),
+            ...(typeof parsed.actor_id === "string" ? { actorId: parsed.actor_id } : {}),
+            ...(typeof parsed.resource_type === "string" ? { resourceType: parsed.resource_type } : {}),
+            ...(typeof parsed.resource_id === "string" ? { resourceId: parsed.resource_id } : {}),
+            ...(parsed.payload && typeof parsed.payload === "object" ? { payload: parsed.payload as Record<string, unknown> } : {}),
+            ...(typeof parsed.hash === "string" ? { hash: parsed.hash } : {}),
+            ...(typeof parsed.previous_hash === "string" ? { previousHash: parsed.previous_hash } : {}),
+            ...(typeof parsed.occurred_at === "string" ? { occurredAt: parsed.occurred_at } : {}),
+          } satisfies DecisionStreamEvent;
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   /**

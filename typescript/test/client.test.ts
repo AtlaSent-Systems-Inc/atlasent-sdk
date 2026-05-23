@@ -1861,3 +1861,95 @@ describe("evaluateBatch()", () => {
     expect(result.replayed).toBe(true);
   });
 });
+
+// ── subscribeDecisions ─────────────────────────────────────────────────────
+
+function sseResponse(frames: string[]): Response {
+  const body = frames.join("");
+  return new Response(body, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
+describe("subscribeDecisions()", () => {
+  it("yields typed events from SSE frames", async () => {
+    const sse = [
+      "id: evt_1\nevent: evaluate.allow\ndata: {\"decision\":\"allow\",\"actor_id\":\"bot\",\"resource_type\":\"deploy\",\"occurred_at\":\"2026-05-23T08:00:00Z\"}\n\n",
+      "id: evt_2\nevent: evaluate.deny\ndata: {\"decision\":\"deny\",\"actor_id\":\"bot2\"}\n\n",
+      "event: session_end\ndata: {\"reason\":\"max_seconds_reached\"}\n\n",
+    ];
+    const fetchImpl = mockFetch(() => sseResponse(sse));
+    const client = makeClient(fetchImpl);
+
+    const events = [];
+    for await (const ev of client.subscribeDecisions()) {
+      events.push(ev);
+    }
+
+    expect(events).toHaveLength(3);
+    expect(events[0]).toMatchObject({ id: "evt_1", type: "evaluate.allow", decision: "allow", actorId: "bot" });
+    expect(events[1]).toMatchObject({ id: "evt_2", type: "evaluate.deny", decision: "deny" });
+    expect(events[2]).toMatchObject({ type: "session_end" });
+  });
+
+  it("yields heartbeat for SSE comment lines", async () => {
+    const sse = [
+      ": keep-alive\n\n",
+      "event: session_end\ndata: {}\n\n",
+    ];
+    const fetchImpl = mockFetch(() => sseResponse(sse));
+    const client = makeClient(fetchImpl);
+
+    const events = [];
+    for await (const ev of client.subscribeDecisions()) {
+      events.push(ev);
+    }
+
+    expect(events[0]).toMatchObject({ type: "heartbeat" });
+    expect(events[1]).toMatchObject({ type: "session_end" });
+  });
+
+  it("passes types and actor_id as query params", async () => {
+    let capturedUrl = "";
+    const fetchImpl = mockFetch((url) => {
+      capturedUrl = url;
+      return sseResponse(["event: session_end\ndata: {}\n\n"]);
+    });
+    const client = makeClient(fetchImpl);
+
+    for await (const _ of client.subscribeDecisions({
+      types: ["evaluate.allow", "evaluate.deny"],
+      actorId: "deploy-bot",
+    })) { break; }
+
+    expect(capturedUrl).toContain("types=evaluate.allow%2Cevaluate.deny");
+    expect(capturedUrl).toContain("actor_id=deploy-bot");
+  });
+
+  it("sends Last-Event-ID header when lastEventId is supplied", async () => {
+    let capturedHeaders: Record<string, string> = {};
+    const fetchImpl: FetchMock = vi.fn(async (_input, init) => {
+      for (const [k, v] of Object.entries((init?.headers ?? {}) as Record<string, string>)) {
+        capturedHeaders[k.toLowerCase()] = v;
+      }
+      return sseResponse(["event: session_end\ndata: {}\n\n"]);
+    }) as unknown as FetchMock;
+    const client = makeClient(fetchImpl);
+
+    for await (const _ of client.subscribeDecisions({ lastEventId: "evt_42" })) { break; }
+
+    expect(capturedHeaders["last-event-id"]).toBe("evt_42");
+  });
+
+  it("throws AtlaSentError on 401", async () => {
+    const fetchImpl = mockFetch(() =>
+      new Response("{}", { status: 401, headers: { "Content-Type": "application/json" } }),
+    );
+    const client = makeClient(fetchImpl);
+
+    await expect(async () => {
+      for await (const _ of client.subscribeDecisions()) { /* empty */ }
+    }).rejects.toBeInstanceOf(AtlaSentError);
+  });
+});
