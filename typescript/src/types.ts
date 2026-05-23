@@ -850,3 +850,130 @@ export interface StreamProgressEvent {
 
 /** Union of all events yielded by {@link AtlaSentClient.protectStream}. */
 export type StreamEvent = StreamDecisionEvent | StreamProgressEvent;
+
+// ── Batch evaluate ────────────────────────────────────────────────────────────
+
+/**
+ * A single item in a {@link AtlaSentClient.evaluateBatch} call.
+ * Same shape as {@link EvaluateRequest}.
+ */
+export interface BatchEvalItem {
+  /** Identifier of the calling agent. */
+  agent: string;
+  /** The action being authorized. */
+  action: string;
+  /** Arbitrary policy context. */
+  context?: Record<string, unknown>;
+}
+
+/**
+ * Per-item result in an {@link EvaluateBatchResponse}.
+ *
+ * Success items carry `decision`, `decisionId`, `permitToken`, `auditHash`,
+ * and `timestamp`. Error items (when the per-item RPC layer failed) carry
+ * only `index`, `error`, and optionally `message`.
+ */
+export interface EvaluateBatchResultItem {
+  /** 0-based position matching the input order. */
+  index: number;
+  /**
+   * Policy decision for this item. Present on success items.
+   * `"allow"`, `"deny"`, `"hold"`, or `"escalate"`.
+   */
+  decision?: DecisionCanonical;
+  /** Server-assigned permit / decision identifier. */
+  decisionId?: string;
+  /** Opaque permit token (allow decisions only). Pass to verifyPermit(). */
+  permitToken?: string | null;
+  /** Machine-readable denial / hold reason. */
+  reason?: string;
+  /** Hash-chained audit-trail entry. */
+  auditHash?: string;
+  /** ISO-8601 decision timestamp. */
+  timestamp?: string;
+  /** Error code when the item itself failed at the RPC layer. */
+  error?: string;
+  /** Human-readable detail when `error` is set. */
+  message?: string;
+}
+
+/**
+ * Response from {@link AtlaSentClient.evaluateBatch}.
+ *
+ * - `items` is in the same order as the input `requests` array.
+ * - `partial: true` means at least one item errored at the RPC layer
+ *   (not a policy deny — those are surfaced via `decision: "deny"` on
+ *   the item). Check `item.error` on items without a `decision`.
+ * - `replayed: true` means the response was served from the idempotency
+ *   cache (a prior call with the same `batchId` completed within 24 h).
+ */
+export interface BatchEvalResponse {
+  /** Server-assigned (or caller-supplied) batch identifier. */
+  batchId: string;
+  /** Per-item results, in input order. */
+  items: EvaluateBatchResultItem[];
+  /** `true` when at least one item failed at the RPC layer. */
+  partial: boolean;
+  /** `true` when served from the idempotency cache. */
+  replayed?: boolean;
+  /** Rate-limit state from the batch response headers. */
+  rateLimit: RateLimitState | null;
+}
+
+// ── Decisions stream ──────────────────────────────────────────────────────────
+
+/**
+ * Options for {@link AtlaSentClient.subscribeDecisions}.
+ */
+export interface SubscribeDecisionsOptions {
+  /**
+   * Filter to specific event types (e.g. `["evaluate.allow", "evaluate.deny"]`).
+   * Omit to receive all types.
+   */
+  types?: string[];
+  /** Filter to a specific actor ID. */
+  actorId?: string;
+  /**
+   * Resume from a prior event. Pass the `id` of the last received event.
+   * The server replays everything after that sequence position, then
+   * transitions to live polling.
+   */
+  lastEventId?: string;
+  /**
+   * Maximum session duration in seconds. The server emits `session_end`
+   * and closes after this window; the caller should reconnect with the
+   * last received `lastEventId`. Defaults to 1800 (30 min), max 3600 (1 h).
+   */
+  maxSeconds?: number;
+  /** Abort signal to cancel the stream. */
+  signal?: AbortSignal;
+}
+
+/**
+ * A single event from {@link AtlaSentClient.subscribeDecisions}.
+ *
+ * The `type` field maps to the audit-event type emitted by the server
+ * (e.g. `"evaluate.allow"`, `"evaluate.deny"`, `"permit.verified"`).
+ * `"heartbeat"` is a synthetic type emitted by the SDK — not a server
+ * event — indicating the server sent a keepalive ping.
+ * `"session_end"` signals the server-side max-seconds limit was reached;
+ * reconnect with `lastEventId` to continue.
+ */
+export interface DecisionStreamEvent {
+  /** Stable server-assigned ID. Pass as `lastEventId` to resume. */
+  id?: string;
+  /**
+   * Audit-event type, e.g. `"evaluate.allow"`, `"evaluate.deny"`,
+   * `"evaluate.hold"`, `"permit.verified"`, `"permit.revoked"`,
+   * `"heartbeat"`, `"session_end"`.
+   */
+  type: string;
+  decision?: DecisionCanonical;
+  actorId?: string;
+  resourceType?: string;
+  resourceId?: string;
+  payload?: Record<string, unknown>;
+  hash?: string;
+  previousHash?: string;
+  occurredAt?: string;
+}

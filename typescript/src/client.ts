@@ -30,10 +30,16 @@ import type {
   AuditExportRequest,
   AuditExportResult,
   ConstraintTrace,
+  DecisionCanonical,
+  DecisionStreamEvent,
   DeployGateEvidence,
   DeployGateRequest,
   DeployGateResponse,
+  BatchEvalItem,
+  BatchEvalResponse,
+  EvaluateBatchResultItem,
   EvaluatePreflightResponse,
+  SubscribeDecisionsOptions,
   EvaluateRequest,
   EvaluateResponse,
   GetPermitResponse,
@@ -298,6 +304,26 @@ interface EvaluateWire {
   timestamp?: string;
 }
 
+interface EvaluateBatchWireItem {
+  index: number;
+  decision?: string;
+  decision_id?: string;
+  permit_token?: string | null;
+  reason?: string | null;
+  audit_entry_hash?: string;
+  timestamp?: string;
+  error?: string;
+  message?: string;
+  status?: number;
+}
+
+interface EvaluateBatchWire {
+  batch_id: string;
+  items: EvaluateBatchWireItem[];
+  partial?: boolean;
+  replayed?: boolean;
+}
+
 function deployGateEvidence(input: {
   permitId?: string;
   permitHash?: string;
@@ -469,6 +495,235 @@ export class AtlaSentClient {
       timestamp: wire.timestamp ?? "",
       rateLimit,
     };
+  }
+
+  /**
+   * Batch evaluate — send up to 100 decisions in a single round-trip.
+   *
+   * Wraps `POST /v1-evaluate-batch`. The server evaluates each item
+   * against the active policy bundle and returns results in the same
+   * order as the input. One rate-limit token is consumed for the
+   * whole batch, and one audit-chain entry lists every included
+   * decision id.
+   *
+   * A per-item policy `deny` is **not** thrown — it appears as
+   * `item.decision === "deny"` in the returned items. A whole-batch
+   * network error, 4xx, or 5xx throws {@link AtlaSentError}.
+   *
+   * Requires the `v2_batch` tenant feature flag to be enabled on the
+   * org (returns 404 when off). Requires scope `evaluate:write`.
+   *
+   * @param requests - 1–100 evaluate items.
+   * @param batchId  - Optional caller-supplied UUID for idempotency.
+   *   A retried call with the same `batchId` and identical items
+   *   returns the cached response within 24 h (`replayed: true`).
+   */
+  async evaluateBatch(
+    requests: BatchEvalItem[],
+    batchId?: string,
+  ): Promise<BatchEvalResponse> {
+    if (!Array.isArray(requests) || requests.length === 0) {
+      throw new AtlaSentError(
+        "evaluateBatch: requests must be a non-empty array",
+        { code: "bad_request" },
+      );
+    }
+    if (requests.length > 100) {
+      throw new AtlaSentError(
+        `evaluateBatch: requests.length ${requests.length} exceeds the 100-item cap`,
+        { code: "bad_request" },
+      );
+    }
+
+    const wireItems = requests.map((r) => ({
+      action_type: r.action,
+      actor_id: r.agent,
+      context: r.context ?? {},
+    }));
+
+    const wireBody: Record<string, unknown> = { items: wireItems };
+    if (batchId) wireBody.batch_id = batchId;
+
+    const { body: wire, rateLimit } = await this.post<EvaluateBatchWire>(
+      "/v1-evaluate-batch",
+      wireBody,
+    );
+
+    const items: EvaluateBatchResultItem[] = (wire.items ?? []).map(
+      (item: EvaluateBatchWireItem) => {
+        const rawDecision = typeof item.decision === "string"
+          ? item.decision.toLowerCase()
+          : undefined;
+        const decision = (
+          rawDecision === "allow" ||
+          rawDecision === "deny" ||
+          rawDecision === "hold" ||
+          rawDecision === "escalate"
+            ? rawDecision
+            : undefined
+        ) as DecisionCanonical | undefined;
+
+        return {
+          index: item.index,
+          ...(decision !== undefined ? { decision } : {}),
+          ...(item.decision_id ? { decisionId: item.decision_id } : {}),
+          ...(item.permit_token != null ? { permitToken: item.permit_token } : {}),
+          ...(item.reason != null ? { reason: item.reason } : {}),
+          ...(item.audit_entry_hash ? { auditHash: item.audit_entry_hash } : {}),
+          ...(item.timestamp ? { timestamp: item.timestamp } : {}),
+          ...(item.error ? { error: item.error } : {}),
+          ...(item.message ? { message: item.message } : {}),
+        } satisfies EvaluateBatchResultItem;
+      },
+    );
+
+    return {
+      batchId: wire.batch_id,
+      items,
+      partial: wire.partial ?? false,
+      ...(wire.replayed ? { replayed: wire.replayed } : {}),
+      rateLimit,
+    };
+  }
+
+  /**
+   * Subscribe to a live stream of decisions for this org.
+   *
+   * Wraps `GET /v1-decisions-stream`. The server emits one SSE frame
+   * per audit event and sends a heartbeat every 15 s. The session
+   * auto-closes after `maxSeconds` (default 30 min); reconnect with
+   * the last received `event.id` to resume without replaying history.
+   *
+   * ```ts
+   * const controller = new AbortController();
+   * for await (const event of client.subscribeDecisions({ signal: controller.signal })) {
+   *   if (event.type === "heartbeat") continue;
+   *   console.log(event.type, event.decision, event.actorId);
+   *   if (event.type === "session_end") break; // reconnect
+   * }
+   * ```
+   *
+   * Requires scope `audit:read`. Requires the `v2_decisions_stream`
+   * tenant feature flag (returns 404 when off).
+   */
+  async *subscribeDecisions(
+    opts: SubscribeDecisionsOptions = {},
+  ): AsyncGenerator<DecisionStreamEvent> {
+    const url = new URL(`${this.baseUrl}/v1-decisions-stream`);
+    if (opts.types?.length) url.searchParams.set("types", opts.types.join(","));
+    if (opts.actorId) url.searchParams.set("actor_id", opts.actorId);
+    if (opts.maxSeconds !== undefined) url.searchParams.set("max_seconds", String(opts.maxSeconds));
+
+    const headers: Record<string, string> = {
+      Accept: "text/event-stream",
+      Authorization: `Bearer ${this.apiKey}`,
+      "User-Agent": this.userAgent,
+    };
+    if (opts.lastEventId) headers["Last-Event-ID"] = opts.lastEventId;
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url.toString(), {
+        method: "GET",
+        headers,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      throw new AtlaSentError(
+        `Failed to connect to decisions stream: ${err instanceof Error ? err.message : String(err)}`,
+        { code: "network" },
+      );
+    }
+
+    if (!response.ok) {
+      const code = response.status === 401 ? "invalid_api_key" : "server_error";
+      throw new AtlaSentError(
+        `Decisions stream returned ${response.status}`,
+        { code, status: response.status },
+      );
+    }
+
+    if (!response.body) {
+      throw new AtlaSentError("Decisions stream response has no body", { code: "bad_response" });
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+
+    try {
+      while (true) {
+        let chunk: Awaited<ReturnType<typeof reader.read>>;
+        try {
+          chunk = await reader.read();
+        } catch (err) {
+          if (err instanceof Error && err.name === "AbortError") return;
+          throw new AtlaSentError(
+            `Decisions stream read error: ${err instanceof Error ? err.message : String(err)}`,
+            { code: "network" },
+          );
+        }
+        if (chunk.done) break;
+
+        buf += decoder.decode(chunk.value, { stream: true });
+        const rawBlocks = buf.split("\n\n");
+        buf = rawBlocks.pop() ?? "";
+
+        for (const block of rawBlocks) {
+          if (!block.trim()) continue;
+
+          // SSE comment / heartbeat line (": …")
+          if (block.trimStart().startsWith(":")) {
+            yield { type: "heartbeat" };
+            continue;
+          }
+
+          let id: string | undefined;
+          let eventType = "audit_event";
+          let dataLine = "";
+
+          for (const line of block.split("\n")) {
+            if (line.startsWith("id:")) id = line.slice(3).trim();
+            else if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataLine = line.slice(5).trim();
+          }
+
+          if (!dataLine) continue;
+
+          let parsed: Record<string, unknown>;
+          try {
+            parsed = JSON.parse(dataLine) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+
+          if (eventType === "session_end") {
+            yield { ...(id !== undefined ? { id } : {}), type: "session_end", payload: parsed };
+            return;
+          }
+
+          const decision = typeof parsed.decision === "string"
+            ? parsed.decision.toLowerCase() as DecisionCanonical
+            : undefined;
+
+          yield {
+            ...(id !== undefined ? { id } : {}),
+            type: eventType,
+            ...(decision ? { decision } : {}),
+            ...(typeof parsed.actor_id === "string" ? { actorId: parsed.actor_id } : {}),
+            ...(typeof parsed.resource_type === "string" ? { resourceType: parsed.resource_type } : {}),
+            ...(typeof parsed.resource_id === "string" ? { resourceId: parsed.resource_id } : {}),
+            ...(parsed.payload && typeof parsed.payload === "object" ? { payload: parsed.payload as Record<string, unknown> } : {}),
+            ...(typeof parsed.hash === "string" ? { hash: parsed.hash } : {}),
+            ...(typeof parsed.previous_hash === "string" ? { previousHash: parsed.previous_hash } : {}),
+            ...(typeof parsed.occurred_at === "string" ? { occurredAt: parsed.occurred_at } : {}),
+          } satisfies DecisionStreamEvent;
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   /**
