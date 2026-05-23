@@ -30,9 +30,13 @@ import type {
   AuditExportRequest,
   AuditExportResult,
   ConstraintTrace,
+  DecisionCanonical,
   DeployGateEvidence,
   DeployGateRequest,
   DeployGateResponse,
+  EvaluateBatchItem,
+  EvaluateBatchResponse,
+  EvaluateBatchResultItem,
   EvaluatePreflightResponse,
   EvaluateRequest,
   EvaluateResponse,
@@ -298,6 +302,26 @@ interface EvaluateWire {
   timestamp?: string;
 }
 
+interface EvaluateBatchWireItem {
+  index: number;
+  decision?: string;
+  decision_id?: string;
+  permit_token?: string | null;
+  reason?: string | null;
+  audit_entry_hash?: string;
+  timestamp?: string;
+  error?: string;
+  message?: string;
+  status?: number;
+}
+
+interface EvaluateBatchWire {
+  batch_id: string;
+  items: EvaluateBatchWireItem[];
+  partial?: boolean;
+  replayed?: boolean;
+}
+
 function deployGateEvidence(input: {
   permitId?: string;
   permitHash?: string;
@@ -467,6 +491,95 @@ export class AtlaSentClient {
       reason,
       auditHash: wire.audit_hash ?? "",
       timestamp: wire.timestamp ?? "",
+      rateLimit,
+    };
+  }
+
+  /**
+   * Batch evaluate — send up to 100 decisions in a single round-trip.
+   *
+   * Wraps `POST /v1-evaluate-batch`. The server evaluates each item
+   * against the active policy bundle and returns results in the same
+   * order as the input. One rate-limit token is consumed for the
+   * whole batch, and one audit-chain entry lists every included
+   * decision id.
+   *
+   * A per-item policy `deny` is **not** thrown — it appears as
+   * `item.decision === "deny"` in the returned items. A whole-batch
+   * network error, 4xx, or 5xx throws {@link AtlaSentError}.
+   *
+   * Requires the `v2_batch` tenant feature flag to be enabled on the
+   * org (returns 404 when off). Requires scope `evaluate:write`.
+   *
+   * @param requests - 1–100 evaluate items.
+   * @param batchId  - Optional caller-supplied UUID for idempotency.
+   *   A retried call with the same `batchId` and identical items
+   *   returns the cached response within 24 h (`replayed: true`).
+   */
+  async evaluateBatch(
+    requests: EvaluateBatchItem[],
+    batchId?: string,
+  ): Promise<EvaluateBatchResponse> {
+    if (!Array.isArray(requests) || requests.length === 0) {
+      throw new AtlaSentError(
+        "evaluateBatch: requests must be a non-empty array",
+        { code: "bad_request" },
+      );
+    }
+    if (requests.length > 100) {
+      throw new AtlaSentError(
+        `evaluateBatch: requests.length ${requests.length} exceeds the 100-item cap`,
+        { code: "bad_request" },
+      );
+    }
+
+    const wireItems = requests.map((r) => ({
+      action_type: r.action,
+      actor_id: r.agent,
+      context: r.context ?? {},
+    }));
+
+    const wireBody: Record<string, unknown> = { items: wireItems };
+    if (batchId) wireBody.batch_id = batchId;
+
+    const { body: wire, rateLimit } = await this.post<EvaluateBatchWire>(
+      "/v1-evaluate-batch",
+      wireBody,
+    );
+
+    const items: EvaluateBatchResultItem[] = (wire.items ?? []).map(
+      (item: EvaluateBatchWireItem) => {
+        const rawDecision = typeof item.decision === "string"
+          ? item.decision.toLowerCase()
+          : undefined;
+        const decision = (
+          rawDecision === "allow" ||
+          rawDecision === "deny" ||
+          rawDecision === "hold" ||
+          rawDecision === "escalate"
+            ? rawDecision
+            : undefined
+        ) as DecisionCanonical | undefined;
+
+        return {
+          index: item.index,
+          ...(decision !== undefined ? { decision } : {}),
+          ...(item.decision_id ? { decisionId: item.decision_id } : {}),
+          ...(item.permit_token != null ? { permitToken: item.permit_token } : {}),
+          ...(item.reason != null ? { reason: item.reason } : {}),
+          ...(item.audit_entry_hash ? { auditHash: item.audit_entry_hash } : {}),
+          ...(item.timestamp ? { timestamp: item.timestamp } : {}),
+          ...(item.error ? { error: item.error } : {}),
+          ...(item.message ? { message: item.message } : {}),
+        } satisfies EvaluateBatchResultItem;
+      },
+    );
+
+    return {
+      batchId: wire.batch_id,
+      items,
+      partial: wire.partial ?? false,
+      ...(wire.replayed ? { replayed: wire.replayed } : {}),
       rateLimit,
     };
   }

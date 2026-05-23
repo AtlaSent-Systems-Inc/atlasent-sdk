@@ -1711,3 +1711,153 @@ describe("AtlaSentClient retry", () => {
     expect(fetchImpl.mock.calls).toHaveLength(1);
   });
 });
+
+// ── evaluateBatch ──────────────────────────────────────────────────────────
+
+const BATCH_WIRE = {
+  batch_id: "batch-uuid-1",
+  items: [
+    {
+      index: 0,
+      decision: "allow",
+      decision_id: "dec_a",
+      permit_token: "ptk_a",
+      reason: "",
+      audit_entry_hash: "h_a",
+      timestamp: "2026-05-23T08:00:00Z",
+    },
+    {
+      index: 1,
+      decision: "deny",
+      decision_id: "dec_b",
+      permit_token: null,
+      reason: "policy blocked",
+      audit_entry_hash: "h_b",
+      timestamp: "2026-05-23T08:00:01Z",
+    },
+  ],
+  partial: false,
+};
+
+describe("evaluateBatch()", () => {
+  it("maps wire response to EvaluateBatchResponse", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(BATCH_WIRE));
+    const client = makeClient(fetchImpl);
+
+    const result = await client.evaluateBatch([
+      { agent: "bot", action: "deploy" },
+      { agent: "bot", action: "rollback" },
+    ]);
+
+    expect(result.batchId).toBe("batch-uuid-1");
+    expect(result.partial).toBe(false);
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({
+      index: 0,
+      decision: "allow",
+      decisionId: "dec_a",
+      permitToken: "ptk_a",
+      auditHash: "h_a",
+    });
+    expect(result.items[1]).toMatchObject({
+      index: 1,
+      decision: "deny",
+      decisionId: "dec_b",
+      reason: "policy blocked",
+    });
+  });
+
+  it("posts to /v1-evaluate-batch with snake_case body", async () => {
+    let captured: { url: string; body: unknown } = { url: "", body: null };
+    const fetchImpl = mockFetch((url, init) => {
+      captured = { url, body: JSON.parse(init.body as string) };
+      return jsonResponse(BATCH_WIRE);
+    });
+    const client = makeClient(fetchImpl);
+
+    await client.evaluateBatch([
+      { agent: "bot", action: "deploy", context: { env: "prod" } },
+    ]);
+
+    expect(captured.url).toContain("/v1-evaluate-batch");
+    expect(captured.body).toMatchObject({
+      items: [{ action_type: "deploy", actor_id: "bot", context: { env: "prod" } }],
+    });
+  });
+
+  it("includes caller-supplied batchId in the request body", async () => {
+    let body: unknown;
+    const fetchImpl = mockFetch((_url, init) => {
+      body = JSON.parse(init.body as string);
+      return jsonResponse({ ...BATCH_WIRE, batch_id: "my-batch" });
+    });
+    const client = makeClient(fetchImpl);
+
+    await client.evaluateBatch([{ agent: "bot", action: "action" }], "my-batch");
+
+    expect((body as Record<string, unknown>).batch_id).toBe("my-batch");
+  });
+
+  it("throws AtlaSentError on empty requests array (does not call fetch)", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(BATCH_WIRE));
+    const client = makeClient(fetchImpl);
+
+    await expect(client.evaluateBatch([])).rejects.toMatchObject({
+      code: "bad_request",
+    });
+    expect(fetchImpl.mock.calls).toHaveLength(0);
+  });
+
+  it("throws AtlaSentError when requests.length > 100", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(BATCH_WIRE));
+    const client = makeClient(fetchImpl);
+    const tooMany = Array.from({ length: 101 }, () => ({
+      agent: "bot",
+      action: "act",
+    }));
+
+    await expect(client.evaluateBatch(tooMany)).rejects.toMatchObject({
+      code: "bad_request",
+    });
+    expect(fetchImpl.mock.calls).toHaveLength(0);
+  });
+
+  it("throws AtlaSentError on 401", async () => {
+    const fetchImpl = mockFetch(() =>
+      new Response("{}", { status: 401, headers: { "Content-Type": "application/json" } }),
+    );
+    const client = makeClient(fetchImpl);
+
+    await expect(
+      client.evaluateBatch([{ agent: "bot", action: "act" }]),
+    ).rejects.toBeInstanceOf(AtlaSentError);
+  });
+
+  it("surfaces partial=true from the wire response", async () => {
+    const partialWire = {
+      ...BATCH_WIRE,
+      partial: true,
+      items: [
+        { index: 0, error: "item_failed", message: "rpc timeout" },
+      ],
+    };
+    const fetchImpl = mockFetch(() => jsonResponse(partialWire));
+    const client = makeClient(fetchImpl);
+
+    const result = await client.evaluateBatch([{ agent: "bot", action: "act" }]);
+
+    expect(result.partial).toBe(true);
+    expect(result.items[0]).toMatchObject({ index: 0, error: "item_failed" });
+  });
+
+  it("propagates replayed=true from the wire response", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({ ...BATCH_WIRE, replayed: true }),
+    );
+    const client = makeClient(fetchImpl);
+
+    const result = await client.evaluateBatch([{ agent: "bot", action: "act" }]);
+
+    expect(result.replayed).toBe(true);
+  });
+});

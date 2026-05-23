@@ -850,3 +850,72 @@ export interface StreamProgressEvent {
 
 /** Union of all events yielded by {@link AtlaSentClient.protectStream}. */
 export type StreamEvent = StreamDecisionEvent | StreamProgressEvent;
+
+// ── Batch evaluate ────────────────────────────────────────────────────────────
+
+/**
+ * A single item in a {@link AtlaSentClient.evaluateBatch} call.
+ * Same shape as {@link EvaluateRequest}.
+ */
+export interface EvaluateBatchItem {
+  /** Identifier of the calling agent. */
+  agent: string;
+  /** The action being authorized. */
+  action: string;
+  /** Arbitrary policy context. */
+  context?: Record<string, unknown>;
+}
+
+/**
+ * Per-item result in an {@link EvaluateBatchResponse}.
+ *
+ * Success items carry `decision`, `decisionId`, `permitToken`, `auditHash`,
+ * and `timestamp`. Error items (when the per-item RPC layer failed) carry
+ * only `index`, `error`, and optionally `message`.
+ */
+export interface EvaluateBatchResultItem {
+  /** 0-based position matching the input order. */
+  index: number;
+  /**
+   * Policy decision for this item. Present on success items.
+   * `"allow"`, `"deny"`, `"hold"`, or `"escalate"`.
+   */
+  decision?: DecisionCanonical;
+  /** Server-assigned permit / decision identifier. */
+  decisionId?: string;
+  /** Opaque permit token (allow decisions only). Pass to verifyPermit(). */
+  permitToken?: string | null;
+  /** Machine-readable denial / hold reason. */
+  reason?: string;
+  /** Hash-chained audit-trail entry. */
+  auditHash?: string;
+  /** ISO-8601 decision timestamp. */
+  timestamp?: string;
+  /** Error code when the item itself failed at the RPC layer. */
+  error?: string;
+  /** Human-readable detail when `error` is set. */
+  message?: string;
+}
+
+/**
+ * Response from {@link AtlaSentClient.evaluateBatch}.
+ *
+ * - `items` is in the same order as the input `requests` array.
+ * - `partial: true` means at least one item errored at the RPC layer
+ *   (not a policy deny — those are surfaced via `decision: "deny"` on
+ *   the item). Check `item.error` on items without a `decision`.
+ * - `replayed: true` means the response was served from the idempotency
+ *   cache (a prior call with the same `batchId` completed within 24 h).
+ */
+export interface EvaluateBatchResponse {
+  /** Server-assigned (or caller-supplied) batch identifier. */
+  batchId: string;
+  /** Per-item results, in input order. */
+  items: EvaluateBatchResultItem[];
+  /** `true` when at least one item failed at the RPC layer. */
+  partial: boolean;
+  /** `true` when served from the idempotency cache. */
+  replayed?: boolean;
+  /** Rate-limit state from the batch response headers. */
+  rateLimit: RateLimitState | null;
+}
