@@ -233,6 +233,28 @@ from .v2_endpoints import (
 )
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
+from .scim import (
+    SCIM_USER_SCHEMA,
+    SCIM_GROUP_SCHEMA,
+    SCIM_PATCH_OP_SCHEMA,
+    scim_list_users,
+    scim_create_user,
+    scim_get_user,
+    scim_replace_user,
+    scim_patch_user,
+    scim_delete_user,
+    scim_list_groups,
+    scim_create_group,
+    scim_get_group,
+    scim_replace_group,
+    scim_patch_group,
+    scim_delete_group,
+)
+from .siem import (
+    get_siem_config,
+    upsert_siem_config,
+    siem_test_delivery,
+)
 
 #: Canonical Deploy Gate V1 protected action. Mirrors the TypeScript
 #: SDK's ``PRODUCTION_DEPLOY_ACTION``. Use this string (or the constant)
