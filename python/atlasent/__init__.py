@@ -258,6 +258,11 @@ from .siem import (
     upsert_siem_config,
     siem_test_delivery,
 )
+from .evidence_exports import (
+    list_evidence_exports,
+    get_evidence_export,
+    create_evidence_export,
+)
 
 #: Canonical Deploy Gate V1 protected action. Mirrors the TypeScript
 #: SDK's ``PRODUCTION_DEPLOY_ACTION``. Use this string (or the constant)
@@ -463,4 +468,8 @@ __all__ = [
     # Deploy Gate V1 customer API surface.
     "BCCAEClient",
     "generate_bccae_nonce",
+    # Evidence bundle exports (Wave B parity).
+    "list_evidence_exports",
+    "get_evidence_export",
+    "create_evidence_export",
 ]
