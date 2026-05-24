@@ -228,6 +228,25 @@ export interface DeployGateResponse {
   evidence: DeployGateEvidence;
 }
 
+/**
+ * Frozen BVS snapshot wire shape (BI4).
+ * Carried in {@link EvaluateRequest}.context.bvsSnapshot when
+ * the `behavior_conditioning` flag is enabled for the tenant.
+ * Produced by behavior-insights GET /api/patterns/snapshot/:userId
+ * and attached via `@atlasent/behavior` attachToEvaluate().
+ */
+export interface BvsSnapshot {
+  user_id: string;
+  /** Factor model output — keyed by BVS factor slug, value is score 0-1. */
+  factors: Record<string, number>;
+  /** Aggregate confidence score (0-1). Decays on a 60-day half-life. */
+  confidence: number;
+  /** True when the aggregate is fresh-and-thin (too few events to trust). */
+  confidence_low: boolean;
+  /** ISO-8601 timestamp of the compute run that produced this snapshot. */
+  computed_at: string;
+}
+
 /** Input to {@link AtlaSentClient.evaluate}. */
 export interface EvaluateRequest {
   /** Identifier of the calling agent (e.g. "clinical-data-agent"). */

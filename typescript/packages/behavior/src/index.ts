@@ -1,5 +1,6 @@
 export { getStateSummary } from './getStateSummary';
 export { getCategoryAggregate } from './getCategoryAggregate';
+export { getBvsSnapshot } from './getBvsSnapshot';
 export { attachToEvaluate } from './attachToEvaluate';
 export type {
   BehaviorCategory,
