@@ -261,6 +261,101 @@ describe("evaluate()", () => {
     expect(result.decision_canonical).toBe("escalate");
     expect(result.reason).toBe("queued for human review");
   });
+
+  it("passes explain:true in the request body when specified", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.evaluate({ agent: "a", action: "b", explain: true });
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1]!.body as string);
+    expect(body.explain).toBe(true);
+  });
+
+  it("omits explain from the request body when not specified", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.evaluate({ agent: "a", action: "b" });
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1]!.body as string);
+    expect(body).not.toHaveProperty("explain");
+  });
+
+  it("maps risk_envelope to riskEnvelope when present (no factors)", async () => {
+    const wire = {
+      decision: "allow",
+      permit_token: "pt_envelope",
+      risk_envelope: {
+        weighted_score: 0.42,
+        engine_decision: "allow",
+        envelope_decision: "allow",
+        promoted: false,
+        hard_blocks: [],
+      },
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.riskEnvelope).toEqual({
+      weightedScore: 0.42,
+      engineDecision: "allow",
+      envelopeDecision: "allow",
+      promoted: false,
+      hardBlocks: [],
+    });
+  });
+
+  it("maps risk_envelope.factors when explain:true causes server to populate them", async () => {
+    const wire = {
+      decision: "hold",
+      permit_token: "",
+      denial: { reason: "high risk score", code: "RISK_HOLD" },
+      risk_envelope: {
+        weighted_score: 0.85,
+        engine_decision: "allow",
+        envelope_decision: "hold",
+        promoted: true,
+        hard_blocks: ["SANCTION_LIST"],
+        factors: [
+          {
+            factor: "ACTION_SENSITIVITY",
+            value: 0.9,
+            weight: 0.5,
+            reason: "action touches PII",
+          },
+          {
+            factor: "ACTOR_TRUST",
+            value: 0.7,
+            weight: 0.5,
+            reason: "actor has recent anomalies",
+          },
+        ],
+      },
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluate({
+      agent: "a",
+      action: "b",
+      explain: true,
+    });
+    expect(result.riskEnvelope).toEqual({
+      weightedScore: 0.85,
+      engineDecision: "allow",
+      envelopeDecision: "hold",
+      promoted: true,
+      hardBlocks: ["SANCTION_LIST"],
+      factors: [
+        { factor: "ACTION_SENSITIVITY", value: 0.9, weight: 0.5, reason: "action touches PII" },
+        { factor: "ACTOR_TRUST", value: 0.7, weight: 0.5, reason: "actor has recent anomalies" },
+      ],
+    });
+  });
+
+  it("leaves riskEnvelope undefined when risk_envelope absent from server response", async () => {
+    const wire = {
+      decision: "allow",
+      permit_token: "pt_no_envelope",
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.riskEnvelope).toBeUndefined();
+  });
 });
 
 const CONSTRAINT_TRACE_WIRE = {

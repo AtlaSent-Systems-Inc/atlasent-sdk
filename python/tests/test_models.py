@@ -15,6 +15,8 @@ from atlasent.models import (
     EnforcementOutcome,
     EvaluateRequest,
     EvaluateResult,
+    EvaluateRiskEnvelope,
+    EvaluateRiskEnvelopeFactor,
     GateResult,
     GovernanceDecision,
     VerifyRequest,
@@ -289,3 +291,113 @@ class TestEnforcementOutcome:
         assert out.enforced is True
         assert out.enforcement_action == "raised"
         assert out.reason == "quorum_failed"
+
+
+class TestEvaluateRiskEnvelope:
+    """Tests for EvaluateRiskEnvelope and EvaluateRiskEnvelopeFactor models."""
+
+    def test_risk_envelope_without_factors(self):
+        """risk_envelope present with no factors (explain not requested)."""
+        envelope = EvaluateRiskEnvelope.model_validate(
+            {
+                "weighted_score": 0.42,
+                "engine_decision": "allow",
+                "envelope_decision": "allow",
+                "promoted": False,
+                "hard_blocks": [],
+            }
+        )
+        assert envelope.weighted_score == 0.42
+        assert envelope.engine_decision == "allow"
+        assert envelope.envelope_decision == "allow"
+        assert envelope.promoted is False
+        assert envelope.hard_blocks == []
+        assert envelope.factors == []
+
+    def test_risk_envelope_with_factors(self):
+        """risk_envelope present with factors populated via explain=True."""
+        envelope = EvaluateRiskEnvelope.model_validate(
+            {
+                "weighted_score": 0.85,
+                "engine_decision": "allow",
+                "envelope_decision": "hold",
+                "promoted": True,
+                "hard_blocks": ["SANCTION_LIST"],
+                "factors": [
+                    {
+                        "factor": "ACTION_SENSITIVITY",
+                        "value": 0.9,
+                        "weight": 0.5,
+                        "reason": "action touches PII",
+                    },
+                    {
+                        "factor": "ACTOR_TRUST",
+                        "value": 0.7,
+                        "weight": 0.5,
+                        "reason": "actor has recent anomalies",
+                    },
+                ],
+            }
+        )
+        assert envelope.weighted_score == 0.85
+        assert envelope.promoted is True
+        assert envelope.hard_blocks == ["SANCTION_LIST"]
+        assert len(envelope.factors) == 2
+        assert envelope.factors[0].factor == "ACTION_SENSITIVITY"
+        assert envelope.factors[0].value == 0.9
+        assert envelope.factors[0].weight == 0.5
+        assert envelope.factors[0].reason == "action touches PII"
+        assert envelope.factors[1].factor == "ACTOR_TRUST"
+
+    def test_evaluate_result_risk_envelope_present(self):
+        """EvaluateResult parses risk_envelope from the wire response."""
+        result = EvaluateResult.model_validate(
+            {
+                "decision": "hold",
+                "permit_token": "",
+                "denial": {"reason": "high risk score", "code": "RISK_HOLD"},
+                "risk_envelope": {
+                    "weighted_score": 0.75,
+                    "engine_decision": "allow",
+                    "envelope_decision": "hold",
+                    "promoted": True,
+                    "hard_blocks": [],
+                    "factors": [
+                        {
+                            "factor": "ACTION_SENSITIVITY",
+                            "value": 0.8,
+                            "weight": 1.0,
+                            "reason": "high-sensitivity action",
+                        }
+                    ],
+                },
+            }
+        )
+        assert result.decision == "hold"
+        assert result.risk_envelope is not None
+        assert result.risk_envelope.weighted_score == 0.75
+        assert result.risk_envelope.promoted is True
+        assert len(result.risk_envelope.factors) == 1
+        assert result.risk_envelope.factors[0].factor == "ACTION_SENSITIVITY"
+
+    def test_evaluate_result_risk_envelope_absent(self):
+        """EvaluateResult.risk_envelope is None when server omits the field."""
+        result = EvaluateResult.model_validate(
+            {
+                "decision": "allow",
+                "permit_token": "pt_no_envelope",
+            }
+        )
+        assert result.risk_envelope is None
+
+    def test_evaluate_request_explain_field(self):
+        """EvaluateRequest serializes explain when set."""
+        req = EvaluateRequest(action_type="read_data", actor_id="agent-1", explain=True)
+        data = req.model_dump(exclude_none=True)
+        assert data["explain"] is True
+
+    def test_evaluate_request_explain_omitted_by_default(self):
+        """EvaluateRequest omits explain from the wire when not set."""
+        req = EvaluateRequest(action_type="read_data", actor_id="agent-1")
+        data = req.model_dump(exclude_none=True)
+        assert "explain" not in data
