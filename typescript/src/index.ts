@@ -164,6 +164,14 @@ export type {
   AuditExport,
   AuditExportSignatureStatus,
 } from "./audit.js";
+export type {
+  EngineVersionKind,
+  EnvelopeDriftDetail,
+  EnvelopeVerification,
+  ReplayDecisionResponse,
+  ReplayDecisionValue,
+  ReplayVarianceKind,
+} from "./replay.js";
 export {
   DEFAULT_RETRY_POLICY,
   computeBackoffMs,

@@ -15,6 +15,7 @@ import type {
   AuditEventsQuery,
   AuditExport,
 } from "./audit.js";
+import type { ReplayDecisionResponse } from "./replay.js";
 import {
   AtlaSentError,
   StreamParseError,
@@ -1256,6 +1257,84 @@ export class AtlaSentClient {
     ) {
       throw new AtlaSentError(
         "Malformed response from /v1-audit/exports: missing `export_id`, `chain_head_hash`, or `events`",
+        { code: "bad_response" },
+      );
+    }
+
+    return { ...wire, rateLimit };
+  }
+
+  /**
+   * Re-evaluate a recorded decision against its originally-pinned policy
+   * bundle and engine version, and report whether the result agrees with
+   * what was recorded.
+   *
+   * Wraps `POST /v1-decisions-replay/:id/replay`. **Side-effect-free** — no
+   * audit chain row is written and no permit is issued (per ADR-016).
+   * Useful for compliance review, regression testing of bundle changes,
+   * and post-incident investigation.
+   *
+   * Outcomes encoded in the response:
+   * - `variance: "NONE"` — replay agrees with the original decision.
+   * - `variance: "DECISION_CHANGED"` — same envelope, same bundle, different
+   *   decision. Almost always indicates non-determinism in a rule
+   *   (e.g. wall-clock comparison) and warrants investigation.
+   * - `variance: "ENVELOPE_DRIFT"` — the recorded request envelope no longer
+   *   hashes to the recorded value. The replay short-circuits without
+   *   running the engine; `replay_decision` is absent. Treat as evidence
+   *   of substrate tamper or a recorder bug.
+   *
+   * Server-side 409 responses (replay refused because the engine version
+   * does not accept replay, or because no bundle was pinned) surface as
+   * `AtlaSentError` with `code: "replay_not_eligible"` — callers should
+   * treat them as expected for old / un-pinned decisions, not as bugs.
+   *
+   * Requires the `evaluate:write` API key scope.
+   *
+   * @param decisionId The UUID of the recorded decision to replay.
+   *                   Matches `execution_evaluations.request_id`.
+   *
+   * @example
+   * ```ts
+   * const result = await client.replayDecision("dec_abc123");
+   * if (result.variance === "DECISION_CHANGED") {
+   *   console.warn(
+   *     `Decision ${result.decision_id} changed on replay: ` +
+   *     `${result.original_decision} → ${result.replay_decision}`,
+   *   );
+   * }
+   * ```
+   */
+  async replayDecision(
+    decisionId: string,
+  ): Promise<ReplayDecisionResponse & { rateLimit: RateLimitState | null }> {
+    if (typeof decisionId !== "string" || decisionId.length === 0) {
+      throw new AtlaSentError("decisionId is required", {
+        code: "bad_request",
+      });
+    }
+
+    const path = `/v1-decisions-replay/${encodeURIComponent(decisionId)}/replay`;
+    const { body: wire, rateLimit } = await this.post<ReplayDecisionResponse>(
+      path,
+      {},
+    );
+
+    // Defensive validation. The replay endpoint is alpha (see
+    // STABLE_V2_PROMOTION.md) — wire shapes can shift without a
+    // deprecation cycle, so guard the contract fields callers will
+    // branch on rather than trusting the cast.
+    if (
+      typeof wire.decision_id !== "string" ||
+      typeof wire.original_decision !== "string" ||
+      typeof wire.engine_version_kind !== "string" ||
+      typeof wire.accepts_replay !== "boolean" ||
+      typeof wire.variance !== "string" ||
+      typeof wire.envelope_verification !== "string" ||
+      typeof wire.replayed_at !== "string"
+    ) {
+      throw new AtlaSentError(
+        "Malformed response from /v1-decisions-replay/:id/replay: missing required fields",
         { code: "bad_response" },
       );
     }
