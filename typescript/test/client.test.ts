@@ -2006,3 +2006,160 @@ describe("subscribeDecisions()", () => {
     expect(events[0]).toMatchObject({ type: "session_end" });
   });
 });
+
+describe("replayDecision()", () => {
+  const REPLAY_NONE_WIRE = {
+    decision_id: "dec_abc123",
+    original_decision: "allow" as const,
+    replay_decision: "allow" as const,
+    engine_version: "wire-v1@1.0.0",
+    engine_version_kind: "active" as const,
+    accepts_replay: true,
+    variance: "NONE" as const,
+    envelope_verification: "verified" as const,
+    replayed_at: "2026-05-24T00:00:00Z",
+  };
+
+  it("POSTs to /v1-decisions-replay/:id/replay with an empty body and surfaces NONE variance", async () => {
+    const fetchImpl = mockFetch((url, init) => {
+      expect(url).toMatch(/\/v1-decisions-replay\/dec_abc123\/replay$/);
+      expect(init.method).toBe("POST");
+      expect(init.body).toBe("{}");
+      expect((init.headers as Record<string, string>)["Content-Type"]).toBe(
+        "application/json",
+      );
+      return jsonResponse(REPLAY_NONE_WIRE);
+    });
+    const client = makeClient(fetchImpl);
+    const result = await client.replayDecision("dec_abc123");
+
+    expect(result.decision_id).toBe("dec_abc123");
+    expect(result.variance).toBe("NONE");
+    expect(result.original_decision).toBe("allow");
+    expect(result.replay_decision).toBe("allow");
+    expect(result.engine_version_kind).toBe("active");
+    expect(result.envelope_verification).toBe("verified");
+    expect(result.rateLimit).toBeNull();
+  });
+
+  it("surfaces DECISION_CHANGED variance with both decisions for diagnosis", async () => {
+    const wire = {
+      ...REPLAY_NONE_WIRE,
+      original_decision: "allow" as const,
+      replay_decision: "deny" as const,
+      replay_deny_code: "policy.expired_consent",
+      variance: "DECISION_CHANGED" as const,
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.replayDecision("dec_abc123");
+
+    expect(result.variance).toBe("DECISION_CHANGED");
+    expect(result.original_decision).toBe("allow");
+    expect(result.replay_decision).toBe("deny");
+    expect(result.replay_deny_code).toBe("policy.expired_consent");
+  });
+
+  it("surfaces ENVELOPE_DRIFT with hashes and no replay_decision", async () => {
+    const wire = {
+      decision_id: "dec_abc123",
+      original_decision: "allow" as const,
+      engine_version: "wire-v1@1.0.0",
+      engine_version_kind: "active" as const,
+      accepts_replay: true,
+      variance: "ENVELOPE_DRIFT" as const,
+      envelope_verification: "drift" as const,
+      envelope_drift_detail: {
+        recorded_hash: "sha256:aaaa",
+        recomputed_hash: "sha256:bbbb",
+      },
+      replayed_at: "2026-05-24T00:00:00Z",
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.replayDecision("dec_abc123");
+
+    expect(result.variance).toBe("ENVELOPE_DRIFT");
+    expect(result.envelope_verification).toBe("drift");
+    expect(result.envelope_drift_detail).toEqual({
+      recorded_hash: "sha256:aaaa",
+      recomputed_hash: "sha256:bbbb",
+    });
+    expect(result.replay_decision).toBeUndefined();
+  });
+
+  it("url-encodes the decision id", async () => {
+    const fetchImpl = mockFetch((url) => {
+      // ':' must be %3A in the path component.
+      expect(url).toMatch(/\/v1-decisions-replay\/odd%3Aid\/replay$/);
+      return jsonResponse({ ...REPLAY_NONE_WIRE, decision_id: "odd:id" });
+    });
+    const client = makeClient(fetchImpl);
+    await client.replayDecision("odd:id");
+  });
+
+  it("rejects empty / non-string decisionId without issuing a request", async () => {
+    const fetchImpl = mockFetch(() => {
+      throw new Error("fetch should not be called");
+    });
+    const client = makeClient(fetchImpl);
+    await expect(client.replayDecision("")).rejects.toMatchObject({
+      code: "bad_request",
+    });
+    // @ts-expect-error — runtime guard for non-string input
+    await expect(client.replayDecision(undefined)).rejects.toMatchObject({
+      code: "bad_request",
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("surfaces rateLimit when X-RateLimit-* headers are present", async () => {
+    const fetchImpl = mockFetch(
+      () =>
+        new Response(JSON.stringify(REPLAY_NONE_WIRE), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-RateLimit-Limit": "100",
+            "X-RateLimit-Remaining": "99",
+            "X-RateLimit-Reset": "1714070000",
+          },
+        }),
+    );
+    const client = makeClient(fetchImpl);
+    const result = await client.replayDecision("dec_abc123");
+    expect(result.rateLimit).toEqual({
+      limit: 100,
+      remaining: 99,
+      resetAt: new Date(1_714_070_000 * 1000),
+    });
+  });
+
+  it("throws bad_response when required fields are missing", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({ decision_id: "dec_abc123" }),
+    );
+    const client = makeClient(fetchImpl);
+    await expect(client.replayDecision("dec_abc123")).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+
+  it("surfaces 409 replay_not_eligible as an AtlaSentError", async () => {
+    const fetchImpl = mockFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            error: "replay_not_eligible",
+            message: "Engine version wire-v0@0.9.0 does not accept replay (kind: archival)",
+          }),
+          {
+            status: 409,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+    );
+    const client = makeClient(fetchImpl);
+    await expect(client.replayDecision("dec_abc123")).rejects.toBeInstanceOf(
+      AtlaSentError,
+    );
+  });
+});

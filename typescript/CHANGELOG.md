@@ -6,6 +6,37 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.7.0 (2026-05-24)
+
+### New features
+
+#### Decision replay client
+
+A new `client.replayDecision(decisionId)` method that wraps
+`POST /v1-decisions-replay/:id/replay`. Re-evaluates a recorded
+decision against its originally-pinned policy bundle and engine version,
+and reports whether the result agrees with the recorded one. Side-effect
+free — no audit chain row is written and no permit is issued (per
+ADR-016). Useful for compliance review, regression testing of bundle
+changes, and post-incident investigation.
+
+Surface returns one of three `variance` outcomes:
+- `NONE` — replay agrees with the original.
+- `DECISION_CHANGED` — same envelope, same bundle, different decision
+  (typically a rule non-determinism bug).
+- `ENVELOPE_DRIFT` — recorded request envelope no longer hashes to the
+  recorded value; replay short-circuits without re-evaluating.
+
+Also exports the supporting wire types: `ReplayDecisionResponse`,
+`ReplayVarianceKind`, `EngineVersionKind`, `EnvelopeVerification`,
+`EnvelopeDriftDetail`, `ReplayDecisionValue`.
+
+> Note: `/v1/decisions/:id/replay` is **alpha** per atlasent-api's
+> `STABLE_V2_PROMOTION.md`. Wire shapes can shift without a deprecation
+> cycle until the endpoint graduates to stable v1.
+
+---
+
 ## @atlasent/sdk 2.6.0 (2026-05-22)
 
 ### New features
