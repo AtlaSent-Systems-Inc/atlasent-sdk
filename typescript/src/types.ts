@@ -50,960 +50,521 @@ export type Decision = DecisionCanonical;
  * preemptively back off before hitting a 429.
  */
 export interface RateLimitState {
-  /** Value of `X-RateLimit-Limit` — the per-minute budget. */
+  /** Cap for the current window (from `X-RateLimit-Limit`). */
   limit: number;
-  /** Value of `X-RateLimit-Remaining` — unused budget in the current window. */
+  /** Remaining calls in the current window. */
   remaining: number;
-  /**
-   * Parsed `X-RateLimit-Reset` — the UTC instant when the current
-   * window's counter zeroes. Accepts either a unix-seconds integer or
-   * an ISO 8601 string on the wire.
-   */
-  resetAt: Date;
+  /** ISO-8601 timestamp when the window resets. */
+  resetAt: string;
 }
 
 /**
- * Canonical Deploy Gate V1 protected action.
+ * Options accepted by the {@link AtlaSentClient} constructor.
+ */
+export interface AtlaSentClientOptions {
+  /** API key issued from the AtlaSent dashboard. */
+  apiKey: string;
+  /**
+   * Override the default API base URL (`https://api.atlasent.io`).
+   * Must use `https://` in production. Defaults to the AtlaSent
+   * hosted endpoint when omitted.
+   */
+  baseUrl?: string;
+  /**
+   * Per-request network timeout in milliseconds (default 10 000).
+   * Applies to every request independently; the countdown resets on
+   * each retry attempt.
+   */
+  timeoutMs?: number;
+  /**
+   * Inject a custom `fetch` implementation. When omitted the SDK
+   * uses `globalThis.fetch` — suitable for Node ≥ 18, browsers, and
+   * Cloudflare Workers.
+   */
+  fetch?: typeof globalThis.fetch;
+  /**
+   * Retry policy override. Merged with the SDK defaults:
+   * `{ maxAttempts: 3, initialDelayMs: 200, maxDelayMs: 5000, factor: 2 }`.
+   */
+  retryPolicy?: {
+    maxAttempts?: number;
+    initialDelayMs?: number;
+    maxDelayMs?: number;
+    factor?: number;
+  };
+}
+
+/**
+ * The canonical production-deploy action string, used by
+ * {@link DeployGateRequest} when `action` is omitted.
  *
- * Use this constant (or its string value `"production.deploy"`) on all
- * new code. Server-side `action_classes.slug` was canonicalised to
- * `production.deploy` in atlasent-api PR #662 / atlasent-console
- * PR #432; the SDK default now matches.
+ * Exported so callers can reference it without hard-coding the string.
  */
 export const PRODUCTION_DEPLOY_ACTION = "production.deploy" as const;
 
 /**
- * Legacy alias for {@link PRODUCTION_DEPLOY_ACTION}.
- *
- * @deprecated since 2.3.0 — use {@link PRODUCTION_DEPLOY_ACTION}. The
- * server alias-tolerates `deployment.production` during the V1 alias
- * window, so existing callers continue to work unchanged; please
- * migrate by the next minor release.
+ * Input for {@link AtlaSentClient.evaluate}.
  */
-export const DEPLOYMENT_PRODUCTION_ACTION = "deployment.production" as const;
-
-// ── Deploy Gate V1 context types ──────────────────────────────────────────────
-
-/**
- * Permit claim for `production.deploy` evaluations (Rule 3).
- *
- * Pass as `permit` inside {@link DeployGateContext}.
- * The `verified` flag is set by the verify-permit service after a
- * successful `/v1-verify-permit` call — do not self-assert it.
- */
-export interface DeployPermitClaim {
-  permit_id?: string;
-  environment?: string;
-  action_type?: string;
-  /** ISO-8601 timestamp when the permit was issued. */
-  issued_at?: string;
-  /** Set server-side by the verify-permit service. Do not self-assert. */
-  verified?: boolean;
-}
-
-/**
- * Override claim for `production.deploy` evaluations (Rule 8).
- *
- * Both `override_reason` and `authority_basis` must be non-empty to
- * receive `OVERRIDE_APPROVED`. Missing or blank fields return `DENY_POLICY`.
- */
-export interface DeployOverrideClaim {
-  /** Human-readable reason. Required and non-empty. */
-  override_reason?: string;
-  /** Authoritative basis — runbook section, incident ticket, etc. Required and non-empty. */
-  authority_basis?: string;
-  /** Approver actor ID (audit record; does not gate the decision). */
-  approver_actor_id?: string;
-}
-
-/**
- * Typed context shape for `production.deploy` evaluations.
- *
- * Pass as `context` to `protect()`, `deployGate()`, or
- * {@link AtlaSentClient.evaluate} for the Deploy Gate V1 flow.
- *
- * @example
- * ```ts
- * const permit = await atlasent.protect({
- *   agent: "deploy-bot",
- *   action: PRODUCTION_DEPLOY_ACTION,
- *   context: {
- *     environment: "production",
- *     evaluation_confirmed: true,
- *     actorMetadata: { role: "deploy_engineer" },
- *     permit: {
- *       permit_id: permitToken,
- *       environment: "production",
- *       action_type: PRODUCTION_DEPLOY_ACTION,
- *       issued_at: new Date().toISOString(),
- *       verified: true,
- *     },
- *   } satisfies DeployGateContext,
- * });
- * ```
- */
-export interface DeployGateContext {
-  /** Must be `"production"` for the production gate to apply. */
-  environment?: "production" | "staging" | "development";
-  /**
-   * When `true`, all rule failures are shadowed to `allow` (fail-open).
-   * Malformed-timestamp inconsistencies still escalate.
-   * Use for initial rollout before locking enforcement.
-   */
-  pilot_mode?: boolean;
-  /** Must be `true` — confirms an evaluation record exists before proceeding. */
-  evaluation_confirmed?: boolean;
-  /** ISO-8601 timestamp of when evaluation was confirmed. */
-  evaluation_confirmed_at?: string;
-  /** Actor role metadata. `role` must be one of the approved deploy roles. */
-  actorMetadata?: { role?: string };
-  /** Signed permit claim — required for non-pilot production deployments. */
-  permit?: DeployPermitClaim;
-  /** Override claim — short-circuits all rules when both fields are non-empty. */
-  override?: DeployOverrideClaim;
-  [key: string]: unknown;
-}
-
-/**
- * Canonical deploy gate decision codes emitted for `production.deploy`.
- *
- * Appears as `deny_code` / `matchedRuleId` on evaluation responses.
- * Pin dashboards, alerting, and routing logic to these codes — not to
- * `deny_reason` strings, which may change.
- */
-export type DeployGateDenyCode =
-  | "ALLOW"
-  | "DENY_POLICY"
-  | "DENY_AUTHORITY"
-  | "DENY_ENVIRONMENT"
-  | "PERMIT_EXPIRED"
-  | "VERIFY_FAILED"
-  | "ESCALATE_REQUIRED"
-  | "OVERRIDE_APPROVED";
-
-/** Typed constants for {@link DeployGateDenyCode}. */
-export const DEPLOY_GATE_CODES = Object.freeze({
-  ALLOW: "ALLOW",
-  DENY_POLICY: "DENY_POLICY",
-  DENY_AUTHORITY: "DENY_AUTHORITY",
-  DENY_ENVIRONMENT: "DENY_ENVIRONMENT",
-  PERMIT_EXPIRED: "PERMIT_EXPIRED",
-  VERIFY_FAILED: "VERIFY_FAILED",
-  ESCALATE_REQUIRED: "ESCALATE_REQUIRED",
-  OVERRIDE_APPROVED: "OVERRIDE_APPROVED",
-} satisfies Record<DeployGateDenyCode, DeployGateDenyCode>);
-
-/** Input to {@link AtlaSentClient.deployGate}. */
-export interface DeployGateRequest {
-  /** CI/repo actor performing the deployment. Defaults to `ci-deploy-bot`. */
-  agent?: string;
-  /** Protected action. Defaults to `production.deploy`. */
-  action?:
-    | typeof PRODUCTION_DEPLOY_ACTION
-    | typeof DEPLOYMENT_PRODUCTION_ACTION
-    | string;
-  /** Typed deploy gate context for `production.deploy`. */
-  context?: DeployGateContext | Record<string, unknown>;
-}
-
-/** Evidence metadata returned by {@link AtlaSentClient.deployGate}. */
-export interface DeployGateEvidence {
-  permitId?: string;
-  permitHash?: string;
-  auditHash?: string;
-  verifiedAt?: string;
-}
-
-/** Result of the canonical Deploy Gate V1 flow. */
-export interface DeployGateResponse {
-  /** True only after evaluate allowed AND `/v1-verify-permit` verified server-side. */
-  allowed: boolean;
-  /** Evaluation response from `POST /v1-evaluate`, when available. */
-  evaluation?: EvaluateResponse;
-  /** Verification response from `POST /v1-verify-permit`, when evaluation allowed. */
-  verification?: VerifyPermitResponse;
-  /** Human-readable block/allow reason. */
-  reason: string;
-  /** Best-effort audit/evidence metadata available to the SDK. */
-  evidence: DeployGateEvidence;
-}
-
-/**
- * Frozen BVS snapshot wire shape (BI4).
- * Carried in {@link EvaluateRequest}.context.bvsSnapshot when
- * the `behavior_conditioning` flag is enabled for the tenant.
- * Produced by behavior-insights GET /api/patterns/snapshot/:userId
- * and attached via `@atlasent/behavior` attachToEvaluate().
- */
-export interface BvsSnapshot {
-  user_id: string;
-  /** Factor model output — keyed by BVS factor slug, value is score 0-1. */
-  factors: Record<string, number>;
-  /** Aggregate confidence score (0-1). Decays on a 60-day half-life. */
-  confidence: number;
-  /** True when the aggregate is fresh-and-thin (too few events to trust). */
-  confidence_low: boolean;
-  /** ISO-8601 timestamp of the compute run that produced this snapshot. */
-  computed_at: string;
-}
-
-/**
- * Consent-class projection (BI5) — the privacy-safe aggregate shape that
- * third-party apps (LedgersMe, hiCoach, echobloom) receive when reading a
- * user's behavioral summary. Counts and timestamps only; no raw free-text.
- * Produced by behavior-insights `/api/patterns/summary/:userId` and fetched
- * via `@atlasent/behavior` getStateSummary(). The SDK enforces
- * {@link https://github.com/AtlaSent-Systems-Inc/atlasent-sdk | assertNoRawText}
- * client-side before returning this shape to callers.
- */
-export interface ConsentClassProjection {
-  user_id: string;
-  window_start: string;
-  window_end: string;
-  event_count: number;
-  category_counts: Partial<Record<string, number>>;
-}
-
-/** Input to {@link AtlaSentClient.evaluate}. */
 export interface EvaluateRequest {
-  /** Identifier of the calling agent (e.g. "clinical-data-agent"). */
+  /** Identifier for the actor initiating the action (e.g. agent or user ID). */
   agent: string;
-  /** The action being authorized (e.g. "modify_patient_record"). */
+  /** Action type string evaluated against the active policy bundle. */
   action: string;
-  /** Arbitrary policy context (user, environment, resource IDs). */
+  /** Arbitrary key/value context forwarded to the policy engine. */
   context?: Record<string, unknown>;
 }
 
 /**
- * Slim permit object embedded in {@link EvaluateResponse} when the decision
- * is `"allow"`. Contains the essential fields needed to act on the permit
- * immediately without a separate `GET /v1/permits/:id` round-trip.
- *
- * Mirrors the `Permit` schema in atlasent-control-plane
- * `api/src/schemas/permits.ts`.
- */
-export interface EvaluateResponsePermit {
-  id: string;
-  orgId: string;
-  subject: string;
-  scope: string;
-  status: "active" | "revoked" | "expired";
-  /** The evaluation that produced this permit. */
-  evaluationId: string | null;
-  issuedBy: string;
-  revokedBy: string | null;
-  /** ISO-8601 issuance timestamp. */
-  issuedAt: string;
-  revokedAt: string | null;
-  expiresAt: string | null;
-  metadata: Record<string, unknown> | null;
-}
-
-/** Result of {@link AtlaSentClient.evaluate}. */
-export interface EvaluateResponse {
-  /**
-   * Policy decision — canonical 4-value lowercase vocabulary:
-   * `"allow"`, `"deny"`, `"hold"`, or `"escalate"`.
-   *
-   * Previously emitted `"ALLOW"` / `"DENY"` (uppercase, 2-value);
-   * the SDK now normalises all values to lowercase and passes `hold`
-   * and `escalate` through rather than collapsing them to `"DENY"`.
-   *
-   * The `decision_canonical` field carries the same value and is the
-   * recommended field for new code.
-   */
-  decision: Decision;
-  /**
-   * Canonical 4-value decision, byte-identical to the wire.
-   *
-   * One of `"allow"`, `"deny"`, `"hold"`, `"escalate"`. Branch on
-   * this field on new code. `hold` and `escalate` are non-terminal
-   * states that route to a human reviewer / approval signal — they
-   * are not equivalent to a `deny`.
-   */
-  decision_canonical: DecisionCanonical;
-  /**
-   * Server-assigned identifier for this evaluation decision.
-   *
-   * Stable across retries and used as the key for proof retrieval
-   * (`GET /v1/proof/:evaluationId`) and override requests. Also
-   * available as the legacy `permitId` field for backward compatibility.
-   */
-  evaluationId: string;
-  /** Opaque permit identifier, passed to {@link AtlaSentClient.verifyPermit}.
-   *
-   * @deprecated Prefer `evaluationId`. This field is kept for backward
-   * compatibility and points to the same server-assigned ID.
-   */
-  permitId: string;
-  /**
-   * Slim permit object issued when `decision === "allow"`.
-   * `null` on deny, hold, or escalate decisions.
-   *
-   * Mirrors the `Permit` schema from the control-plane.
-   */
-  permit: EvaluateResponsePermit | null;
-  /**
-   * Opaque HMAC-signed permit token issued when `decision === "allow"`.
-   * Pass to `POST /v1/verify-permit` to verify the permit server-side.
-   * `null` on deny, hold, or escalate decisions.
-   */
-  permitToken: string | null;
-  /**
-   * Machine-readable reasons emitted by the policy engine.
-   *
-   * The array may be empty. For deny/hold/escalate decisions the array
-   * typically contains a single human-readable explanation; for allow
-   * decisions it is often empty. Do not parse these strings — use
-   * `decision` for branching.
-   */
-  reasons: string[];
-  /** Human-readable explanation from the policy engine.
-   *
-   * @deprecated Prefer `reasons[0]` or `reasons`. This field is the
-   * first element of `reasons` (or an empty string) for backward compat.
-   */
-  reason: string;
-  /** Hash-chained audit-trail entry (21 CFR Part 11 / GxP-ready). */
-  auditHash: string;
-  /** ISO 8601 timestamp of the decision. */
-  timestamp: string;
-  /**
-   * Per-key rate-limit state for this request's response, parsed from
-   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
-   */
-  rateLimit: RateLimitState | null;
-}
-
-/** Input to {@link AtlaSentClient.verifyPermit}. */
-export interface VerifyPermitRequest {
-  /** The permit ID returned by a prior evaluate() call. */
-  permitId: string;
-  /** Optional: re-state the action for cross-check with the server. */
-  action?: string;
-  /** Optional: re-state the agent for cross-check with the server. */
-  agent?: string;
-  /** Optional: re-state the context for cross-check with the server. */
-  context?: Record<string, unknown>;
-  /**
-   * Environment of the permit being verified. Sourced from the evaluate
-   * payload (context.environment → top-level environment → "production").
-   * Required by the server for production permits as of 2026-05-14.
-   * P1-1 fix: withPermit/protect now always populates this field.
-   */
-  environment?: string;
-  /**
-   * SHA-256 hex digest of the recursively key-sorted canonical JSON of the
-   * original evaluate payload. Required by the server for production permits
-   * as of 2026-05-14.
-   * P1-5 fix: withPermit/protect now always computes and sends this field.
-   */
-  execution_hash?: string;
-}
-
-/**
- * Result of {@link AtlaSentClient.verifyPermit}.
- *
- * @deprecated Use {@link VerifyPermitByIdResponse} via
- * {@link AtlaSentClient.verifyPermitById} — the canonical REST surface
- * (`POST /v1/permits/{id}/verify`) returns the unified verification
- * envelope (`valid`, `verification_type`, `reason`, `verified_at`,
- * `evidence`) plus the full {@link PermitRecord} fields. Will be
- * removed in `@atlasent/sdk@3`.
- */
-export interface VerifyPermitResponse {
-  /** `true` when the permit is valid and un-revoked. */
-  verified: boolean;
-  /** Verification outcome string from the server. */
-  outcome: string;
-  /** Verification hash bound to the permit. */
-  permitHash: string;
-  /** ISO 8601 timestamp of the verification. */
-  timestamp: string;
-  /**
-   * Per-key rate-limit state for this request's response, parsed from
-   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
-   */
-  rateLimit: RateLimitState | null;
-}
-
-/**
- * Result of {@link AtlaSentClient.keySelf} — self-introspection of the API
- * key the client was constructed with. Returned by `GET /v1/api-key-self`.
- *
- * Never includes the raw key or its hash — introspection is intentionally
- * read-only and safe to surface in operator dashboards. Useful for:
- *   - "which key am I?" debugging
- *   - IP_NOT_ALLOWED failures — `clientIp` is the IP the server observed
- *   - proactive expiry warnings — `expiresAt` is the server-stored expiry
- *     (`null` means the key does not auto-expire)
- *   - verifying scopes before attempting a scope-gated action
- */
-export interface ApiKeySelfResponse {
-  /** Server-side UUID of the api_keys row for this key. */
-  keyId: string;
-  /** Organization the key belongs to. */
-  organizationId: string;
-  /** "live" or "test" (or any future environment label the server introduces). */
-  environment: string;
-  /** Granted scopes — e.g. ["evaluate", "audit.read"]. */
-  scopes: string[];
-  /**
-   * Per-key IP allowlist as CIDR strings (e.g. ["10.0.0.0/8"]). `null`
-   * when the key is unrestricted.
-   */
-  allowedCidrs: string[] | null;
-  /** Server-enforced per-minute rate limit for this key. */
-  rateLimitPerMinute: number;
-  /** Client IP as the server observed it (first hop of X-Forwarded-For). */
-  clientIp: string | null;
-  /** Server-stored expiry; `null` means the key does not auto-expire. */
-  expiresAt: string | null;
-  /**
-   * Per-key rate-limit state for this request's response, parsed from
-   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
-   */
-  rateLimit: RateLimitState | null;
-}
-
-/**
- * Result of {@link AtlaSentClient.listAuditEvents}. Extends the raw
- * wire page with a camelCase `rateLimit` alongside the snake_case
- * wire fields — the wire shape (`events`, `total`, `next_cursor`) is
- * untouched so callers that pass it to the offline verifier get
- * byte-identical behaviour.
- */
-export interface AuditEventsResult extends AuditEventsPage {
-  /**
-   * Per-key rate-limit state for this request's response, parsed from
-   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
-   */
-  rateLimit: RateLimitState | null;
-}
-
-/**
- * Filter accepted by {@link AtlaSentClient.createAuditExport}. Fields
- * are snake_case to match the server's `POST /v1-audit/exports`
- * request body; an empty object requests a full-org bundle.
- */
-export interface AuditExportRequest {
-  /** Comma-joined list of event types to include (e.g. `"evaluate.allow,policy.updated"`). */
-  types?: string;
-  /** Filter to a single actor. */
-  actor_id?: string;
-  /** Inclusive lower bound on `occurred_at` (ISO 8601). */
-  from?: string;
-  /** Inclusive upper bound on `occurred_at` (ISO 8601). */
-  to?: string;
-}
-
-/**
- * Result of {@link AtlaSentClient.createAuditExport}. Extends the
- * signed bundle shape with a camelCase `rateLimit`. The signed
- * envelope fields (`export_id`, `org_id`, `chain_head_hash`,
- * `event_count`, `signed_at`, `events`, `signature`) are preserved
- * byte-for-byte so the object can be handed straight to
- * `verifyAuditBundle(bundle, keys)`.
- */
-export interface AuditExportResult extends AuditExport {
-  /**
-   * Per-key rate-limit state for this request's response, parsed from
-   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
-   */
-  rateLimit: RateLimitState | null;
-}
-
-/** Constructor options for {@link AtlaSentClient}. */
-export interface AtlaSentClientOptions {
-  /** Required. Your AtlaSent API key. */
-  apiKey: string;
-  /** API base URL. Defaults to "https://api.atlasent.io". */
-  baseUrl?: string;
-  /** Per-request timeout in milliseconds. Defaults to 10_000. */
-  timeoutMs?: number;
-  /**
-   * Inject a fetch implementation (primarily for testing).
-   * Defaults to `globalThis.fetch`.
-   */
-  fetch?: typeof fetch;
-  /**
-   * Retry policy for transient failures (network errors, timeouts,
-   * 429 rate-limit, 5xx server errors, malformed responses).
-   * Omit to use the default: 4 total attempts, 2 000 ms base, 16 000 ms cap,
-   * full-jitter exponential backoff matching the Python SDK schedule
-   * (2 s → 4 s → 8 s → 16 s).
-   * Pass `{ maxAttempts: 1 }` to disable retries entirely.
-   */
-  retryPolicy?: import("./retry.js").RetryPolicy;
-}
-
-// ── Permit lifecycle (canonical REST shapes) ──────────────────────────────────
-
-/** Permit lifecycle status. */
-export type PermitStatus =
-  | "issued"
-  | "verified"
-  | "consumed"
-  | "expired"
-  | "revoked";
-
-/**
- * Wire shape of a Permit row, returned by {@link AtlaSentClient.getPermit}
- * and {@link AtlaSentClient.listPermits}. Mirrors the openapi `Permit`
- * schema.
- *
- * Revocation fields (`revoked_at`, `revoked_by`, `revoke_reason`) are
- * populated only when `status === 'revoked'`; null otherwise.
- */
-export interface PermitRecord {
-  id: string;
-  org_id: string;
-  actor_id: string;
-  action_id: string;
-  target_id?: string;
-  environment?: string;
-  status: PermitStatus;
-  issued_at: string;
-  expires_at: string;
-  consumed_at?: string | null;
-  revoked_at?: string | null;
-  revoked_by?: string | null;
-  revoke_reason?: string | null;
-  signature?: string;
-  payload_hash?: string | null;
-  decision_id?: string | null;
-}
-
-/** Optional filters for {@link AtlaSentClient.listPermits}. */
-export interface ListPermitsRequest {
-  status?: PermitStatus;
-  actorId?: string;
-  actionType?: string;
-  /** ISO-8601 lower bound on `created_at`. */
-  from?: string;
-  /** ISO-8601 upper bound on `created_at`. */
-  to?: string;
-  /** Page size. Server max is 500; default 50. */
-  limit?: number;
-  /** Pass `nextCursor` from a prior response to page forward. */
-  cursor?: string;
-}
-
-/** Response from {@link AtlaSentClient.listPermits}. */
-export interface ListPermitsResponse {
-  permits: PermitRecord[];
-  /** Total matching rows ignoring `limit`/`cursor`. */
-  total: number;
-  /** Pass on next call as `cursor`. Absent when no more rows. */
-  nextCursor?: string;
-  rateLimit: RateLimitState | null;
-}
-
-/** Response from {@link AtlaSentClient.getPermit}. */
-export interface GetPermitResponse {
-  permit: PermitRecord;
-  rateLimit: RateLimitState | null;
-}
-
-/**
- * Response from {@link AtlaSentClient.checkPermitValid}.
- *
- * Lightweight validity snapshot returned by
- * `GET /v1/permits/{permitId}/valid`. Designed for guard heartbeat
- * polling — returns only the fields needed to determine whether to
- * abort a running permit mid-execution (via {@link PermitRevoked}).
- */
-export interface PermitValidResponse {
-  /** True iff the permit is currently valid (active). */
-  valid: boolean;
-  /**
-   * Current lifecycle status of the permit.
-   * - `"active"` — permit is valid and in-flight.
-   * - `"expired"` — TTL elapsed before revocation or consumption.
-   * - `"revoked"` — administratively revoked (see `revocation_id`).
-   * - `"consumed"` — single-use permit already consumed.
-   */
-  status: "active" | "expired" | "revoked" | "consumed";
-  /** ISO-8601 timestamp when the permit was revoked. Populated only when `status === "revoked"`. */
-  revoked_at?: string;
-  /** Opaque identifier of the revocation record. Populated only when `status === "revoked"`. */
-  revocation_id?: string;
-}
-
-// ── Canonical revoke / verify (REST) ──────────────────────────────────────────
-
-/** Input for {@link AtlaSentClient.revokePermitById}. */
-export interface RevokePermitByIdInput {
-  /** Operator-supplied free-text reason. Recorded on the permit row,
-   *  written to the audit trail, and surfaced (truncated) on later
-   *  verify responses. Optional but strongly encouraged. */
-  reason?: string;
-}
-
-/**
- * Response from {@link AtlaSentClient.revokePermitById}.
- *
- * Returns the updated {@link PermitRecord} with `status === 'revoked'`
- * and the populated `revoked_at` / `revoked_by` / `revoke_reason`
- * fields.
- */
-export interface RevokePermitByIdResponse {
-  permit: PermitRecord;
-  rateLimit: RateLimitState | null;
-}
-
-/**
- * Response from {@link AtlaSentClient.verifyPermitById}.
- *
- * Returns the canonical verification envelope (`valid`,
- * `verification_type`, `reason`, `verified_at`, `evidence`) plus the
- * legacy {@link PermitRecord} fields preserved at the top level for
- * backward compatibility. The envelope shape matches the unified
- * verify response in atlasent-api PR #352.
- */
-export interface VerifyPermitByIdResponse {
-  /** `true` iff the permit verified — i.e. unconsumed, unexpired, and signature OK. */
-  valid: boolean;
-  /** Always `'permit'` on this surface. */
-  verification_type: "permit";
-  /** Operator-readable explanation when `valid` is `false`; `null` on success. */
-  reason: string | null;
-  /** Server clock at the moment verification ran. */
-  verified_at: string;
-  /** Type-specific evidence — same fields as the openapi PermitVerifyEvidence schema. */
-  evidence: {
-    permit_id: string;
-    status: PermitStatus;
-    actor_id?: string;
-    action_id?: string;
-    expires_at?: string;
-    payload_hash?: string | null;
-    decision_id?: string | null;
-  };
-  /** Legacy: full permit row preserved at the top level. */
-  permit: PermitRecord;
-  rateLimit: RateLimitState | null;
-}
-
-// ── Revoke permit ─────────────────────────────────────────────────────────────
-
-/** Input for {@link AtlaSentClient.revokePermit}. */
-export interface RevokePermitRequest {
-  /** The permit ID returned by a prior evaluate() call. */
-  permitId: string;
-  /** Optional human-readable reason stored in the audit log. */
-  reason?: string;
-}
-
-/**
- * Result of {@link AtlaSentClient.revokePermit}.
- *
- * @deprecated Use {@link RevokePermitByIdResponse} via
- * {@link AtlaSentClient.revokePermitById} — the canonical REST surface
- * (`POST /v1/permits/{id}/revoke`) returns the full updated
- * {@link PermitRecord} with `revoked_at`/`revoked_by`/`revoke_reason`
- * populated, instead of the legacy `{revoked, permitId}` envelope.
- * Will be removed in `@atlasent/sdk@3`.
- */
-export interface RevokePermitResponse {
-  /** `true` when the permit was found and successfully revoked. */
-  revoked: boolean;
-  /** Echo of the revoked permit's ID. */
-  permitId: string;
-  /** ISO-8601 timestamp of when the revocation was recorded. `undefined` when not returned by the server. */
-  revokedAt?: string | undefined;
-  /** Audit hash for the revocation event. `undefined` when not returned by the server. */
-  auditHash?: string | undefined;
-  /** Per-key rate-limit state. `null` when the server didn't emit headers. */
-  rateLimit: RateLimitState | null;
-}
-
-// ── Constraint trace (preflight) ──────────────────────────────────────────────
-
-/**
- * One stage of a single policy's constraint evaluation.
- *
- * Mirrors `ConstraintTraceStage` in
- * `atlasent-api/packages/types/src/index.ts`. Emitted by the rule
- * engine when the request URL carries `?include=constraint_trace`.
- *
- * Forward-compat: extra engine-side keys are tolerated; readers
- * should not assume this is a closed shape.
- */
-export interface ConstraintTraceStage {
-  /** Engine stage name (e.g. `"role_check"`, `"context"`). */
-  readonly stage: string;
-  /** Optional rule identifier; absent for wrapper stages. */
-  readonly rule?: string;
-  /** True iff this stage's predicate fired. */
-  readonly matched: boolean;
-  /** Optional human-readable note from the engine. */
-  readonly detail?: string;
-  /** Zero-based position within the policy's `stages` array. */
-  readonly order: number;
-  /** Forward-compat: tolerate unknown engine-side keys without crashing. */
-  readonly [key: string]: unknown;
-}
-
-/**
- * Per-policy block of a constraint trace.
- *
- * Mirrors `ConstraintTracePolicy` in
- * `atlasent-api/packages/types/src/index.ts`. The handler iterates
- * active policies in order until first non-allow; the policy that
- * produced the outer decision has `decision !== "allow"`.
- */
-export interface ConstraintTracePolicy {
-  /** Stable identifier of the evaluated policy. */
-  readonly policy_id: string;
-  /** Policy-level decision (`"allow"|"deny"|"hold"|"escalate"`). */
-  readonly decision: string;
-  /** Engine-side fingerprint of the bundle row. */
-  readonly fingerprint: string;
-  /**
-   * Optional engine-computed risk score from a `risk` rule clause.
-   * Distinct from the heuristic risk score on the outer envelope.
-   */
-  readonly risk_score?: number;
-  /** Ordered stages produced while evaluating this policy. */
-  readonly stages: ReadonlyArray<ConstraintTraceStage>;
-  /** Forward-compat: tolerate unknown engine-side keys. */
-  readonly [key: string]: unknown;
-}
-
-/**
- * Top-level constraint trace returned by
- * `/v1-evaluate?include=constraint_trace`.
- *
- * Mirrors `ConstraintTraceResponse` in
- * `atlasent-api/packages/types/src/index.ts`. Present iff the
- * caller requested the trace; the SDK's preflight helper always
- * requests it.
- */
-export interface ConstraintTrace {
-  /** Per-policy blocks in evaluation order. */
-  readonly rules_evaluated: ReadonlyArray<ConstraintTracePolicy>;
-  /**
-   * Policy id whose evaluation produced the outer decision. Equals
-   * the outer `matched_policy_id` on non-allow paths; `undefined` on
-   * a clean allow (all policies passed).
-   */
-  readonly matching_policy_id?: string;
-  /** Forward-compat: tolerate unknown engine-side keys. */
-  readonly [key: string]: unknown;
-}
-
-/**
- * Result of {@link AtlaSentClient.evaluatePreflight}.
- *
- * Wraps the regular {@link EvaluateResponse} plus the
- * {@link ConstraintTrace} returned when the request URL carries
- * `?include=constraint_trace`. The whole point of preflight is to
- * surface which stages / policies WOULD fire BEFORE pushing the
- * request onto an approval queue, so workflows can reject trivially
- * defective requests at submission time and only forward viable
- * requests to a human reviewer.
- *
- * `constraintTrace` is `null` on responses from older atlasent-api
- * deployments that do not echo the trace — forward-compatible
- * degradation.
- */
-export interface EvaluatePreflightResponse {
-  /** The regular evaluate response (decision, permitId, ...). */
-  readonly evaluation: EvaluateResponse;
-  /**
-   * The constraint trace, or `null` when the server omitted it
-   * (older atlasent-api version).
-   */
-  readonly constraintTrace: ConstraintTrace | null;
-}
-
-// ── Streaming evaluate ────────────────────────────────────────────────────────
-
-/**
- * Options for {@link AtlaSentClient.protectStream}.
- *
- * All fields are optional; defaults are used when omitted.
- */
-export interface StreamOptions {
-  /**
-   * Optional abort signal to cancel the stream from the caller side.
-   */
-  signal?: AbortSignal;
-  /**
-   * Per-event timeout in milliseconds: if no SSE event arrives within
-   * this window the stream throws {@link StreamTimeoutError}.
-   * Defaults to 30 000 ms (30 s). Pass `0` to disable.
-   */
-  timeoutMs?: number;
-  /**
-   * Maximum reconnection attempts on network drop before the stream
-   * gives up and throws. Defaults to 3.
-   */
-  maxRetries?: number;
-}
-
-/** A policy decision emitted mid-stream. */
-export interface StreamDecisionEvent {
-  type: "decision";
-  /**
-   * Policy decision — canonical 4-value lowercase vocabulary:
-   * `"allow"`, `"deny"`, `"hold"`, or `"escalate"`.
-   *
-   * Previously emitted `"ALLOW"` / `"DENY"` (uppercase, 2-value);
-   * now unified with `decision_canonical`.
-   *
-   * @deprecated Read `decision_canonical` instead for forward-compatible
-   * branching. Both fields now carry the same value. Will be
-   * removed/changed in `@atlasent/sdk@3`.
-   */
-  decision: Decision;
-  /**
-   * Canonical 4-value decision, byte-identical to the wire.
-   * One of `"allow"`, `"deny"`, `"hold"`, `"escalate"`.
-   */
-  decision_canonical: DecisionCanonical;
-  /** Opaque permit identifier for a final allow. Pass to verifyPermit. */
-  permitId: string;
-  /** Human-readable explanation from the policy engine. */
-  reason: string;
-  /** Audit hash bound to this decision. */
-  auditHash: string;
-  /** ISO-8601 timestamp of the decision. */
-  timestamp: string;
-  /** When true the stream will emit done and close after this event. */
-  isFinal: boolean;
-}
-
-/** An intermediate progress hint emitted before the final decision. */
-export interface StreamProgressEvent {
-  type: "progress";
-  /** Human-readable stage name (e.g. "policy_loading", "context_enrichment"). */
-  stage: string;
-  /** Additional server-defined fields — forward-compat, do not rely on shape. */
-  [key: string]: unknown;
-}
-
-/** Union of all events yielded by {@link AtlaSentClient.protectStream}. */
-export type StreamEvent = StreamDecisionEvent | StreamProgressEvent;
-
-// ── Batch evaluate ────────────────────────────────────────────────────────────
-
-/**
- * A single item in a {@link AtlaSentClient.evaluateBatch} call.
- * Same shape as {@link EvaluateRequest}.
+ * A single item inside a batch evaluate request.
  */
 export interface BatchEvalItem {
-  /** Identifier of the calling agent. */
+  /** Identifier for the actor initiating the action. */
   agent: string;
-  /** The action being authorized. */
+  /** Action type string evaluated against the active policy bundle. */
   action: string;
-  /** Arbitrary policy context. */
+  /** Arbitrary key/value context forwarded to the policy engine. */
   context?: Record<string, unknown>;
 }
 
 /**
- * Per-item result in an {@link EvaluateBatchResponse}.
- *
- * Success items carry `decision`, `decisionId`, `permitToken`, `auditHash`,
- * and `timestamp`. Error items (when the per-item RPC layer failed) carry
- * only `index`, `error`, and optionally `message`.
+ * A single item in the batch evaluation response.
  */
 export interface EvaluateBatchResultItem {
-  /** 0-based position matching the input order. */
+  /** Zero-based index matching the input order. */
   index: number;
-  /**
-   * Policy decision for this item. Present on success items.
-   * `"allow"`, `"deny"`, `"hold"`, or `"escalate"`.
-   */
+  /** Policy decision for this item. */
   decision?: DecisionCanonical;
-  /** Server-assigned permit / decision identifier. */
+  /** Evaluation / decision ID for this item. */
   decisionId?: string;
-  /** Opaque permit token (allow decisions only). Pass to verifyPermit(). */
+  /** Permit token (present when `decision === "allow"`). */
   permitToken?: string | null;
-  /** Machine-readable denial / hold reason. */
-  reason?: string;
-  /** Hash-chained audit-trail entry. */
+  /** Human-readable denial reason (present when `decision === "deny"`). */
+  reason?: string | null;
+  /** Audit-chain hash for this item's entry. */
   auditHash?: string;
-  /** ISO-8601 decision timestamp. */
+  /** Server-side timestamp. */
   timestamp?: string;
-  /** Error code when the item itself failed at the RPC layer. */
+  /** Per-item error code when the item failed server-side validation. */
   error?: string;
-  /** Human-readable detail when `error` is set. */
+  /** Per-item error message. */
   message?: string;
 }
 
 /**
  * Response from {@link AtlaSentClient.evaluateBatch}.
- *
- * - `items` is in the same order as the input `requests` array.
- * - `partial: true` means at least one item errored at the RPC layer
- *   (not a policy deny — those are surfaced via `decision: "deny"` on
- *   the item). Check `item.error` on items without a `decision`.
- * - `replayed: true` means the response was served from the idempotency
- *   cache (a prior call with the same `batchId` completed within 24 h).
  */
 export interface BatchEvalResponse {
-  /** Server-assigned (or caller-supplied) batch identifier. */
+  /** Batch ID assigned by the server (or echoed from the request). */
   batchId: string;
-  /** Per-item results, in input order. */
+  /** Ordered result items, one per input request. */
   items: EvaluateBatchResultItem[];
-  /** `true` when at least one item failed at the RPC layer. */
+  /** True when some items were dropped due to a server-side cap. */
   partial: boolean;
-  /** `true` when served from the idempotency cache. */
+  /** True when the server returned a cached response (idempotency replay). */
   replayed?: boolean;
-  /** Rate-limit state from the batch response headers. */
+  /** Per-key rate-limit state from the response headers. */
   rateLimit: RateLimitState | null;
 }
 
-// ── Decisions stream ──────────────────────────────────────────────────────────
+/**
+ * Full permit record returned by the control-plane REST endpoints
+ * (`GET /v1/permits/:id`, `POST /v1/permits/:id/revoke`, etc.).
+ */
+export interface PermitRecord {
+  /** Unique permit identifier. */
+  id: string;
+  /** Status of the permit lifecycle. */
+  status: "active" | "revoked" | "expired" | "consumed";
+  /** Actor that triggered the permit issuance. */
+  actor_id: string;
+  /** Action type evaluated. */
+  action_type: string;
+  /** ISO-8601 creation timestamp. */
+  created_at: string;
+  /** ISO-8601 expiry timestamp (absent when permit has no TTL). */
+  expires_at?: string;
+  /** ISO-8601 revocation timestamp. */
+  revoked_at?: string;
+  /** Principal that revoked the permit. */
+  revoked_by?: string;
+  /** Human-readable revocation reason. */
+  revoke_reason?: string;
+  /** SHA-256 of the permit payload, used by the offline verifier. */
+  payload_hash?: string;
+  /** Decision ID that originated this permit. */
+  decision_id?: string;
+  /** Environment the permit was issued in. */
+  environment?: string;
+  /** Arbitrary metadata attached at issuance. */
+  metadata?: Record<string, unknown>;
+}
 
 /**
- * Options for {@link AtlaSentClient.subscribeDecisions}.
+ * Response from {@link AtlaSentClient.evaluate}.
  */
-export interface SubscribeDecisionsOptions {
+export interface EvaluateResponse {
+  /** Policy decision. */
+  decision: DecisionCanonical;
+  /** Canonical lowercase decision (always present, identical to `decision`). */
+  decision_canonical: DecisionCanonical;
+  /** Evaluation / permit ID. Use `permitId` on new code. */
+  evaluationId: string;
+  /** Permit ID issued when `decision === "allow"`. */
+  permitId: string;
   /**
-   * Filter to specific event types (e.g. `["evaluate.allow", "evaluate.deny"]`).
-   * Omit to receive all types.
+   * Full permit record — only populated when the endpoint returns one
+   * (currently always `null` for `/v1-evaluate`; present on control-plane
+   * endpoints that return the full permit object).
    */
+  permit: PermitRecord | null;
+  /** Opaque permit token string (present when `decision === "allow"`). */
+  permitToken: string | null;
+  /** Denial / informational reasons. */
+  reasons: string[];
+  /** Primary reason string (first element of `reasons`, or `""`). */
+  reason: string;
+  /** SHA-256 of the audit chain entry. */
+  auditHash: string;
+  /** ISO-8601 server timestamp. */
+  timestamp: string;
+  /** Per-key rate-limit state from the response headers. */
+  rateLimit: RateLimitState | null;
+}
+
+/**
+ * Constraint trace returned when `?include=constraint_trace` is set.
+ * Shape mirrors `ConstraintTraceResponse` in `atlasent-api`.
+ */
+export interface ConstraintTrace {
+  /** Ordered list of policy stages that were evaluated. */
+  stages: Array<{
+    /** Policy stage identifier. */
+    id: string;
+    /** Stage outcome. */
+    result: "pass" | "fail" | "skip";
+    /** Human-readable label. */
+    label?: string;
+    /** Evaluated constraints within the stage. */
+    constraints?: Array<{
+      key: string;
+      expected: unknown;
+      actual: unknown;
+      matched: boolean;
+    }>;
+  }>;
+  /** Milliseconds the engine spent evaluating. */
+  eval_ms?: number;
+  /** Additional engine-side metadata. */
+  [key: string]: unknown;
+}
+
+/**
+ * Response from {@link AtlaSentClient.evaluatePreflight}.
+ */
+export interface EvaluatePreflightResponse {
+  /** Full evaluate result including decision, permitId, rateLimit, etc. */
+  evaluation: EvaluateResponse;
+  /**
+   * Per-stage policy trace. `null` on older server versions that don't
+   * emit the trace even when `?include=constraint_trace` is set.
+   */
+  constraintTrace: ConstraintTrace | null;
+}
+
+/**
+ * Input for {@link AtlaSentClient.verifyPermit}.
+ *
+ * @deprecated Prefer {@link AtlaSentClient.verifyPermitById}.
+ */
+export interface VerifyPermitRequest {
+  /** Permit ID returned by a prior {@link AtlaSentClient.evaluate} call. */
+  permitId: string;
+  /** Agent that originally requested the permit (cross-check). */
+  agent?: string;
+  /** Action that was evaluated (cross-check). */
+  action?: string;
+  /** Context forwarded to the verify handler (not re-evaluated). */
+  context?: Record<string, unknown>;
+  /** Environment the permit was issued in. */
+  environment?: string;
+  /** Hash of the execution payload to bind the verification. */
+  execution_hash?: string;
+}
+
+/**
+ * Response from {@link AtlaSentClient.verifyPermit}.
+ *
+ * @deprecated Prefer {@link AtlaSentClient.verifyPermitById}.
+ */
+export interface VerifyPermitResponse {
+  /** Whether the permit is currently valid. */
+  verified: boolean;
+  /** Canonical outcome string from the server. */
+  outcome: string;
+  /** SHA-256 of the permit payload at verify time. */
+  permitHash: string;
+  /** ISO-8601 server timestamp. */
+  timestamp: string;
+  /** Per-key rate-limit state from the response headers. */
+  rateLimit: RateLimitState | null;
+}
+
+/**
+ * Response from {@link AtlaSentClient.verifyPermitById}.
+ */
+export interface VerifyPermitByIdResponse {
+  /** Whether the permit is valid at verification time. */
+  valid: boolean;
+  /** Verification type discriminator (always `"permit"` for this endpoint). */
+  verification_type?: string;
+  /** Human-readable denial reason when `valid === false`. */
+  reason?: string;
+  /** ISO-8601 timestamp when verification ran. */
+  verified_at?: string;
+  /**
+   * Audit evidence bundle emitted by the server. Shape is server-defined
+   * and may include `permit_hash`, `chain_head`, etc.
+   */
+  evidence?: Record<string, unknown>;
+  /** Full permit record at the time of verification. */
+  permit?: PermitRecord;
+  /** Per-key rate-limit state from the response headers. */
+  rateLimit: RateLimitState | null;
+}
+
+/**
+ * Response from {@link AtlaSentClient.getPermit}.
+ */
+export interface GetPermitResponse {
+  /** Full permit lifecycle record. */
+  permit: PermitRecord;
+  /** Per-key rate-limit state from the response headers. */
+  rateLimit: RateLimitState | null;
+}
+
+/**
+ * Input for {@link AtlaSentClient.listPermits}.
+ */
+export interface ListPermitsRequest {
+  /** Filter by permit status. */
+  status?: "active" | "revoked" | "expired" | "consumed";
+  /** Filter by actor ID. */
+  actorId?: string;
+  /** Filter by action type. */
+  actionType?: string;
+  /** ISO-8601 lower bound for `created_at`. */
+  from?: string;
+  /** ISO-8601 upper bound for `created_at`. */
+  to?: string;
+  /** Maximum number of results (server default 50, cap 500). */
+  limit?: number;
+  /** Opaque cursor from a prior page's `nextCursor`. */
+  cursor?: string;
+}
+
+/**
+ * Response from {@link AtlaSentClient.listPermits}.
+ */
+export interface ListPermitsResponse {
+  /** Permits for the current page. */
+  permits: PermitRecord[];
+  /** Total matching permits across all pages. */
+  total: number;
+  /** Opaque cursor — pass to the next call to fetch the next page. */
+  nextCursor?: string;
+  /** Per-key rate-limit state from the response headers. */
+  rateLimit: RateLimitState | null;
+}
+
+/**
+ * Lightweight validity snapshot returned by
+ * {@link AtlaSentClient.checkPermitValid}.
+ */
+export interface PermitValidResponse {
+  /** Current lifecycle status. */
+  status: "active" | "revoked" | "expired" | "consumed";
+  /** ISO-8601 expiry (when the permit has a TTL). */
+  expires_at?: string;
+  /** ISO-8601 revocation timestamp (when `status === "revoked"`). */
+  revoked_at?: string;
+}
+
+/**
+ * Revoke input for the deprecated {@link AtlaSentClient.revokePermit}.
+ *
+ * @deprecated Use {@link AtlaSentClient.revokePermitById}.
+ */
+export interface RevokePermitRequest {
+  /** Permit ID to revoke. */
+  permitId: string;
+  /** Optional human-readable reason recorded in the audit log. */
+  reason?: string;
+}
+
+/**
+ * Response from the deprecated {@link AtlaSentClient.revokePermit}.
+ *
+ * @deprecated Use {@link AtlaSentClient.revokePermitById}.
+ */
+export interface RevokePermitResponse {
+  /** Whether the revocation was accepted. */
+  revoked: boolean;
+  /** Permit ID that was revoked. */
+  permitId: string;
+  /** ISO-8601 revocation timestamp. */
+  revokedAt?: string;
+  /** Audit-chain hash for the revocation entry. */
+  auditHash?: string;
+  /** Per-key rate-limit state from the response headers. */
+  rateLimit: RateLimitState | null;
+}
+
+/**
+ * Input for {@link AtlaSentClient.revokePermitById}.
+ */
+export interface RevokePermitByIdInput {
+  /** Optional human-readable reason recorded in the audit log. */
+  reason?: string;
+}
+
+/**
+ * Response from {@link AtlaSentClient.revokePermitById}.
+ */
+export interface RevokePermitByIdResponse {
+  /** Full permit record post-revocation. */
+  permit: PermitRecord;
+  /** Per-key rate-limit state from the response headers. */
+  rateLimit: RateLimitState | null;
+}
+
+/**
+ * Self-describe response from `GET /v1-api-key-self`.
+ */
+export interface ApiKeySelfResponse {
+  /** Unique key identifier (not the raw secret). */
+  keyId: string;
+  /** Organization this key belongs to. */
+  organizationId: string;
+  /** Environment the key is scoped to (e.g. `"production"`, `"staging"`). */
+  environment: string;
+  /** OAuth-style scopes granted to this key. */
+  scopes: string[];
+  /** IP CIDR allowlist (`null` means unrestricted). */
+  allowedCidrs: string[] | null;
+  /** Per-minute request cap configured for this key. */
+  rateLimitPerMinute: number;
+  /** Client IP the server observed on this request (`null` when unavailable). */
+  clientIp: string | null;
+  /** ISO-8601 expiry (`null` when the key has no TTL). */
+  expiresAt: string | null;
+  /** Per-key rate-limit state from the response headers. */
+  rateLimit: RateLimitState | null;
+}
+
+/** Audit event query parameters for {@link AtlaSentClient.listAuditEvents}. */
+export interface AuditEventsQuery {
+  /** Comma-separated event types to filter on. */
+  types?: string;
+  /** Filter by actor ID. */
+  actorId?: string;
+  /** ISO-8601 lower bound. */
+  from?: string;
+  /** ISO-8601 upper bound. */
+  to?: string;
+  /** Maximum results (server default 50, cap 500). */
+  limit?: number;
+  /** Opaque cursor from the prior page. */
+  cursor?: string;
+}
+
+/** Combined result from {@link AtlaSentClient.listAuditEvents}. */
+export type AuditEventsResult = AuditEventsPage & {
+  /** Per-key rate-limit state from the response headers. */
+  rateLimit: RateLimitState | null;
+};
+
+/** Input for {@link AtlaSentClient.createAuditExport}. */
+export interface AuditExportRequest {
+  /** Comma-separated event types to include. */
+  types?: string;
+  /** ISO-8601 lower bound. */
+  from?: string;
+  /** ISO-8601 upper bound. */
+  to?: string;
+  /** Filter by actor ID. */
+  actor_id?: string;
+}
+
+/** Combined result from {@link AtlaSentClient.createAuditExport}. */
+export type AuditExportResult = AuditExport & {
+  /** Per-key rate-limit state from the response headers. */
+  rateLimit: RateLimitState | null;
+};
+
+// ── Streaming ───────────────────────────────────────────────────────────────
+
+/** Options for {@link AtlaSentClient.protectStream}. */
+export interface StreamOptions {
+  /** Per-event idle timeout in milliseconds (default 30 000; 0 = disabled). */
+  timeoutMs?: number;
+  /** Maximum reconnection attempts on network drop (default 3). */
+  maxRetries?: number;
+  /** AbortSignal to cancel the stream from outside. */
+  signal?: AbortSignal;
+}
+
+/** A progress update emitted by the streaming evaluation endpoint. */
+export interface StreamProgressEvent {
+  type: "progress";
+  /** Server-assigned SSE event ID (used for reconnect). */
+  id?: string;
+  /** Human-readable progress message. */
+  message: string;
+  /** Completion percentage (0–100), when available. */
+  percent?: number;
+}
+
+/** The final decision emitted by the streaming evaluation endpoint. */
+export interface StreamDecisionEvent {
+  type: "decision";
+  /** Server-assigned SSE event ID. */
+  id?: string;
+  /** Policy decision. */
+  decision: DecisionCanonical;
+  /** True when this is the terminal event for the session. */
+  isFinal: boolean;
+  /** Permit ID when `decision === "allow"`. */
+  permitId?: string;
+  /** Human-readable denial / hold reason. */
+  reason?: string;
+}
+
+/** Union of all events emitted by {@link AtlaSentClient.protectStream}. */
+export type StreamEvent = StreamProgressEvent | StreamDecisionEvent;
+
+// ── Decision-stream subscription ────────────────────────────────────────────
+
+/** Options for {@link AtlaSentClient.subscribeDecisions}. */
+export interface SubscribeDecisionsOptions {
+  /** Filter to specific event types (e.g. `["evaluate.allow", "evaluate.deny"]`). */
   types?: string[];
   /** Filter to a specific actor ID. */
   actorId?: string;
   /**
-   * Resume from a prior event. Pass the `id` of the last received event.
-   * The server replays everything after that sequence position, then
-   * transitions to live polling.
-   */
-  lastEventId?: string;
-  /**
-   * Maximum session duration in seconds. The server emits `session_end`
-   * and closes after this window; the caller should reconnect with the
-   * last received `lastEventId`. Defaults to 1800 (30 min), max 3600 (1 h).
+   * Maximum stream duration in seconds (server enforces a hard cap;
+   * omit to use the server default).
    */
   maxSeconds?: number;
-  /** Abort signal to cancel the stream. */
+  /** Reconnect from this event ID (resumes without replaying history). */
+  lastEventId?: string;
+  /** AbortSignal to cancel the subscription. */
   signal?: AbortSignal;
 }
 
-/**
- * A single event from {@link AtlaSentClient.subscribeDecisions}.
- *
- * The `type` field maps to the audit-event type emitted by the server
- * (e.g. `"evaluate.allow"`, `"evaluate.deny"`, `"permit.verified"`).
- * `"heartbeat"` is a synthetic type emitted by the SDK — not a server
- * event — indicating the server sent a keepalive ping.
- * `"session_end"` signals the server-side max-seconds limit was reached;
- * reconnect with `lastEventId` to continue.
- */
+/** A single event from the decisions subscription stream. */
 export interface DecisionStreamEvent {
-  /** Stable server-assigned ID. Pass as `lastEventId` to resume. */
-  id?: string;
-  /**
-   * Audit-event type, e.g. `"evaluate.allow"`, `"evaluate.deny"`,
-   * `"evaluate.hold"`, `"permit.verified"`, `"permit.revoked"`,
-   * `"heartbeat"`, `"session_end"`.
-   */
   type: string;
+  id?: string;
   decision?: DecisionCanonical;
   actorId?: string;
   resourceType?: string;
@@ -1014,20 +575,53 @@ export interface DecisionStreamEvent {
   occurredAt?: string;
 }
 
-// ── Decision replay (ADR-015, Phase C) ──────────────────────────────────────
+// ── Deploy Gate ─────────────────────────────────────────────────────────────
+
+/** Optional evidence bundle attached to a Deploy Gate result. */
+export interface DeployGateEvidence {
+  permitId?: string;
+  permitHash?: string;
+  auditHash?: string;
+  verifiedAt?: string;
+}
+
+/** Input for {@link AtlaSentClient.deployGate}. */
+export interface DeployGateRequest {
+  /** Agent identifier (default `"ci-deploy-bot"`). */
+  agent?: string;
+  /** Action to evaluate (default `"production.deploy"`). */
+  action?: string;
+  /** Context forwarded to the policy engine. */
+  context?: Record<string, unknown>;
+}
+
+/** Response from {@link AtlaSentClient.deployGate}. */
+export interface DeployGateResponse {
+  /** Whether the deploy is authorized. */
+  allowed: boolean;
+  /** Full evaluate result. */
+  evaluation: EvaluateResponse;
+  /** Verification result (absent when evaluate returned non-allow). */
+  verification?: VerifyPermitResponse;
+  /** Human-readable summary. */
+  reason: string;
+  /** Evidence bundle for audit / compliance tooling. */
+  evidence: DeployGateEvidence;
+}
+
+// ── Decision replay (ADR-015 §Replay, parity v2) ────────────────────────────
 
 /**
- * Variance kind reported by {@link AtlaSentClient.replay}.
+ * Variance kind returned by {@link AtlaSentClient.replay}.
  *
- * Closed set from POLICY_PARITY_CONTRACT.md §Replay (parity v2).
- * Precedence on multi-failure rows: the order listed here.
- *
- * - `NONE` — replayed decision matches the original exactly.
- * - `POLICY_DRIFT` — re-evaluation produced a different decision (policy changed).
- * - `ENVELOPE_DRIFT` — recorded context envelope mismatch; replay can't proceed.
- * - `ENGINE_DRIFT` — engine version is retired / not replay-eligible.
- * - `CHAIN_TAMPER` — audit chain integrity check failed.
- * - `BUNDLE_MISSING` — the pinned policy bundle can no longer be resolved.
+ * | Value           | Meaning                                                  |
+ * |-----------------|----------------------------------------------------------|
+ * | `NONE`          | Replay produced the same outcome — no drift detected.    |
+ * | `POLICY_DRIFT`  | Policy changed; replay outcome differs from original.    |
+ * | `ENVELOPE_DRIFT`| Envelope hash mismatch; replay was not possible.         |
+ * | `ENGINE_DRIFT`  | Engine version retired/unknown; replay was not possible. |
+ * | `CHAIN_TAMPER`  | Audit chain tampered; replay aborted.                    |
+ * | `BUNDLE_MISSING`| No policy bundle recorded; replay was not possible.      |
  */
 export type ReplayVarianceKind =
   | "NONE"
@@ -1037,59 +631,39 @@ export type ReplayVarianceKind =
   | "CHAIN_TAMPER"
   | "BUNDLE_MISSING";
 
-/** Input to {@link AtlaSentClient.replay}. */
+/** Input for {@link AtlaSentClient.replay}. */
 export interface ReplayRequest {
-  /**
-   * Opaque ID of the evaluation to replay. Sourced from a prior
-   * {@link EvaluateResponse.evaluationId}.
-   */
+  /** ID of the prior evaluation to re-evaluate. */
   evaluationId: string;
 }
 
 /** Response from {@link AtlaSentClient.replay}. */
 export interface ReplayResponse {
-  /** Opaque decision ID that was replayed. Echoes the request's `evaluationId`. */
+  /** Decision ID (echoed from wire, or falls back to `evaluationId`). */
   decisionId: string;
-  /**
-   * Variance kind — the authoritative result of the replay.
-   *
-   * `"NONE"` means the replayed decision byte-matches the original.
-   * Any other value identifies the drift or integrity kind per
-   * POLICY_PARITY_CONTRACT.md §Replay.
-   */
+  /** Variance classification between original and replayed decision. */
   varianceKind: ReplayVarianceKind;
-  /** Decision recorded at original evaluation time. */
+  /** Decision recorded at evaluation time. */
   originalDecision: DecisionCanonical;
-  /** Machine-readable deny code from the original decision, if present. */
+  /** Deny code from the original decision (when `originalDecision === "deny"`). */
   originalDenyCode?: string;
-  /**
-   * Decision produced by re-evaluating with the pinned bundle.
-   * Absent when `varianceKind` is `"ENVELOPE_DRIFT"`, `"ENGINE_DRIFT"`,
-   * or `"BUNDLE_MISSING"` (replay couldn't proceed to evaluation).
-   */
+  /** Decision produced by the replay run (absent on ENVELOPE_DRIFT). */
   replayedDecision?: DecisionCanonical;
-  /** Machine-readable deny code from the replay evaluation, if present. */
+  /** Deny code from the replay run (when `replayedDecision === "deny"`). */
   replayedDenyCode?: string;
-  /** Engine version string used at original evaluation time. */
+  /** Engine version identifier used for the replay. */
   engineVersion?: string;
-  /**
-   * Lifecycle classification of the engine version.
-   * One of `"active"`, `"retired"`, `"archival_within_window"`,
-   * `"archival_expired"`, or `"unknown"`.
-   */
+  /** Lifecycle status of the engine version (`"active"`, `"retired"`, …). */
   engineVersionKind?: string;
-  /** Whether the engine version accepted replay. `false` corresponds to `ENGINE_DRIFT`. */
+  /** Whether the engine version accepts replay requests. */
   acceptsReplay: boolean;
-  /**
-   * Envelope verification outcome.
-   * One of `"verified"`, `"drift"`, `"absent"`, or `"envelope_missing"`.
-   */
+  /** Envelope verification result (`"verified"`, `"drift"`, `"absent"`, …). */
   envelopeVerification?: string;
-  /** ISO-8601 timestamp when the replay evaluation was executed. */
+  /** ISO-8601 timestamp when the replay ran. */
   replayedAt: string;
   /**
-   * Per-key rate-limit state for this request's response.
-   * `null` when the server didn't emit headers.
+   * Per-key rate-limit state from the response headers.
+   * `null` when the server didn't emit them.
    */
   rateLimit: RateLimitState | null;
 }
