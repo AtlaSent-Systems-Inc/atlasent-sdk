@@ -1,20 +1,14 @@
 import type { BehaviorClientOptions } from './types';
-import { getStateSummary } from './getStateSummary';
+import { getBvsSnapshot } from './getBvsSnapshot';
 
-// Enriches an evaluate request with behavior context.
-// Returns a metadata object to merge into the evaluate request's metadata field.
+// Enriches an evaluate request context with the frozen BvsSnapshot wire shape (BI4).
+// Returns an object to spread into EvaluateRequest.context.
+// Returns {} when the snapshot is unavailable (service down, no data) — fail-open.
 export async function attachToEvaluate(
   userId: string,
   clientOpts: BehaviorClientOptions,
 ): Promise<Record<string, unknown>> {
-  const summary = await getStateSummary(userId, clientOpts).catch(() => null);
-  if (!summary) return {};
-  return {
-    behavior_context: {
-      event_count: summary.event_count,
-      confidence_low: Object.values(summary.category_counts).length === 0,
-      window_start: summary.window_start,
-      window_end: summary.window_end,
-    },
-  };
+  const snapshot = await getBvsSnapshot(userId, clientOpts).catch(() => null);
+  if (!snapshot) return {};
+  return { bvsSnapshot: snapshot };
 }

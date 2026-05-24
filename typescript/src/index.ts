@@ -101,6 +101,7 @@ export { withPermit } from "./withPermit.js";
 export type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
+  BvsSnapshot,
   AuditEventsResult,
   AuditExportRequest,
   AuditExportResult,
