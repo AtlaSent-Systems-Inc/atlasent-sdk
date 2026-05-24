@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "description": "SDK replay conformance vectors for client.replay() (ADR-015 Phase C). Consumed by the TypeScript SDK test suite. The variance_kind closed set mirrors POLICY_PARITY_CONTRACT.md §Replay.",
+  "vectors": [
+    {
+      "name": "replay-none-allow",
+      "description": "Nominal replay: original allow, pinned bundle re-produces allow. No drift.",
+      "sdk_input": {
+        "evaluationId": "00000000-0000-0000-0000-000000000001"
+      },
+      "wire_response_status": 200,
+      "wire_response": {
+        "decision_id": "00000000-0000-0000-0000-000000000001",
+        "original_decision": "allow",
+        "replay_decision": "allow",
+        "engine_version": "wire-v1@1.4.0",
+        "engine_version_kind": "active",
+        "accepts_replay": true,
+        "variance": "NONE",
+        "envelope_verification": "verified",
+        "replayed_at": "2026-05-24T12:00:00.000Z"
+      },
+      "sdk_output": {
+        "decision_id": "00000000-0000-0000-0000-000000000001",
+        "variance_kind": "NONE",
+        "original_decision": "allow",
+        "replayed_decision": "allow",
+        "accepts_replay": true,
+        "envelope_verification": "verified"
+      }
+    },
+    {
+      "name": "replay-policy-drift",
+      "description": "Policy drift: replay produces deny where original was allow. Wire uses DECISION_CHANGED; SDK maps to POLICY_DRIFT.",
+      "sdk_input": {
+        "evaluationId": "00000000-0000-0000-0000-000000000002"
+      },
+      "wire_response_status": 200,
+      "wire_response": {
+        "decision_id": "00000000-0000-0000-0000-000000000002",
+        "original_decision": "allow",
+        "replay_decision": "deny",
+        "replay_deny_code": "DENY_POLICY",
+        "engine_version": "wire-v1@1.4.0",
+        "engine_version_kind": "active",
+        "accepts_replay": true,
+        "variance": "DECISION_CHANGED",
+        "envelope_verification": "verified",
+        "replayed_at": "2026-05-24T12:00:00.000Z"
+      },
+      "sdk_output": {
+        "decision_id": "00000000-0000-0000-0000-000000000002",
+        "variance_kind": "POLICY_DRIFT",
+        "original_decision": "allow",
+        "replayed_decision": "deny",
+        "replayed_deny_code": "DENY_POLICY",
+        "accepts_replay": true
+      }
+    },
+    {
+      "name": "replay-envelope-drift",
+      "description": "Envelope drift: stored envelope hash does not match re-canonicalized envelope. Replay aborts before re-evaluation.",
+      "sdk_input": {
+        "evaluationId": "00000000-0000-0000-0000-000000000003"
+      },
+      "wire_response_status": 200,
+      "wire_response": {
+        "decision_id": "00000000-0000-0000-0000-000000000003",
+        "original_decision": "allow",
+        "engine_version": "wire-v1@1.4.0",
+        "engine_version_kind": "active",
+        "accepts_replay": true,
+        "variance": "ENVELOPE_DRIFT",
+        "envelope_verification": "drift",
+        "replayed_at": "2026-05-24T12:00:00.000Z"
+      },
+      "sdk_output": {
+        "decision_id": "00000000-0000-0000-0000-000000000003",
+        "variance_kind": "ENVELOPE_DRIFT",
+        "original_decision": "allow",
+        "accepts_replay": true,
+        "envelope_verification": "drift"
+      }
+    },
+    {
+      "name": "replay-engine-drift",
+      "description": "ENGINE_DRIFT: engine version is retired and does not accept replay. Server returns 409 replay_not_eligible.",
+      "sdk_input": {
+        "evaluationId": "00000000-0000-0000-0000-000000000004"
+      },
+      "wire_response_status": 409,
+      "wire_response": {
+        "error": "replay_not_eligible",
+        "message": "Engine version wire-v1@0.9.0 does not accept replay (kind: retired)"
+      },
+      "sdk_output": {
+        "variance_kind": "ENGINE_DRIFT",
+        "accepts_replay": false
+      }
+    },
+    {
+      "name": "replay-bundle-missing",
+      "description": "BUNDLE_MISSING: no policy bundle recorded for this decision. Server returns 409 replay_not_eligible.",
+      "sdk_input": {
+        "evaluationId": "00000000-0000-0000-0000-000000000005"
+      },
+      "wire_response_status": 409,
+      "wire_response": {
+        "error": "replay_not_eligible",
+        "message": "No policy bundle recorded for this decision — cannot deterministically replay"
+      },
+      "sdk_output": {
+        "variance_kind": "BUNDLE_MISSING",
+        "accepts_replay": false
+      }
+    }
+  ]
+}
