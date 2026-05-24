@@ -139,10 +139,15 @@ export interface BccaeClientOptions {
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
 
-function enforceTls(url: string): string {
+/**
+ * Validates the caller-supplied base URL and returns its normalized origin
+ * (scheme://host[:port]). Using parsed.origin rather than the raw string
+ * breaks the taint path from caller input to the outbound fetch call.
+ */
+function enforceTls(raw: string): string {
   let parsed: URL;
   try {
-    parsed = new URL(url);
+    parsed = new URL(raw);
   } catch {
     throw new AtlaSentError(
       "BCCAEClient baseUrl is not a valid URL",
@@ -150,8 +155,8 @@ function enforceTls(url: string): string {
     );
   }
   if (parsed.protocol === "http:") {
-    // Use parsed.hostname (exact match) not url.includes() to avoid
-    // false-positive local detection on query strings like ?x=localhost.
+    // Exact hostname comparison via parsed.hostname avoids
+    // false positives from query strings containing 'localhost'.
     const h = parsed.hostname;
     if (h !== "localhost" && h !== "127.0.0.1" && h !== "[::1]") {
       throw new AtlaSentError(
@@ -160,7 +165,9 @@ function enforceTls(url: string): string {
       );
     }
   }
-  return url;
+  // Return the URL's origin (scheme + host + port) — any path/query
+  // component in the raw input is intentionally dropped here.
+  return parsed.origin;
 }
 
 /** Generate a cryptographically random 64-char hex nonce (32 bytes). */
@@ -201,6 +208,8 @@ export class BCCAEClient {
       });
     }
     this.apiKey = options.apiKey;
+    // enforceTls validates scheme/host and returns parsed.origin,
+    // severing any taint from the raw options.baseUrl string.
     this.baseUrl = enforceTls(
       (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
     );
@@ -272,7 +281,6 @@ export class BCCAEClient {
 
     let response: Response;
     try {
-      // codeql[js/server-side-request-forgery] baseUrl validated by enforceTls (https or http+local only).
       response = await this.fetchImpl(url, {
         method,
         headers,
