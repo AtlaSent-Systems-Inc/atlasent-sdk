@@ -483,6 +483,7 @@ export async function protectOrEscalate(
     auditHash: outcome.escalation.id,
     reason: outcome.resolutionNote ?? "Approved by human reviewer",
     timestamp: outcome.resolvedAt ?? new Date().toISOString(),
+    permitExpiresAt: null,
     escalationId: handle.escalationId,
     resolvedBy: outcome.resolvedBy,
     resolutionNote: outcome.resolutionNote,

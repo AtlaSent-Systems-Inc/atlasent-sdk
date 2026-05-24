@@ -125,7 +125,7 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
         const permit = await atlasent.protect({
           agent: "actor:test",
           action,
-          context: { resource_id: `res_${action}` },
+          context: { environment: "production", resource_id: `res_${action}` },
         });
         // (Mutation gate — must be unreachable on deny.)
         mutationSpy(permit);
@@ -172,7 +172,7 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
           const permit = await atlasent.protect({
             agent: "actor:test",
             action,
-            context: { resource_id: `res_${action}` },
+            context: { environment: "production", resource_id: `res_${action}` },
           });
           mutationSpy(permit);
         } catch (err) {
@@ -201,7 +201,7 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
       const permit = await atlasent.protect({
         agent: "actor:test",
         action,
-        context: { resource_id: `res_${action}` },
+        context: { environment: "production", resource_id: `res_${action}` },
       });
 
       expect(permit.permitId).toBe(`dec_${action.replace(/\./g, "_")}`);
@@ -226,7 +226,7 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
         await atlasent.protect({
           agent: "actor:test",
           action,
-          context: { resource_id: `res_${action}` },
+          context: { environment: "production", resource_id: `res_${action}` },
         });
         // The next line must be unreachable; if it executes the test fails.
         throw new Error("protect() returned on deny — bypass detected");
@@ -254,7 +254,7 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
       await atlasent.protect({
         agent: "actor:test",
         action,
-        context: { resource_id: `res_${action}` },
+        context: { environment: "production", resource_id: `res_${action}` },
       });
 
       const [, evalInit] = fetchImpl.mock.calls[0]!;

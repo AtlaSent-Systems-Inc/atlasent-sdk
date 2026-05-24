@@ -96,7 +96,7 @@ describe("atlasent.protect (default export API)", () => {
     const permit = await atlasent.protect({
       agent: "deploy-bot",
       action: "production.deploy",
-      context: { commit: "abc123" },
+      context: { commit: "abc123", environment: "production" },
     });
 
     expect(permit).toEqual({
@@ -105,6 +105,7 @@ describe("atlasent.protect (default export API)", () => {
       auditHash: "hash_alpha",
       reason: "GxP policy authorized operator",
       timestamp: "2026-04-22T10:00:01Z",
+      permitExpiresAt: null,
     });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
@@ -115,7 +116,7 @@ describe("atlasent.protect (default export API)", () => {
 
     let caught: unknown;
     try {
-      await atlasent.protect({ agent: "a", action: "b" });
+      await atlasent.protect({ agent: "a", action: "b", context: { environment: "production" } });
     } catch (err) {
       caught = err;
     }
@@ -140,7 +141,7 @@ describe("atlasent.protect (default export API)", () => {
 
     let caught: unknown;
     try {
-      await atlasent.protect({ agent: "a", action: "b" });
+      await atlasent.protect({ agent: "a", action: "b", context: { environment: "production" } });
     } catch (err) {
       caught = err;
     }
@@ -175,7 +176,7 @@ describe("atlasent.protect (default export API)", () => {
 
       let caught: unknown;
       try {
-        await atlasent.protect({ agent: "a", action: "b" });
+        await atlasent.protect({ agent: "a", action: "b", context: { environment: "production" } });
       } catch (err) {
         caught = err;
       }
@@ -200,7 +201,7 @@ describe("atlasent.protect (default export API)", () => {
 
     let caught: unknown;
     try {
-      await atlasent.protect({ agent: "a", action: "b" });
+      await atlasent.protect({ agent: "a", action: "b", context: { environment: "production" } });
     } catch (err) {
       caught = err;
     }
@@ -213,7 +214,7 @@ describe("atlasent.protect (default export API)", () => {
     // No configure(), no ATLASENT_API_KEY set.
     let caught: unknown;
     try {
-      await atlasent.protect({ agent: "a", action: "b" });
+      await atlasent.protect({ agent: "a", action: "b", context: { environment: "production" } });
     } catch (err) {
       caught = err;
     }
@@ -231,7 +232,7 @@ describe("atlasent.protect (default export API)", () => {
     // Still have to inject `fetch` for testing; the env only supplies the key.
     configure({ fetch: fetchImpl });
 
-    const permit = await atlasent.protect({ agent: "a", action: "b" });
+    const permit = await atlasent.protect({ agent: "a", action: "b", context: { environment: "production" } });
     expect(permit.permitId).toBe("dec_alpha");
   });
 
@@ -246,12 +247,12 @@ describe("atlasent.protect (default export API)", () => {
     ]);
 
     configure({ apiKey: "ask_test_1", fetch: first });
-    await atlasent.protect({ agent: "a", action: "b" });
+    await atlasent.protect({ agent: "a", action: "b", context: { environment: "production" } });
     expect(first).toHaveBeenCalledTimes(2);
     expect(second).toHaveBeenCalledTimes(0);
 
     configure({ apiKey: "ask_test_2", fetch: second });
-    await atlasent.protect({ agent: "a", action: "b" });
+    await atlasent.protect({ agent: "a", action: "b", context: { environment: "production" } });
     // First mock must not get further calls after configure() replaces it.
     expect(first).toHaveBeenCalledTimes(2);
     expect(second).toHaveBeenCalledTimes(2);
@@ -266,8 +267,8 @@ describe("atlasent.protect (default export API)", () => {
     ]);
     configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
-    await atlasent.protect({ agent: "a", action: "b" });
-    await atlasent.protect({ agent: "a", action: "b" });
+    await atlasent.protect({ agent: "a", action: "b", context: { environment: "production" } });
+    await atlasent.protect({ agent: "a", action: "b", context: { environment: "production" } });
     expect(fetchImpl).toHaveBeenCalledTimes(4);
   });
 
@@ -278,7 +279,7 @@ describe("atlasent.protect (default export API)", () => {
     ]);
     configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
-    const ctx = { commit: "abc123", approver: "alice" };
+    const ctx = { commit: "abc123", approver: "alice", environment: "production" };
     await atlasent.protect({
       agent: "deploy-bot",
       action: "deploy",
@@ -305,11 +306,11 @@ describe("atlasent.protect (default export API)", () => {
     ]);
     configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
-    await atlasent.protect({ agent: "a", action: "b" });
+    await atlasent.protect({ agent: "a", action: "b", context: { environment: "production" } });
 
     const [, evalInit] = fetchImpl.mock.calls[0]!;
     const evalBody = JSON.parse(evalInit!.body as string);
-    expect(evalBody.context).toEqual({});
+    expect(evalBody.context).toEqual({ environment: "production" });
   });
 });
 
@@ -413,7 +414,7 @@ describe("protectWithEvidence", () => {
     configure({ apiKey: "ask_test_protect_evidence_k1", fetch: fetchMock, retryPolicy: { maxAttempts: 1 } });
 
     await expect(
-      protectWithEvidence({ agent: "bot", action: "deploy" }),
+      protectWithEvidence({ agent: "bot", action: "deploy", context: { environment: "staging" } }),
     ).rejects.toBeInstanceOf(AtlaSentDeniedError);
   });
 

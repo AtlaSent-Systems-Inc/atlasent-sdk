@@ -91,7 +91,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      await protectShadow({ agent: "a", action: "b" });
+      await protectShadow({ agent: "a", action: "b", context: { environment: "production" } });
 
       // The second configureShadow call replaced onOutcome; onOutcome2 fires.
       expect(onOutcome2).toHaveBeenCalledOnce();
@@ -105,7 +105,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      const outcome = await protectShadow({ agent: "a", action: "b" });
+      const outcome = await protectShadow({ agent: "a", action: "b", context: { environment: "production" } });
       expect(outcome.mode).toBe("observe");
     });
   });
@@ -121,7 +121,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       const outcome = await protectShadow(
-        { agent: "agent-x", action: "files.read" },
+        { agent: "agent-x", action: "files.read", context: { environment: "production" } },
         { mode: "observe" },
       );
 
@@ -132,7 +132,7 @@ describe("shadow module", () => {
       expect(outcome.permit).not.toBeNull();
       expect(outcome.permit?.permitId).toBe("dec_1");
       expect(outcome.evaluationId).toBe("dec_1");
-      expect(outcome.request).toEqual({ agent: "agent-x", action: "files.read" });
+      expect(outcome.request).toEqual({ agent: "agent-x", action: "files.read", context: { environment: "production" } });
       expect(typeof outcome.latencyMs).toBe("number");
     });
 
@@ -141,7 +141,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       const outcome = await protectShadow(
-        { agent: "agent-x", action: "files.delete" },
+        { agent: "agent-x", action: "files.delete", context: { environment: "production" } },
         { mode: "observe" },
       );
 
@@ -162,7 +162,7 @@ describe("shadow module", () => {
       });
 
       await expect(
-        protectShadow({ agent: "a", action: "b" }, { mode: "observe" }),
+        protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "observe" }),
       ).rejects.toThrow("network failure");
     });
 
@@ -173,7 +173,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      const outcome = await protectShadow({ agent: "a", action: "b" }, { mode: "observe" });
+      const outcome = await protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "observe" });
       expect(outcome.would_have_blocked).toBe(false);
     });
 
@@ -187,7 +187,7 @@ describe("shadow module", () => {
       globalThis.fetch = fetchImpl;
 
       await protectShadow(
-        { agent: "a", action: "b" },
+        { agent: "a", action: "b", context: { environment: "production" } },
         { mode: "observe", reportToApi: true, apiKey: "ask_test_shadow_k1" },
       );
 
@@ -207,7 +207,7 @@ describe("shadow module", () => {
       globalThis.fetch = fetchImpl;
 
       await protectShadow(
-        { agent: "a", action: "b" },
+        { agent: "a", action: "b", context: { environment: "production" } },
         { mode: "observe", reportToApi: true, apiKey: "ask_test_shadow_k1" },
       );
 
@@ -226,7 +226,7 @@ describe("shadow module", () => {
       globalThis.fetch = fetchImpl;
 
       await protectShadow(
-        { agent: "a", action: "b" },
+        { agent: "a", action: "b", context: { environment: "production" } },
         { mode: "observe", reportToApi: false },
       );
 
@@ -245,7 +245,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       const outcome = await protectShadow(
-        { agent: "agent-x", action: "files.delete" },
+        { agent: "agent-x", action: "files.delete", context: { environment: "production" } },
         { mode: "warn" },
       );
 
@@ -266,7 +266,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       const outcome = await protectShadow(
-        { agent: "a", action: "b" },
+        { agent: "a", action: "b", context: { environment: "production" } },
         { mode: "warn" },
       );
 
@@ -284,7 +284,7 @@ describe("shadow module", () => {
       });
 
       await expect(
-        protectShadow({ agent: "a", action: "b" }, { mode: "warn" }),
+        protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "warn" }),
       ).rejects.toThrow("unexpected failure");
     });
 
@@ -293,7 +293,7 @@ describe("shadow module", () => {
       const fetchImpl = mockFetchSequence([jsonResponse(EVALUATE_DENY_WIRE)]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      await protectShadow({ agent: "a", action: "b" }, { mode: "warn" });
+      await protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "warn" });
       const shadowWarn = warnSpy.mock.calls.find(([msg]) => String(msg).includes("shadow:warn"));
       expect(shadowWarn?.[0]).toMatch(/dec_2/);
     });
@@ -310,7 +310,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       const outcome = await protectShadow(
-        { agent: "agent-x", action: "files.write" },
+        { agent: "agent-x", action: "files.write", context: { environment: "production" } },
         { mode: "enforce" },
       );
 
@@ -326,7 +326,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       await expect(
-        protectShadow({ agent: "agent-x", action: "critical.action" }, { mode: "enforce" }),
+        protectShadow({ agent: "agent-x", action: "critical.action", context: { environment: "production" } }, { mode: "enforce" }),
       ).rejects.toBeInstanceOf(AtlaSentDeniedError);
     });
 
@@ -339,7 +339,7 @@ describe("shadow module", () => {
       });
 
       await expect(
-        protectShadow({ agent: "a", action: "b" }, { mode: "enforce" }),
+        protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "enforce" }),
       ).rejects.toThrow("server exploded");
     });
 
@@ -350,7 +350,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      const outcome = await protectShadow({ agent: "a", action: "b" }, { mode: "enforce" });
+      const outcome = await protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "enforce" });
       expect(outcome.would_have_blocked).toBe(false);
     });
   });
@@ -367,7 +367,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       const outcome = await protectShadow(
-        { agent: "a", action: "b" },
+        { agent: "a", action: "b", context: { environment: "production" } },
         { mode: "observe", onOutcome },
       );
 
@@ -381,7 +381,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       const outcome = await protectShadow(
-        { agent: "a", action: "b" },
+        { agent: "a", action: "b", context: { environment: "production" } },
         { mode: "observe", onOutcome },
       );
 
@@ -398,7 +398,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      await protectShadow({ agent: "a", action: "b" }, { mode: "enforce", onOutcome });
+      await protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "enforce", onOutcome });
       expect(onOutcome).toHaveBeenCalledOnce();
     });
 
@@ -412,7 +412,7 @@ describe("shadow module", () => {
 
       // Should not throw despite onOutcome throwing.
       await expect(
-        protectShadow({ agent: "a", action: "b" }, { mode: "observe", onOutcome }),
+        protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "observe", onOutcome }),
       ).resolves.toBeDefined();
     });
 
@@ -422,7 +422,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       await expect(
-        protectShadow({ agent: "a", action: "b" }, { mode: "observe", onOutcome }),
+        protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "observe", onOutcome }),
       ).resolves.toBeDefined();
     });
 
@@ -435,7 +435,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      await protectShadow({ agent: "a", action: "b" }, { mode: "observe" });
+      await protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "observe" });
       expect(onOutcome).toHaveBeenCalledOnce();
     });
   });
@@ -446,12 +446,12 @@ describe("shadow module", () => {
     function buildOutcome(overrides: Partial<Parameters<typeof reportShadowEvent>[0]> = {}): Parameters<typeof reportShadowEvent>[0] {
       return {
         decision: "permit",
-        permit: { permitId: "dec_1", permitHash: "ph1", auditHash: "h1", reason: "ok", timestamp: "2026-01-01T00:00:00Z" },
+        permit: { permitId: "dec_1", permitHash: "ph1", auditHash: "h1", reason: "ok", timestamp: "2026-01-01T00:00:00Z", permitExpiresAt: null },
         error: null,
         would_have_blocked: false,
         latencyMs: 42,
         evaluationId: "dec_1",
-        request: { agent: "agent-x", action: "files.read" },
+        request: { agent: "agent-x", action: "files.read", context: { environment: "production" } },
         mode: "observe",
         ...overrides,
       };
@@ -596,7 +596,7 @@ describe("shadow module", () => {
 
       // Passing mode: "observe" in opts should override the global "enforce" mode.
       const outcome = await protectShadow(
-        { agent: "a", action: "b" },
+        { agent: "a", action: "b", context: { environment: "production" } },
         { mode: "observe" },
       );
       expect(outcome.mode).toBe("observe");
@@ -614,12 +614,12 @@ describe("shadow module", () => {
       function buildPermitOutcome() {
         return {
           decision: "permit" as const,
-          permit: { permitId: "dec_1", permitHash: "ph1", auditHash: "h1", reason: "ok", timestamp: "2026-01-01T00:00:00Z" },
+          permit: { permitId: "dec_1", permitHash: "ph1", auditHash: "h1", reason: "ok", timestamp: "2026-01-01T00:00:00Z", permitExpiresAt: null },
           error: null,
           would_have_blocked: false,
           latencyMs: 10,
           evaluationId: "dec_1",
-          request: { agent: "a", action: "b" },
+          request: { agent: "a", action: "b", context: { environment: "production" } },
           mode: "observe" as const,
         };
       }

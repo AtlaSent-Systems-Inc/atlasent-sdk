@@ -80,7 +80,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
     const app = new Hono<AppEnv>();
     app.post(
       "/deploy",
-      atlaSentGuard({ agent: "deploy-bot", action: "production.deploy" }),
+      atlaSentGuard({ agent: "deploy-bot", action: "production.deploy", context: async () => ({ environment: "production" }) }),
       (c) => {
         const permit = c.get("atlasent");
         return c.json({ ok: true, permitId: permit.permitId });
@@ -109,6 +109,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
         context: async (c) => ({
           commit: (await c.req.json<{ commit: string }>()).commit,
           approver: c.req.header("x-approver") ?? "unknown",
+          environment: "production",
         }),
       }),
       (c) => c.json({ ok: true }),
@@ -130,7 +131,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
     const evalBody = JSON.parse(evalInit!.body as string);
     expect(evalBody.actor_id).toBe("ci-runner-42");
     expect(evalBody.action_type).toBe("deploy_billing-api");
-    expect(evalBody.context).toEqual({ commit: "abc123", approver: "alice" });
+    expect(evalBody.context).toEqual({ commit: "abc123", approver: "alice", environment: "production" });
   });
 
   it("on DENY, throws AtlaSentDeniedError — not caught inside the middleware", async () => {
@@ -170,7 +171,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
     const app = new Hono<AppEnv>();
     app.post(
       "/deploy",
-      atlaSentGuard({ agent: "bot", action: "deploy", key: "permit" }),
+      atlaSentGuard({ agent: "bot", action: "deploy", key: "permit", context: async () => ({ environment: "production" }) }),
       (c) => {
         expect(c.get("atlasent")).toBeUndefined();
         const permit = c.get("permit");
