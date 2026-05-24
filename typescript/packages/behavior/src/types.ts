@@ -41,3 +41,14 @@ export interface GetStateSummaryOptions {
 export interface GetCategoryAggregateOptions {
   windowDays?: number;   // default 30
 }
+
+/**
+ * Consent-class projection (BI5) — the privacy-safe shape that crosses the
+ * LedgersMe (and other third-party app) boundary. Identical in structure to
+ * {@link StateSummary} but explicitly named so callers understand this is the
+ * redacted, aggregate-only surface: counts and timestamps only, never raw
+ * free-text or per-event payloads. The behavior-insights server enforces this
+ * server-side (cross-user callers receive event_count=0 + empty
+ * category_counts); the SDK enforces it client-side via assertNoRawText.
+ */
+export type ConsentClassProjection = StateSummary;
