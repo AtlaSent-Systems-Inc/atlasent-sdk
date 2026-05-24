@@ -272,7 +272,8 @@ export class BCCAEClient {
 
     let response: Response;
     try {
-      response = await this.fetchImpl(url, { // codeql[js/request-forgery] baseUrl validated by enforceTls (https or http+local only)
+      // codeql[js/server-side-request-forgery] baseUrl validated by enforceTls (https or http+local only).
+      response = await this.fetchImpl(url, {
         method,
         headers,
         signal: AbortSignal.timeout(this.timeoutMs),
