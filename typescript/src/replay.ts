@@ -16,12 +16,22 @@
  * it graduates to stable v1 (see atlasent-api `docs/STABLE_V2_PROMOTION.md`).
  */
 
-/** Replay variance per ADR-015 §3. Aligned with the recorded `variance`
- * field in the replay response. */
+/**
+ * Replay variance — superset covering both the raw wire values used by
+ * `replayDecision()` and the SDK-canonical values used by `replay()`.
+ *
+ * Raw wire values (replayDecision): NONE, DECISION_CHANGED, ENVELOPE_DRIFT
+ * SDK-canonical values (replay):    NONE, POLICY_DRIFT, ENVELOPE_DRIFT,
+ *                                   ENGINE_DRIFT, CHAIN_TAMPER, BUNDLE_MISSING
+ */
 export type ReplayVarianceKind =
   | "NONE"
   | "DECISION_CHANGED"
-  | "ENVELOPE_DRIFT";
+  | "POLICY_DRIFT"
+  | "ENVELOPE_DRIFT"
+  | "ENGINE_DRIFT"
+  | "CHAIN_TAMPER"
+  | "BUNDLE_MISSING";
 
 /** Engine-version registry classification (ADR-017). `unknown` covers
  * NULL engine_version (pre-replay-era rows) and registry-misses. */
@@ -76,4 +86,46 @@ export interface ReplayDecisionResponse {
   envelope_verification: EnvelopeVerification;
   envelope_drift_detail?: EnvelopeDriftDetail;
   replayed_at: string;
+}
+
+// ── ADR-015 Phase C — SDK-canonical replay surface ────────────────────────────
+
+/** Input to {@link AtlaSentClient.replay}. */
+export interface ReplayRequest {
+  /** The evaluation/decision ID to replay. */
+  evaluationId: string;
+}
+
+import type { RateLimitState } from "./types.js";
+import type { DecisionCanonical } from "./types.js";
+
+/**
+ * Result of {@link AtlaSentClient.replay}.
+ *
+ * Uses SDK-canonical variance kinds (see {@link ReplayVarianceKind}).
+ * `DECISION_CHANGED` on the wire maps to `POLICY_DRIFT` here.
+ * 409 responses map to `ENGINE_DRIFT` or `BUNDLE_MISSING` and are never
+ * thrown — callers can always switch on `varianceKind`.
+ */
+export interface ReplayResponse {
+  /** The decision/evaluation ID that was replayed. */
+  decisionId: string;
+  /** SDK-canonical variance outcome. */
+  varianceKind: ReplayVarianceKind;
+  /** The original recorded decision. */
+  originalDecision: DecisionCanonical;
+  /** Original deny code, if any. */
+  originalDenyCode?: string;
+  /** Re-evaluated decision. Absent when `varianceKind === "ENVELOPE_DRIFT"`. */
+  replayedDecision?: DecisionCanonical;
+  replayedDenyCode?: string;
+  engineVersion?: string;
+  engineVersionKind?: string;
+  /** Whether the evaluation was eligible for replay. `false` for 409 responses. */
+  acceptsReplay: boolean;
+  envelopeVerification?: string;
+  /** ISO-8601 timestamp of the replay. */
+  replayedAt: string;
+  /** Rate-limit state from response headers. */
+  rateLimit: RateLimitState | null;
 }

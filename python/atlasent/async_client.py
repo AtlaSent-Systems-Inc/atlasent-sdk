@@ -67,6 +67,8 @@ from .models import (
     VerifyPermitByIdResult,
     VerifyRequest,
     VerifyResult,
+    ReplayResponse,
+    ReplayVarianceKind,
 )
 
 if TYPE_CHECKING:
@@ -995,7 +997,7 @@ class AsyncAtlaSentClient:
         agent_slug: str | None = None,
     ) -> ListGovernanceFindingsResult:
         """List advisory findings produced against one governed change
-        (``GET /v1/governance/findings?change_id=...``).
+        (``GET /v1/governance/findings?change_id=...").
 
         All returned findings have ``can_authorize == False`` -- enforced
         by a CHECK constraint on the runtime DB; no finding can ever
@@ -1040,7 +1042,7 @@ class AsyncAtlaSentClient:
         agent_slug: str | None = None,
     ) -> ListGovernanceEvaluationsResult:
         """List agent run records for a governed change
-        (``GET /v1/governance/evaluations?change_id=...``).
+        (``GET /v1/governance/evaluations?change_id=...").
 
         Includes completed, failed, and timed-out runs. The same
         (agent_slug, agent_version, input_hash) combination may produce
@@ -1080,6 +1082,54 @@ class AsyncAtlaSentClient:
             ],
             rate_limit=rate_limit,
         )
+
+    # ── Decision replay (ADR-015 §Replay, parity v2) ─────────────────────────
+
+    async def replay(self, *, evaluation_id: str) -> ReplayResponse:
+        path = f"/v1/decisions/{quote(evaluation_id, safe='')}/replay"
+        try:
+            data, rate_limit, _ = await self._post(path, {})
+        except AtlaSentError as err:
+            if err.status_code == 409:
+                msg = str(err).lower()
+                variance_kind: ReplayVarianceKind = (
+                    "BUNDLE_MISSING" if "bundle" in msg else "ENGINE_DRIFT"
+                )
+                return ReplayResponse(
+                    decision_id=evaluation_id,
+                    variance_kind=variance_kind,
+                    original_decision="deny",
+                    accepts_replay=False,
+                    replayed_at=datetime.now(timezone.utc).isoformat(),
+                    rate_limit=None,
+                )
+            raise
+        _VARIANCE_MAP: dict[str, str] = {
+            "NONE": "NONE",
+            "DECISION_CHANGED": "POLICY_DRIFT",
+            "ENVELOPE_DRIFT": "ENVELOPE_DRIFT",
+            "CHAIN_TAMPER": "CHAIN_TAMPER",
+            "BUNDLE_MISSING": "BUNDLE_MISSING",
+            "ENGINE_DRIFT": "ENGINE_DRIFT",
+        }
+        raw_variance = data.get("variance", "")
+        vk: ReplayVarianceKind = _VARIANCE_MAP.get(raw_variance, "NONE")
+        replay_dec = data.get("replay_decision")
+        return ReplayResponse(
+            decision_id=data.get("decision_id", evaluation_id),
+            variance_kind=vk,
+            original_decision=(data.get("original_decision") or "deny").lower(),
+            original_deny_code=data.get("original_deny_code"),
+            replayed_decision=replay_dec.lower() if replay_dec else None,
+            replayed_deny_code=data.get("replay_deny_code"),
+            engine_version=data.get("engine_version"),
+            engine_version_kind=data.get("engine_version_kind"),
+            accepts_replay=bool(data.get("accepts_replay", True)),
+            envelope_verification=data.get("envelope_verification"),
+            replayed_at=data.get("replayed_at") or datetime.now(timezone.utc).isoformat(),
+            rate_limit=rate_limit,
+        )
+
 
     # ── internals ─────────────────────────────────────────────
 
