@@ -1,3 +1,4 @@
+/**
  * AtlaSent HTTP client.
  *
  * Two public methods, both backed by native `fetch`:
@@ -14,7 +15,12 @@ import type {
   AuditEventsQuery,
   AuditExport,
 } from "./audit.js";
-import type { ReplayDecisionResponse, ReplayRequest, ReplayResponse, ReplayVarianceKind } from "./replay.js";
+import type {
+  ReplayDecisionResponse,
+  ReplayRequest,
+  ReplayResponse,
+  ReplayVarianceKind,
+} from "./replay.js";
 import {
   AtlaSentError,
   StreamParseError,
@@ -371,7 +377,6 @@ interface VerifyPermitWire {
   permit_hash?: string;
   timestamp?: string;
 }
-
 interface ReplayWire {
   decision_id?: string;
   original_decision?: string;
@@ -815,8 +820,6 @@ export class AtlaSentClient {
       decision_canonical: decision,
       evaluationId: permitId,
       permitId,
-      // /v1-evaluate does not return a control-plane-shaped Permit body;
-      // callers needing the full record fetch GET /v1/permits/:id.
       permit: null,
       permitToken: decision === "allow" ? (permitToken ?? null) : null,
       reasons: reason ? [reason] : [],
@@ -826,10 +829,6 @@ export class AtlaSentClient {
       rateLimit,
     };
 
-    // Forward-compat: if the server omits `constraint_trace` (older
-    // atlasent-api version), surface trace=null rather than throwing.
-    // Unknown engine-side keys inside the trace are tolerated by the
-    // ConstraintTrace interface's index signature.
     let constraintTrace: ConstraintTrace | null = null;
     if (
       wire.constraint_trace !== undefined &&
@@ -858,9 +857,6 @@ export class AtlaSentClient {
     input: VerifyPermitRequest,
   ): Promise<VerifyPermitResponse> {
     _warnOversizeContext(input.context);
-    // Canonical wire shape per handler.ts: only permit_token is required.
-    // action_type / actor_id are optional cross-checks; context / api_key
-    // are NOT consulted by the verify handler.
     const body: Record<string, unknown> = {
       permit_token: input.permitId,
       action_type: input.action ?? "",
@@ -877,8 +873,6 @@ export class AtlaSentClient {
       body,
     );
 
-    // Tolerate both canonical {valid, outcome} and legacy {verified} server
-    // responses.
     const valid = typeof wire.valid === "boolean" ? wire.valid : wire.verified;
     if (typeof valid !== "boolean") {
       throw new AtlaSentError(
@@ -900,11 +894,6 @@ export class AtlaSentClient {
    * Run the canonical Deploy Gate V1 flow:
    * evaluate `production.deploy`, verify the issued permit server-side,
    * and return allow/block plus audit/evidence metadata.
-   *
-   * This helper never treats a signed/offline permit artifact as sufficient
-   * authorization. Execution is allowed only when `POST /v1-evaluate` returns
-   * `decision: "allow"` with a permit AND `POST /v1-verify-permit` returns
-   * `verified: true` / `valid: true`.
    */
   async deployGate(input: DeployGateRequest = {}): Promise<DeployGateResponse> {
     const agent = input.agent ?? "ci-deploy-bot";
@@ -968,17 +957,7 @@ export class AtlaSentClient {
    * Revoke a previously-issued permit so it can no longer pass
    * {@link verifyPermit}.
    *
-   * @deprecated Use {@link revokePermitById} — the canonical REST
-   * surface (`POST /v1/permits/{id}/revoke`) returns the full updated
-   * {@link PermitRecord} with `revoked_at`/`revoked_by`/`revoke_reason`
-   * populated, instead of the legacy `{revoked, permitId}` envelope
-   * this method emits. Will be removed in `@atlasent/sdk@3`.
-   *
-   * Use this when an agent's action is cancelled, superseded, or
-   * determined to be unauthorized after the fact. The revocation is
-   * recorded in the audit log with the optional `reason`.
-   *
-   * Throws {@link AtlaSentError} on transport / auth failures.
+   * @deprecated Use {@link revokePermitById}.
    */
   async revokePermit(
     input: RevokePermitRequest,
@@ -1014,21 +993,6 @@ export class AtlaSentClient {
     };
   }
 
-  /**
-   * Revoke a permit through the canonical REST surface
-   * (`POST /v1/permits/{permitId}/revoke`).
-   *
-   * Returns the full updated {@link PermitRecord} with `status === 'revoked'`
-   * and `revoked_at` / `revoked_by` / `revoke_reason` populated. After
-   * revocation, subsequent verify calls return `410 PERMIT_REVOKED`.
-   *
-   * Idempotent on `409 permit_revoked` for already-revoked permits;
-   * server returns the existing revoked row in that case.
-   *
-   * Throws {@link AtlaSentError} on `404` (permit not in calling org),
-   * `409` (already in a terminal state), `410` (expired before revoke),
-   * or `429` (rate limited).
-   */
   async revokePermitById(
     permitId: string,
     input: RevokePermitByIdInput = {},
@@ -1045,19 +1009,6 @@ export class AtlaSentClient {
     return { permit: wire, rateLimit };
   }
 
-  /**
-   * Verify a permit through the canonical REST surface
-   * (`POST /v1/permits/{permitId}/verify`).
-   *
-   * Returns the unified verification envelope (`valid`,
-   * `verification_type: 'permit'`, `reason`, `verified_at`, `evidence`)
-   * plus the full {@link PermitRecord} fields preserved at the top
-   * level. The `valid` field is the contract — pin to it.
-   *
-   * A `valid: false` is **not** thrown when the server returns 200 with
-   * a denial reason (matches the verify-shape unification on the wire);
-   * it is thrown on 4xx (`404` not found, `410` expired/consumed).
-   */
   async verifyPermitById(permitId: string): Promise<VerifyPermitByIdResponse> {
     if (!permitId) {
       throw new AtlaSentError("permitId is required", { code: "bad_request" });
@@ -1065,9 +1016,6 @@ export class AtlaSentClient {
     const { body: wire, rateLimit } = await this.post<
       VerifyPermitByIdResponse & PermitRecord
     >(`/v1/permits/${encodeURIComponent(permitId)}/verify`, {});
-    // Server returns the canonical envelope merged with the Permit row
-    // (allOf in openapi). Pull out the legacy permit row into `permit`
-    // for callers that want it as a sub-object too.
     const { valid, verification_type, reason, verified_at, evidence, ...row } =
       wire as VerifyPermitByIdResponse & PermitRecord;
     return {
@@ -1081,20 +1029,6 @@ export class AtlaSentClient {
     };
   }
 
-  /**
-   * Get a single permit's full lifecycle state.
-   *
-   * Calls `GET /v1/permits/{permitId}` (the canonical REST surface).
-   * Returns `status`, all timestamps, `revoked_at` / `revoked_by` /
-   * `revoke_reason` (when applicable), and the bound `payload_hash`
-   * / `decision_id`.
-   *
-   * Operator-facing introspection — answers "what state is this permit
-   * in, and why?" without reading audit logs.
-   *
-   * Throws {@link AtlaSentError} on `404` (permit not in calling org)
-   * or `410` (expired before retrieval).
-   */
   async getPermit(permitId: string): Promise<GetPermitResponse> {
     if (!permitId) {
       throw new AtlaSentError("permitId is required", { code: "bad_request" });
@@ -1105,17 +1039,6 @@ export class AtlaSentClient {
     return { permit: wire, rateLimit };
   }
 
-  /**
-   * Poll whether a permit is currently valid.
-   *
-   * Calls `GET /v1/permits/{permitId}/valid` — a lightweight read
-   * returning only the status snapshot optimised for guard heartbeat
-   * polling. Guards with `permitRevalidationIntervalMs` set race this
-   * against `tool.execute()` and throw {@link PermitRevoked} when
-   * `status === "revoked"` arrives.
-   *
-   * Throws {@link AtlaSentError} on transport / auth failures.
-   */
   async checkPermitValid(permitId: string): Promise<PermitValidResponse> {
     if (!permitId) {
       throw new AtlaSentError("permitId is required", { code: "bad_request" });
@@ -1126,16 +1049,6 @@ export class AtlaSentClient {
     return body;
   }
 
-  /**
-   * List permits issued to the calling org, most-recently-issued first.
-   *
-   * Calls `GET /v1/permits` (the canonical REST surface). Cursor-paged.
-   * Filters narrow on server side; pagination uses the `created_at`
-   * timestamp opaquely (`nextCursor`).
-   *
-   * Designed for incident review, debugging, and compliance
-   * reconstruction.
-   */
   async listPermits(
     input: ListPermitsRequest = {},
   ): Promise<ListPermitsResponse> {
@@ -1169,19 +1082,6 @@ export class AtlaSentClient {
     return result;
   }
 
-  /**
-   * Self-introspection: ask the server to describe the API key this
-   * client was constructed with. Returns the key's ID, organization,
-   * environment, scopes, IP allowlist, per-minute rate limit, the
-   * client IP the server observed, and the expiry (if any).
-   *
-   * Never includes the raw key or its hash. Safe to surface in operator
-   * dashboards. Useful for `IP_NOT_ALLOWED` debugging (the server tells
-   * you exactly which IP it saw) and for proactive expiry warnings.
-   *
-   * Throws {@link AtlaSentError} on transport / auth failures — same
-   * taxonomy as {@link AtlaSentClient.evaluate}.
-   */
   async keySelf(): Promise<ApiKeySelfResponse> {
     const { body: wire, rateLimit } =
       await this.get<ApiKeySelfWire>("/v1-api-key-self");
@@ -1209,21 +1109,6 @@ export class AtlaSentClient {
     };
   }
 
-  /**
-   * List persisted audit events for the authenticated organization
-   * (`GET /v1-audit/events`). Returned rows are wire-identical with
-   * the server: snake_case field names, including `previous_hash` and
-   * the `hash` chain, so the response can be fed straight into the
-   * offline verifier when paired with a signed export.
-   *
-   * `query.types` is a comma-joined list (e.g.
-   * `"evaluate.allow,policy.updated"`). `cursor` is the opaque
-   * `next_cursor` from the prior page. All fields are optional; the
-   * server defaults `limit` to 50 (capped at 500).
-   *
-   * Throws {@link AtlaSentError} on transport / auth failures — same
-   * taxonomy as {@link AtlaSentClient.evaluate}.
-   */
   async listAuditEvents(
     query: AuditEventsQuery = {},
   ): Promise<AuditEventsResult> {
@@ -1242,21 +1127,6 @@ export class AtlaSentClient {
     return { ...wire, rateLimit };
   }
 
-  /**
-   * Request a signed audit export bundle
-   * (`POST /v1-audit/exports`). The returned object is wire-identical
-   * with the server — `signature`, `chain_head_hash`, `events`, and
-   * friends survive untouched so the bundle can be persisted to disk
-   * and handed to the offline verifier (`verifyBundle` /
-   * `verifyAuditBundle`) without any reshaping.
-   *
-   * Pass `filter.types`, `filter.from`, `filter.to`, or `filter.actor_id`
-   * to narrow the export; omit for a full-org bundle. `rateLimit` is
-   * attached alongside the wire fields for observability.
-   *
-   * Throws {@link AtlaSentError} on transport / auth failures — same
-   * taxonomy as {@link AtlaSentClient.evaluate}.
-   */
   async createAuditExport(
     filter: AuditExportRequest = {},
   ): Promise<AuditExportResult> {
@@ -1279,176 +1149,6 @@ export class AtlaSentClient {
     return { ...wire, rateLimit };
   }
 
-  /**
-   * Re-evaluate a recorded decision against its originally-pinned policy
-   * bundle and engine version, and report whether the result agrees with
-   * what was recorded.
-   *
-   * Wraps `POST /v1-decisions-replay/:id/replay`. **Side-effect-free** — no
-   * audit chain row is written and no permit is issued (per ADR-016).
-   * Useful for compliance review, regression testing of bundle changes,
-   * and post-incident investigation.
-   *
-   * Outcomes encoded in the response:
-   * - `variance: "NONE"` — replay agrees with the original decision.
-   * - `variance: "DECISION_CHANGED"` — same envelope, same bundle, different
-   *   decision. Almost always indicates non-determinism in a rule
-   *   (e.g. wall-clock comparison) and warrants investigation.
-   * - `variance: "ENVELOPE_DRIFT"` — the recorded request envelope no longer
-   *   hashes to the recorded value. The replay short-circuits without
-   *   running the engine; `replay_decision` is absent. Treat as evidence
-   *   of substrate tamper or a recorder bug.
-   *
-   * Server-side 409 responses (replay refused because the engine version
-   * does not accept replay, or because no bundle was pinned) surface as
-   * `AtlaSentError` with `code: "replay_not_eligible"` — callers should
-   * treat them as expected for old / un-pinned decisions, not as bugs.
-   *
-   * Requires the `evaluate:write` API key scope.
-   *
-   * @param decisionId The UUID of the recorded decision to replay.
-   *                   Matches `execution_evaluations.request_id`.
-   *
-   * @example
-   * ```ts
-   * const result = await client.replayDecision("dec_abc123");
-   * if (result.variance === "DECISION_CHANGED") {
-   *   console.warn(
-   *     `Decision ${result.decision_id} changed on replay: ` +
-   *     `${result.original_decision} → ${result.replay_decision}`,
-   *   );
-   * }
-   * ```
-   */
-  async replayDecision(
-    decisionId: string,
-  ): Promise<ReplayDecisionResponse & { rateLimit: RateLimitState | null }> {
-    if (typeof decisionId !== "string" || decisionId.length === 0) {
-      throw new AtlaSentError("decisionId is required", {
-        code: "bad_request",
-      });
-    }
-
-    const path = `/v1-decisions-replay/${encodeURIComponent(decisionId)}/replay`;
-    const { body: wire, rateLimit } = await this.post<ReplayDecisionResponse>(
-      path,
-      {},
-    );
-
-    // Defensive validation. The replay endpoint is alpha (see
-    // STABLE_V2_PROMOTION.md) — wire shapes can shift without a
-    // deprecation cycle, so guard the contract fields callers will
-    // branch on rather than trusting the cast.
-    if (
-      typeof wire.decision_id !== "string" ||
-      typeof wire.original_decision !== "string" ||
-      typeof wire.engine_version_kind !== "string" ||
-      typeof wire.accepts_replay !== "boolean" ||
-      typeof wire.variance !== "string" ||
-      typeof wire.envelope_verification !== "string" ||
-      typeof wire.replayed_at !== "string"
-    ) {
-      throw new AtlaSentError(
-        "Malformed response from /v1-decisions-replay/:id/replay: missing required fields",
-        { code: "bad_response" },
-      );
-    }
-
-    return { ...wire, rateLimit };
-  }
-
-  /**
-   * Re-evaluate a recorded decision against its originally-pinned bundle
-   * (ADR-015 Phase C parity runtime). Returns {@link ReplayResponse} with
-   * SDK-canonical variance kinds. Never throws for any variance outcome;
-   * 409 `replay_not_eligible` maps to `ENGINE_DRIFT` or `BUNDLE_MISSING`.
-   */
-  async replay(request: ReplayRequest): Promise<ReplayResponse> {
-    const path = `/v1/decisions/${encodeURIComponent(request.evaluationId)}/replay`;
-    let wireBody: ReplayWire;
-    let rateLimit: RateLimitState | null;
-    try {
-      const result = await this.post<ReplayWire>(path, {});
-      wireBody = result.body;
-      rateLimit = result.rateLimit;
-    } catch (err) {
-      if (err instanceof AtlaSentError && err.status === 409) {
-        const msg = err.message ?? "";
-        const varianceKind: ReplayVarianceKind = msg.toLowerCase().includes("bundle")
-          ? "BUNDLE_MISSING"
-          : "ENGINE_DRIFT";
-        return {
-          decisionId: request.evaluationId,
-          varianceKind,
-          originalDecision: "deny",
-          acceptsReplay: false,
-          replayedAt: new Date().toISOString(),
-          rateLimit: null,
-        };
-      }
-      throw err;
-    }
-    const rawVariance = wireBody.variance ?? "";
-    const varianceKind: ReplayVarianceKind =
-      rawVariance === "NONE" ? "NONE"
-      : rawVariance === "DECISION_CHANGED" ? "POLICY_DRIFT"
-      : rawVariance === "ENVELOPE_DRIFT" ? "ENVELOPE_DRIFT"
-      : rawVariance === "CHAIN_TAMPER" ? "CHAIN_TAMPER"
-      : rawVariance === "BUNDLE_MISSING" ? "BUNDLE_MISSING"
-      : rawVariance === "ENGINE_DRIFT" ? "ENGINE_DRIFT"
-      : "NONE";
-    const originalDecision = (
-      (wireBody.original_decision ?? "deny").toLowerCase()
-    ) as DecisionCanonical;
-    const replayedDecision = wireBody.replay_decision
-      ? (wireBody.replay_decision.toLowerCase() as DecisionCanonical)
-      : undefined;
-    const out: ReplayResponse = {
-      decisionId: wireBody.decision_id ?? request.evaluationId,
-      varianceKind,
-      originalDecision,
-      acceptsReplay: wireBody.accepts_replay ?? true,
-      replayedAt: wireBody.replayed_at ?? new Date().toISOString(),
-      rateLimit,
-    };
-    if (wireBody.original_deny_code) out.originalDenyCode = wireBody.original_deny_code;
-    if (replayedDecision !== undefined) out.replayedDecision = replayedDecision;
-    if (wireBody.replay_deny_code) out.replayedDenyCode = wireBody.replay_deny_code;
-    if (wireBody.engine_version) out.engineVersion = wireBody.engine_version;
-    if (wireBody.engine_version_kind) out.engineVersionKind = wireBody.engine_version_kind;
-    if (wireBody.envelope_verification) out.envelopeVerification = wireBody.envelope_verification;
-    return out;
-  }
-
-  /**
-   * Open a streaming evaluation session against `POST /v1-evaluate-stream`.
-   *
-   * Yields {@link StreamDecisionEvent} and {@link StreamProgressEvent} objects
-   * as the server emits them. The iterator ends cleanly when the server sends
-   * `event: done`; it throws {@link AtlaSentError} on transport errors or when
-   * the server sends `event: error`.
-   *
-   * The final {@link StreamDecisionEvent} (isFinal: true) carries a `permitId`
-   * suitable for passing to {@link verifyPermit} after the stream closes.
-   *
-   * Hardening:
-   * - Throws {@link StreamTimeoutError} when no event arrives within
-   *   `opts.timeoutMs` (default 30 s). Pass `0` to disable.
-   * - Retries up to `opts.maxRetries` times (default 3) with 1 s / 2 s / 4 s
-   *   delays on network drop (before a terminal event). Sends `Last-Event-ID`
-   *   on reconnect when the server has emitted event IDs.
-   * - Throws {@link StreamParseError} on partial / malformed JSON rather than
-   *   crashing with a raw `SyntaxError`.
-   * - Closes cleanly on `event: done` or a decision event with `done: true`.
-   *
-   * ```ts
-   * for await (const event of client.protectStream({ agent, action })) {
-   *   if (event.type === "decision" && event.isFinal) {
-   *     await client.verifyPermit({ permitId: event.permitId });
-   *   }
-   * }
-   * ```
-   */
   async *protectStream(
     input: EvaluateRequest,
     opts: StreamOptions = {},
@@ -1500,7 +1200,7 @@ export class AtlaSentClient {
         const mapped = mapFetchError(err, requestId);
         if (mapped.code === "network" && retryCount < maxRetries) {
           retryCount++;
-          await sleep(1_000 * Math.pow(2, retryCount - 1)); // 1s, 2s, 4s
+          await sleep(1_000 * Math.pow(2, retryCount - 1));
           continue;
         }
         throw mapped;
@@ -1535,7 +1235,6 @@ export class AtlaSentClient {
             streamDone = true;
           }
         }
-        // parseSseStream returned normally (saw event: done or stream ended)
         streamDone = true;
       } catch (err) {
         if (err instanceof AtlaSentError && err.code === "network") {
@@ -1547,10 +1246,9 @@ export class AtlaSentClient {
 
       if (streamDone) break;
 
-      // Network drop before terminal event — attempt reconnect
       if (networkDrop && retryCount < maxRetries) {
         retryCount++;
-        await sleep(1_000 * Math.pow(2, retryCount - 1)); // 1s, 2s, 4s
+        await sleep(1_000 * Math.pow(2, retryCount - 1));
         continue;
       }
       if (networkDrop) {
@@ -1589,11 +1287,6 @@ export class AtlaSentClient {
     const url = `${this.baseUrl}${path}${qs}`;
     const requestId = globalThis.crypto.randomUUID();
 
-    /**
-     * Canonical auth header. The API also accepts X-AtlaSent-Key for legacy
-     * compatibility but that path is deprecated and will be removed in a future
-     * version. Always use Authorization: Bearer <api_key>.
-     */
     const headers: Record<string, string> = {
       Accept: "application/json",
       Authorization: `Bearer ${this.apiKey}`,
@@ -1685,19 +1378,6 @@ export class AtlaSentClient {
     }
   }
 
-  /**
-   * Open a new HITL escalation. Bridges a `hold` outcome from
-   * `protect()` to the approval queue: an agent that receives a
-   * `hold` decision calls this to enroll the proposed action for
-   * human review. The returned escalation can then be polled with
-   * `getHitlEscalation()` or driven to terminal by
-   * `approveHitlEscalation()` / `rejectHitlEscalation()`.
-   *
-   * Quorum, pool size, fallback decision and routing inherit from
-   * the server-side policy when omitted from `input`.
-   *
-   * Calls `POST /v1/hitl`.
-   */
   async createHitlEscalation(
     input: HitlCreateRequest,
   ): Promise<{ escalation: HitlEscalation; rateLimit: RateLimitState | null }> {
@@ -1708,14 +1388,6 @@ export class AtlaSentClient {
     return { escalation: body, rateLimit };
   }
 
-  /**
-   * List HITL escalations for the calling org. Defaults to
-   * `status=pending`; pass `status` to query other queues
-   * (`escalated`, `approved`, `rejected`, `auto_approved`,
-   * `timed_out`).
-   *
-   * Calls `GET /v1/hitl`.
-   */
   async listHitlEscalations(input: ListHitlEscalationsRequest = {}): Promise<{
     data: ListHitlEscalationsResponse;
     rateLimit: RateLimitState | null;
@@ -1734,12 +1406,6 @@ export class AtlaSentClient {
     return { data: body, rateLimit };
   }
 
-  /**
-   * Get a HITL escalation. The server payload includes a live
-   * `quorum_progress` snapshot when the escalation is still open.
-   *
-   * Calls `GET /v1/hitl/:id`.
-   */
   async getHitlEscalation(
     escalationId: string,
   ): Promise<{ escalation: HitlEscalation; rateLimit: RateLimitState | null }> {
@@ -1754,10 +1420,6 @@ export class AtlaSentClient {
     return { escalation: body, rateLimit };
   }
 
-  /**
-   * List per-approver vote rows for an escalation.
-   * Calls `GET /v1/hitl/:id/approvals`.
-   */
   async listHitlApprovals(escalationId: string): Promise<{
     approvals: HitlApprovalRecord[];
     rateLimit: RateLimitState | null;
@@ -1768,11 +1430,6 @@ export class AtlaSentClient {
     return { approvals: body.approvals ?? [], rateLimit };
   }
 
-  /**
-   * List the escalation chain hops for an escalation. Each `/escalate`
-   * call appends one row.
-   * Calls `GET /v1/hitl/:id/chain`.
-   */
   async getHitlChain(
     escalationId: string,
   ): Promise<{ chain: HitlChainHop[]; rateLimit: RateLimitState | null }> {
@@ -1782,16 +1439,6 @@ export class AtlaSentClient {
     return { chain: body.chain ?? [], rateLimit };
   }
 
-  /**
-   * Record an approve vote. Resolves the escalation only once the
-   * server-side quorum count is satisfied; before that the response
-   * carries a refreshed escalation row with the latest
-   * `quorum_progress`.
-   *
-   * Calls `POST /v1/hitl/:id/approve`. The server returns 409
-   * `duplicate_vote` if the same principal has already voted, and
-   * 409 `already_rejected` if a concurrent reject crossed the line.
-   */
   async approveHitlEscalation(
     escalationId: string,
     input: HitlApproveRequest = {},
@@ -1803,13 +1450,6 @@ export class AtlaSentClient {
     return { escalation: body, rateLimit };
   }
 
-  /**
-   * Record a reject vote. Reject is short-circuit terminal — a single
-   * reject closes the escalation regardless of how many approves have
-   * accumulated.
-   *
-   * Calls `POST /v1/hitl/:id/reject`.
-   */
   async rejectHitlEscalation(
     escalationId: string,
     input: HitlRejectRequest = {},
@@ -1821,14 +1461,6 @@ export class AtlaSentClient {
     return { escalation: body, rateLimit };
   }
 
-  /**
-   * Re-route an open escalation to a higher tier. Bounded by the
-   * escalation's `max_escalation_depth` — the server returns 409
-   * `chain_exhausted` and applies the configured fallback decision
-   * once the ceiling is hit.
-   *
-   * Calls `POST /v1/hitl/:id/escalate`.
-   */
   async escalateHitlEscalation(
     escalationId: string,
     input: HitlEscalateRequest,
@@ -1840,14 +1472,6 @@ export class AtlaSentClient {
     return { escalation: body, rateLimit };
   }
 
-  /**
-   * Manually apply the escalation's `fallback_decision`. Useful for
-   * admin recovery of a hung escalation when the cron sweeper hasn't
-   * run yet, or to short-circuit a stuck flow during incident
-   * response.
-   *
-   * Calls `POST /v1/hitl/:id/timeout`.
-   */
   async timeoutHitlEscalation(
     escalationId: string,
   ): Promise<{ escalation: HitlEscalation; rateLimit: RateLimitState | null }> {
@@ -1858,16 +1482,6 @@ export class AtlaSentClient {
     return { escalation: body, rateLimit };
   }
 
-  /**
-   * Run a named governance graph traversal query.
-   *
-   * Dispatches to `GET /v1/governance/graph/query?type=<queryType>`.
-   * Each query type returns a different row shape — the return type
-   * narrows automatically based on the literal `queryType` argument.
-   *
-   * `"user_approvals"` requires `params.actor_id` — the server returns
-   * a 400 if it is absent.
-   */
   async queryGovernanceGraph<T extends GovernanceGraphQueryType>(
     queryType: T,
     params: GovernanceGraphQueryParams = {},
@@ -1882,19 +1496,6 @@ export class AtlaSentClient {
     return { ...body, rateLimit };
   }
 
-  /**
-   * Reconstruct the multi-system execution timeline for a specific incident.
-   *
-   * Calls `GET /v1/governance/timeline/incident/{incidentId}`. Backed
-   * server-side by `reconstruct_incident_chains_v2()`, which fixes the
-   * `executor_id → actor_id` bug that silently produced empty timelines
-   * in the original function.
-   *
-   * Returns full execution rows including the §13.1 columns
-   * (`delegation_chain_id`, `replay_of_execution_id`, `incident_id`,
-   * `policy_version_id`, `bundle_version_id`) alongside the actor
-   * timeline and evidence rows.
-   */
   async getIncidentTimeline(
     incidentId: string,
   ): Promise<IncidentTimelineResponse> {
@@ -1911,10 +1512,6 @@ export class AtlaSentClient {
 
   // ── Connector Management ─────────────────────────────────────────────────
 
-  /**
-   * List connectors registered for the calling org.
-   * Calls `GET /v1/governance/connectors`.
-   */
   async listConnectors(
     options: { cursor?: string; limit?: number } = {},
   ): Promise<ListConnectorsResponse> {
@@ -1935,10 +1532,6 @@ export class AtlaSentClient {
     return result;
   }
 
-  /**
-   * Register and install a new connector for the calling org.
-   * Calls `POST /v1/governance/connectors`.
-   */
   async installConnector(
     input: InstallConnectorInput,
   ): Promise<InstallConnectorResponse> {
@@ -1948,10 +1541,6 @@ export class AtlaSentClient {
     return { connector: body, rateLimit };
   }
 
-  /**
-   * Store encrypted credentials for a connector.
-   * Calls `POST /v1/governance/connectors/{id}/authenticate`.
-   */
   async authenticateConnector(
     connectorId: string,
     input: AuthenticateConnectorInput,
@@ -1975,10 +1564,6 @@ export class AtlaSentClient {
     };
   }
 
-  /**
-   * Trigger an incremental sync for a connector.
-   * Calls `POST /v1/governance/connectors/{id}/sync`.
-   */
   async syncConnector(connectorId: string): Promise<SyncConnectorResponse> {
     if (!connectorId) {
       throw new AtlaSentError("connectorId is required", {
@@ -1993,10 +1578,6 @@ export class AtlaSentClient {
     return { ...body, rateLimit };
   }
 
-  /**
-   * Revoke a connector and all its associated credentials.
-   * Calls `POST /v1/governance/connectors/{id}/revoke`.
-   */
   async revokeConnector(
     connectorId: string,
     reason?: string,
@@ -2018,10 +1599,6 @@ export class AtlaSentClient {
     return { ...wire, rateLimit };
   }
 
-  /**
-   * Rotate the credentials for a connector.
-   * Calls `POST /v1/governance/connectors/{id}/rotate-credentials`.
-   */
   async rotateConnectorCredentials(
     connectorId: string,
   ): Promise<RotateCredentialsResponse> {
@@ -2041,10 +1618,6 @@ export class AtlaSentClient {
     return { ...body, rateLimit };
   }
 
-  /**
-   * List enforcement policies for the calling org, optionally filtered by connector type.
-   * Calls `GET /v1/governance/enforcement-policies`.
-   */
   async listEnforcementPolicies(
     connectorType?: ConnectorType,
   ): Promise<ListEnforcementPoliciesResponse> {
@@ -2057,10 +1630,6 @@ export class AtlaSentClient {
     return { policies: body.policies ?? [], total: body.total, rateLimit };
   }
 
-  /**
-   * Create or update a connector enforcement policy.
-   * Calls `POST /v1/governance/enforcement-policies`.
-   */
   async upsertEnforcementPolicy(
     input: UpsertEnforcementPolicyInput,
   ): Promise<UpsertEnforcementPolicyResponse> {
@@ -2072,10 +1641,6 @@ export class AtlaSentClient {
 
   // ── Organizational Risk Graph ─────────────────────────────────────────────
 
-  /**
-   * Trigger a fresh org-level risk score computation.
-   * Calls `POST /v1/governance/risk/compute`.
-   */
   async computeOrgRisk(
     options: ComputeOrgRiskOptions = {},
   ): Promise<ComputeOrgRiskResponse> {
@@ -2085,10 +1650,6 @@ export class AtlaSentClient {
     return { score: body, rateLimit };
   }
 
-  /**
-   * Retrieve the most recently computed risk score for the calling org.
-   * Calls `GET /v1/governance/risk/latest`.
-   */
   async getLatestOrgRisk(): Promise<GetLatestOrgRiskResponse> {
     const { body, rateLimit } = await this.get<{
       score: GetLatestOrgRiskResponse["score"];
@@ -2096,10 +1657,6 @@ export class AtlaSentClient {
     return { score: body.score ?? null, rateLimit };
   }
 
-  /**
-   * Page through historical org risk scores, most-recent first.
-   * Calls `GET /v1/governance/risk/history`.
-   */
   async listOrgRiskHistory(
     options: { cursor?: string; limit?: number } = {},
   ): Promise<ListOrgRiskHistoryResponse> {
@@ -2119,6 +1676,7 @@ export class AtlaSentClient {
     if (body.next_cursor) result.nextCursor = body.next_cursor;
     return result;
   }
+
   // ── Cross-Org Permission Negotiation ──────────────────────────────────────
 
   async checkCrossOrgPermission(
@@ -2442,21 +2000,7 @@ export class AtlaSentClient {
   }
 
   // ── Constrained governance agents (read surface) ──────────────────────────
-  //
-  // Three GETs onto the v1-governance-agents edge function. Doctrine:
-  // findings produced by these endpoints are advisory signal, never
-  // authority. There is no `runGovernanceAgent` method on this client —
-  // invocation belongs in CI (atlasent-action `governance-agents` mode),
-  // not in application code.
 
-  /**
-   * List the advisory governance-agent registry for the calling org.
-   *
-   * Calls `GET /v1/governance/agents`. The registry is reference data
-   * seeded at runtime-DB migration time; every row has
-   * `authority_class = "advisory"` and `can_authorize = false` —
-   * structural invariants enforced by the schema, not policy.
-   */
   async listGovernanceAgents(): Promise<GovernanceAgent[]> {
     const { body } = await this.get<ListGovernanceAgentsResponse>(
       "/v1/governance/agents",
@@ -2464,15 +2008,6 @@ export class AtlaSentClient {
     return [...(body.agents ?? [])];
   }
 
-  /**
-   * List advisory findings emitted against one governed change.
-   *
-   * Calls `GET /v1/governance/findings?change_id=…[&agent_slug=…]`.
-   * Returns the typed-finding rows in `created_at DESC` order, including
-   * `routed_gate_id` when the finding→gate trigger linked them. Findings
-   * with `can_authorize === false` (always) are advisory; rendering them
-   * never satisfies a gate.
-   */
   async listGovernanceFindings(
     query: ListGovernanceFindingsQuery,
   ): Promise<GovernanceAgentFinding[]> {
@@ -2488,15 +2023,6 @@ export class AtlaSentClient {
     return [...(body.findings ?? [])];
   }
 
-  /**
-   * List agent run records against one governed change.
-   *
-   * Calls `GET /v1/governance/evaluations?change_id=…[&agent_slug=…]`.
-   * Returns every persisted evaluation, including `failed` / `timeout`
-   * runs and `completed` runs with zero findings — the latter is the
-   * positive signal "the agent ran and found nothing", which the UI
-   * surfaces as `clear`.
-   */
   async listGovernanceEvaluations(
     query: ListGovernanceEvaluationsQuery,
   ): Promise<GovernanceAgentEvaluation[]> {
@@ -2511,17 +2037,107 @@ export class AtlaSentClient {
     );
     return [...(body.evaluations ?? [])];
   }
+
+  async replayDecision(
+    decisionId: string,
+  ): Promise<ReplayDecisionResponse & { rateLimit: RateLimitState | null }> {
+    if (typeof decisionId !== "string" || decisionId.length === 0) {
+      throw new AtlaSentError("decisionId is required", {
+        code: "bad_request",
+      });
+    }
+
+    const path = `/v1-decisions-replay/${encodeURIComponent(decisionId)}/replay`;
+    const { body: wire, rateLimit } = await this.post<ReplayDecisionResponse>(
+      path,
+      {},
+    );
+
+    if (
+      typeof wire.decision_id !== "string" ||
+      typeof wire.original_decision !== "string" ||
+      typeof wire.engine_version_kind !== "string" ||
+      typeof wire.accepts_replay !== "boolean" ||
+      typeof wire.variance !== "string" ||
+      typeof wire.envelope_verification !== "string" ||
+      typeof wire.replayed_at !== "string"
+    ) {
+      throw new AtlaSentError(
+        "Malformed response from /v1-decisions-replay/:id/replay: missing required fields",
+        { code: "bad_response" },
+      );
+    }
+
+    return { ...wire, rateLimit };
+  }
+
+  async replay(request: ReplayRequest): Promise<ReplayResponse> {
+    const path = `/v1/decisions/${encodeURIComponent(request.evaluationId)}/replay`;
+    let wireBody: ReplayWire;
+    let rateLimit: RateLimitState | null;
+    try {
+      const result = await this.post<ReplayWire>(path, {});
+      wireBody = result.body;
+      rateLimit = result.rateLimit;
+    } catch (err) {
+      if (err instanceof AtlaSentError && err.status === 409) {
+        const msg = err.message ?? "";
+        const varianceKind: ReplayVarianceKind = msg.toLowerCase().includes("bundle")
+          ? "BUNDLE_MISSING"
+          : "ENGINE_DRIFT";
+        return {
+          decisionId: request.evaluationId,
+          varianceKind,
+          originalDecision: "deny",
+          acceptsReplay: false,
+          replayedAt: new Date().toISOString(),
+          rateLimit: null,
+        };
+      }
+      throw err;
+    }
+
+    const rawVariance = wireBody.variance ?? "";
+    const varianceKind: ReplayVarianceKind =
+      rawVariance === "NONE"
+        ? "NONE"
+        : rawVariance === "DECISION_CHANGED"
+          ? "POLICY_DRIFT"
+          : rawVariance === "ENVELOPE_DRIFT"
+            ? "ENVELOPE_DRIFT"
+            : rawVariance === "CHAIN_TAMPER"
+              ? "CHAIN_TAMPER"
+              : rawVariance === "BUNDLE_MISSING"
+                ? "BUNDLE_MISSING"
+                : rawVariance === "ENGINE_DRIFT"
+                  ? "ENGINE_DRIFT"
+                  : "NONE";
+
+    const originalDecision = (
+      (wireBody.original_decision ?? "deny").toLowerCase()
+    ) as DecisionCanonical;
+    const replayedDecision = wireBody.replay_decision
+      ? (wireBody.replay_decision.toLowerCase() as DecisionCanonical)
+      : undefined;
+
+    const out: ReplayResponse = {
+      decisionId: wireBody.decision_id ?? request.evaluationId,
+      varianceKind,
+      originalDecision,
+      acceptsReplay: wireBody.accepts_replay ?? true,
+      replayedAt: wireBody.replayed_at ?? new Date().toISOString(),
+      rateLimit,
+    };
+    if (wireBody.original_deny_code) out.originalDenyCode = wireBody.original_deny_code;
+    if (replayedDecision !== undefined) out.replayedDecision = replayedDecision;
+    if (wireBody.replay_deny_code) out.replayedDenyCode = wireBody.replay_deny_code;
+    if (wireBody.engine_version) out.engineVersion = wireBody.engine_version;
+    if (wireBody.engine_version_kind) out.engineVersionKind = wireBody.engine_version_kind;
+    if (wireBody.envelope_verification) out.envelopeVerification = wireBody.envelope_verification;
+    return out;
+  }
 }
 
-/**
- * Parse the server's `X-RateLimit-*` header triple into a typed
- * {@link RateLimitState}. Returns `null` when any of the three headers
- * is missing or unparseable — callers treat that as "the server didn't
- * emit rate-limit state" rather than "the window is empty".
- *
- * `X-RateLimit-Reset` is accepted as either unix-seconds (what the
- * AtlaSent edge functions emit today) or an ISO 8601 timestamp.
- */
 function parseRateLimitHeaders(headers: Headers): RateLimitState | null {
   const rawLimit = headers.get("x-ratelimit-limit");
   const rawRemaining = headers.get("x-ratelimit-remaining");
@@ -2544,9 +2160,6 @@ function parseRateLimitHeaders(headers: Headers): RateLimitState | null {
 function parseResetHeader(raw: string): Date | null {
   const seconds = Number(raw);
   if (Number.isFinite(seconds)) {
-    // Standard shape: unix seconds. 10-digit values are in the valid
-    // range ~2001–2286 so this heuristic won't confuse a tiny
-    // `remaining`-like number for an epoch.
     return new Date(seconds * 1000);
   }
   const ms = Date.parse(raw);
@@ -2662,13 +2275,6 @@ async function readServerMessage(response: Response): Promise<string | null> {
   }
 }
 
-/**
- * Translate an {@link AuditEventsQuery} into `URLSearchParams`. The
- * server expects snake_case keys (`actor_id`) and accepts
- * comma-joined values for `types`; numeric `limit` serializes via
- * `String(n)`. Undefined / empty fields are dropped so the query
- * string stays minimal.
- */
 function buildAuditEventsQuery(query: AuditEventsQuery): URLSearchParams {
   const params = new URLSearchParams();
   if (query.types !== undefined && query.types !== "") {
@@ -2710,19 +2316,6 @@ function parseRetryAfter(raw: string | null): number | undefined {
 
 // ── SSE stream parser ─────────────────────────────────────────────────────────
 
-/**
- * Parse an SSE `ReadableStream<Uint8Array>` into typed {@link StreamEvent}s.
- *
- * Hardening additions over the original:
- * - Per-event timeout: if no chunk arrives within `timeoutMs` (0 = disabled),
- *   throws {@link StreamTimeoutError}.
- * - Partial-JSON guard: wraps `JSON.parse` failures in {@link StreamParseError}
- *   rather than letting the raw `SyntaxError` escape.
- * - Calls `onEventId` whenever the server emits an `id:` field so the caller
- *   can track the `Last-Event-ID` for reconnection.
- * - Terminal detection: returns on `event: done` OR when a `decision` event
- *   carries `done: true` at the top level (server-side terminal signal).
- */
 async function* parseSseStream(
   body: ReadableStream<Uint8Array>,
   requestId: string,
@@ -2737,11 +2330,6 @@ async function* parseSseStream(
     | { done: true; value?: undefined }
     | { done: false; value: Uint8Array };
 
-  /**
-   * Read the next chunk from the reader, applying a per-read timeout when
-   * `timeoutMs > 0`. Returns `{ done: true }` when the stream ends, throws
-   * {@link StreamTimeoutError} on timeout.
-   */
   async function readChunk(): Promise<ChunkResult> {
     if (timeoutMs <= 0) {
       return reader.read() as Promise<ChunkResult>;
@@ -2773,8 +2361,6 @@ async function* parseSseStream(
         value = result.value;
       } catch (err) {
         if (err instanceof StreamTimeoutError) throw err;
-        // Network error mid-stream: surface as AtlaSentError(network) so the
-        // caller's reconnection loop can catch and retry.
         throw new AtlaSentError(
           `AtlaSent stream read failed: ${err instanceof Error ? err.message : String(err)}`,
           { code: "network", requestId, cause: err },
@@ -2848,8 +2434,6 @@ async function* parseSseStream(
               },
             );
           }
-          // Streaming wire uses legacy {permitted, decision_id} shape;
-          // normalise to canonical lowercase decision vocabulary.
           const streamDecision = d.permitted ? "allow" : "deny";
           const isFinal = d.is_final ?? false;
           yield {
@@ -2863,7 +2447,6 @@ async function* parseSseStream(
             isFinal,
           } satisfies StreamDecisionEvent;
 
-          // Terminal: final decision OR inline done: true closes the stream.
           if (isFinal || d.done === true) return;
         } else if (eventType === "progress") {
           const p = parsed as Record<string, unknown>;
@@ -2872,10 +2455,8 @@ async function* parseSseStream(
             stage: String(p["stage"] ?? ""),
             ...p,
           } satisfies StreamProgressEvent;
-          // Server may signal terminal state via done: true on any event type.
           if ((p as Record<string, unknown>).done === true) return;
         } else {
-          // Unknown event type: check for done: true as a terminal signal.
           if (
             parsed !== null &&
             typeof parsed === "object" &&
@@ -2884,12 +2465,9 @@ async function* parseSseStream(
             return;
           }
         }
-        // Unknown event types skipped for forward compatibility.
       }
     }
 
-    // Stream closed before an explicit `event: done`. If there's leftover
-    // partial data in the buffer, it means the stream was cut mid-event.
     if (buf.trim().length > 0) {
       throw new StreamParseError(buf);
     }
