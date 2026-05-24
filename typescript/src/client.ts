@@ -27,6 +27,7 @@ import { PRODUCTION_DEPLOY_ACTION } from "./types.js";
 import type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
+  Decision,
   AuditEventsResult,
   AuditExportRequest,
   AuditExportResult,
