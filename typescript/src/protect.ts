@@ -69,6 +69,8 @@ export interface Permit {
   reason: string;
   /** ISO 8601 timestamp of the verification. */
   timestamp: string;
+  /** ISO-8601 expiration timestamp of the permit. null on pre-rollout servers. */
+  permitExpiresAt: string | null;
 }
 
 /** Configuration for the process-wide singleton used by {@link protect}. */
@@ -305,6 +307,7 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
     auditHash: evaluation.auditHash,
     reason: evaluation.reason,
     timestamp: verification.timestamp,
+    permitExpiresAt: verification.expiresAt ?? null,
   };
 }
 
@@ -509,6 +512,7 @@ export async function protectWithEvidence(
     auditHash: evaluation.auditHash,
     reason: evaluation.reason,
     timestamp: verification.timestamp,
+    permitExpiresAt: verification.expiresAt ?? null,
     receipt,
   };
 }

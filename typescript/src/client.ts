@@ -381,6 +381,7 @@ interface VerifyPermitWire {
   outcome: "allow" | "deny";
   verify_error_code?: string;
   reason?: string;
+  expires_at?: string | null;
   // Legacy passthrough.
   verified?: boolean;
   permit_hash?: string;
@@ -916,6 +917,7 @@ export class AtlaSentClient {
       outcome: wire.outcome ?? "",
       permitHash: wire.permit_hash ?? "",
       timestamp: wire.timestamp ?? "",
+      expiresAt: wire.expires_at ?? null,
       rateLimit,
     };
   }
