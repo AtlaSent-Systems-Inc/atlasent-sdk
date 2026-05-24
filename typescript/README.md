@@ -42,6 +42,41 @@ client.deployGate({ agent?, action?, context? })
 
 `verifyPermit()` confirms a previously-issued permit server-side. Signed/offline permit artifacts never imply deployment authorization by themselves.
 
+## Decision replay
+
+Re-evaluate a recorded decision against its originally-pinned policy bundle and engine version. **Side-effect-free**: no audit row is written, no permit is minted (ADR-016 `mode: "replay"` sentinel). Useful for compliance review, regression-testing bundle changes, and post-incident investigation.
+
+Two surfaces exist; pick the one that matches your call site:
+
+```ts
+// SDK-canonical (preferred for new code) — wire DECISION_CHANGED is normalized
+// to POLICY_DRIFT; 409 replay_not_eligible returns ENGINE_DRIFT or BUNDLE_MISSING
+// instead of throwing. You can always `switch` on the variance kind.
+const r = await client.replay({ evaluationId: "dec_abc123" });
+switch (r.varianceKind) {
+  case "NONE":             /* replay agrees */                          break;
+  case "POLICY_DRIFT":     /* same envelope/bundle, different decision */ break;
+  case "ENVELOPE_DRIFT":   /* recorded envelope no longer hashes */     break;
+  case "ENGINE_DRIFT":     /* original engine retired beyond archival */ break;
+  case "BUNDLE_MISSING":   /* original eval had no bundle pinned */     break;
+  case "CHAIN_TAMPER":     /* audit-chain v5 detector tripped */        break;
+}
+```
+
+```ts
+// Raw-wire surface — variance values pass through verbatim
+// (NONE / DECISION_CHANGED / ENVELOPE_DRIFT); 409 throws AtlaSentError
+const result = await client.replayDecision("dec_abc123");
+if (result.variance === "DECISION_CHANGED") {
+  console.warn(
+    `Decision ${result.decision_id} drifted: ` +
+    `${result.original_decision} → ${result.replay_decision}`,
+  );
+}
+```
+
+`/v1/decisions/:id/replay` is alpha per `atlasent-api/docs/STABLE_V2_PROMOTION.md` — wire shapes can shift without a deprecation cycle until it graduates to stable v1.
+
 ## CI deploy-gate pattern
 
 ```ts

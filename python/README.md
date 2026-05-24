@@ -190,6 +190,46 @@ pick one of these:
 from atlasent import protect, evaluate, verify
 ```
 
+### Decision replay
+
+Re-evaluate a recorded decision against its originally-pinned policy bundle
+and engine version. **Side-effect-free**: no audit row written, no permit
+minted (ADR-016 `mode: "replay"` sentinel). Useful for compliance review,
+regression-testing bundle changes, and post-incident investigation.
+
+```python
+from atlasent import AtlaSentClient
+
+client = AtlaSentClient(api_key="ask_live_...")
+r = client.replay(evaluation_id="dec_abc123")
+
+match r.variance_kind:
+    case "NONE":
+        ...  # replay agrees with the original decision
+    case "POLICY_DRIFT":
+        ...  # same envelope/bundle, different decision (normalized
+             # from the wire `DECISION_CHANGED` value)
+    case "ENVELOPE_DRIFT":
+        ...  # recorded envelope no longer hashes to the recorded value
+    case "ENGINE_DRIFT":
+        ...  # original engine retired beyond archival window
+    case "BUNDLE_MISSING":
+        ...  # original eval had no bundle pinned
+    case "CHAIN_TAMPER":
+        ...  # audit-chain v5 detector tripped
+```
+
+`409 replay_not_eligible` responses are surfaced as a `ReplayResponse` with
+`variance_kind` of `ENGINE_DRIFT` or `BUNDLE_MISSING` rather than raising —
+callers can always branch on the variance kind without try/except plumbing.
+
+Async parity: `AsyncAtlaSentClient.replay(*, evaluation_id=...)` mirrors the
+sync surface exactly.
+
+`/v1/decisions/:id/replay` is alpha per
+`atlasent-api/docs/STABLE_V2_PROMOTION.md` — wire shapes can shift without a
+deprecation cycle until it graduates to stable v1.
+
 ### Deprecated convenience wrappers
 
 These exist for backward compatibility and **will be removed in
@@ -225,6 +265,7 @@ The SDK calls:
 
 - `POST https://api.atlasent.io/v1-evaluate`
 - `POST https://api.atlasent.io/v1-verify-permit`
+- `POST https://api.atlasent.io/v1/decisions/{id}/replay` (`.replay()` — alpha)
 
 Override with the `base_url` argument.
 
