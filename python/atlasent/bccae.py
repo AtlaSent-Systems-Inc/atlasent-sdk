@@ -49,13 +49,15 @@ def generate_bccae_nonce() -> str:
 
 def _enforce_tls(base_url: str) -> str:
     parsed = urlparse(base_url)
+    if parsed.scheme == "https":
+        return base_url
     if parsed.scheme == "http":
         is_local = parsed.hostname in ("localhost", "127.0.0.1", "::1")
-        if not is_local:
-            raise ValueError(
-                f"BCCAEClient base_url must use https:// (got scheme={parsed.scheme!r})"
-            )
-    return base_url
+        if is_local:
+            return base_url
+    raise ValueError(
+        f"BCCAEClient base_url must use https:// (got scheme={parsed.scheme!r})"
+    )
 
 
 class BCCAEClient:
@@ -232,8 +234,8 @@ class BCCAEClient:
 
     def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         try:
-            # Base URL is caller-configured and TLS-validated by _enforce_tls.
-            resp = self._client.post(f"{self._base_url}{path}", json=body)  # noqa: S113
+            # codeql[py/full-ssrf] Base URL is caller-configured and TLS-validated by _enforce_tls.
+            resp = self._client.post(f"{self._base_url}{path}", json=body)
         except httpx.TransportError as exc:
             raise AtlaSentError(
                 f"BCCAEClient: network error on POST {path}: {exc}",
@@ -243,8 +245,8 @@ class BCCAEClient:
 
     def _get(self, path: str) -> dict[str, Any]:
         try:
-            # Base URL is caller-configured and TLS-validated by _enforce_tls.
-            resp = self._client.get(f"{self._base_url}{path}")  # noqa: S113
+            # codeql[py/full-ssrf] Base URL is caller-configured and TLS-validated by _enforce_tls.
+            resp = self._client.get(f"{self._base_url}{path}")
         except httpx.TransportError as exc:
             raise AtlaSentError(
                 f"BCCAEClient: network error on GET {path}: {exc}",

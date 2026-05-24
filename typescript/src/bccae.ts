@@ -254,8 +254,6 @@ export class BCCAEClient {
     method: "GET" | "POST",
     body: unknown,
   ): Promise<{ body: T }> {
-    // Base URL is caller-configured and TLS-validated by enforceTls().
-    // codeql[js/request-forgery]
     const url = `${this.baseUrl}${path}`;
     const headers: Record<string, string> = {
       Accept: "application/json",
@@ -266,6 +264,7 @@ export class BCCAEClient {
 
     let response: Response;
     try {
+      // codeql[js/server-side-request-forgery] baseUrl is SDK caller config, not request-derived; enforceTls validates scheme.
       response = await this.fetchImpl(url, {
         method,
         headers,
