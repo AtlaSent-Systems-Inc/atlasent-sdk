@@ -170,6 +170,8 @@ export type {
   EnvelopeVerification,
   ReplayDecisionResponse,
   ReplayDecisionValue,
+  ReplayRequest,
+  ReplayResponse,
   ReplayVarianceKind,
 } from "./replay.js";
 export {
