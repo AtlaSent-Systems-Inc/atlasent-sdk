@@ -102,6 +102,7 @@ export type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
   BvsSnapshot,
+  ConsentClassProjection,
   AuditEventsResult,
   AuditExportRequest,
   AuditExportResult,

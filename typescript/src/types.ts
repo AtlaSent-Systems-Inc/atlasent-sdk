@@ -247,6 +247,23 @@ export interface BvsSnapshot {
   computed_at: string;
 }
 
+/**
+ * Consent-class projection (BI5) — the privacy-safe aggregate shape that
+ * third-party apps (LedgersMe, hiCoach, echobloom) receive when reading a
+ * user's behavioral summary. Counts and timestamps only; no raw free-text.
+ * Produced by behavior-insights `/api/patterns/summary/:userId` and fetched
+ * via `@atlasent/behavior` getStateSummary(). The SDK enforces
+ * {@link https://github.com/AtlaSent-Systems-Inc/atlasent-sdk | assertNoRawText}
+ * client-side before returning this shape to callers.
+ */
+export interface ConsentClassProjection {
+  user_id: string;
+  window_start: string;
+  window_end: string;
+  event_count: number;
+  category_counts: Partial<Record<string, number>>;
+}
+
 /** Input to {@link AtlaSentClient.evaluate}. */
 export interface EvaluateRequest {
   /** Identifier of the calling agent (e.g. "clinical-data-agent"). */
