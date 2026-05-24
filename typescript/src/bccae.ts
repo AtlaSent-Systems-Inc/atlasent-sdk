@@ -140,12 +140,20 @@ const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 function enforceTls(url: string): string {
-  if (url.startsWith("http://")) {
-    const isLocal =
-      url.includes("localhost") ||
-      url.includes("127.0.0.1") ||
-      url.includes("::1");
-    if (!isLocal) {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new AtlaSentError(
+      "BCCAEClient baseUrl is not a valid URL",
+      { code: "network" },
+    );
+  }
+  if (parsed.protocol === "http:") {
+    // Use parsed.hostname (exact match) not url.includes() to avoid
+    // false-positive local detection on query strings like ?x=localhost.
+    const h = parsed.hostname;
+    if (h !== "localhost" && h !== "127.0.0.1" && h !== "[::1]") {
       throw new AtlaSentError(
         "BCCAEClient baseUrl must use https:// for non-local endpoints",
         { code: "network" },
@@ -264,8 +272,7 @@ export class BCCAEClient {
 
     let response: Response;
     try {
-      // codeql[js/server-side-request-forgery] baseUrl is SDK caller config, not request-derived; enforceTls validates scheme.
-      response = await this.fetchImpl(url, {
+      response = await this.fetchImpl(url, { // codeql[js/request-forgery] baseUrl validated by enforceTls (https or http+local only)
         method,
         headers,
         signal: AbortSignal.timeout(this.timeoutMs),
