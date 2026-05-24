@@ -300,8 +300,8 @@ export class BCCAEClient {
       response = await this.fetchImpl(url, {
         method,
         headers,
-        body: method === "POST" ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(this.timeoutMs),
+        ...(method === "POST" ? { body: JSON.stringify(body) } : {}),
       });
     } catch (err) {
       throw new AtlaSentError(
@@ -328,16 +328,14 @@ export class BCCAEClient {
           : `BCCAE request failed with status ${response.status}`;
       const code =
         response.status === 401
-          ? "unauthorized"
+          ? "invalid_api_key"
           : response.status === 403
-            ? "permission_denied"
-            : response.status === 404
-              ? "not_found"
-              : response.status === 409
-                ? "conflict"
-                : response.status === 429
-                  ? "rate_limited"
-                  : "network";
+            ? "forbidden"
+            : response.status === 429
+              ? "rate_limited"
+              : response.status >= 500
+                ? "server_error"
+                : "network";
       throw new AtlaSentError(message, { code });
     }
 

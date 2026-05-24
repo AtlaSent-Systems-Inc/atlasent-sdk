@@ -337,13 +337,13 @@ describe("BCCAEClient.getEvidence", () => {
 
 describe("BCCAEClient HTTP error handling", () => {
   const errorCases: Array<[number, string]> = [
-    [401, "unauthorized"],
-    [403, "permission_denied"],
-    [404, "not_found"],
-    [409, "conflict"],
+    [401, "invalid_api_key"],
+    [403, "forbidden"],
+    [404, "network"],
+    [409, "network"],
     [429, "rate_limited"],
-    [500, "network"],
-    [503, "network"],
+    [500, "server_error"],
+    [503, "server_error"],
   ];
 
   for (const [status, expectedCode] of errorCases) {
