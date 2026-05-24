@@ -127,6 +127,8 @@ export type {
   EvaluateRequest,
   EvaluateResponse,
   EvaluateResponsePermit,
+  EvaluateRiskEnvelope,
+  EvaluateRiskEnvelopeFactor,
   GetPermitResponse,
   ListPermitsRequest,
   ListPermitsResponse,

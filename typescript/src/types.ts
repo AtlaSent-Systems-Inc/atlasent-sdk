@@ -373,6 +373,45 @@ export interface EvaluateResponse {
    * `X-RateLimit-*` headers. `null` when the server didn't emit them.
    */
   rateLimit: RateLimitState | null;
+  /**
+   * Risk envelope summary from the policy engine. Present on all responses
+   * from engine version wire-v1@1.0.0+. Provides the weighted risk score,
+   * the pre/post-promotion decisions, and (when evaluate was called with
+   * `explain: true`) a per-factor breakdown.
+   *
+   * The envelope can only raise severity — it structurally cannot soften
+   * a deny to allow. When `promoted` is true the live `decision` was
+   * upgraded from `engineDecision` to `envelopeDecision`.
+   */
+  riskEnvelope?: EvaluateRiskEnvelope;
+}
+
+/** Per-factor contribution in a {@link EvaluateRiskEnvelope}. */
+export interface EvaluateRiskEnvelopeFactor {
+  /** Factor identifier, e.g. `"ACTION_SENSITIVITY"`. */
+  factor: string;
+  /** Factor score in [0, 1]. Higher = more risk. */
+  value: number;
+  /** Configured weight for this factor. */
+  weight: number;
+  /** Human-readable explanation for the score. */
+  reason: string;
+}
+
+/** Risk envelope summary returned in a top-level {@link EvaluateResponse}. */
+export interface EvaluateRiskEnvelope {
+  /** Weighted risk score in [0, 1]. Score ≥ 0.70 triggers a hold. */
+  weightedScore: number;
+  /** Policy engine decision before envelope promotion. */
+  engineDecision: Decision;
+  /** Decision resolved by the risk envelope. */
+  envelopeDecision: Decision;
+  /** `true` when the envelope raised the decision's severity (most-restrictive-wins). */
+  promoted: boolean;
+  /** Deny codes that unconditionally block regardless of score. */
+  hardBlocks: string[];
+  /** Per-factor breakdown. Present only when `explain: true` was passed. */
+  factors?: EvaluateRiskEnvelopeFactor[];
 }
 
 /** Input to {@link AtlaSentClient.verifyPermit}. */

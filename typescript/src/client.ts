@@ -27,6 +27,7 @@ import { PRODUCTION_DEPLOY_ACTION } from "./types.js";
 import type {
   ApiKeySelfResponse,
   AtlaSentClientOptions,
+  Decision,
   AuditEventsResult,
   AuditExportRequest,
   AuditExportResult,
@@ -303,6 +304,14 @@ interface EvaluateWire {
   reason?: string;
   audit_hash?: string;
   timestamp?: string;
+  risk_envelope?: {
+    weighted_score: number;
+    engine_decision: string;
+    envelope_decision: string;
+    promoted: boolean;
+    hard_blocks: string[];
+    factors?: Array<{ factor: string; value: number; weight: number; reason: string }>;
+  };
 }
 
 interface EvaluateBatchWireItem {
@@ -495,6 +504,16 @@ export class AtlaSentClient {
       auditHash: wire.audit_hash ?? "",
       timestamp: wire.timestamp ?? "",
       rateLimit,
+      ...(wire.risk_envelope && {
+        riskEnvelope: {
+          weightedScore: wire.risk_envelope.weighted_score,
+          engineDecision: wire.risk_envelope.engine_decision as Decision,
+          envelopeDecision: wire.risk_envelope.envelope_decision as Decision,
+          promoted: wire.risk_envelope.promoted,
+          hardBlocks: wire.risk_envelope.hard_blocks ?? [],
+          ...(wire.risk_envelope.factors && { factors: wire.risk_envelope.factors }),
+        },
+      }),
     };
   }
 
@@ -809,6 +828,16 @@ export class AtlaSentClient {
       auditHash: wire.audit_hash ?? "",
       timestamp: wire.timestamp ?? "",
       rateLimit,
+      ...(wire.risk_envelope && {
+        riskEnvelope: {
+          weightedScore: wire.risk_envelope.weighted_score,
+          engineDecision: wire.risk_envelope.engine_decision as Decision,
+          envelopeDecision: wire.risk_envelope.envelope_decision as Decision,
+          promoted: wire.risk_envelope.promoted,
+          hardBlocks: wire.risk_envelope.hard_blocks ?? [],
+          ...(wire.risk_envelope.factors && { factors: wire.risk_envelope.factors }),
+        },
+      }),
     };
 
     // Forward-compat: if the server omits `constraint_trace` (older
