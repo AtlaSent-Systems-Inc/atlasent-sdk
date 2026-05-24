@@ -1013,3 +1013,83 @@ export interface DecisionStreamEvent {
   previousHash?: string;
   occurredAt?: string;
 }
+
+// ── Decision replay (ADR-015, Phase C) ──────────────────────────────────────
+
+/**
+ * Variance kind reported by {@link AtlaSentClient.replay}.
+ *
+ * Closed set from POLICY_PARITY_CONTRACT.md §Replay (parity v2).
+ * Precedence on multi-failure rows: the order listed here.
+ *
+ * - `NONE` — replayed decision matches the original exactly.
+ * - `POLICY_DRIFT` — re-evaluation produced a different decision (policy changed).
+ * - `ENVELOPE_DRIFT` — recorded context envelope mismatch; replay can't proceed.
+ * - `ENGINE_DRIFT` — engine version is retired / not replay-eligible.
+ * - `CHAIN_TAMPER` — audit chain integrity check failed.
+ * - `BUNDLE_MISSING` — the pinned policy bundle can no longer be resolved.
+ */
+export type ReplayVarianceKind =
+  | "NONE"
+  | "POLICY_DRIFT"
+  | "ENVELOPE_DRIFT"
+  | "ENGINE_DRIFT"
+  | "CHAIN_TAMPER"
+  | "BUNDLE_MISSING";
+
+/** Input to {@link AtlaSentClient.replay}. */
+export interface ReplayRequest {
+  /**
+   * Opaque ID of the evaluation to replay. Sourced from a prior
+   * {@link EvaluateResponse.evaluationId}.
+   */
+  evaluationId: string;
+}
+
+/** Response from {@link AtlaSentClient.replay}. */
+export interface ReplayResponse {
+  /** Opaque decision ID that was replayed. Echoes the request's `evaluationId`. */
+  decisionId: string;
+  /**
+   * Variance kind — the authoritative result of the replay.
+   *
+   * `"NONE"` means the replayed decision byte-matches the original.
+   * Any other value identifies the drift or integrity kind per
+   * POLICY_PARITY_CONTRACT.md §Replay.
+   */
+  varianceKind: ReplayVarianceKind;
+  /** Decision recorded at original evaluation time. */
+  originalDecision: DecisionCanonical;
+  /** Machine-readable deny code from the original decision, if present. */
+  originalDenyCode?: string;
+  /**
+   * Decision produced by re-evaluating with the pinned bundle.
+   * Absent when `varianceKind` is `"ENVELOPE_DRIFT"`, `"ENGINE_DRIFT"`,
+   * or `"BUNDLE_MISSING"` (replay couldn't proceed to evaluation).
+   */
+  replayedDecision?: DecisionCanonical;
+  /** Machine-readable deny code from the replay evaluation, if present. */
+  replayedDenyCode?: string;
+  /** Engine version string used at original evaluation time. */
+  engineVersion?: string;
+  /**
+   * Lifecycle classification of the engine version.
+   * One of `"active"`, `"retired"`, `"archival_within_window"`,
+   * `"archival_expired"`, or `"unknown"`.
+   */
+  engineVersionKind?: string;
+  /** Whether the engine version accepted replay. `false` corresponds to `ENGINE_DRIFT`. */
+  acceptsReplay: boolean;
+  /**
+   * Envelope verification outcome.
+   * One of `"verified"`, `"drift"`, `"absent"`, or `"envelope_missing"`.
+   */
+  envelopeVerification?: string;
+  /** ISO-8601 timestamp when the replay evaluation was executed. */
+  replayedAt: string;
+  /**
+   * Per-key rate-limit state for this request's response.
+   * `null` when the server didn't emit headers.
+   */
+  rateLimit: RateLimitState | null;
+}
