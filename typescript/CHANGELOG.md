@@ -6,6 +6,58 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.9.0 (2026-05-24)
+
+### New features
+
+#### Risk envelope — Phase C
+
+Every evaluate response from engine version `wire-v1@1.0.0+` now includes
+a `riskEnvelope` field exposing the composite risk score and how the policy
+engine decision interacts with the risk envelope:
+
+```typescript
+const result = await client.evaluate({ agent, action, explain: true });
+
+if (result.riskEnvelope) {
+  console.log(result.riskEnvelope.weightedScore);      // 0.723
+  console.log(result.riskEnvelope.engineDecision);    // "allow"
+  console.log(result.riskEnvelope.envelopeDecision);  // "hold"
+  console.log(result.riskEnvelope.promoted);          // true
+  console.log(result.riskEnvelope.hardBlocks);        // []
+  console.log(result.riskEnvelope.factors);           // per-factor breakdown
+}
+```
+
+New types: `EvaluateRiskEnvelope`, `EvaluateRiskEnvelopeFactor` (exported from the root).
+
+`promoted: true` means the envelope raised the engine decision's severity via
+most-restrictive-wins. The envelope structurally cannot soften a deny.
+
+`factors` is only populated when `explain: true` is passed on the request (see below).
+
+#### `explain` request flag
+
+Pass `explain: true` on `EvaluateRequest` to receive a per-factor breakdown in
+`riskEnvelope.factors`:
+
+```typescript
+const result = await client.evaluate({
+  agent: "payment-agent",
+  action: "approve_payment",
+  explain: true,
+});
+// result.riskEnvelope.factors is now populated
+```
+
+Seven factors: `ACTION_SENSITIVITY`, `ACTOR_AUTHORITY`, `ORG_POLICY_STRICTNESS`,
+`ENVIRONMENT`, `CONTEXT_ANOMALY`, `HISTORY`, `BEHAVIOR_BASELINE`.
+Each carries `{ factor, value, weight, reason }`.
+
+Omit `explain` (or pass `false`) to keep payloads small.
+
+---
+
 ## @atlasent/sdk 2.8.0 (2026-05-24)
 
 ### New features

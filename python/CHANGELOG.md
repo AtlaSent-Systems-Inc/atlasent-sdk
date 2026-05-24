@@ -1,5 +1,52 @@
 # Changelog
 
+## 2.7.0 -- 2026-05-24 -- risk envelope Phase C
+
+### Added
+
+- **`atlasent.models.EvaluateRiskEnvelopeFactor`** — Pydantic model for one
+  factor contribution: `{ factor, value, weight, reason }`.
+
+- **`atlasent.models.EvaluateRiskEnvelope`** — Pydantic model for the
+  top-level risk envelope block present on all responses from engine version
+  `wire-v1@1.0.0+`:
+  - `weighted_score: float` — composite score in [0, 1]; ≥ 0.70 triggers hold
+  - `engine_decision` — policy engine decision *before* envelope promotion
+  - `envelope_decision` — decision resolved by the envelope
+  - `promoted: bool` — `True` when envelope raised the engine decision
+  - `hard_blocks: list[str]` — deny codes that blocked unconditionally
+  - `factors: list[EvaluateRiskEnvelopeFactor]` — per-factor breakdown;
+    only populated when `explain=True` was passed on the request
+
+- **`EvaluateResult.risk_envelope: EvaluateRiskEnvelope | None`** — populated
+  from the Phase C inline wire field. `None` on pre-Phase-C server responses.
+
+- **`EvaluateRequest.explain: bool | None`** — when `True`, the server
+  populates `risk_envelope.factors`. Omit for smaller payloads.
+
+- New exports from `atlasent`: `EvaluateRiskEnvelope`, `EvaluateRiskEnvelopeFactor`.
+
+### Usage
+
+```python
+from atlasent import AtlaSentClient
+
+client = AtlaSentClient(api_key="ask_live_...")
+result = client.evaluate(
+    action_type="approve_payment",
+    actor_id="user_01",
+    explain=True,
+)
+
+if result.risk_envelope:
+    print(result.risk_envelope.weighted_score)    # 0.723
+    print(result.risk_envelope.promoted)          # True
+    for f in result.risk_envelope.factors:
+        print(f.factor, f.value, f.reason)
+```
+
+---
+
 ## 2.6.0 -- 2026-05-24 -- decision replay runtime (Python parity restore)
 
 ### Added
