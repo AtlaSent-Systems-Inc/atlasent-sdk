@@ -748,6 +748,31 @@ export {
   type BuildFromActionBundleOpts,
 } from "./claimLineage.js";
 
+// ── BCCAE V1 — Phase 3 Execution Assurance substrate ───────────────────────
+//
+// Standalone BCCAEClient — separate from AtlaSentClient because BCCAE
+// uses different API scopes (bccae:evaluate / bccae:execute / bccae:revoke /
+// bccae:audit) and is not a Deploy Gate V1 customer API surface.
+export {
+  BCCAEClient,
+  generateBccaeNonce,
+  type BccaeActorType,
+  type BccaeTrustLevel,
+  type BccaeResourceClassification,
+  type BccaeDeploymentEnv,
+  type BccaeSecurityPosture,
+  type BccaeRequestSource,
+  type BccaeRevocationTargetType,
+  type BccaeClientOptions,
+  type BccaeEvaluateInput,
+  type BccaeEvaluateResponse,
+  type BccaeExecuteInput,
+  type BccaeExecuteResponse,
+  type BccaeRevokeInput,
+  type BccaeRevokeResponse,
+  type BccaeEvidenceResponse,
+} from "./bccae.js";
+
 // ── Constrained governance agents (advisory read surface) ───────────────────
 //
 // Doctrine: evaluation ≠ authorization ≠ execution. The exports below
