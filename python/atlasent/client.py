@@ -225,6 +225,11 @@ class AtlaSentClient:
                 "Accept": "application/json",
                 "Authorization": f"Bearer {api_key}",
                 "User-Agent": f"atlasent-python/{__version__}",
+                # ADR-025: declare the wire-protocol version we were
+                # built against. Runtime serves this version's response
+                # shape; older versions outside the compatibility window
+                # get 426 Upgrade Required.
+                "X-AtlaSent-Protocol-Version": "1",
             },
             timeout=self._timeout,
         )

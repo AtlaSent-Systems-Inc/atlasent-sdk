@@ -643,6 +643,10 @@ export class AtlaSentClient {
       Accept: "text/event-stream",
       Authorization: `Bearer ${this.apiKey}`,
       "User-Agent": this.userAgent,
+      // ADR-025: declare the wire-protocol version we were built
+      // against. Runtime serves this version's response shape; older
+      // versions outside the compatibility window get 426.
+      "X-AtlaSent-Protocol-Version": "1",
     };
     if (opts.lastEventId) headers["Last-Event-ID"] = opts.lastEventId;
 
@@ -1532,6 +1536,8 @@ export class AtlaSentClient {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
         "User-Agent": this.userAgent,
+        // ADR-025: wire-protocol version declared on every request.
+        "X-AtlaSent-Protocol-Version": "1",
         "X-Request-ID": requestId,
       };
       if (lastEventId !== undefined) {
@@ -1656,6 +1662,8 @@ export class AtlaSentClient {
       Authorization: `Bearer ${this.apiKey}`,
       "User-Agent": this.userAgent,
       "X-Request-ID": requestId,
+      // ADR-025: wire-protocol version declared on every request.
+      "X-AtlaSent-Protocol-Version": "1",
     };
     if (method === "POST") headers["Content-Type"] = "application/json";
 
