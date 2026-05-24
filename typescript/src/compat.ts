@@ -29,6 +29,8 @@ export interface V2EvaluateRequest {
   action_type: string;
   actor_id: string;
   context?: Record<string, unknown>;
+  /** Populate `risk_envelope.factors` in the response (Phase C). */
+  explain?: boolean;
 }
 
 /**
@@ -57,9 +59,8 @@ export function normalizeEvaluateRequest(
       action_type: legacy.action!,
       actor_id: legacy.agent!,
     };
-    if (legacy.context !== undefined) {
-      normalized.context = legacy.context;
-    }
+    if (legacy.context !== undefined) normalized.context = legacy.context;
+    if ((legacy as any).explain !== undefined) normalized.explain = (legacy as any).explain;
     return normalized;
   }
   return input as V2EvaluateRequest;

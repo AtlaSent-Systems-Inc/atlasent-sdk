@@ -179,6 +179,10 @@ class EvaluateRequest(BaseModel):
     # Carried server-side onto the audit row and echoed onto
     # /v1-verify-permit's require_approval gate.
     require_approval: bool | None = Field(default=None)
+    # When True, the server populates risk_envelope.factors with a
+    # per-factor breakdown of the weighted risk score. Absent (False)
+    # by default to keep response payloads small.
+    explain: bool | None = Field(default=None)
     # Kept for backward-compat with code that constructs the request
     # directly. Excluded from wire serialization — the server reads the
     # API key from the Authorization header, never from the body.
@@ -206,6 +210,50 @@ class EvaluateRequest(BaseModel):
     @classmethod
     def _check_context_size(cls, value: dict[str, Any]) -> dict[str, Any]:
         return _warn_oversize_context(value)
+
+
+# ── Risk envelope (Phase C) ───────────────────────────────────────────────────
+
+
+class EvaluateRiskEnvelopeFactor(BaseModel):
+    """One factor contribution inside a risk envelope ``factors`` breakdown."""
+
+    factor: str
+    value: float
+    weight: float
+    reason: str
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+
+class EvaluateRiskEnvelope(BaseModel):
+    """Top-level risk envelope returned by ``POST /v1-evaluate`` (Phase C).
+
+    Always present on responses from engine version ``wire-v1@1.0.0+``.
+    Enforces most-restrictive-wins: the envelope can raise the engine
+    decision's severity but structurally cannot soften a deny.
+
+    Attributes:
+        weighted_score: Composite risk score in [0, 1]. Score ≥ 0.70
+            triggers a hold promotion.
+        engine_decision: Policy engine decision *before* envelope promotion.
+        envelope_decision: Decision resolved by the envelope
+            (may equal ``engine_decision`` when no promotion occurred).
+        promoted: ``True`` when ``envelope_decision`` is more restrictive
+            than ``engine_decision``.
+        hard_blocks: Deny codes that unconditionally block regardless of score.
+        factors: Per-factor breakdown. Only populated when the evaluate
+            request carried ``explain=True``.
+    """
+
+    weighted_score: float
+    engine_decision: Literal["allow", "deny", "hold", "escalate"]
+    envelope_decision: Literal["allow", "deny", "hold", "escalate"]
+    promoted: bool
+    hard_blocks: list[str] = Field(default_factory=list)
+    factors: list[EvaluateRiskEnvelopeFactor] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
 
 
 class EvaluateResult(BaseModel):
@@ -252,6 +300,9 @@ class EvaluateResult(BaseModel):
     # proof of which signed approval authorized this permit.
     permit_approval: PermitApprovalBinding | None = None
     rate_limit: RateLimitState | None = None
+    # Risk envelope — present on responses from engine version wire-v1@1.0.0+.
+    # None on legacy server responses that predate Phase C.
+    risk_envelope: EvaluateRiskEnvelope | None = None
 
     # Legacy fields. Populated by the model_validator (from canonical
     # `decision` / `permit_token` / `denial`) so existing readers like
