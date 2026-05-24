@@ -57,6 +57,53 @@
     "audit_entry_hash": { "type": "string" },
     "fingerprint": { "type": "string" },
     "risk_score": { "type": "number" },
+    "risk_envelope": {
+      "type": "object",
+      "description": "Risk envelope summary. Always present on responses from engine version wire-v1@1.0.0+. Provides the weighted risk score, the pre/post-promotion decisions, and (when explain=true) a per-factor breakdown. The envelope enforces most-restrictive-wins: it can raise severity but structurally cannot soften a deny.",
+      "required": ["weighted_score", "engine_decision", "envelope_decision", "promoted", "hard_blocks"],
+      "additionalProperties": false,
+      "properties": {
+        "weighted_score": {
+          "type": "number",
+          "description": "Weighted risk score in [0, 1]. Score ≥ 0.70 triggers a hold.",
+          "example": 0.723
+        },
+        "engine_decision": {
+          "type": "string",
+          "enum": ["allow", "deny", "hold", "escalate"],
+          "description": "Policy engine decision before envelope promotion."
+        },
+        "envelope_decision": {
+          "type": "string",
+          "enum": ["allow", "deny", "hold", "escalate"],
+          "description": "Decision resolved by the risk envelope."
+        },
+        "promoted": {
+          "type": "boolean",
+          "description": "true when envelope_decision is more restrictive than engine_decision."
+        },
+        "hard_blocks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Deny codes that unconditionally block regardless of score."
+        },
+        "factors": {
+          "type": "array",
+          "description": "Per-factor breakdown. Present only when explain=true was passed to the evaluate request.",
+          "items": {
+            "type": "object",
+            "required": ["factor", "value", "weight", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "factor": { "type": "string", "example": "ACTION_SENSITIVITY" },
+              "value": { "type": "number", "description": "Factor score in [0, 1]." },
+              "weight": { "type": "number", "description": "Configured weight for this factor." },
+              "reason": { "type": "string", "description": "Human-readable explanation for the score." }
+            }
+          }
+        }
+      }
+    },
     "permit": {
       "type": "object",
       "description": "Wire-format PermitV2 body. Returned alongside `permit_token` when the legacy v1 surface is upgraded to V2. The `approval` sub-block is the cryptographic linkage to the approval artifact verified at evaluate time.",
