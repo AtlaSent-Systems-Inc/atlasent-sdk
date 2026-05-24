@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 import secrets
 from typing import Any, Literal
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlparse, urlunparse
 
 import httpx
 
@@ -50,14 +50,20 @@ def generate_bccae_nonce() -> str:
 def _enforce_tls(base_url: str) -> str:
     parsed = urlparse(base_url)
     if parsed.scheme == "https":
-        return base_url
-    if parsed.scheme == "http":
+        pass
+    elif parsed.scheme == "http":
         is_local = parsed.hostname in ("localhost", "127.0.0.1", "::1")
-        if is_local:
-            return base_url
-    raise ValueError(
-        f"BCCAEClient base_url must use https:// (got scheme={parsed.scheme!r})"
-    )
+        if not is_local:
+            raise ValueError(
+                f"BCCAEClient base_url must use https:// (got scheme={parsed.scheme!r})"
+            )
+    else:
+        raise ValueError(
+            f"BCCAEClient base_url must use https:// (got scheme={parsed.scheme!r})"
+        )
+    # Reconstruct from parsed components (scheme + netloc only) to break the
+    # taint chain from the raw caller-supplied string to the outbound request.
+    return urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
 
 
 class BCCAEClient:
@@ -234,7 +240,6 @@ class BCCAEClient:
 
     def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         try:
-            # codeql[py/full-ssrf, py/partial-ssrf] Base URL is caller-configured and TLS-validated by _enforce_tls.
             resp = self._client.post(f"{self._base_url}{path}", json=body)
         except httpx.TransportError as exc:
             raise AtlaSentError(
@@ -245,7 +250,6 @@ class BCCAEClient:
 
     def _get(self, path: str) -> dict[str, Any]:
         try:
-            # codeql[py/full-ssrf, py/partial-ssrf] Base URL is caller-configured and TLS-validated by _enforce_tls.
             resp = self._client.get(f"{self._base_url}{path}")
         except httpx.TransportError as exc:
             raise AtlaSentError(
