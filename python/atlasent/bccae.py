@@ -13,7 +13,6 @@ Phase 3 — Execution Assurance. Not a Deploy Gate V1 customer API.
 
 from __future__ import annotations
 
-import os
 import secrets
 from typing import Any, Literal
 from urllib.parse import quote, urlparse, urlunparse

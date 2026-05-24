@@ -210,9 +210,7 @@ export class BCCAEClient {
     this.apiKey = options.apiKey;
     // enforceTls validates scheme/host and returns parsed.origin,
     // severing any taint from the raw options.baseUrl string.
-    this.baseUrl = enforceTls(
-      (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
-    );
+    this.baseUrl = enforceTls(options.baseUrl ?? DEFAULT_BASE_URL);
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
