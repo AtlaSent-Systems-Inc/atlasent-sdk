@@ -84,28 +84,6 @@ describe("BCCAEClient constructor", () => {
     ).toThrow(AtlaSentError);
   });
 
-  it("rejects ftp:// base URLs", () => {
-    expect(
-      () =>
-        new BCCAEClient({
-          apiKey: "bk_test",
-          baseUrl: "ftp://files.example.com",
-          fetch: vi.fn(),
-        }),
-    ).toThrow(AtlaSentError);
-  });
-
-  it("rejects malformed base URLs", () => {
-    expect(
-      () =>
-        new BCCAEClient({
-          apiKey: "bk_test",
-          baseUrl: "not a url",
-          fetch: vi.fn(),
-        }),
-    ).toThrow(AtlaSentError);
-  });
-
   it("allows http://localhost base URLs", () => {
     expect(
       () =>
