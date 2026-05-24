@@ -441,11 +441,12 @@ export class AtlaSentClient {
       input as LegacyEvaluateRequest | V2EvaluateRequest,
     );
 
-    const body = {
+    const body: Record<string, unknown> = {
       action_type: normalized.action_type,
       actor_id: normalized.actor_id,
       context: normalized.context ?? {},
     };
+    if (normalized.explain !== undefined) body.explain = normalized.explain;
     const { body: wire, rateLimit } = await this.post<EvaluateWire>(
       "/v1-evaluate",
       body,

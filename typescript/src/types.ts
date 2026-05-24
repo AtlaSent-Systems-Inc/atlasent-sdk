@@ -272,6 +272,12 @@ export interface EvaluateRequest {
   action: string;
   /** Arbitrary policy context (user, environment, resource IDs). */
   context?: Record<string, unknown>;
+  /**
+   * When `true`, the server populates `riskEnvelope.factors` with a
+   * per-factor breakdown of the weighted risk score. Omit (or `false`)
+   * to keep response payloads small.
+   */
+  explain?: boolean;
 }
 
 /**
