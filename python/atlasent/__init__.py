@@ -233,6 +233,7 @@ from .v2_endpoints import (
 )
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
+from .bccae import BCCAEClient, generate_bccae_nonce
 from .scim import (
     SCIM_USER_SCHEMA,
     SCIM_GROUP_SCHEMA,
@@ -453,4 +454,9 @@ __all__ = [
     "evaluate_many",
     "authorize_stream",
     "graphql",
+    # BCCAE V1 — Phase 3 Execution Assurance substrate.
+    # Standalone BCCAEClient with bccae:* scopes — not part of the
+    # Deploy Gate V1 customer API surface.
+    "BCCAEClient",
+    "generate_bccae_nonce",
 ]

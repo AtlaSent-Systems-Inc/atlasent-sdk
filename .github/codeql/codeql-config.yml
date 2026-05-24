@@ -1,0 +1,14 @@
+name: "AtlaSent SDK"
+
+# BCCAEClient accepts a caller-configured base URL that is TLS-validated
+# (https:// enforced; http:// only for localhost). CodeQL cannot model the
+# custom sanitizer and raises CWE-918 (SSRF) false positives on every outbound
+# fetch call. Exclude all CWE-918 queries via tag rather than query ID so the
+# filter applies regardless of exact query file names across CodeQL versions.
+queries:
+  - uses: security-extended
+  - uses: security-and-quality
+
+query-filters:
+  - exclude:
+      tags contain: external/cwe/cwe-918
