@@ -16,14 +16,14 @@
  * it graduates to stable v1 (see atlasent-api `docs/STABLE_V2_PROMOTION.md`).
  */
 
-import type { DecisionCanonical, RateLimitState } from "./types.js";
-
-/** Replay variance per ADR-015 §3. Aligned with the recorded `variance`
- * field in the replay response.
+/**
+ * Replay variance — superset covering both the raw wire values used by
+ * `replayDecision()` and the SDK-canonical values used by `replay()`.
  *
- * Superset that covers the `replayDecision()` wire contract (NONE,
- * DECISION_CHANGED, ENVELOPE_DRIFT) and the `replay()` SDK-canonical
- * mapping (adds POLICY_DRIFT, ENGINE_DRIFT, CHAIN_TAMPER, BUNDLE_MISSING). */
+ * Raw wire values (replayDecision): NONE, DECISION_CHANGED, ENVELOPE_DRIFT
+ * SDK-canonical values (replay):    NONE, POLICY_DRIFT, ENVELOPE_DRIFT,
+ *                                   ENGINE_DRIFT, CHAIN_TAMPER, BUNDLE_MISSING
+ */
 export type ReplayVarianceKind =
   | "NONE"
   | "DECISION_CHANGED"
@@ -88,39 +88,44 @@ export interface ReplayDecisionResponse {
   replayed_at: string;
 }
 
-/** Input for {@link AtlaSentClient.replay}. */
+// ── ADR-015 Phase C — SDK-canonical replay surface ────────────────────────────
+
+/** Input to {@link AtlaSentClient.replay}. */
 export interface ReplayRequest {
-  /** ID of the prior evaluation to re-evaluate. */
+  /** The evaluation/decision ID to replay. */
   evaluationId: string;
 }
 
-/** Response from {@link AtlaSentClient.replay}. */
+import type { RateLimitState } from "./types.js";
+import type { DecisionCanonical } from "./types.js";
+
+/**
+ * Result of {@link AtlaSentClient.replay}.
+ *
+ * Uses SDK-canonical variance kinds (see {@link ReplayVarianceKind}).
+ * `DECISION_CHANGED` on the wire maps to `POLICY_DRIFT` here.
+ * 409 responses map to `ENGINE_DRIFT` or `BUNDLE_MISSING` and are never
+ * thrown — callers can always switch on `varianceKind`.
+ */
 export interface ReplayResponse {
-  /** Decision ID (echoed from wire, or falls back to `evaluationId`). */
+  /** The decision/evaluation ID that was replayed. */
   decisionId: string;
-  /** Variance classification between original and replayed decision. */
+  /** SDK-canonical variance outcome. */
   varianceKind: ReplayVarianceKind;
-  /** Decision recorded at evaluation time. */
+  /** The original recorded decision. */
   originalDecision: DecisionCanonical;
-  /** Deny code from the original decision (when `originalDecision === "deny"`). */
+  /** Original deny code, if any. */
   originalDenyCode?: string;
-  /** Decision produced by the replay run (absent on ENVELOPE_DRIFT). */
+  /** Re-evaluated decision. Absent when `varianceKind === "ENVELOPE_DRIFT"`. */
   replayedDecision?: DecisionCanonical;
-  /** Deny code from the replay run (when `replayedDecision === "deny"`). */
   replayedDenyCode?: string;
-  /** Engine version identifier used for the replay. */
   engineVersion?: string;
-  /** Lifecycle status of the engine version (`"active"`, `"retired"`, …). */
   engineVersionKind?: string;
-  /** Whether the engine version accepts replay requests. */
+  /** Whether the evaluation was eligible for replay. `false` for 409 responses. */
   acceptsReplay: boolean;
-  /** Envelope verification result (`"verified"`, `"drift"`, `"absent"`, …). */
   envelopeVerification?: string;
-  /** ISO-8601 timestamp when the replay ran. */
+  /** ISO-8601 timestamp of the replay. */
   replayedAt: string;
-  /**
-   * Per-key rate-limit state from the response headers.
-   * `null` when the server didn't emit them.
-   */
+  /** Rate-limit state from response headers. */
   rateLimit: RateLimitState | null;
 }
