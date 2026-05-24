@@ -48,6 +48,11 @@
       "type": "boolean",
       "description": "True iff the atomic verify-and-consume burned the permit row. APPROVAL_LINKAGE_MISSING returns valid=false BUT consumed=true — the permit cannot be reused; do not retry."
     },
+    "expires_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO-8601 expiration timestamp of the permit, sourced from the evaluation row or legacy permit row. null when the server does not surface expiry (pre-rollout deployments). Callers should store this alongside the permit record so they can reason about TTL without a separate GET /v1/permits/:id round-trip."
+    },
     "approval": {
       "oneOf": [
         { "type": "null" },

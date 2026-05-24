@@ -466,6 +466,11 @@ export interface VerifyPermitResponse {
   /** ISO 8601 timestamp of the verification. */
   timestamp: string;
   /**
+   * ISO-8601 expiration timestamp of the permit. `null` on pre-rollout
+   * server versions that do not yet surface this field.
+   */
+  expiresAt: string | null;
+  /**
    * Per-key rate-limit state for this request's response, parsed from
    * `X-RateLimit-*` headers. `null` when the server didn't emit them.
    */

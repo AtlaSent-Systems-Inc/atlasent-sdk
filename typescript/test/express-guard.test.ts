@@ -74,7 +74,7 @@ describe("atlaSentGuard middleware", () => {
 
   it("attaches permit to req and calls next() on allow", async () => {
     globalThis.fetch = makeFetchQueue([EVAL_ALLOW, VERIFY_OK]);
-    const guard = atlaSentGuard({ action: "production.deploy", agent: "bot" });
+    const guard = atlaSentGuard({ action: "production.deploy", agent: "bot", context: async () => ({ environment: "production" }) });
     const req = makeReq();
     const res = makeRes();
     const next = vi.fn();
@@ -98,6 +98,7 @@ describe("atlaSentGuard middleware", () => {
     const guard = atlaSentGuard({
       action: (req) => (req as unknown as Record<string, unknown>)["action"] as string,
       agent: (req) => (req as unknown as Record<string, unknown>)["agent"] as string,
+      context: async () => ({ environment: "production" }),
     });
     const req = makeReq({ action: "data.read", agent: "user-1" });
     const next = vi.fn();
@@ -126,7 +127,7 @@ describe("atlaSentGuard middleware", () => {
 
   it("uses custom key on req", async () => {
     globalThis.fetch = makeFetchQueue([EVAL_ALLOW, VERIFY_OK]);
-    const guard = atlaSentGuard({ action: "x.y", agent: "bot", key: "myPermit" });
+    const guard = atlaSentGuard({ action: "x.y", agent: "bot", key: "myPermit", context: async () => ({ environment: "production" }) });
     const req = makeReq();
     const next = vi.fn();
     await guard(req as never, makeRes() as never, next);
