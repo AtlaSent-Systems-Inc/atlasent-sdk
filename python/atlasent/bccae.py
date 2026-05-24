@@ -234,7 +234,7 @@ class BCCAEClient:
 
     def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         try:
-            # codeql[py/full-ssrf] Base URL is caller-configured and TLS-validated by _enforce_tls.
+            # codeql[py/full-ssrf, py/partial-ssrf] Base URL is caller-configured and TLS-validated by _enforce_tls.
             resp = self._client.post(f"{self._base_url}{path}", json=body)
         except httpx.TransportError as exc:
             raise AtlaSentError(
@@ -245,7 +245,7 @@ class BCCAEClient:
 
     def _get(self, path: str) -> dict[str, Any]:
         try:
-            # codeql[py/full-ssrf] Base URL is caller-configured and TLS-validated by _enforce_tls.
+            # codeql[py/full-ssrf, py/partial-ssrf] Base URL is caller-configured and TLS-validated by _enforce_tls.
             resp = self._client.get(f"{self._base_url}{path}")
         except httpx.TransportError as exc:
             raise AtlaSentError(
