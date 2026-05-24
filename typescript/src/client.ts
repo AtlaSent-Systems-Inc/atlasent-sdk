@@ -16,6 +16,11 @@ import type {
   AuditExport,
 } from "./audit.js";
 import type { ReplayDecisionResponse } from "./replay.js";
+import type {
+  ReplayRequest,
+  ReplayResponse,
+  ReplayVarianceKind,
+} from "./replay.js";
 import {
   AtlaSentError,
   StreamParseError,
@@ -1340,6 +1345,107 @@ export class AtlaSentClient {
     }
 
     return { ...wire, rateLimit };
+  }
+
+  /**
+   * ADR-015 Phase C — SDK-canonical replay runtime.
+   *
+   * Re-evaluates a recorded decision against its originally-pinned policy
+   * bundle and engine version via `POST /v1/decisions/:id/replay`.
+   * Side-effect-free server-side: no audit chain row is written and no
+   * permit is issued (ADR-016 `mode: "replay"` sentinel).
+   *
+   * Differences from {@link replayDecision} (the 2.7.0 raw-wire surface):
+   *
+   * | | `replayDecision()` | `replay()` |
+   * | --- | --- | --- |
+   * | Path | `/v1-decisions-replay/:id/replay` | `/v1/decisions/:id/replay` |
+   * | Variance | raw wire (`DECISION_CHANGED`) | SDK-canonical (`POLICY_DRIFT`) |
+   * | 409 handling | throws `AtlaSentError` | returns `ENGINE_DRIFT` / `BUNDLE_MISSING` |
+   * | Input shape | `decisionId: string` | `{ evaluationId }` |
+   *
+   * **Never throws on `409 replay_not_eligible`** — instead returns a
+   * `ReplayResponse` with `varianceKind: "ENGINE_DRIFT"` (engine retired
+   * beyond archival window) or `"BUNDLE_MISSING"` (no bundle pinned on
+   * the original evaluation). Callers can always `switch` on
+   * `result.varianceKind` without a try/catch.
+   *
+   * Fix-forward note: this method was originally landed in PR #275 but
+   * dropped from the squash merge. The TS types (`ReplayResponse`,
+   * `ReplayRequest`) and CHANGELOG made it through; the method itself
+   * did not. Restored here to match the Python {@link
+   * AtlaSentClient}.replay() that landed in atlasent-sdk@2.6.0 (Python).
+   */
+  async replay(input: ReplayRequest): Promise<ReplayResponse> {
+    if (!input || typeof input.evaluationId !== "string" || input.evaluationId.length === 0) {
+      throw new AtlaSentError("evaluationId is required", {
+        code: "bad_request",
+      });
+    }
+
+    const path = `/v1/decisions/${encodeURIComponent(input.evaluationId)}/replay`;
+    let wire: Record<string, unknown>;
+    let rateLimit: RateLimitState | null;
+    try {
+      const result = await this.post<Record<string, unknown>>(path, {});
+      wire = result.body;
+      rateLimit = result.rateLimit;
+    } catch (err) {
+      if (err instanceof AtlaSentError && err.status === 409) {
+        const msg = (err.message ?? "").toLowerCase();
+        const varianceKind: ReplayVarianceKind = msg.includes("bundle")
+          ? "BUNDLE_MISSING"
+          : "ENGINE_DRIFT";
+        return {
+          decisionId: input.evaluationId,
+          varianceKind,
+          originalDecision: "deny",
+          acceptsReplay: false,
+          replayedAt: new Date().toISOString(),
+          rateLimit: null,
+        };
+      }
+      throw err;
+    }
+
+    // Map raw wire variance → SDK-canonical. Unknown values default to
+    // NONE per the additive-contract policy (the SDK never breaks on a
+    // forward-introduced wire kind).
+    const VARIANCE_MAP: Record<string, ReplayVarianceKind> = {
+      NONE: "NONE",
+      DECISION_CHANGED: "POLICY_DRIFT",
+      ENVELOPE_DRIFT: "ENVELOPE_DRIFT",
+      CHAIN_TAMPER: "CHAIN_TAMPER",
+      BUNDLE_MISSING: "BUNDLE_MISSING",
+      ENGINE_DRIFT: "ENGINE_DRIFT",
+    };
+    const rawVariance = typeof wire.variance === "string" ? wire.variance : "";
+    const varianceKind: ReplayVarianceKind = VARIANCE_MAP[rawVariance] ?? "NONE";
+
+    const replayDec = typeof wire.replay_decision === "string"
+      ? (wire.replay_decision.toLowerCase() as DecisionCanonical)
+      : undefined;
+    const originalDec = (
+      typeof wire.original_decision === "string"
+        ? wire.original_decision.toLowerCase()
+        : "deny"
+    ) as DecisionCanonical;
+
+    const response: ReplayResponse = {
+      decisionId: typeof wire.decision_id === "string" ? wire.decision_id : input.evaluationId,
+      varianceKind,
+      originalDecision: originalDec,
+      acceptsReplay: typeof wire.accepts_replay === "boolean" ? wire.accepts_replay : true,
+      replayedAt: typeof wire.replayed_at === "string" ? wire.replayed_at : new Date().toISOString(),
+      rateLimit,
+    };
+    if (typeof wire.original_deny_code === "string") response.originalDenyCode = wire.original_deny_code;
+    if (replayDec !== undefined) response.replayedDecision = replayDec;
+    if (typeof wire.replay_deny_code === "string") response.replayedDenyCode = wire.replay_deny_code;
+    if (typeof wire.engine_version === "string") response.engineVersion = wire.engine_version;
+    if (typeof wire.engine_version_kind === "string") response.engineVersionKind = wire.engine_version_kind;
+    if (typeof wire.envelope_verification === "string") response.envelopeVerification = wire.envelope_verification;
+    return response;
   }
 
   /**
