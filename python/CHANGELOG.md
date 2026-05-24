@@ -1,5 +1,62 @@
 # Changelog
 
+## 2.6.0 -- 2026-05-24 -- decision replay runtime (Python parity restore)
+
+### Added
+
+- **`AtlaSentClient.replay(*, evaluation_id)`** -- sync wrapper around
+  `POST /v1/decisions/{id}/replay` (ADR-015 Phase C parity runtime).
+  Re-evaluates a recorded decision against its originally-pinned
+  policy bundle and engine version, and returns a `ReplayResponse`
+  with the variance outcome. Side-effect-free server-side: no audit
+  chain row is written and no permit is minted (ADR-016
+  `mode: "replay"` sentinel).
+
+- **`atlasent.models.ReplayResponse`** -- Pydantic model with the
+  variance kind, original-and-replayed decisions, engine-version
+  metadata, envelope-verification state, and rate-limit state.
+
+- **`atlasent.models.ReplayVarianceKind`** -- 7-value `Literal` union
+  covering both raw wire values (`NONE`, `DECISION_CHANGED`,
+  `ENVELOPE_DRIFT`) and SDK-canonical mappings (`POLICY_DRIFT`,
+  `CHAIN_TAMPER`, `ENGINE_DRIFT`, `BUNDLE_MISSING`).
+
+- **`tests/test_client_replay.py`** -- 10 tests pinning the wire
+  contract: all variance kinds, `DECISION_CHANGED → POLICY_DRIFT`
+  normalization, forward-compat default-to-`NONE` for unrecognized
+  variance strings, `409 replay_not_eligible → ENGINE_DRIFT /
+  BUNDLE_MISSING` (returned, not raised), URL path + JSON body
+  shape, `evaluation_id` URL-encoding.
+
+### Variance semantics
+
+| `variance_kind` | Meaning |
+|---|---|
+| `NONE` | Replay agrees with the original decision |
+| `POLICY_DRIFT` | Same envelope, same bundle, different decision (typically rule non-determinism). Normalized from the wire `DECISION_CHANGED` value |
+| `ENVELOPE_DRIFT` | Recorded envelope hash no longer matches the recomputed canonical hash; replay short-circuited |
+| `CHAIN_TAMPER` | Audit-chain-v5 detector reports the engine_version binding was tampered |
+| `ENGINE_DRIFT` | Original engine version retired beyond archival window, or absent from the registry |
+| `BUNDLE_MISSING` | Original policy bundle was not pinned on the recorded evaluation |
+
+### Fix-forward note
+
+PR #275 (`feat(client): add client.replay() — ADR-015 Phase C parity
+runtime`) added the **async** `AsyncAtlaSentClient.replay()` method
+plus its imports in `async_client.py`, but its squash merge dropped 7
+of 11 files from the PR -- including `python/atlasent/models.py`
+(`ReplayResponse` / `ReplayVarianceKind`), `python/atlasent/client.py`
+(sync `replay()`), `python/atlasent/__init__.py` (exports), and the
+test file. The result was that `from atlasent import async_client`
+raised `ImportError: cannot import name 'ReplayResponse' from
+'atlasent.models'` on `main`, blocking every Python consumer.
+
+This release restores the dropped pieces. The async surface that did
+land in 275 is unchanged; the sync surface mirrors it exactly so
+contract-vector conformance is symmetric across both runtimes.
+
+---
+
 ## 2.5.0 -- 2026-05-22 -- governance agents read surface (parity with @atlasent/sdk 2.6.0)
 
 ### Added

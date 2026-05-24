@@ -975,3 +975,86 @@ class EnforcementOutcome(BaseModel):
     code: str | None = None
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+
+# ── Decision replay (ADR-015 Phase C parity runtime) ────────────────────
+#
+# Restored 2026-05-24: PR #275 added the async client.replay() method
+# and the dependent imports in async_client.py, but its squash merge
+# dropped python/atlasent/models.py from the changeset — breaking
+# `from atlasent import async_client` with an ImportError. This block
+# closes that gap and also provides the type surface needed by the
+# sync client.replay() in client.py.
+#
+# Wire alignment notes:
+#   - The 7-value union is a deliberate superset of the raw server
+#     wire values (NONE / DECISION_CHANGED / ENVELOPE_DRIFT) and the
+#     SDK-canonical mapping the client performs (DECISION_CHANGED →
+#     POLICY_DRIFT, plus 409 → ENGINE_DRIFT / BUNDLE_MISSING, plus
+#     CHAIN_TAMPER for the audit-chain-v5 detector landing in a
+#     parallel session). Server can emit any of the wire values; the
+#     SDK never round-trips a POLICY_DRIFT string back to the server,
+#     so the union being a superset is safe.
+#   - `original_decision` and `replayed_decision` are lowercased on
+#     ingest to match the canonical evaluate response convention.
+
+
+ReplayVarianceKind = Literal[
+    "NONE",
+    "POLICY_DRIFT",
+    "DECISION_CHANGED",
+    "ENVELOPE_DRIFT",
+    "CHAIN_TAMPER",
+    "ENGINE_DRIFT",
+    "BUNDLE_MISSING",
+]
+
+
+class ReplayResponse(BaseModel):
+    """Result of replaying a recorded decision.
+
+    Wire shape mirrors ``POST /v1/decisions/{id}/replay`` on the API
+    (atlasent-api ``supabase/functions/v1-decisions-replay``).
+    Side-effect-free server-side: replaying does not write to the audit
+    chain or mint a permit (ADR-016 ``mode: "replay"`` sentinel).
+
+    Variance interpretation:
+        - ``NONE``: replay agrees with the original decision.
+        - ``POLICY_DRIFT`` / ``DECISION_CHANGED``: same envelope, same
+          bundle, different decision — typically rule non-determinism.
+          The SDK normalizes ``DECISION_CHANGED`` (raw wire) to
+          ``POLICY_DRIFT`` (canonical); both literals are accepted in
+          the union to keep adapters that pass the raw wire string
+          through working.
+        - ``ENVELOPE_DRIFT``: recorded envelope hash no longer matches
+          the recomputed canonical hash; replay short-circuited
+          without re-evaluating.
+        - ``CHAIN_TAMPER``: audit chain entry binding the engine
+          version was tampered (audit chain v5 detector).
+        - ``ENGINE_DRIFT``: original engine version is retired beyond
+          its archival window, or absent from the registry.
+        - ``BUNDLE_MISSING``: original policy bundle was not pinned
+          on the recorded evaluation, so replay cannot be made
+          deterministic.
+    """
+
+    decision_id: str
+    variance_kind: ReplayVarianceKind
+    original_decision: Literal["allow", "deny", "hold", "escalate"]
+    original_deny_code: str | None = None
+    replayed_decision: (
+        Literal["allow", "deny", "hold", "escalate"] | None
+    ) = None
+    replayed_deny_code: str | None = None
+    engine_version: str | None = None
+    engine_version_kind: (
+        Literal["active", "retired", "archival", "unknown"] | None
+    ) = None
+    accepts_replay: bool = True
+    envelope_verification: (
+        Literal["verified", "drift", "absent", "envelope_missing"] | None
+    ) = None
+    replayed_at: str
+    rate_limit: RateLimitState | None = None
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True, arbitrary_types_allowed=True)

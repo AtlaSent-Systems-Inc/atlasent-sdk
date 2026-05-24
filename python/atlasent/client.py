@@ -42,6 +42,8 @@ from .models import (
     PermitRecord,
     PermitVerifyEvidence,
     RateLimitState,
+    ReplayResponse,
+    ReplayVarianceKind,
     RevokePermitByIdResult,
     RevokePermitResult,
     VerifyPermitByIdResult,
@@ -918,6 +920,77 @@ class AtlaSentClient:
             evaluations=[
                 GovernanceAgentEvaluation.model_validate(e) for e in evals_raw
             ],
+            rate_limit=rate_limit,
+        )
+
+    # ── Decision replay (ADR-015 Phase C parity runtime) ────────────────
+    #
+    # Sync mirror of AsyncAtlaSentClient.replay(). Side-effect-free
+    # server-side: replaying does not write to the audit chain or mint
+    # a permit (ADR-016 ``mode: "replay"`` sentinel).
+    #
+    # Wire-variance → SDK-canonical mapping is kept identical to the
+    # async client to keep contract conformance vectors valid against
+    # both runtimes. See ``ReplayResponse`` in ``models`` for the
+    # 7-value variance union and its interpretation.
+
+    def replay(self, *, evaluation_id: str) -> ReplayResponse:
+        """Re-evaluate a recorded decision against its originally-pinned
+        bundle and engine version. Side-effect-free server-side.
+
+        ``409 replay_not_eligible`` responses are surfaced as a
+        ``ReplayResponse`` with ``variance_kind`` of ``ENGINE_DRIFT``
+        or ``BUNDLE_MISSING`` rather than raising — callers can branch
+        on the variance kind without try/except plumbing.
+
+        Args:
+            evaluation_id: The UUID of the recorded decision to replay.
+
+        Raises:
+            AtlaSentError: Network / transport failure, non-409 HTTP
+                error, or malformed response payload.
+        """
+        path = f"/v1/decisions/{quote(evaluation_id, safe='')}/replay"
+        try:
+            data, rate_limit, _ = self._post(path, {})
+        except AtlaSentError as err:
+            if err.status_code == 409:
+                msg = str(err).lower()
+                variance_kind: ReplayVarianceKind = (
+                    "BUNDLE_MISSING" if "bundle" in msg else "ENGINE_DRIFT"
+                )
+                return ReplayResponse(
+                    decision_id=evaluation_id,
+                    variance_kind=variance_kind,
+                    original_decision="deny",
+                    accepts_replay=False,
+                    replayed_at=datetime.now(timezone.utc).isoformat(),
+                    rate_limit=None,
+                )
+            raise
+        _VARIANCE_MAP: dict[str, str] = {
+            "NONE": "NONE",
+            "DECISION_CHANGED": "POLICY_DRIFT",
+            "ENVELOPE_DRIFT": "ENVELOPE_DRIFT",
+            "CHAIN_TAMPER": "CHAIN_TAMPER",
+            "BUNDLE_MISSING": "BUNDLE_MISSING",
+            "ENGINE_DRIFT": "ENGINE_DRIFT",
+        }
+        raw_variance = data.get("variance", "")
+        vk: ReplayVarianceKind = _VARIANCE_MAP.get(raw_variance, "NONE")
+        replay_dec = data.get("replay_decision")
+        return ReplayResponse(
+            decision_id=data.get("decision_id", evaluation_id),
+            variance_kind=vk,
+            original_decision=(data.get("original_decision") or "deny").lower(),
+            original_deny_code=data.get("original_deny_code"),
+            replayed_decision=replay_dec.lower() if replay_dec else None,
+            replayed_deny_code=data.get("replay_deny_code"),
+            engine_version=data.get("engine_version"),
+            engine_version_kind=data.get("engine_version_kind"),
+            accepts_replay=bool(data.get("accepts_replay", True)),
+            envelope_verification=data.get("envelope_verification"),
+            replayed_at=data.get("replayed_at") or datetime.now(timezone.utc).isoformat(),
             rate_limit=rate_limit,
         )
 
