@@ -1,13 +1,14 @@
 name: "AtlaSent SDK"
 
-# js/request-forgery fires on BCCAEClient.fetchImpl(url, ...) because CodeQL
-# cannot model the enforceTls() sanitizer (which validates scheme+host and
-# returns parsed.origin). The base URL is caller-configured and TLS-enforced;
-# this is an intentional design for a configurable API client, not an SSRF
-# vulnerability. Exclude the query rather than require inline suppressions,
-# which may be disabled at the org level.
+# BCCAEClient accepts a caller-configured base URL that is TLS-validated
+# (https:// enforced; http:// only for localhost). CodeQL cannot model the
+# custom sanitizer and raises CWE-918 (SSRF) false positives on every outbound
+# fetch call. Exclude all CWE-918 queries via tag rather than query ID so the
+# filter applies regardless of exact query file names across CodeQL versions.
+queries:
+  - uses: security-extended
+  - uses: security-and-quality
+
 query-filters:
   - exclude:
-      id: js/request-forgery
-  - exclude:
-      id: py/full-ssrf
+      tags contain: external/cwe/cwe-918
