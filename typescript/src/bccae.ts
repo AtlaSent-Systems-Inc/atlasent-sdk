@@ -140,19 +140,29 @@ const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 function enforceTls(url: string): string {
-  if (url.startsWith("http://")) {
-    const isLocal =
-      url.includes("localhost") ||
-      url.includes("127.0.0.1") ||
-      url.includes("::1");
-    if (!isLocal) {
-      throw new AtlaSentError(
-        "BCCAEClient baseUrl must use https:// for non-local endpoints",
-        { code: "network" },
-      );
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new AtlaSentError(`BCCAEClient: invalid baseUrl: ${url}`, {
+      code: "bad_request",
+    });
+  }
+  if (parsed.protocol === "https:") return url;
+  if (parsed.protocol === "http:") {
+    const { hostname } = parsed;
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1"
+    ) {
+      return url;
     }
   }
-  return url;
+  throw new AtlaSentError(
+    "BCCAEClient baseUrl must use https:// for non-local endpoints",
+    { code: "bad_request" },
+  );
 }
 
 /** Generate a cryptographically random 64-char hex nonce (32 bytes). */

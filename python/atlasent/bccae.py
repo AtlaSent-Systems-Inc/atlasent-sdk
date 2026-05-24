@@ -13,7 +13,6 @@ Phase 3 — Execution Assurance. Not a Deploy Gate V1 customer API.
 
 from __future__ import annotations
 
-import os
 import secrets
 from typing import Any, Literal
 from urllib.parse import urlparse
@@ -34,12 +33,8 @@ BccaeResourceClassification = Literal[
 ]
 BccaeDeploymentEnv = Literal["PROD", "STAGING", "DEV", "TEST"]
 BccaeSecurityPosture = Literal["STANDARD", "ELEVATED", "LOCKED"]
-BccaeRequestSource = Literal[
-    "AGENT", "API", "INTERNAL", "SCHEDULED", "TRIGGERED"
-]
-BccaeRevocationTargetType = Literal[
-    "PERMIT", "EVALUATION", "ACTOR", "RESOURCE"
-]
+BccaeRequestSource = Literal["AGENT", "API", "INTERNAL", "SCHEDULED", "TRIGGERED"]
+BccaeRevocationTargetType = Literal["PERMIT", "EVALUATION", "ACTOR", "RESOURCE"]
 
 
 def generate_bccae_nonce() -> str:
@@ -49,13 +44,13 @@ def generate_bccae_nonce() -> str:
 
 def _enforce_tls(base_url: str) -> str:
     parsed = urlparse(base_url)
-    if parsed.scheme == "http":
-        is_local = parsed.hostname in ("localhost", "127.0.0.1", "::1")
-        if not is_local:
-            raise ValueError(
-                f"BCCAEClient base_url must use https:// (got scheme={parsed.scheme!r})"
-            )
-    return base_url
+    if parsed.scheme == "https":
+        return base_url
+    if parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1"):
+        return base_url
+    raise ValueError(
+        f"BCCAEClient base_url must use https:// (got scheme={parsed.scheme!r})"
+    )
 
 
 class BCCAEClient:
@@ -99,7 +94,7 @@ class BCCAEClient:
             timeout=timeout,
         )
 
-    def __enter__(self) -> "BCCAEClient":
+    def __enter__(self) -> BCCAEClient:
         return self
 
     def __exit__(self, *_: Any) -> None:
@@ -190,11 +185,14 @@ class BCCAEClient:
         Never raises on denial — only raises on network errors or 5xx.
         Requires API key with ``bccae:execute`` scope.
         """
-        return self._post("/v1/bccae/execute", {
-            "permit_token": permit_token,
-            "action_id": action_id,
-            "resource_ref": resource_ref,
-        })
+        return self._post(
+            "/v1/bccae/execute",
+            {
+                "permit_token": permit_token,
+                "action_id": action_id,
+                "resource_ref": resource_ref,
+            },
+        )
 
     def revoke(
         self,
@@ -210,11 +208,14 @@ class BCCAEClient:
 
         Requires API key with ``bccae:revoke`` scope.
         """
-        return self._post("/v1/bccae/revocations", {
-            "target_type": target_type,
-            "target_id": target_id,
-            "reason": reason,
-        })
+        return self._post(
+            "/v1/bccae/revocations",
+            {
+                "target_type": target_type,
+                "target_id": target_id,
+                "reason": reason,
+            },
+        )
 
     def get_evidence(self, evidence_id: str) -> dict[str, Any]:
         """Fetch a single evidence record and verify its hash chain integrity.
@@ -250,14 +251,13 @@ class BCCAEClient:
             ) from exc
         return self._handle_response(resp, path)
 
-    def _handle_response(
-        self, resp: httpx.Response, path: str
-    ) -> dict[str, Any]:
+    def _handle_response(self, resp: httpx.Response, path: str) -> dict[str, Any]:
         try:
             data: dict[str, Any] = resp.json()
         except Exception as exc:
             raise AtlaSentError(
-                f"BCCAEClient: non-JSON response (status {resp.status_code}) from {path}",
+                f"BCCAEClient: non-JSON response (status {resp.status_code})"
+                f" from {path}",
                 code="network",
             ) from exc
 
