@@ -254,22 +254,16 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
     });
   }
 
-  // P1-1: Extract environment from the evaluate payload. Priority:
-  //   context.environment → (no top-level environment on EvaluateRequest)
-  //   → default "production" with a console warning.
-  const environment =
-    (request.context?.environment as string | undefined) ??
-    (() => {
-      // eslint-disable-next-line no-console
-      console.warn(
-        "[atlasent] environment not set on evaluate request — " +
-          "defaulting to 'production'. Set context.environment explicitly to suppress.",
-      );
-      return "production";
-    })();
+  const environment = request.context?.environment as string | undefined;
+  if (!environment) {
+    throw new AtlaSentError(
+      'context.environment is required. Pass the environment where this action executes (e.g. "production", "staging").',
+      { code: "bad_request" },
+    );
+  }
 
-  // P1-5: Compute execution_hash over the original evaluate payload so
-  //   the server can validate integrity on permit consume.
+  // Compute execution_hash over the original evaluate payload so
+  // the server can validate integrity on permit consume.
   const evaluatePayload = {
     action_type: request.action,
     actor_id: request.agent,
@@ -398,16 +392,13 @@ export async function protectWithEvidence(
   }
 
   // 2. Extract environment, compute execution_hash, verify permit.
-  const environment =
-    (request.context?.environment as string | undefined) ??
-    (() => {
-      // eslint-disable-next-line no-console
-      console.warn(
-        "[atlasent] environment not set on evaluate request — " +
-          "defaulting to 'production'. Set context.environment explicitly to suppress.",
-      );
-      return "production";
-    })();
+  const environment = request.context?.environment as string | undefined;
+  if (!environment) {
+    throw new AtlaSentError(
+      'context.environment is required. Pass the environment where this action executes (e.g. "production", "staging").',
+      { code: "bad_request" },
+    );
+  }
 
   const evaluatePayload = {
     action_type: request.action,
