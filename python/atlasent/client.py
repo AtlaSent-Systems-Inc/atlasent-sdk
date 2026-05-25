@@ -116,6 +116,7 @@ def _compute_execution_hash(payload: dict) -> str:
 # what atlasent-api accepts; widen here only if the server widens
 # first.
 _API_KEY_PATTERN = re.compile(r"^ask_(?:live|test)_[A-Za-z0-9_-]+$")
+_ACTION_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 
 
 def _validate_api_key(api_key: str) -> str:
@@ -431,6 +432,11 @@ class AtlaSentClient:
         action: str,
         context: dict[str, Any] | None = None,
     ) -> Permit:
+        if not _ACTION_TYPE_RE.match(action):
+            raise AtlaSentError(
+                f'action must be in dot-notation format (e.g. "production.deploy"). Got: {action!r}',
+                code="bad_request",
+            )
         ctx = context or {}
         try:
             eval_result = self.evaluate(action, agent, ctx)

@@ -6,9 +6,46 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
-## @atlasent/sdk 2.9.0 (2026-05-24)
+## @atlasent/sdk 2.9.0 (2026-05-25)
 
 ### New features
+
+#### `AtlaSentDeniedError.outcome` — permit-side denial discriminator (D4)
+
+`AtlaSentDeniedError` now carries an `outcome` field typed as
+`PermitOutcome | undefined`. When `/v1-verify-permit` rejects a permit,
+the server's `outcome` string is normalized and surfaced here. Four
+predicates provide ergonomic branching:
+
+| Predicate | `outcome` value | When |
+|---|---|---|
+| `isRevoked` | `"permit_revoked"` | Operator revoked the permit mid-flight |
+| `isExpired` | `"permit_expired"` | Permit TTL elapsed before verify |
+| `isConsumed` | `"permit_consumed"` | Single-use permit already consumed |
+| `isNotFound` | `"permit_not_found"` | Permit token not in DB |
+
+Unknown future outcome strings normalize to `undefined` (forward-compat).
+See `docs/REVOCATION_RUNBOOK.md` for the operator runbook.
+
+```ts
+try {
+  await atlasent.protect({ agent, action, context });
+} catch (err) {
+  if (err instanceof AtlaSentDeniedError) {
+    if (err.isRevoked) notifySecurity("permit revoked mid-flight");
+    else if (err.isExpired) scheduleReauthorization();
+  }
+}
+```
+
+#### `protect()` / `protectWithEvidence()` — client-side `action` format validation
+
+Both functions now validate that `action` matches the canonical
+dot-notation format (`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`) before
+making any network call. Invalid values throw `AtlaSentError` with
+`code: "bad_request"` immediately at call site, matching the 400
+`invalid_action_type` the server would return. This surfaces
+mis-configured callers at integration time rather than at runtime.
 
 #### Risk envelope — Phase C
 
@@ -55,6 +92,11 @@ Seven factors: `ACTION_SENSITIVITY`, `ACTOR_AUTHORITY`, `ORG_POLICY_STRICTNESS`,
 Each carries `{ factor, value, weight, reason }`.
 
 Omit `explain` (or pass `false`) to keep payloads small.
+
+### Exports added
+
+- `PermitOutcome` — `"permit_consumed" | "permit_expired" | "permit_revoked" | "permit_not_found"`
+- `normalizePermitOutcome(raw)` — maps server strings to `PermitOutcome | undefined`
 
 ---
 

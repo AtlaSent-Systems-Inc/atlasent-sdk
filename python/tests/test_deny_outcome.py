@@ -139,7 +139,7 @@ class TestProtectPropagatesOutcomeSync:
         ]
 
         with pytest.raises(AtlaSentDeniedError) as excinfo:
-            client.protect(agent="a", action="b")
+            client.protect(agent="a", action="test.action")
 
         assert excinfo.value.outcome == expected_outcome
         assert getattr(excinfo.value, expected_predicate) is True
@@ -153,7 +153,7 @@ class TestProtectPropagatesOutcomeSync:
         ]
 
         with pytest.raises(AtlaSentDeniedError) as excinfo:
-            client.protect(agent="a", action="b")
+            client.protect(agent="a", action="test.action")
 
         # The reason still carries the raw outcome string for
         # debuggability; the discriminator is None so callers
@@ -188,7 +188,7 @@ class TestProtectPropagatesOutcomeAsync:
         ]
 
         with pytest.raises(AtlaSentDeniedError) as excinfo:
-            await client.protect(agent="a", action="b")
+            await client.protect(agent="a", action="test.action")
 
         assert excinfo.value.outcome == expected_outcome
         assert getattr(excinfo.value, expected_predicate) is True

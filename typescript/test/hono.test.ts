@@ -105,7 +105,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
       "/deploy/:service",
       atlaSentGuard({
         agent: (c) => c.req.header("x-agent-id") ?? "anon",
-        action: (c) => `deploy_${c.req.param("service")}`,
+        action: (c) => `deploy.${(c.req.param("service") ?? "unknown").replace(/-/g, "_")}`,
         context: async (c) => ({
           commit: (await c.req.json<{ commit: string }>()).commit,
           approver: c.req.header("x-approver") ?? "unknown",
@@ -130,7 +130,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
     const [, evalInit] = fetchImpl.mock.calls[0]!;
     const evalBody = JSON.parse(evalInit!.body as string);
     expect(evalBody.actor_id).toBe("ci-runner-42");
-    expect(evalBody.action_type).toBe("deploy_billing-api");
+    expect(evalBody.action_type).toBe("deploy.billing_api");
     expect(evalBody.context).toEqual({ commit: "abc123", approver: "alice", environment: "production" });
   });
 
@@ -149,7 +149,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
 
     app.post(
       "/deploy",
-      atlaSentGuard({ agent: "bot", action: "deploy" }),
+      atlaSentGuard({ agent: "bot", action: "production.deploy" }),
       (c) => c.json({ ok: true }),
     );
 
@@ -171,7 +171,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
     const app = new Hono<AppEnv>();
     app.post(
       "/deploy",
-      atlaSentGuard({ agent: "bot", action: "deploy", key: "permit", context: async () => ({ environment: "production" }) }),
+      atlaSentGuard({ agent: "bot", action: "production.deploy", key: "permit", context: async () => ({ environment: "production" }) }),
       (c) => {
         expect(c.get("atlasent")).toBeUndefined();
         const permit = c.get("permit");
@@ -192,7 +192,7 @@ describe("atlaSentGuard (Hono middleware)", () => {
     app.onError((_err, c) => c.json({}, 403));
     app.post(
       "/deploy",
-      atlaSentGuard({ agent: "bot", action: "deploy" }),
+      atlaSentGuard({ agent: "bot", action: "production.deploy" }),
       (c) => {
         handlerSpy();
         return c.json({ ok: true });
@@ -221,7 +221,7 @@ describe("atlaSentErrorHandler", () => {
     app.onError(atlaSentErrorHandler());
     app.post(
       "/deploy",
-      atlaSentGuard({ agent: "bot", action: "deploy" }),
+      atlaSentGuard({ agent: "bot", action: "production.deploy" }),
       (c) => c.json({ ok: true }),
     );
 
@@ -245,7 +245,7 @@ describe("atlaSentErrorHandler", () => {
     app.onError(atlaSentErrorHandler());
     app.post(
       "/deploy",
-      atlaSentGuard({ agent: "bot", action: "deploy" }),
+      atlaSentGuard({ agent: "bot", action: "production.deploy" }),
       (c) => c.json({ ok: true }),
     );
 
@@ -272,7 +272,7 @@ describe("atlaSentErrorHandler", () => {
     );
     app.post(
       "/deploy",
-      atlaSentGuard({ agent: "bot", action: "deploy" }),
+      atlaSentGuard({ agent: "bot", action: "production.deploy" }),
       (c) => c.json({ ok: true }),
     );
 

@@ -91,7 +91,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      await protectShadow({ agent: "a", action: "b", context: { environment: "production" } });
+      await protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } });
 
       // The second configureShadow call replaced onOutcome; onOutcome2 fires.
       expect(onOutcome2).toHaveBeenCalledOnce();
@@ -105,7 +105,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      const outcome = await protectShadow({ agent: "a", action: "b", context: { environment: "production" } });
+      const outcome = await protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } });
       expect(outcome.mode).toBe("observe");
     });
   });
@@ -162,7 +162,7 @@ describe("shadow module", () => {
       });
 
       await expect(
-        protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "observe" }),
+        protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } }, { mode: "observe" }),
       ).rejects.toThrow("network failure");
     });
 
@@ -173,7 +173,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      const outcome = await protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "observe" });
+      const outcome = await protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } }, { mode: "observe" });
       expect(outcome.would_have_blocked).toBe(false);
     });
 
@@ -187,7 +187,7 @@ describe("shadow module", () => {
       globalThis.fetch = fetchImpl;
 
       await protectShadow(
-        { agent: "a", action: "b", context: { environment: "production" } },
+        { agent: "a", action: "test.action", context: { environment: "production" } },
         { mode: "observe", reportToApi: true, apiKey: "ask_test_shadow_k1" },
       );
 
@@ -207,7 +207,7 @@ describe("shadow module", () => {
       globalThis.fetch = fetchImpl;
 
       await protectShadow(
-        { agent: "a", action: "b", context: { environment: "production" } },
+        { agent: "a", action: "test.action", context: { environment: "production" } },
         { mode: "observe", reportToApi: true, apiKey: "ask_test_shadow_k1" },
       );
 
@@ -226,7 +226,7 @@ describe("shadow module", () => {
       globalThis.fetch = fetchImpl;
 
       await protectShadow(
-        { agent: "a", action: "b", context: { environment: "production" } },
+        { agent: "a", action: "test.action", context: { environment: "production" } },
         { mode: "observe", reportToApi: false },
       );
 
@@ -266,7 +266,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       const outcome = await protectShadow(
-        { agent: "a", action: "b", context: { environment: "production" } },
+        { agent: "a", action: "test.action", context: { environment: "production" } },
         { mode: "warn" },
       );
 
@@ -284,7 +284,7 @@ describe("shadow module", () => {
       });
 
       await expect(
-        protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "warn" }),
+        protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } }, { mode: "warn" }),
       ).rejects.toThrow("unexpected failure");
     });
 
@@ -293,7 +293,7 @@ describe("shadow module", () => {
       const fetchImpl = mockFetchSequence([jsonResponse(EVALUATE_DENY_WIRE)]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      await protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "warn" });
+      await protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } }, { mode: "warn" });
       const shadowWarn = warnSpy.mock.calls.find(([msg]) => String(msg).includes("shadow:warn"));
       expect(shadowWarn?.[0]).toMatch(/dec_2/);
     });
@@ -339,7 +339,7 @@ describe("shadow module", () => {
       });
 
       await expect(
-        protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "enforce" }),
+        protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } }, { mode: "enforce" }),
       ).rejects.toThrow("server exploded");
     });
 
@@ -350,7 +350,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      const outcome = await protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "enforce" });
+      const outcome = await protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } }, { mode: "enforce" });
       expect(outcome.would_have_blocked).toBe(false);
     });
   });
@@ -367,7 +367,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       const outcome = await protectShadow(
-        { agent: "a", action: "b", context: { environment: "production" } },
+        { agent: "a", action: "test.action", context: { environment: "production" } },
         { mode: "observe", onOutcome },
       );
 
@@ -381,7 +381,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       const outcome = await protectShadow(
-        { agent: "a", action: "b", context: { environment: "production" } },
+        { agent: "a", action: "test.action", context: { environment: "production" } },
         { mode: "observe", onOutcome },
       );
 
@@ -398,7 +398,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      await protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "enforce", onOutcome });
+      await protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } }, { mode: "enforce", onOutcome });
       expect(onOutcome).toHaveBeenCalledOnce();
     });
 
@@ -412,7 +412,7 @@ describe("shadow module", () => {
 
       // Should not throw despite onOutcome throwing.
       await expect(
-        protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "observe", onOutcome }),
+        protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } }, { mode: "observe", onOutcome }),
       ).resolves.toBeDefined();
     });
 
@@ -422,7 +422,7 @@ describe("shadow module", () => {
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
       await expect(
-        protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "observe", onOutcome }),
+        protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } }, { mode: "observe", onOutcome }),
       ).resolves.toBeDefined();
     });
 
@@ -435,7 +435,7 @@ describe("shadow module", () => {
       ]);
       configure({ apiKey: "ask_test_shadow_k1", fetch: fetchImpl });
 
-      await protectShadow({ agent: "a", action: "b", context: { environment: "production" } }, { mode: "observe" });
+      await protectShadow({ agent: "a", action: "test.action", context: { environment: "production" } }, { mode: "observe" });
       expect(onOutcome).toHaveBeenCalledOnce();
     });
   });
@@ -596,7 +596,7 @@ describe("shadow module", () => {
 
       // Passing mode: "observe" in opts should override the global "enforce" mode.
       const outcome = await protectShadow(
-        { agent: "a", action: "b", context: { environment: "production" } },
+        { agent: "a", action: "test.action", context: { environment: "production" } },
         { mode: "observe" },
       );
       expect(outcome.mode).toBe("observe");
@@ -619,7 +619,7 @@ describe("shadow module", () => {
           would_have_blocked: false,
           latencyMs: 10,
           evaluationId: "dec_1",
-          request: { agent: "a", action: "b", context: { environment: "production" } },
+          request: { agent: "a", action: "test.action", context: { environment: "production" } },
           mode: "observe" as const,
         };
       }

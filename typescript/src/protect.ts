@@ -146,6 +146,9 @@ function getClient(): AtlaSentClient {
   return sharedClient;
 }
 
+// Mirrors the server-side ACTION_TYPE_RE in v1-evaluate/handler.ts.
+const ACTION_TYPE_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
+
 function wireDecisionToDenied(serverDecision: string): AtlaSentDecision {
   // Normalise to lowercase before matching — the decision field is now
   // always lowercase from evaluate(), but defensive lower-casing here
@@ -243,6 +246,12 @@ function generateReceiptId(): string {
  *   or server error. Same fail-closed contract: do not proceed.
  */
 export async function protect(request: ProtectRequest): Promise<Permit> {
+  if (!ACTION_TYPE_RE.test(request.action)) {
+    throw new AtlaSentError(
+      `action must be in dot-notation format (e.g. "production.deploy"). Got: ${JSON.stringify(request.action)}`,
+      { code: "bad_request" },
+    );
+  }
   const client = getClient();
   const evaluation = await client.evaluate(request);
 
@@ -380,6 +389,12 @@ export async function protectWithEvidence(
   request: ProtectRequest,
   opts: ProtectWithEvidenceOptions = {},
 ): Promise<PermitWithEvidence> {
+  if (!ACTION_TYPE_RE.test(request.action)) {
+    throw new AtlaSentError(
+      `action must be in dot-notation format (e.g. "production.deploy"). Got: ${JSON.stringify(request.action)}`,
+      { code: "bad_request" },
+    );
+  }
   const client = getClient();
 
   // 1. Evaluate (same logic as protect()).

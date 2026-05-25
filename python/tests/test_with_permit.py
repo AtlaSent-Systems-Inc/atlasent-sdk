@@ -102,7 +102,7 @@ class TestSyncWithPermit:
             return "ran"
 
         result = with_permit(
-            agent="deploy-bot", action="deploy", context={"commit": "abc"}, fn=fn
+            agent="deploy-bot", action="production.deploy", context={"commit": "abc"}, fn=fn
         )
 
         assert result == "ran"
@@ -129,7 +129,7 @@ class TestSyncWithPermit:
             return "should-not-run"
 
         with pytest.raises(AtlaSentDeniedError):
-            with_permit(agent="bot", action="deploy", fn=fn)
+            with_permit(agent="bot", action="production.deploy", fn=fn)
         assert called is False
 
     def test_replay_v1_single_use_raises_denied_fn_never_called(self, mocker) -> None:
@@ -157,7 +157,7 @@ class TestSyncWithPermit:
             return "should-not-run"
 
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            with_permit(agent="bot", action="deploy", fn=fn)
+            with_permit(agent="bot", action="production.deploy", fn=fn)
         assert called is False
         assert "permit_consumed" in (exc_info.value.reason or "").lower() or (
             "verification" in str(exc_info.value).lower()
@@ -184,7 +184,7 @@ class TestSyncWithPermit:
             raise CallerError("user code blew up")
 
         with pytest.raises(CallerError, match="user code blew up"):
-            with_permit(agent="bot", action="deploy", fn=fn)
+            with_permit(agent="bot", action="production.deploy", fn=fn)
 
     def test_5xx_on_evaluate_raises_atlasent_error_fn_never_called(
         self, mocker
@@ -205,7 +205,7 @@ class TestSyncWithPermit:
             return "should-not-run"
 
         with pytest.raises(AtlaSentError):
-            with_permit(agent="bot", action="deploy", fn=fn)
+            with_permit(agent="bot", action="production.deploy", fn=fn)
         assert called is False
 
     def test_returns_arbitrary_fn_return_value(self, mocker) -> None:
@@ -224,7 +224,7 @@ class TestSyncWithPermit:
 
         result = with_permit(
             agent="bot",
-            action="deploy",
+            action="production.deploy",
             fn=lambda permit: {"ok": True, "id": permit.permit_id},
         )
         assert result == {"ok": True, "id": "dec_alpha"}
@@ -266,7 +266,7 @@ class TestAsyncWithPermit:
             return "ran-async"
 
         result = await atlasent_aio.with_permit(
-            async_client, agent="bot", action="deploy", fn=fn
+            async_client, agent="bot", action="production.deploy", fn=fn
         )
 
         assert result == "ran-async"
@@ -288,7 +288,7 @@ class TestAsyncWithPermit:
         result = await atlasent_aio.with_permit(
             async_client,
             agent="bot",
-            action="deploy",
+            action="production.deploy",
             fn=lambda permit: ("sync-result", permit.permit_id),
         )
         assert result == ("sync-result", "dec_alpha")
@@ -315,7 +315,7 @@ class TestAsyncWithPermit:
 
         with pytest.raises(AtlaSentDeniedError):
             await atlasent_aio.with_permit(
-                async_client, agent="bot", action="deploy", fn=fn
+                async_client, agent="bot", action="production.deploy", fn=fn
             )
         assert called is False
 
@@ -340,5 +340,5 @@ class TestAsyncWithPermit:
 
         with pytest.raises(CallerError, match="async user code blew up"):
             await atlasent_aio.with_permit(
-                async_client, agent="bot", action="deploy", fn=fn
+                async_client, agent="bot", action="production.deploy", fn=fn
             )
