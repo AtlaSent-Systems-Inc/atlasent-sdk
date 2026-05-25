@@ -1,5 +1,16 @@
 # AtlaSent SDKs
 
+> **Versioning note (Doctrine 5).** Per-language SDK SemVer is
+> **independent** of the AtlaSent platform version. There is one
+> platform version — `v1` — and no "v2 product." A
+> `@atlasent/sdk@2.x` release is the second major **SDK** contract
+> generation (a breaking change in SDK ergonomics, wire-call API,
+> or type surface) and is not "AtlaSent v2." Both SDKs target the
+> stable `/v1-evaluate` and `/v1-verify-permit` endpoints. See the
+> umbrella [Versioning Doctrine](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/VERSIONING_DOCTRINE.md)
+> (Doctrines 3 and 5) and the precedent set by Stripe, AWS, and
+> OpenAI client libraries.
+
 Client SDKs for **AtlaSent execution-time authorization infrastructure** — one runtime gating protected actions across CI/CD deployment, financial close, and AI agent execution.
 
 Fail-closed by design — no protected action proceeds without an explicit, server-verified permit.
@@ -75,12 +86,18 @@ A runnable example wiring all five end to end lives in
 
 ## API endpoints
 
-Both SDKs target the same two endpoints:
+Both SDKs target the same two endpoints on the `/v1-*` surface:
 
 - `POST https://api.atlasent.io/v1-evaluate`
 - `POST https://api.atlasent.io/v1-verify-permit`
 
 Full wire-format parity: a Python permit token is verifiable from the TypeScript SDK and vice-versa.
+
+The `V2_ROLLOUT.md` document in this repo is a **historical filename**
+preserved per Doctrine 4. Its substantive content (batch evaluate,
+streaming evaluate, GraphQL client, behavior-conditioning helper)
+ships as additive Phase 1 / Phase 2 work on the same `/v1/*` wire
+surface.
 
 ## Repository layout
 
