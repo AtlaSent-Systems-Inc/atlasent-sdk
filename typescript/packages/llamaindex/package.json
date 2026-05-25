@@ -2,7 +2,7 @@
   "name": "@atlasent/llamaindex",
   "version": "1.6.0",
   "description": "AtlaSent authorization wrapper for LlamaIndex tools — authorize every tool call before execution",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -34,7 +34,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@atlasent/sdk": "^1.5.0 || ^2.0.0"
+    "@atlasent/sdk": "^2.10.0"
   },
   "devDependencies": {
     "@atlasent/sdk": "file:../../",

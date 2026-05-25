@@ -16,7 +16,7 @@
 > `contract/schemas/v2/` are **code-level identifiers** — preserved
 > per Doctrines 3, 4, and 5.
 >
-> **Last updated:** 2026-05-18
+> **Last updated:** 2026-05-25
 
 Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`). Nothing
 ships to customers until these ship. SDK package SemVer evolves
@@ -27,29 +27,19 @@ independently of platform phases (see Doctrine 5 above).
 The SDKs implement the stable AtlaSent **v1** contract
 (`evaluate → permit → verify → audit`).
 
-- **Python `atlasent` 1.4.1** on PyPI (2026-04-26) — implements `v1`
+- **TypeScript `@atlasent/sdk` 2.10.0** on npm (tag: `typescript-v2.10.0`) — implements `v1`
   contract.
-- **TypeScript `@atlasent/sdk` 1.6.0** on npm — implements `v1`
-  contract.
-- **Go SDK** shipped in v1.6.0, then **removed** (PR #143) — will be
-  re-added on customer demand.
-- **`@atlasent/sdk` 2.0.0** (PR #140) ready to merge — SDK-major
-  ergonomics bump (canonical wire shape). Per Doctrine 5 this is an
-  SDK SemVer major, **not** "AtlaSent v2."
-- **`@atlasent/sdk` 2.1.0** (PR #141) ready to merge — builds on 2.0.0.
+- **Python `atlasent` 2.10.0** on PyPI (tag: `python-v2.10.0`) — implements `v1` contract.
+- **Go SDK** — removed; will be re-added on customer demand.
 - **Framework guard packages** (`@atlasent/langchain`,
-  `@atlasent/llamaindex`, `@atlasent/cursor`) — tests green, README +
-  LICENSE in place; **not yet published to npm** (pending org-wide
-  Apache-2.0/MIT license decision and PRs #140 / #141 merge).
+  `@atlasent/llamaindex`, `@atlasent/cursor`) at 1.6.0 — tests green, README +
+  LICENSE in place; **not yet published to npm** (blocked on org-wide
+  Apache-2.0/MIT license decision).
 
 Remaining to close out the current SDK-publishing arc:
 
-- Merge PR #140 (SDK 2.0.0 — canonical wire shape on the `v1` contract).
-- Merge PR #141 (SDK 2.1.0 — builds on 2.0.0).
-- Publish updated `@atlasent/sdk` to npm (post PR chain).
-- Publish updated `atlasent` to PyPI (post PR chain).
-- Publish framework guard packages — unblocks agent-framework pilot
-  scenarios.
+- Publish framework guard packages to npm — unblocks agent-framework pilot
+  scenarios; blocked on org-wide Apache-2.0/MIT license decision.
 
 Known gaps tracked for later phases:
 
@@ -63,20 +53,18 @@ Known gaps tracked for later phases:
 Additive on the `v1` contract. The SDKs ship the stable `v1` surface
 plus the framework guards required for pilot deployments.
 
-1. **TS SDK published** — `@atlasent/sdk` **1.6.0 on npm**. PR #140 (SDK
-   2.0.0 canonical wire shape) and PR #141 (SDK 2.1.0) are ready to
-   merge; merge then re-publish. `@atlasent/types` lives in
+1. **TS SDK published** — `@atlasent/sdk` **2.10.0 on npm** (tag: `typescript-v2.10.0`).
+   `@atlasent/types` lives in
    `atlasent-api/packages/types`; whether it ships as a separate npm
    package or folds into `@atlasent/sdk` is open.
-2. **Python SDK published** — `atlasent` **1.4.1 on PyPI** (2026-04-26).
+2. **Python SDK published** — `atlasent` **2.10.0 on PyPI** (tag: `python-v2.10.0`).
    Sync + async clients, `protect()` / `authorize()` / `gate()` /
    `evaluate()` / `verify()`, `@atlasent_guard` + `@async_atlasent_guard`
    decorators, typed errors, `TTLCache`, audit-bundle verification.
-3. **Go SDK** — removed via PR #143. Re-add as a separate module on
-   customer demand.
+3. **Go SDK** — removed. Re-add as a separate module on customer demand.
 4. **`v1`-only API sweep** — done in the 1.x line.
 5. **Offline verifier** — `@atlasent/verify` zero-dep Node CLI +
-   library packaged in PR #128. `verify_audit_bundle()` ships in both
+   library packaged. `verify_audit_bundle()` ships in both
    `atlasent` (Python) and TS SDK.
 6. **SSO-aware types** — once `atlasent-api/v1-sso` ships, export
    `SsoConnection`, `SsoJitRule`, `SsoEvent` from `@atlasent/types`.
@@ -152,12 +140,12 @@ assurance.
   `atlasent_sentry_preview`). Workflow on tag. `PYPI_TOKEN` secret.
   Preview distribution names are published-identifier-stable per
   Doctrine 5.
-- **Go proxy**: removed for now (PR #143); will restore as a tagged
-  module when re-added (module-path suffix per Go SemVer convention).
-- **License blocker**: org-wide Apache-2.0 flip pending counsel; all
-  package.json currently set to MIT (corrected in PR #216). Framework
-  guard packages cannot publish until license decision is finalized and
-  all package.json fields + root LICENSE updated atomically.
+- **Go proxy**: removed; will restore as a tagged module when re-added
+  (module-path suffix per Go SemVer convention).
+- **License blocker**: org-wide Apache-2.0/MIT decision pending counsel;
+  framework guard packages (`@atlasent/langchain`, `@atlasent/llamaindex`,
+  `@atlasent/cursor`) cannot publish until license decision is finalized
+  and all package.json fields + root LICENSE updated atomically.
 
 ## Cross-repo dependencies
 
@@ -171,13 +159,11 @@ assurance.
 - **atlasent-examples**: imports published packages to demo real
   customer flow.
 
-## Gaps (identified 2026-05-11)
+## Gaps (identified 2026-05-25)
 
-- **PRs #140 / #141 pending** — canonical wire shape has been ready for
-  review; blocking the next npm/PyPI publish and the stable SDK story.
 - **Framework guard npm publish blocked** — three packages are
-  code-complete but blocked on: (a) license decision, (b) PRs #140 /
-  #141 merge so they don't ship on a pre-canonical wire shape.
+  code-complete but blocked on the org-wide Apache-2.0/MIT license
+  decision.
 - **Unified decision type** — TS and Python still diverge on the
   decision object shape; this confuses polyglot users.
 
