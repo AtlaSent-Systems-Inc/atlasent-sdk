@@ -154,7 +154,7 @@ describe("protect() propagates outcome from /v1-verify-permit", () => {
       configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
       try {
-        await protect({ agent: "a", action: "b", context: { environment: "production" } });
+        await protect({ agent: "a", action: "test.action", context: { environment: "production" } });
         throw new Error("expected protect() to throw");
       } catch (err) {
         expect(err).toBeInstanceOf(AtlaSentDeniedError);
@@ -173,7 +173,7 @@ describe("protect() propagates outcome from /v1-verify-permit", () => {
     configure({ apiKey: "ask_live_test", fetch: fetchImpl });
 
     try {
-      await protect({ agent: "a", action: "b", context: { environment: "production" } });
+      await protect({ agent: "a", action: "test.action", context: { environment: "production" } });
       throw new Error("expected protect() to throw");
     } catch (err) {
       expect(err).toBeInstanceOf(AtlaSentDeniedError);

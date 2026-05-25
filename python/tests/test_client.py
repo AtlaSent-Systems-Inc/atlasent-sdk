@@ -1600,7 +1600,7 @@ class TestDeprecationWarnings:
         import warnings as _warnings
         with _warnings.catch_warnings():
             _warnings.simplefilter("error", DeprecationWarning)
-            client.protect(agent="a", action="b")  # must not raise
+            client.protect(agent="a", action="production.deploy")  # must not raise
 
     def test_evaluate_does_not_emit_deprecation_warning(self, client, mocker):
         # Canonical surface — must not emit.

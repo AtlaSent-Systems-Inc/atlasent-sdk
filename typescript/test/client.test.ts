@@ -1840,7 +1840,7 @@ describe("evaluateBatch()", () => {
     const client = makeClient(fetchImpl);
 
     const result = await client.evaluateBatch([
-      { agent: "bot", action: "deploy" },
+      { agent: "bot", action: "production.deploy" },
       { agent: "bot", action: "rollback" },
     ]);
 
@@ -1871,12 +1871,12 @@ describe("evaluateBatch()", () => {
     const client = makeClient(fetchImpl);
 
     await client.evaluateBatch([
-      { agent: "bot", action: "deploy", context: { env: "prod" } },
+      { agent: "bot", action: "production.deploy", context: { env: "prod" } },
     ]);
 
     expect(captured.url).toContain("/v1-evaluate-batch");
     expect(captured.body).toMatchObject({
-      items: [{ action_type: "deploy", actor_id: "bot", context: { env: "prod" } }],
+      items: [{ action_type: "production.deploy", actor_id: "bot", context: { env: "prod" } }],
     });
   });
 

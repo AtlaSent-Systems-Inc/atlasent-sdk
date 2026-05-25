@@ -372,7 +372,7 @@ describe("protectOrEscalate()", () => {
     configure({ apiKey: "ask_test_approval_runtime", fetch: protectFetch as unknown as typeof fetch });
 
     const permit = await protectOrEscalate(
-      { agent: "bot", action: "deploy", context: { environment: "production" } },
+      { agent: "bot", action: "production.deploy", context: { environment: "production" } },
     );
 
     expect(permit.approvalBasis).toBe("direct_policy");
@@ -407,7 +407,7 @@ describe("protectOrEscalate()", () => {
     }) as unknown as typeof globalThis.fetch;
 
     const permit = await protectOrEscalate(
-      { agent: "bot", action: "deploy", context: { environment: "production" } },
+      { agent: "bot", action: "production.deploy", context: { environment: "production" } },
       { pollIntervalMs: 10, waitMs: 5_000 },
     );
 
@@ -439,7 +439,7 @@ describe("protectOrEscalate()", () => {
     const onCreated = vi.fn();
 
     await protectOrEscalate(
-      { agent: "bot", action: "deploy" },
+      { agent: "bot", action: "production.deploy" },
       { onEscalationCreated: onCreated, pollIntervalMs: 10, waitMs: 5_000 },
     );
 
@@ -469,7 +469,7 @@ describe("protectOrEscalate()", () => {
 
     await expect(
       protectOrEscalate(
-        { agent: "bot", action: "deploy" },
+        { agent: "bot", action: "production.deploy" },
         { pollIntervalMs: 10, waitMs: 5_000 },
       ),
     ).rejects.toThrow(EscalationDeniedError);
@@ -497,7 +497,7 @@ describe("protectOrEscalate()", () => {
     let caught: unknown;
     try {
       await protectOrEscalate(
-        { agent: "bot", action: "deploy" },
+        { agent: "bot", action: "production.deploy" },
         { pollIntervalMs: 10, waitMs: 5_000 },
       );
     } catch (err) {
@@ -532,7 +532,7 @@ describe("protectOrEscalate()", () => {
 
     await expect(
       protectOrEscalate(
-        { agent: "bot", action: "deploy" },
+        { agent: "bot", action: "production.deploy" },
         { pollIntervalMs: 10, waitMs: 5_000 },
       ),
     ).rejects.toThrow(EscalationTimeoutError);
@@ -555,7 +555,7 @@ describe("protectOrEscalate()", () => {
     globalThis.fetch = hitlFetch as unknown as typeof globalThis.fetch;
 
     await expect(
-      protectOrEscalate({ agent: "bot", action: "deploy" }),
+      protectOrEscalate({ agent: "bot", action: "production.deploy" }),
     ).rejects.toThrow(AtlaSentDeniedError);
 
     expect(hitlFetch).not.toHaveBeenCalled();
@@ -573,7 +573,7 @@ describe("protectOrEscalate()", () => {
     globalThis.fetch = hitlFetch as unknown as typeof globalThis.fetch;
 
     await expect(
-      protectOrEscalate({ agent: "bot", action: "deploy" }),
+      protectOrEscalate({ agent: "bot", action: "production.deploy" }),
     ).rejects.toThrow(AtlaSentError);
 
     expect(hitlFetch).not.toHaveBeenCalled();
@@ -600,7 +600,7 @@ describe("protectOrEscalate()", () => {
     globalThis.fetch = fetchSpy as unknown as typeof globalThis.fetch;
 
     await protectOrEscalate(
-      { agent: "original-agent", action: "deploy" },
+      { agent: "original-agent", action: "production.deploy" },
       { agentId: "override-agent", pollIntervalMs: 10, waitMs: 5_000 },
     );
 

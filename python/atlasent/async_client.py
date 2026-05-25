@@ -18,6 +18,7 @@ import httpx
 from ._version import __version__
 from .audit import AuditEventsResult, AuditExportResult
 from .client import (
+    _ACTION_TYPE_RE,
     _enforce_tls,
     _parse_rate_limit_headers,
     _parse_retry_after,
@@ -408,6 +409,11 @@ class AsyncAtlaSentClient:
                     context={"commit": commit},
                 )
         """
+        if not _ACTION_TYPE_RE.match(action):
+            raise AtlaSentError(
+                f'action must be in dot-notation format (e.g. "production.deploy"). Got: {action!r}',
+                code="bad_request",
+            )
         ctx = context or {}
         try:
             eval_result = await self.evaluate(action, agent, ctx)

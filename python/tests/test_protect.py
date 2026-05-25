@@ -73,7 +73,7 @@ class TestSyncProtect:
         )
         permit = client.protect(
             agent="deploy-bot",
-            action="deploy_to_production",
+            action="production.deploy",
             context={"commit": "abc123"},
         )
         assert isinstance(permit, Permit)
@@ -91,7 +91,7 @@ class TestSyncProtect:
             return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            client.protect(agent="bot", action="deploy")
+            client.protect(agent="bot", action="production.deploy")
 
         err = exc_info.value
         assert err.decision == "deny"
@@ -110,7 +110,7 @@ class TestSyncProtect:
             return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
         )
         with pytest.raises(AtlaSentDenied):
-            client.protect(agent="bot", action="deploy")
+            client.protect(agent="bot", action="production.deploy")
 
     def test_raises_denied_on_verify_revoked(self, mocker):
         client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
@@ -123,7 +123,7 @@ class TestSyncProtect:
             ],
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            client.protect(agent="bot", action="deploy")
+            client.protect(agent="bot", action="production.deploy")
         err = exc_info.value
         assert err.decision == "deny"
         assert err.evaluation_id == "dec_alpha"
@@ -139,7 +139,7 @@ class TestSyncProtect:
             side_effect=httpx.TimeoutException("t"),
         )
         with pytest.raises(AtlaSentError) as exc_info:
-            client.protect(agent="a", action="b")
+            client.protect(agent="a", action="test.action")
         # Not misrouted as a denial.
         assert not isinstance(exc_info.value, AtlaSentDeniedError)
 
@@ -149,7 +149,7 @@ class TestSyncProtect:
         resp.text = "boom"
         mocker.patch.object(client._client, "post", return_value=resp)
         with pytest.raises(AtlaSentError) as exc_info:
-            client.protect(agent="a", action="b")
+            client.protect(agent="a", action="test.action")
         assert exc_info.value.code == "server_error"
 
     def test_payload_passes_agent_action_context_to_both_endpoints(self, mocker):
@@ -164,21 +164,21 @@ class TestSyncProtect:
         )
         client.protect(
             agent="deploy-bot",
-            action="deploy",
+            action="production.deploy",
             context={"commit": "abc123"},
         )
 
         # evaluate call (first)
         evaluate_payload = mock_post.call_args_list[0][1]["json"]
         assert evaluate_payload["actor_id"] == "deploy-bot"
-        assert evaluate_payload["action_type"] == "deploy"
+        assert evaluate_payload["action_type"] == "production.deploy"
         assert evaluate_payload["context"] == {"commit": "abc123"}
 
         # verifyPermit call (second) — server cross-check
         verify_payload = mock_post.call_args_list[1][1]["json"]
         assert verify_payload["permit_token"] == "dec_alpha"
         assert verify_payload["actor_id"] == "deploy-bot"
-        assert verify_payload["action_type"] == "deploy"
+        assert verify_payload["action_type"] == "production.deploy"
         # The verify handler does not consult `context`; SDK omits it.
         assert "context" not in verify_payload
 
@@ -192,7 +192,7 @@ class TestSyncProtect:
                 _mock_resp(mocker, json_data=VERIFY_OK),
             ],
         )
-        client.protect(agent="a", action="b")
+        client.protect(agent="a", action="test.action")
         assert mock_post.call_args_list[0][1]["json"]["context"] == {}
 
     def test_deny_with_none_response_body_uses_empty_audit_hash(self, mocker):
@@ -205,7 +205,7 @@ class TestSyncProtect:
             ),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            client.protect(agent="bot", action="deploy")
+            client.protect(agent="bot", action="production.deploy")
         assert exc_info.value.audit_hash == ""
 
     def test_deny_with_non_string_audit_hash_uses_empty_audit_hash(self, mocker):
@@ -220,7 +220,7 @@ class TestSyncProtect:
             ),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            client.protect(agent="bot", action="deploy")
+            client.protect(agent="bot", action="production.deploy")
         assert exc_info.value.audit_hash == ""
 
 
@@ -241,7 +241,7 @@ class TestAsyncProtect:
         )
         permit = await client.protect(
             agent="deploy-bot",
-            action="deploy_to_production",
+            action="production.deploy",
             context={"commit": "abc123"},
         )
         assert isinstance(permit, Permit)
@@ -256,7 +256,7 @@ class TestAsyncProtect:
             return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            await client.protect(agent="bot", action="deploy")
+            await client.protect(agent="bot", action="production.deploy")
         assert exc_info.value.decision == "deny"
         assert exc_info.value.evaluation_id == "dec_beta"
 
@@ -272,7 +272,7 @@ class TestAsyncProtect:
             ],
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            await client.protect(agent="bot", action="deploy")
+            await client.protect(agent="bot", action="production.deploy")
         assert exc_info.value.evaluation_id == "dec_alpha"
         assert "revoked" in exc_info.value.reason
 
@@ -287,7 +287,7 @@ class TestAsyncProtect:
             ),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            await client.protect(agent="bot", action="deploy")
+            await client.protect(agent="bot", action="production.deploy")
         assert exc_info.value.audit_hash == ""
 
     @pytest.mark.asyncio
@@ -303,7 +303,7 @@ class TestAsyncProtect:
             ),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            await client.protect(agent="bot", action="deploy")
+            await client.protect(agent="bot", action="production.deploy")
         assert exc_info.value.audit_hash == ""
 
     @pytest.mark.asyncio
@@ -314,7 +314,7 @@ class TestAsyncProtect:
             "post",
             return_value=_mock_resp(mocker, json_data=EVALUATE_PERMIT),
         )
-        result = await client.authorize(agent="bot", action="deploy", verify=False)
+        result = await client.authorize(agent="bot", action="production.deploy", verify=False)
         assert isinstance(result, AuthorizationResult)
         assert result.permitted is True
         assert result.permit_hash == ""
@@ -348,7 +348,7 @@ class TestModuleLevelProtect:
             ],
         )
 
-        permit = protect(agent="a", action="b")
+        permit = protect(agent="a", action="test.action")
         assert isinstance(permit, Permit)
         assert permit.permit_id == "dec_alpha"
 
@@ -364,7 +364,7 @@ class TestModuleLevelProtect:
         )
 
         with pytest.raises(AtlaSentDeniedError):
-            protect(agent="a", action="b")
+            protect(agent="a", action="test.action")
 
 
 # ── AtlaSentDeniedError shape ────────────────────────────────────
