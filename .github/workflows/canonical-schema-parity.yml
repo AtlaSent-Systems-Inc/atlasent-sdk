@@ -1,0 +1,65 @@
+name: canonical-schema-parity
+
+# Phase 1 cross-repo parity gate for the AtlaSent canonical schema
+# freeze (schema/v1-rc, defined in AtlaSent-Systems-Inc/atlasent).
+#
+# The five canonical schema files are vendored under
+# vendor/atlasent-canonical/v1-rc/ at the commit recorded in
+# .atlasent-canonical-pin.json. This job hashes them and asserts the
+# hashes match what the pin file records.
+#
+# What this gate does:
+#   - Detects accidental edits to the vendored mirror
+#   - Forces a deliberate, reviewable bump commit (vendor + pin
+#     updated together) whenever canonical schemas change upstream
+#
+# What this gate does NOT yet do:
+#   - Wire contract/tools/drift.py to validate hand-written SDK shapes
+#     against the vendored canonical schemas. drift.py today validates
+#     against contract/schemas/ (the SDK's own wire-schema copy), not
+#     the runtime-invariant canonical schemas in atlasent. Extending
+#     drift.py to also check vendor/atlasent-canonical/ is the planned
+#     Phase 2 follow-up.
+#
+# No network access; no auth required.
+
+on:
+  pull_request:
+    paths:
+      - '.atlasent-canonical-pin.json'
+      - 'vendor/atlasent-canonical/**'
+      - 'scripts/verify-canonical-pin.sh'
+      - '.github/workflows/canonical-schema-parity.yml'
+      - 'python/atlasent/models.py'
+      - 'typescript/src/client.ts'
+      - 'typescript/src/types.ts'
+      - 'contract/**'
+  push:
+    branches: [main]
+    paths:
+      - '.atlasent-canonical-pin.json'
+      - 'vendor/atlasent-canonical/**'
+      - 'scripts/verify-canonical-pin.sh'
+      - '.github/workflows/canonical-schema-parity.yml'
+      - 'python/atlasent/models.py'
+      - 'typescript/src/client.ts'
+      - 'typescript/src/types.ts'
+      - 'contract/**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canonical-schema-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    name: Canonical schema pin (schema/v1-rc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run pin verifier
+        run: scripts/verify-canonical-pin.sh

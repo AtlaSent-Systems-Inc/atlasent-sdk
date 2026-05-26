@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.atlasent.io/v1.1/decision-snapshot.schema.json",
+  "title": "DecisionSnapshot",
+  "description": "Immutable, frozen record of every input that produced a decision. Replay re-evaluates against this row only — no live sources are consulted. delegation_ancestry is captured here at evaluation time so that replays reproduce the same authority lineage without re-querying live delegation state.",
+  "type": "object",
+  "required": [
+    "decision_id",
+    "org_id",
+    "actor_id",
+    "action_type",
+    "context_snapshot",
+    "policy_version",
+    "consent_snapshot",
+    "decision",
+    "policy_reason",
+    "confidence_score",
+    "evaluated_at"
+  ],
+  "properties": {
+    "decision_id": { "$ref": "_common.schema.json#/$defs/uuid" },
+    "evaluation_id": {
+      "description": "v1 back-compat alias; same row, distinct identity column. New writers populate both.",
+      "$ref": "_common.schema.json#/$defs/uuid"
+    },
+    "org_id":           { "$ref": "_common.schema.json#/$defs/uuid" },
+    "actor_id":         { "type": "string", "minLength": 1 },
+    "action_type":      { "type": "string", "minLength": 1 },
+    "context_snapshot": { "$ref": "_common.schema.json#/$defs/safeContext" },
+    "policy_version":   { "type": "string", "minLength": 1 },
+    "consent_snapshot": {
+      "oneOf": [
+        { "type": "object" },
+        { "type": "null" }
+      ]
+    },
+    "decision":         { "$ref": "_common.schema.json#/$defs/decision" },
+    "policy_reason":    { "type": "string" },
+    "matched_rule_id":  { "$ref": "_common.schema.json#/$defs/uuid" },
+    "confidence_score": { "$ref": "_common.schema.json#/$defs/confidenceScore" },
+    "evaluated_at":     { "$ref": "_common.schema.json#/$defs/iso8601" },
+    "delegation_id": {
+      "oneOf": [
+        { "$ref": "_common.schema.json#/$defs/uuid" },
+        { "type": "null" }
+      ],
+      "description": "The delegation record that authorized this evaluation, if the request was made by a delegated actor. Captured at evaluation time."
+    },
+    "delegation_ancestry": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": { "$ref": "_common.schema.json#/$defs/delegationAncestryEntry" },
+          "maxItems": 16,
+          "description": "Ordered delegation hops from originating principal to the actor, frozen at evaluation time. Covered by the audit-chain hash (chain entry hashes this snapshot). Index 0 is the top-level grant."
+        },
+        { "type": "null" }
+      ]
+    }
+  },
+  "additionalProperties": false
+}
