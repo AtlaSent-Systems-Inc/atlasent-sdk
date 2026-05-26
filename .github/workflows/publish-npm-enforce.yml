@@ -55,7 +55,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     environment: npm-enforce
-    # id-token: write is required for `npm publish --provenance`.
+    # id-token: write is required for:
+    #   1. `npm publish --provenance` (Sigstore-backed npm provenance).
+    #   2. cosign keyless signing (Sigstore Fulcio + Rekor, R4).
     permissions:
       id-token: write
       contents: read
@@ -93,6 +95,39 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Pack tarball for signing
+        run: npm pack
+
+      # ── R4: cosign keyless signing ──────────────────────────────────────
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Sign npm tarball (keyless, Sigstore Fulcio + Rekor)
+        run: |
+          TARBALL="$(ls *.tgz | head -1)"
+          cosign sign-blob \
+            --yes \
+            --bundle="${TARBALL}.bundle" \
+            "${TARBALL}"
+          echo "TARBALL=${TARBALL}" >> "$GITHUB_ENV"
+
+      - name: Verify signature
+        run: |
+          cosign verify-blob \
+            --bundle="${TARBALL}.bundle" \
+            --certificate-identity-regexp='https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/.github/workflows/publish-npm-enforce.yml@refs/tags/enforce-v.*' \
+            --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
+            "${TARBALL}"
+
+      - name: Upload signature bundle as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarball-cosign-bundle-enforce
+          path: typescript/packages/enforce/${{ env.TARBALL }}.bundle
+          retention-days: 90
 
       - name: Inspect tarball contents (dry-run)
         # `npm pack --dry-run` prints the exact file list that would

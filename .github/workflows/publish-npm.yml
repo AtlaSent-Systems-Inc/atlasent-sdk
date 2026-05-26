@@ -53,8 +53,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     environment: npm
-    # id-token: write is required for `npm publish --provenance`
-    # (Sigstore attestation linking the tarball to this workflow run).
+    # id-token: write is required for:
+    #   1. `npm publish --provenance` (Sigstore attestation linking the
+    #      tarball to this workflow run via the npm registry).
+    #   2. cosign keyless signing (Sigstore Fulcio + Rekor, R4).
     permissions:
       id-token: write
       contents: read
@@ -114,6 +116,42 @@ jobs:
         # or accidentally-included secret is visible in the Actions log
         # before we push to npm.
         run: npm pack --dry-run
+
+      - name: Pack tarball for signing
+        # Create the real tarball so cosign can sign it before we publish.
+        run: npm pack
+
+      # ── R4: cosign keyless signing ──────────────────────────────────────
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Sign npm tarball (keyless, Sigstore Fulcio + Rekor)
+        # cosign uses the GitHub Actions OIDC token — no long-lived key secret.
+        # The bundle is a portable, verifiable record anchored in Rekor.
+        run: |
+          TARBALL="$(ls *.tgz | head -1)"
+          cosign sign-blob \
+            --yes \
+            --bundle="${TARBALL}.bundle" \
+            "${TARBALL}"
+          echo "TARBALL=${TARBALL}" >> "$GITHUB_ENV"
+
+      - name: Verify signature
+        run: |
+          cosign verify-blob \
+            --bundle="${TARBALL}.bundle" \
+            --certificate-identity-regexp='https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/.github/workflows/publish-npm.yml@refs/tags/typescript-v.*' \
+            --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
+            "${TARBALL}"
+
+      - name: Upload signature bundle as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarball-cosign-bundle
+          path: typescript/${{ env.TARBALL }}.bundle
+          retention-days: 90
 
       - name: Publish (with provenance)
         run: npm publish --access public --provenance
