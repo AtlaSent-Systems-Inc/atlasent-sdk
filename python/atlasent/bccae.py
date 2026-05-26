@@ -33,12 +33,8 @@ BccaeResourceClassification = Literal[
 ]
 BccaeDeploymentEnv = Literal["PROD", "STAGING", "DEV", "TEST"]
 BccaeSecurityPosture = Literal["STANDARD", "ELEVATED", "LOCKED"]
-BccaeRequestSource = Literal[
-    "AGENT", "API", "INTERNAL", "SCHEDULED", "TRIGGERED"
-]
-BccaeRevocationTargetType = Literal[
-    "PERMIT", "EVALUATION", "ACTOR", "RESOURCE"
-]
+BccaeRequestSource = Literal["AGENT", "API", "INTERNAL", "SCHEDULED", "TRIGGERED"]
+BccaeRevocationTargetType = Literal["PERMIT", "EVALUATION", "ACTOR", "RESOURCE"]
 
 
 def generate_bccae_nonce() -> str:
@@ -106,7 +102,7 @@ class BCCAEClient:
             timeout=timeout,
         )
 
-    def __enter__(self) -> "BCCAEClient":
+    def __enter__(self) -> BCCAEClient:
         return self
 
     def __exit__(self, *_: Any) -> None:
@@ -197,11 +193,14 @@ class BCCAEClient:
         Never raises on denial — only raises on network errors or 5xx.
         Requires API key with ``bccae:execute`` scope.
         """
-        return self._post("/v1/bccae/execute", {
-            "permit_token": permit_token,
-            "action_id": action_id,
-            "resource_ref": resource_ref,
-        })
+        return self._post(
+            "/v1/bccae/execute",
+            {
+                "permit_token": permit_token,
+                "action_id": action_id,
+                "resource_ref": resource_ref,
+            },
+        )
 
     def revoke(
         self,
@@ -217,11 +216,14 @@ class BCCAEClient:
 
         Requires API key with ``bccae:revoke`` scope.
         """
-        return self._post("/v1/bccae/revocations", {
-            "target_type": target_type,
-            "target_id": target_id,
-            "reason": reason,
-        })
+        return self._post(
+            "/v1/bccae/revocations",
+            {
+                "target_type": target_type,
+                "target_id": target_id,
+                "reason": reason,
+            },
+        )
 
     def get_evidence(self, evidence_id: str) -> dict[str, Any]:
         """Fetch a single evidence record and verify its hash chain integrity.
@@ -235,7 +237,7 @@ class BCCAEClient:
             raise ValueError("BCCAEClient: evidence_id is required")
         return self._get(f"/v1/bccae/evidence/{quote(evidence_id, safe='')}")
 
-    # ── HTTP primitives ───────────────────────────────────────────────────────────────────
+    # ── HTTP primitives ────────────────────────────────────────────────────
 
     def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -257,14 +259,15 @@ class BCCAEClient:
             ) from exc
         return self._handle_response(resp, path)
 
-    def _handle_response(
-        self, resp: httpx.Response, path: str
-    ) -> dict[str, Any]:
+    def _handle_response(self, resp: httpx.Response, path: str) -> dict[str, Any]:
         try:
             data: dict[str, Any] = resp.json()
         except Exception as exc:
             raise AtlaSentError(
-                f"BCCAEClient: non-JSON response (status {resp.status_code}) from {path}",
+                (
+                    "BCCAEClient: non-JSON response "
+                    f"(status {resp.status_code}) from {path}"
+                ),
                 code="network",
             ) from exc
 

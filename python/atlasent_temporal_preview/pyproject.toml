@@ -7,7 +7,7 @@ name = "atlasent-temporal-preview"
 version = "2.0.0a0"
 description = "Preview Temporal adapter for AtlaSent. Wraps Temporal Activities with protect() so each invocation produces an audit-chain entry. DO NOT USE IN PRODUCTION."
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [{ name = "AtlaSent Systems Inc.", email = "sdk@atlasent.io" }]
 keywords = ["atlasent", "temporal", "v2-preview"]

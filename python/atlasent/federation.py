@@ -23,7 +23,7 @@ Wire-stable as ``federation.v1``.
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -67,10 +67,10 @@ class FederatedOrg(BaseModel):
     trust_status: FederationTrustStatus
     registered_by: str
     registered_at: str
-    activated_at: Optional[str] = None
-    suspended_at: Optional[str] = None
-    revoked_at: Optional[str] = None
-    revoke_reason: Optional[str] = None
+    activated_at: str | None = None
+    suspended_at: str | None = None
+    revoked_at: str | None = None
+    revoke_reason: str | None = None
     include_in_quorum: bool = False
     """When ``True``, peer decisions count toward home-org quorum."""
 
@@ -82,7 +82,7 @@ class ListFederatedOrgsResponse(BaseModel):
 
     orgs: list[FederatedOrg] = Field(default_factory=list)
     total: int = 0
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -127,8 +127,8 @@ class ObserverGrant(BaseModel):
     active: bool = True
     created_by: str
     created_at: str
-    revoked_at: Optional[str] = None
-    revoke_reason: Optional[str] = None
+    revoked_at: str | None = None
+    revoke_reason: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -138,7 +138,7 @@ class ListObserverGrantsResponse(BaseModel):
 
     grants: list[ObserverGrant] = Field(default_factory=list)
     total: int = 0
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -184,11 +184,11 @@ class FederatedApproval(BaseModel):
     status: FederatedApprovalStatus
     requested_by: str
     requested_at: str
-    expires_at: Optional[str] = None
-    decided_by: Optional[str] = None
-    decided_at: Optional[str] = None
-    peer_decision: Optional[Literal["approve", "reject"]] = None
-    peer_comment: Optional[str] = None
+    expires_at: str | None = None
+    decided_by: str | None = None
+    decided_at: str | None = None
+    peer_decision: Literal["approve", "reject"] | None = None
+    peer_comment: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -198,7 +198,7 @@ class ListFederatedApprovalsResponse(BaseModel):
 
     approvals: list[FederatedApproval] = Field(default_factory=list)
     total: int = 0
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -208,7 +208,7 @@ class SubmitFederatedApprovalRequest(BaseModel):
 
     peer_decision: Literal["approve", "reject"]
     decided_by: str
-    peer_comment: Optional[str] = None
+    peer_comment: str | None = None
 
     model_config = {"extra": "allow"}
 

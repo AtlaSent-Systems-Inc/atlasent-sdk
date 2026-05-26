@@ -27,7 +27,11 @@ def deploy(commit: str, approver: str) -> None:
         permit = protect(
             agent="deploy-bot",
             action="production.deploy",
-            context={"commit": commit, "approver": approver},
+            context={
+                "commit": commit,
+                "approver": approver,
+                "environment": "production",
+            },
         )
     except AtlaSentDeniedError as exc:
         # Policy said no (or the permit failed verification).

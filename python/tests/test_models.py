@@ -16,7 +16,6 @@ from atlasent.models import (
     EvaluateRequest,
     EvaluateResult,
     EvaluateRiskEnvelope,
-    EvaluateRiskEnvelopeFactor,
     GateResult,
     GovernanceDecision,
     VerifyRequest,

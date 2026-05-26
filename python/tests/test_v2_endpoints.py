@@ -15,7 +15,6 @@ from atlasent.v2_endpoints import (
     BATCH_PATH,
     GRAPHQL_PATH,
     MAX_BATCH_ITEMS,
-    STREAM_PATH,
     EvaluateBatchItem,
     EvaluateBatchResponse,
     FeatureNotEnabledError,
@@ -376,9 +375,7 @@ class TestAuthorizeStream:
             "",
         ]
         client._client.stream = MagicMock(return_value=_mock_stream_response(lines))
-        result = authorize_stream(
-            client, [{"action_type": "x", "actor_id": "y"}]
-        )
+        result = authorize_stream(client, [{"action_type": "x", "actor_id": "y"}])
         assert result.count == 1
 
     def test_ignores_non_dict_payload(self) -> None:
@@ -392,9 +389,7 @@ class TestAuthorizeStream:
             "",
         ]
         client._client.stream = MagicMock(return_value=_mock_stream_response(lines))
-        result = authorize_stream(
-            client, [{"action_type": "x", "actor_id": "y"}]
-        )
+        result = authorize_stream(client, [{"action_type": "x", "actor_id": "y"}])
         assert result.batch_id == "b"
 
     def test_handles_bytes_lines(self) -> None:
@@ -405,9 +400,7 @@ class TestAuthorizeStream:
             b"",
         ]
         client._client.stream = MagicMock(return_value=_mock_stream_response(lines))
-        result = authorize_stream(
-            client, [{"action_type": "x", "actor_id": "y"}]
-        )
+        result = authorize_stream(client, [{"action_type": "x", "actor_id": "y"}])
         assert result.batch_id == "b"
 
     def test_404_raises_feature_not_enabled(self) -> None:
@@ -462,9 +455,7 @@ class TestAuthorizeStream:
             ("complete", {"batch_id": "b", "count": 2, "partial": True}),
         )
         client._client.stream = MagicMock(return_value=_mock_stream_response(lines))
-        result = authorize_stream(
-            client, [{"action_type": "x", "actor_id": "y"}] * 2
-        )
+        result = authorize_stream(client, [{"action_type": "x", "actor_id": "y"}] * 2)
         assert result.partial is True
 
     def test_rejects_empty_items(self) -> None:
@@ -498,9 +489,7 @@ class TestGraphQL:
         client = _client()
         body = {
             "data": {
-                "recentEvaluations": [
-                    {"decisionId": "dec_1", "decision": "allow"}
-                ]
+                "recentEvaluations": [{"decisionId": "dec_1", "decision": "allow"}]
             }
         }
         client._client.post = MagicMock(return_value=_mock_response(body=body))
@@ -522,9 +511,7 @@ class TestGraphQL:
         client = _client()
         body = {
             "data": None,
-            "errors": [
-                {"message": "Field 'forbidden' requires policy:read scope."}
-            ],
+            "errors": [{"message": "Field 'forbidden' requires policy:read scope."}],
         }
         client._client.post = MagicMock(return_value=_mock_response(body=body))
         result = graphql(client, "{ forbidden }")

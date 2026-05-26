@@ -7,7 +7,7 @@ name = "atlasent"
 dynamic = ["version"]
 description = "Python SDK for the AtlaSent authorization API"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.9"
 authors = [
     { name = "AtlaSent Systems Inc.", email = "sdk@atlasent.io" },

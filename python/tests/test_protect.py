@@ -74,7 +74,7 @@ class TestSyncProtect:
         permit = client.protect(
             agent="deploy-bot",
             action="production.deploy",
-            context={"commit": "abc123"},
+            context={"commit": "abc123", "environment": "production"},
         )
         assert isinstance(permit, Permit)
         assert permit.permit_id == "dec_alpha"
@@ -91,7 +91,11 @@ class TestSyncProtect:
             return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            client.protect(agent="bot", action="production.deploy")
+            client.protect(
+                agent="bot",
+                action="production.deploy",
+                context={"environment": "production"},
+            )
 
         err = exc_info.value
         assert err.decision == "deny"
@@ -123,7 +127,11 @@ class TestSyncProtect:
             ],
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            client.protect(agent="bot", action="production.deploy")
+            client.protect(
+                agent="bot",
+                action="production.deploy",
+                context={"environment": "production"},
+            )
         err = exc_info.value
         assert err.decision == "deny"
         assert err.evaluation_id == "dec_alpha"
@@ -165,14 +173,17 @@ class TestSyncProtect:
         client.protect(
             agent="deploy-bot",
             action="production.deploy",
-            context={"commit": "abc123"},
+            context={"commit": "abc123", "environment": "production"},
         )
 
         # evaluate call (first)
         evaluate_payload = mock_post.call_args_list[0][1]["json"]
         assert evaluate_payload["actor_id"] == "deploy-bot"
         assert evaluate_payload["action_type"] == "production.deploy"
-        assert evaluate_payload["context"] == {"commit": "abc123"}
+        assert evaluate_payload["context"] == {
+            "commit": "abc123",
+            "environment": "production",
+        }
 
         # verifyPermit call (second) — server cross-check
         verify_payload = mock_post.call_args_list[1][1]["json"]
@@ -192,7 +203,10 @@ class TestSyncProtect:
                 _mock_resp(mocker, json_data=VERIFY_OK),
             ],
         )
-        client.protect(agent="a", action="test.action")
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.protect(agent="a", action="test.action")
+        assert exc_info.value.code == "bad_request"
+        assert "context.environment is required" in str(exc_info.value)
         assert mock_post.call_args_list[0][1]["json"]["context"] == {}
 
     def test_deny_with_none_response_body_uses_empty_audit_hash(self, mocker):
@@ -242,7 +256,7 @@ class TestAsyncProtect:
         permit = await client.protect(
             agent="deploy-bot",
             action="production.deploy",
-            context={"commit": "abc123"},
+            context={"commit": "abc123", "environment": "production"},
         )
         assert isinstance(permit, Permit)
         assert permit.permit_id == "dec_alpha"
@@ -256,7 +270,11 @@ class TestAsyncProtect:
             return_value=_mock_resp(mocker, json_data=EVALUATE_DENY),
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            await client.protect(agent="bot", action="production.deploy")
+            await client.protect(
+                agent="bot",
+                action="production.deploy",
+                context={"environment": "production"},
+            )
         assert exc_info.value.decision == "deny"
         assert exc_info.value.evaluation_id == "dec_beta"
 
@@ -272,7 +290,11 @@ class TestAsyncProtect:
             ],
         )
         with pytest.raises(AtlaSentDeniedError) as exc_info:
-            await client.protect(agent="bot", action="production.deploy")
+            await client.protect(
+                agent="bot",
+                action="production.deploy",
+                context={"environment": "production"},
+            )
         assert exc_info.value.evaluation_id == "dec_alpha"
         assert "revoked" in exc_info.value.reason
 
@@ -314,13 +336,28 @@ class TestAsyncProtect:
             "post",
             return_value=_mock_resp(mocker, json_data=EVALUATE_PERMIT),
         )
-        result = await client.authorize(agent="bot", action="production.deploy", verify=False)
+        result = await client.authorize(
+            agent="bot", action="production.deploy", verify=False
+        )
         assert isinstance(result, AuthorizationResult)
         assert result.permitted is True
         assert result.permit_hash == ""
         assert result.verified is False
         # Only evaluate was called — no verify round-trip.
         assert mock_post.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_requires_environment_on_allow(self, mocker):
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_PERMIT),
+        )
+        with pytest.raises(AtlaSentError) as exc_info:
+            await client.protect(agent="a", action="test.action")
+        assert exc_info.value.code == "bad_request"
+        assert "context.environment is required" in str(exc_info.value)
 
 
 # ── Module-level: atlasent.protect ───────────────────────────────
@@ -348,9 +385,29 @@ class TestModuleLevelProtect:
             ],
         )
 
-        permit = protect(agent="a", action="test.action")
+        permit = protect(
+            agent="a",
+            action="test.action",
+            context={"environment": "production"},
+        )
         assert isinstance(permit, Permit)
         assert permit.permit_id == "dec_alpha"
+
+    def test_module_level_requires_environment(self, mocker):
+        configure(api_key="ask_test_xxxxxxxx")
+        from atlasent.authorize import _get_default_client
+
+        client = _get_default_client()
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_PERMIT),
+        )
+
+        with pytest.raises(AtlaSentError) as exc_info:
+            protect(agent="a", action="test.action")
+        assert exc_info.value.code == "bad_request"
+        assert "context.environment is required" in str(exc_info.value)
 
     def test_module_level_raises_denied_on_deny(self, mocker):
         configure(api_key="ask_test_xxxxxxxx")

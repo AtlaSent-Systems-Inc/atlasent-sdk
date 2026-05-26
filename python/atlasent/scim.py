@@ -180,7 +180,9 @@ def scim_patch_user(
         ])
     """
     body = {"schemas": [SCIM_PATCH_OP_SCHEMA], "Operations": operations}
-    return _do(client, "PATCH", f"/v1/scim/v2/{_enc(org_id)}/Users/{_enc(user_id)}", body)
+    return _do(
+        client, "PATCH", f"/v1/scim/v2/{_enc(org_id)}/Users/{_enc(user_id)}", body
+    )
 
 
 def scim_delete_user(
@@ -237,7 +239,9 @@ def scim_replace_group(
     """``PUT /v1/scim/v2/{orgId}/Groups/{groupId}`` — full replacement."""
     if "schemas" not in group:
         group = {**group, "schemas": [SCIM_GROUP_SCHEMA]}
-    return _do(client, "PUT", f"/v1/scim/v2/{_enc(org_id)}/Groups/{_enc(group_id)}", group)
+    return _do(
+        client, "PUT", f"/v1/scim/v2/{_enc(org_id)}/Groups/{_enc(group_id)}", group
+    )
 
 
 def scim_patch_group(
@@ -256,7 +260,9 @@ def scim_patch_group(
         ])
     """
     body = {"schemas": [SCIM_PATCH_OP_SCHEMA], "Operations": operations}
-    return _do(client, "PATCH", f"/v1/scim/v2/{_enc(org_id)}/Groups/{_enc(group_id)}", body)
+    return _do(
+        client, "PATCH", f"/v1/scim/v2/{_enc(org_id)}/Groups/{_enc(group_id)}", body
+    )
 
 
 def scim_delete_group(

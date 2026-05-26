@@ -23,9 +23,10 @@ Wire-stable as ``budget_governance.v1``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Literal, Optional, Sequence
+from typing import Literal
 
 from .financial_action import CurrencyCode, FinancialActionType, FinancialRiskTier
 
@@ -62,8 +63,8 @@ class BudgetLimit:
     limit_amount: float
     currency: CurrencyCode
     enforcement: BudgetEnforcement
-    period_start: Optional[str]
-    period_end: Optional[str]
+    period_start: str | None
+    period_end: str | None
     active: bool
     created_by: str
     created_at: str
@@ -100,10 +101,10 @@ class SpendingConstraint:
     org_id: str
     action_type: str  # FinancialActionType | "*"
     max_single_transaction: float
-    max_daily_aggregate: Optional[float]
-    max_monthly_aggregate: Optional[float]
+    max_daily_aggregate: float | None
+    max_monthly_aggregate: float | None
     currency: CurrencyCode
-    applies_to_tier_gte: Optional[FinancialRiskTier]
+    applies_to_tier_gte: FinancialRiskTier | None
     allow_anonymous_agents: bool
     active: bool
 
@@ -114,9 +115,9 @@ class BudgetViolation:
 
     violation_type: BudgetViolationType
     description: str
-    limit_id: Optional[str] = None
-    constraint_id: Optional[str] = None
-    overage_amount: Optional[float] = None
+    limit_id: str | None = None
+    constraint_id: str | None = None
+    overage_amount: float | None = None
 
 
 @dataclass(frozen=True)
@@ -143,7 +144,7 @@ class BudgetPolicy:
     allow_approved_escalation: bool
     version: str
     effective_from: str
-    expires_at: Optional[str] = None
+    expires_at: str | None = None
 
 
 def _now_iso() -> str:
@@ -162,7 +163,7 @@ def check_budget_constraints(
     current_monthly_spend: float,
     applicable_limits: Sequence[tuple[BudgetLimit, BudgetSpendingState]],
     applicable_constraints: Sequence[SpendingConstraint],
-    now: Optional[str] = None,
+    now: str | None = None,
 ) -> BudgetConstraintCheckResult:
     """Check an action value against applicable budget limits and constraints.
 
@@ -183,7 +184,8 @@ def check_budget_constraints(
                 violation_type="period_expired",
                 limit_id=limit.limit_id,
                 description=(
-                    f"Budget limit {limit.limit_id} period expired at {limit.period_end}"
+                    "Budget limit "
+                    f"{limit.limit_id} period expired at {limit.period_end}"
                 ),
             )
             (hard_blocks if limit.enforcement == "hard" else soft_warnings).append(v)
@@ -209,56 +211,68 @@ def check_budget_constraints(
             continue
 
         if not constraint.allow_anonymous_agents and is_anonymous_agent:
-            hard_blocks.append(BudgetViolation(
-                violation_type="anonymous_agent_blocked",
-                constraint_id=constraint.constraint_id,
-                description=(
-                    f"Anonymous agents are not permitted to execute {action_type}"
-                ),
-            ))
+            hard_blocks.append(
+                BudgetViolation(
+                    violation_type="anonymous_agent_blocked",
+                    constraint_id=constraint.constraint_id,
+                    description=(
+                        f"Anonymous agents are not permitted to execute {action_type}"
+                    ),
+                )
+            )
 
         if action_value > constraint.max_single_transaction:
-            hard_blocks.append(BudgetViolation(
-                violation_type="single_transaction_exceeds",
-                constraint_id=constraint.constraint_id,
-                description=(
-                    f"Value {action_value} exceeds single-transaction limit "
-                    f"{constraint.max_single_transaction} {constraint.currency}"
-                ),
-                overage_amount=action_value - constraint.max_single_transaction,
-            ))
+            hard_blocks.append(
+                BudgetViolation(
+                    violation_type="single_transaction_exceeds",
+                    constraint_id=constraint.constraint_id,
+                    description=(
+                        f"Value {action_value} exceeds single-transaction limit "
+                        f"{constraint.max_single_transaction} {constraint.currency}"
+                    ),
+                    overage_amount=action_value - constraint.max_single_transaction,
+                )
+            )
 
         if (
             constraint.max_daily_aggregate is not None
             and current_daily_spend + action_value > constraint.max_daily_aggregate
         ):
-            hard_blocks.append(BudgetViolation(
-                violation_type="daily_aggregate_exceeds",
-                constraint_id=constraint.constraint_id,
-                description=(
-                    f"Action would exceed daily aggregate limit "
-                    f"{constraint.max_daily_aggregate} {constraint.currency}"
-                ),
-                overage_amount=(
-                    current_daily_spend + action_value - constraint.max_daily_aggregate
-                ),
-            ))
+            hard_blocks.append(
+                BudgetViolation(
+                    violation_type="daily_aggregate_exceeds",
+                    constraint_id=constraint.constraint_id,
+                    description=(
+                        f"Action would exceed daily aggregate limit "
+                        f"{constraint.max_daily_aggregate} {constraint.currency}"
+                    ),
+                    overage_amount=(
+                        current_daily_spend
+                        + action_value
+                        - constraint.max_daily_aggregate
+                    ),
+                )
+            )
 
         if (
             constraint.max_monthly_aggregate is not None
             and current_monthly_spend + action_value > constraint.max_monthly_aggregate
         ):
-            hard_blocks.append(BudgetViolation(
-                violation_type="monthly_aggregate_exceeds",
-                constraint_id=constraint.constraint_id,
-                description=(
-                    f"Action would exceed monthly aggregate limit "
-                    f"{constraint.max_monthly_aggregate} {constraint.currency}"
-                ),
-                overage_amount=(
-                    current_monthly_spend + action_value - constraint.max_monthly_aggregate
-                ),
-            ))
+            hard_blocks.append(
+                BudgetViolation(
+                    violation_type="monthly_aggregate_exceeds",
+                    constraint_id=constraint.constraint_id,
+                    description=(
+                        f"Action would exceed monthly aggregate limit "
+                        f"{constraint.max_monthly_aggregate} {constraint.currency}"
+                    ),
+                    overage_amount=(
+                        current_monthly_spend
+                        + action_value
+                        - constraint.max_monthly_aggregate
+                    ),
+                )
+            )
 
     return BudgetConstraintCheckResult(
         permitted=len(hard_blocks) == 0,

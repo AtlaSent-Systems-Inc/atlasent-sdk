@@ -63,11 +63,13 @@ def test_active_emergency_freeze_blocks_unconditionally() -> None:
         reason="suspected fraud incident",
         triggered_at="2026-05-08T10:00:00Z",
     )
-    result = evaluate_financial_quorum(_input(
-        _baseline_policy(),
-        approval_count=99,
-        active_freezes=(freeze,),
-    ))
+    result = evaluate_financial_quorum(
+        _input(
+            _baseline_policy(),
+            approval_count=99,
+            active_freezes=(freeze,),
+        )
+    )
     assert result.passed is False
     assert result.blocked_by_freeze is True
     assert "frz_001" in (result.denial_reason or "")
@@ -85,20 +87,24 @@ def test_lifted_freeze_does_not_block() -> None:
         lifted_at="2026-05-08T11:00:00Z",
         lifted_by="u_admin",
     )
-    result = evaluate_financial_quorum(_input(
-        _baseline_policy(),
-        approval_count=2,
-        active_freezes=(freeze,),
-    ))
+    result = evaluate_financial_quorum(
+        _input(
+            _baseline_policy(),
+            approval_count=2,
+            active_freezes=(freeze,),
+        )
+    )
     assert result.blocked_by_freeze is False
     assert result.passed is True
 
 
 def test_base_quorum_count_failure() -> None:
-    result = evaluate_financial_quorum(_input(
-        _baseline_policy(required_count=3),
-        approval_count=2,
-    ))
+    result = evaluate_financial_quorum(
+        _input(
+            _baseline_policy(required_count=3),
+            approval_count=2,
+        )
+    )
     assert result.passed is False
     assert result.base_quorum_passed is False
 
@@ -115,20 +121,24 @@ def test_amount_threshold_escalation_requires_more_approvals() -> None:
         ),
     )
     # Action value crosses threshold; need 2 + 2 = 4 approvals.
-    result = evaluate_financial_quorum(_input(
-        policy,
-        action_value=150_000,
-        approval_count=3,
-    ))
+    result = evaluate_financial_quorum(
+        _input(
+            policy,
+            action_value=150_000,
+            approval_count=3,
+        )
+    )
     assert result.passed is False
     assert result.amount_threshold_satisfied is False
 
     # Same threshold satisfied with the right count.
-    result_ok = evaluate_financial_quorum(_input(
-        policy,
-        action_value=150_000,
-        approval_count=4,
-    ))
+    result_ok = evaluate_financial_quorum(
+        _input(
+            policy,
+            action_value=150_000,
+            approval_count=4,
+        )
+    )
     assert result_ok.passed is True
 
 
@@ -145,22 +155,26 @@ def test_amount_threshold_role_requirement() -> None:
         ),
     )
     # CFO not present → fail.
-    result = evaluate_financial_quorum(_input(
-        policy,
-        action_value=75_000,
-        approval_count=2,
-        present_roles={"finance_lead": 2},
-    ))
+    result = evaluate_financial_quorum(
+        _input(
+            policy,
+            action_value=75_000,
+            approval_count=2,
+            present_roles={"finance_lead": 2},
+        )
+    )
     assert result.passed is False
     assert result.amount_threshold_satisfied is False
 
     # CFO present → pass.
-    result_ok = evaluate_financial_quorum(_input(
-        policy,
-        action_value=75_000,
-        approval_count=2,
-        present_roles={"finance_lead": 1, "cfo": 1},
-    ))
+    result_ok = evaluate_financial_quorum(
+        _input(
+            policy,
+            action_value=75_000,
+            approval_count=2,
+            present_roles={"finance_lead": 1, "cfo": 1},
+        )
+    )
     assert result_ok.passed is True
 
 
@@ -176,21 +190,25 @@ def test_financial_role_requirement_with_tier_filter() -> None:
         ),
     )
     # Medium tier — requirement does not apply.
-    result_medium = evaluate_financial_quorum(_input(
-        policy,
-        risk_tier="medium",
-        approval_count=2,
-        present_roles={},
-    ))
+    result_medium = evaluate_financial_quorum(
+        _input(
+            policy,
+            risk_tier="medium",
+            approval_count=2,
+            present_roles={},
+        )
+    )
     assert result_medium.passed is True
 
     # High tier — CFO required.
-    result_high = evaluate_financial_quorum(_input(
-        policy,
-        risk_tier="high",
-        approval_count=2,
-        present_roles={},
-    ))
+    result_high = evaluate_financial_quorum(
+        _input(
+            policy,
+            risk_tier="high",
+            approval_count=2,
+            present_roles={},
+        )
+    )
     assert result_high.passed is False
     assert result_high.financial_roles_satisfied is False
 
@@ -201,24 +219,36 @@ def test_regulator_approval_threshold() -> None:
         regulator_approval_threshold=1_000_000,
     )
     # Below threshold — no regulator needed.
-    r_below = evaluate_financial_quorum(_input(
-        policy, action_value=500_000, approval_count=2,
-    ))
+    r_below = evaluate_financial_quorum(
+        _input(
+            policy,
+            action_value=500_000,
+            approval_count=2,
+        )
+    )
     assert r_below.passed is True
 
     # At/above threshold without regulator approval — fail.
-    r_above = evaluate_financial_quorum(_input(
-        policy, action_value=2_000_000, approval_count=2,
-        regulator_approval_present=False,
-    ))
+    r_above = evaluate_financial_quorum(
+        _input(
+            policy,
+            action_value=2_000_000,
+            approval_count=2,
+            regulator_approval_present=False,
+        )
+    )
     assert r_above.passed is False
     assert r_above.regulator_approval_missing is True
 
     # At/above threshold with regulator approval — pass.
-    r_with = evaluate_financial_quorum(_input(
-        policy, action_value=2_000_000, approval_count=2,
-        regulator_approval_present=True,
-    ))
+    r_with = evaluate_financial_quorum(
+        _input(
+            policy,
+            action_value=2_000_000,
+            approval_count=2,
+            regulator_approval_present=True,
+        )
+    )
     assert r_with.passed is True
 
 

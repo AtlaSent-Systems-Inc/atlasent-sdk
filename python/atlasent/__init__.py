@@ -70,6 +70,7 @@ from .audit_bundle import (
     verify_bundle,
 )
 from .authorize import authorize, evaluate, gate, protect, verify
+from .bccae import BCCAEClient, generate_bccae_nonce
 from .billing import (
     AccessStatus,
     AdminOverrideRequest,
@@ -86,14 +87,15 @@ from .billing import (
 )
 from .cache import TTLCache
 from .claim_lineage import (
+    NOT_APPLICABLE,
     ActionBundleInput,
     ActionBundleReceipt,
     ApprovalArtifactSlot,
     ClaimEvidenceLink,
-    DeployEvidenceInput,
-    DeployEvidenceSlot,
     DeltaSlot,
     DeltaStatus,
+    DeployEvidenceInput,
+    DeployEvidenceSlot,
     DriftChangeType,
     DriftDetail,
     DriftSeverity,
@@ -101,7 +103,6 @@ from .claim_lineage import (
     HitlChainSummaryInput,
     IntegrationEvidenceInput,
     IntegrationEvidenceSlot,
-    NOT_APPLICABLE,
     NotApplicable,
     RuntimeEvidenceInput,
     RuntimeEvidenceSlot,
@@ -123,6 +124,11 @@ from .compliance_evidence import (
     non_passing_controls,
 )
 from .config import configure
+from .evidence_exports import (
+    create_evidence_export,
+    get_evidence_export,
+    list_evidence_exports,
+)
 from .exceptions import (
     AtlaSentDecision,
     AtlaSentDenied,
@@ -211,6 +217,28 @@ from .policy_sync import (
     is_policy_sync_terminal,
 )
 from .require_permit import ProtectedAction, classify_command, require_permit
+from .scim import (
+    SCIM_GROUP_SCHEMA,
+    SCIM_PATCH_OP_SCHEMA,
+    SCIM_USER_SCHEMA,
+    scim_create_group,
+    scim_create_user,
+    scim_delete_group,
+    scim_delete_user,
+    scim_get_group,
+    scim_get_user,
+    scim_list_groups,
+    scim_list_users,
+    scim_patch_group,
+    scim_patch_user,
+    scim_replace_group,
+    scim_replace_user,
+)
+from .siem import (
+    get_siem_config,
+    siem_test_delivery,
+    upsert_siem_config,
+)
 from .v2_endpoints import (
     BATCH_PATH as V2_BATCH_PATH,
 )
@@ -237,34 +265,6 @@ from .v2_endpoints import (
 )
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
-from .bccae import BCCAEClient, generate_bccae_nonce
-from .scim import (
-    SCIM_USER_SCHEMA,
-    SCIM_GROUP_SCHEMA,
-    SCIM_PATCH_OP_SCHEMA,
-    scim_list_users,
-    scim_create_user,
-    scim_get_user,
-    scim_replace_user,
-    scim_patch_user,
-    scim_delete_user,
-    scim_list_groups,
-    scim_create_group,
-    scim_get_group,
-    scim_replace_group,
-    scim_patch_group,
-    scim_delete_group,
-)
-from .siem import (
-    get_siem_config,
-    upsert_siem_config,
-    siem_test_delivery,
-)
-from .evidence_exports import (
-    list_evidence_exports,
-    get_evidence_export,
-    create_evidence_export,
-)
 
 #: Canonical Deploy Gate V1 protected action. Mirrors the TypeScript
 #: SDK's ``PRODUCTION_DEPLOY_ACTION``. Use this string (or the constant)
@@ -281,6 +281,26 @@ __all__ = [
     "configure",
     "protect",
     "with_permit",
+    # SCIM helpers + schema constants.
+    "SCIM_USER_SCHEMA",
+    "SCIM_GROUP_SCHEMA",
+    "SCIM_PATCH_OP_SCHEMA",
+    "scim_list_users",
+    "scim_create_user",
+    "scim_get_user",
+    "scim_replace_user",
+    "scim_patch_user",
+    "scim_delete_user",
+    "scim_list_groups",
+    "scim_create_group",
+    "scim_get_group",
+    "scim_replace_group",
+    "scim_patch_group",
+    "scim_delete_group",
+    # SIEM helpers.
+    "get_siem_config",
+    "upsert_siem_config",
+    "siem_test_delivery",
     "require_permit",
     "classify_command",
     "ProtectedAction",

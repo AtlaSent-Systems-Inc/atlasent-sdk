@@ -8,23 +8,30 @@ import logging
 import uuid
 import warnings
 from collections.abc import AsyncIterator
-from urllib.parse import quote
 from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 import httpx
 
 from ._version import __version__
+from .approval_artifact import ApprovalReference
 from .audit import AuditEventsResult, AuditExportResult
 from .client import (
     _ACTION_TYPE_RE,
+    _compute_execution_hash,
     _enforce_tls,
     _parse_rate_limit_headers,
     _parse_retry_after,
     _redact_token,
     _server_message,
     _validate_api_key,
+)
+from .evidence_exports import (
+    _VALID_REGIMES,
+)
+from .evidence_exports import (
+    _enc as _ev_enc,
 )
 from .exceptions import (
     AtlaSentDenied,
@@ -36,32 +43,13 @@ from .exceptions import (
     StreamTimeoutError,
     _normalize_permit_outcome,
 )
-from .scim import (
-    SCIM_GROUP_SCHEMA,
-    SCIM_PATCH_OP_SCHEMA,
-    SCIM_USER_SCHEMA,
-    _enc as _scim_enc,
-    _scim_qs,
-)
-from .siem import (
-    _VALID_AUTH_TYPES,
-    _VALID_FORMATS,
-    _enc as _siem_enc,
-)
-from .evidence_exports import (
-    _VALID_REGIMES,
-    _enc as _ev_enc,
-)
-from .approval_artifact import ApprovalReference
 from .governance_agents import (
-    AgentEvidenceRef,
     GovernanceAgent,
     GovernanceAgentEvaluation,
     GovernanceAgentFinding,
     ListGovernanceAgentsResult,
     ListGovernanceEvaluationsResult,
     ListGovernanceFindingsResult,
-    highest_agent_finding_severity,
 )
 from .models import (
     ApiKeySelfResult,
@@ -77,6 +65,8 @@ from .models import (
     PermitRecord,
     PermitVerifyEvidence,
     RateLimitState,
+    ReplayResponse,
+    ReplayVarianceKind,
     RevokePermitByIdResult,
     RevokePermitResult,
     StreamDecisionEvent,
@@ -84,8 +74,22 @@ from .models import (
     VerifyPermitByIdResult,
     VerifyRequest,
     VerifyResult,
-    ReplayResponse,
-    ReplayVarianceKind,
+)
+from .scim import (
+    SCIM_GROUP_SCHEMA,
+    SCIM_PATCH_OP_SCHEMA,
+    SCIM_USER_SCHEMA,
+    _scim_qs,
+)
+from .scim import (
+    _enc as _scim_enc,
+)
+from .siem import (
+    _VALID_AUTH_TYPES,
+    _VALID_FORMATS,
+)
+from .siem import (
+    _enc as _siem_enc,
 )
 
 if TYPE_CHECKING:
@@ -334,6 +338,8 @@ class AsyncAtlaSentClient:
         context: dict[str, Any] | None = None,
         *,
         require_approval: bool | None = None,
+        environment: str | None = None,
+        execution_hash: str | None = None,
     ) -> VerifyResult:
         """Verify a previously issued permit token.
 
@@ -353,15 +359,14 @@ class AsyncAtlaSentClient:
             DeprecationWarning,
             stacklevel=2,
         )
-        # `context` arg preserved on the public method signature for
-        # backward-compat but no longer sent on the wire — handler.ts
-        # cross-checks via action_type / actor_id only.
         del context
         req = VerifyRequest(
             permit_token=permit_token,
             action_type=action_type,
             actor_id=actor_id,
             require_approval=require_approval,
+            environment=environment,
+            execution_hash=execution_hash if execution_hash else None,
         )
         logger.debug("verify token=%s (async)", _redact_token(permit_token))
         data, rate_limit, request_id = await self._post(
@@ -411,7 +416,11 @@ class AsyncAtlaSentClient:
         """
         if not _ACTION_TYPE_RE.match(action):
             raise AtlaSentError(
-                f'action must be in dot-notation format (e.g. "production.deploy"). Got: {action!r}',
+                (
+                    "action must be in dot-notation format "
+                    '(e.g. "production.deploy"). '
+                    f"Got: {action!r}"
+                ),
                 code="bad_request",
             )
         ctx = context or {}
@@ -430,13 +439,35 @@ class AsyncAtlaSentClient:
                 audit_hash=audit_hash,
             ) from None
 
+        _ctx_env = (
+            ctx.get("environment") if isinstance(ctx.get("environment"), str) else None
+        )
+        if not _ctx_env:
+            raise AtlaSentError(
+                "context.environment is required. Pass the environment where this "
+                "action executes (for example, 'production' or 'staging').",
+                code="bad_request",
+            )
+
+        _eval_payload: dict[str, Any] = {
+            "action_type": action,
+            "actor_id": agent,
+            "context": ctx,
+        }
+        _execution_hash = _compute_execution_hash(_eval_payload)
+
         # Suppress the DeprecationWarning from the public verify() method:
         # protect() is the canonical API and should not surface deprecation
         # noise from its own internal implementation.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             verify_result = await self.verify(
-                eval_result.permit_token, action, agent, ctx
+                eval_result.permit_token,
+                action,
+                agent,
+                ctx,
+                environment=_ctx_env,
+                execution_hash=_execution_hash,
             )
 
         if not verify_result.valid:
@@ -881,7 +912,10 @@ class AsyncAtlaSentClient:
         permit_row = {k: v for k, v in data.items() if k not in envelope_keys}
         if "valid" not in data or "evidence" not in data:
             raise AtlaSentError(
-                "Malformed /v1/permits/{id}/verify response: missing canonical envelope fields",
+                (
+                    "Malformed /v1/permits/{id}/verify response: "
+                    "missing canonical envelope fields"
+                ),
                 code="bad_response",
                 request_id=request_id,
                 response_body=data,
@@ -1126,7 +1160,7 @@ class AsyncAtlaSentClient:
                     rate_limit=None,
                 )
             raise
-        _VARIANCE_MAP: dict[str, str] = {
+        variance_map: dict[str, str] = {
             "NONE": "NONE",
             "DECISION_CHANGED": "POLICY_DRIFT",
             "ENVELOPE_DRIFT": "ENVELOPE_DRIFT",
@@ -1135,7 +1169,7 @@ class AsyncAtlaSentClient:
             "ENGINE_DRIFT": "ENGINE_DRIFT",
         }
         raw_variance = data.get("variance", "")
-        vk: ReplayVarianceKind = _VARIANCE_MAP.get(raw_variance, "NONE")
+        vk: ReplayVarianceKind = variance_map.get(raw_variance, "NONE")
         replay_dec = data.get("replay_decision")
         return ReplayResponse(
             decision_id=data.get("decision_id", evaluation_id),
@@ -1148,10 +1182,10 @@ class AsyncAtlaSentClient:
             engine_version_kind=data.get("engine_version_kind"),
             accepts_replay=bool(data.get("accepts_replay", True)),
             envelope_verification=data.get("envelope_verification"),
-            replayed_at=data.get("replayed_at") or datetime.now(timezone.utc).isoformat(),
+            replayed_at=data.get("replayed_at")
+            or datetime.now(timezone.utc).isoformat(),
             rate_limit=rate_limit,
         )
-
 
     # ── SCIM 2.0 (async) ──────────────────────────────────────
 
@@ -1175,7 +1209,9 @@ class AsyncAtlaSentClient:
         """``POST /v1/scim/v2/{orgId}/Users`` — provision a new user (async)."""
         if "schemas" not in user:
             user = {**user, "schemas": [SCIM_USER_SCHEMA]}
-        return await self._do_scim("POST", f"/v1/scim/v2/{_scim_enc(org_id)}/Users", user)
+        return await self._do_scim(
+            "POST", f"/v1/scim/v2/{_scim_enc(org_id)}/Users", user
+        )
 
     async def async_scim_get_user(
         self,
@@ -1221,7 +1257,9 @@ class AsyncAtlaSentClient:
         org_id: str,
         user_id: str,
     ) -> None:
-        """``DELETE /v1/scim/v2/{orgId}/Users/{userId}`` — deprovision a user (async)."""
+        """``DELETE /v1/scim/v2/{orgId}/Users/{userId}`` — deprovision a
+        user (async).
+        """
         await self._do_scim(
             "DELETE", f"/v1/scim/v2/{_scim_enc(org_id)}/Users/{_scim_enc(user_id)}"
         )
@@ -1246,14 +1284,18 @@ class AsyncAtlaSentClient:
         """``POST /v1/scim/v2/{orgId}/Groups`` — create a group (async)."""
         if "schemas" not in group:
             group = {**group, "schemas": [SCIM_GROUP_SCHEMA]}
-        return await self._do_scim("POST", f"/v1/scim/v2/{_scim_enc(org_id)}/Groups", group)
+        return await self._do_scim(
+            "POST", f"/v1/scim/v2/{_scim_enc(org_id)}/Groups", group
+        )
 
     async def async_scim_get_group(
         self,
         org_id: str,
         group_id: str,
     ) -> dict[str, Any]:
-        """``GET /v1/scim/v2/{orgId}/Groups/{groupId}`` — fetch a group by ID (async)."""
+        """``GET /v1/scim/v2/{orgId}/Groups/{groupId}`` — fetch a group by
+        ID (async).
+        """
         return await self._do_scim(
             "GET", f"/v1/scim/v2/{_scim_enc(org_id)}/Groups/{_scim_enc(group_id)}"
         )
@@ -1279,7 +1321,9 @@ class AsyncAtlaSentClient:
         group_id: str,
         operations: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        """``PATCH /v1/scim/v2/{orgId}/Groups/{groupId}`` — add/remove members (async)."""
+        """``PATCH /v1/scim/v2/{orgId}/Groups/{groupId}`` — add/remove
+        members (async).
+        """
         body = {"schemas": [SCIM_PATCH_OP_SCHEMA], "Operations": operations}
         return await self._do_scim(
             "PATCH",
@@ -1316,7 +1360,8 @@ class AsyncAtlaSentClient:
         batch_size: int = 100,
         retry_count: int = 3,
     ) -> dict[str, Any]:
-        """``PATCH /v1/orgs/{orgId}/siem-config`` — create or update SIEM config (async).
+        """``PATCH /v1/orgs/{orgId}/siem-config`` — create or update SIEM
+        config (async).
 
         Args:
             org_id: AtlaSent organisation ID.
@@ -1339,7 +1384,9 @@ class AsyncAtlaSentClient:
         if not destination_url.startswith("https://"):
             raise ValueError("destination_url must be an HTTPS URL")
         if format not in _VALID_FORMATS:
-            raise ValueError(f"format must be one of: {', '.join(sorted(_VALID_FORMATS))}")
+            raise ValueError(
+                f"format must be one of: {', '.join(sorted(_VALID_FORMATS))}"
+            )
         if auth_type not in _VALID_AUTH_TYPES:
             raise ValueError(
                 f"auth_type must be one of: {', '.join(sorted(_VALID_AUTH_TYPES))}"
@@ -1380,7 +1427,8 @@ class AsyncAtlaSentClient:
         *,
         regime: str | None = None,
     ) -> dict[str, Any]:
-        """``GET /v1/orgs/{orgId}/evidence-exports`` — list past evidence exports (async).
+        """``GET /v1/orgs/{orgId}/evidence-exports`` — list past evidence
+        exports (async).
 
         Raises:
             ValueError: When ``regime`` is not a recognised value.
@@ -1399,7 +1447,9 @@ class AsyncAtlaSentClient:
         org_id: str,
         export_id: str,
     ) -> dict[str, Any]:
-        """``GET /v1/orgs/{orgId}/evidence-exports/{exportId}`` — fetch one export (async)."""
+        """``GET /v1/orgs/{orgId}/evidence-exports/{exportId}`` — fetch one
+        export (async).
+        """
         return await self._do_scim(
             "GET",
             f"/v1/orgs/{_ev_enc(org_id)}/evidence-exports/{_ev_enc(export_id)}",
@@ -1414,7 +1464,8 @@ class AsyncAtlaSentClient:
         bundle_id: str | None = None,
         evidence: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """``POST /v1/orgs/{orgId}/evidence-exports`` — build and persist an evidence bundle (async).
+        """``POST /v1/orgs/{orgId}/evidence-exports`` — build and persist an
+        evidence bundle (async).
 
         Args:
             org_id: AtlaSent organisation ID.
@@ -1670,7 +1721,7 @@ class AsyncAtlaSentClient:
             ) from exc
 
 
-# ── SSE parser ─────────────────────────────────────────────────────────────────────────────────────────
+# ── SSE parser ─────────────────────────────────────────────────────────────
 
 
 async def _parse_sse(

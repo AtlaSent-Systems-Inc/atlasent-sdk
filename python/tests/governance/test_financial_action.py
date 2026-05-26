@@ -11,7 +11,9 @@ from atlasent.governance import (
 
 def test_default_thresholds_are_locked() -> None:
     # Locked numeric thresholds; changing them is a wire-breaking event.
-    bounds = [(t.tier, t.lower_bound, t.upper_bound) for t in DEFAULT_RISK_TIER_THRESHOLDS]
+    bounds = [
+        (t.tier, t.lower_bound, t.upper_bound) for t in DEFAULT_RISK_TIER_THRESHOLDS
+    ]
     assert bounds == [
         ("low", 0.0, 1_000.0),
         ("medium", 1_000.0, 50_000.0),

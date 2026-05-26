@@ -22,7 +22,7 @@ Wire-stable as ``policy_certification.v1``.
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -62,7 +62,7 @@ class PolicyVersion(BaseModel):
     """SHA-256 hex of the policy body."""
     submitted_by: str
     submitted_at: str
-    certified_at: Optional[str] = None
+    certified_at: str | None = None
     """ISO 8601 when the last approval quorum was met; ``None`` while pending."""
     approval_count: int = 0
     approval_quorum: int = 1
@@ -75,7 +75,7 @@ class ListPolicyVersionsResponse(BaseModel):
 
     versions: list[PolicyVersion] = Field(default_factory=list)
     total: int = 0
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -89,7 +89,7 @@ class PolicyApproval(BaseModel):
     approver_id: str
     approver_label: str
     decision: PolicyApprovalDecision
-    comment: Optional[str] = None
+    comment: str | None = None
     created_at: str
 
     model_config = {"extra": "allow"}
@@ -102,7 +102,7 @@ class CreatePolicyApprovalRequest(BaseModel):
     approver_id: str
     approver_label: str
     decision: PolicyApprovalDecision
-    comment: Optional[str] = None
+    comment: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -146,7 +146,7 @@ class ListPolicyAttestationsResponse(BaseModel):
 
     attestations: list[PolicyAttestation] = Field(default_factory=list)
     total: int = 0
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
 
     model_config = {"extra": "allow"}
 

@@ -50,7 +50,7 @@ info:
     url: https://atlasent.io
     email: sdk@atlasent.io
   license:
-    name: MIT (Python SDK) / Apache-2.0 (TypeScript SDK)
+    name: Apache-2.0 (Python SDK) / Apache-2.0 (TypeScript SDK)
     url: https://github.com/AtlaSent-Systems-Inc/atlasent-sdk
 
 servers:

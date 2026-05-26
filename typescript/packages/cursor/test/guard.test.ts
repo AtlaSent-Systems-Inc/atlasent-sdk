@@ -9,7 +9,7 @@ import {
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
 const ALLOW_EVAL = {
-  decision: "ALLOW" as const,
+  decision: "allow" as const,
   permitId: "dec_alpha",
   reason: "authorized",
   auditHash: "hash_alpha",
@@ -18,7 +18,7 @@ const ALLOW_EVAL = {
 };
 
 const DENY_EVAL = {
-  decision: "DENY" as const,
+  decision: "deny" as const,
   permitId: "dec_beta",
   reason: "policy denied",
   auditHash: "hash_beta",

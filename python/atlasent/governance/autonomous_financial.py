@@ -22,9 +22,9 @@ Wire-stable as ``autonomous_financial.v1``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional, Sequence
 
 from .financial_action import CurrencyCode, FinancialActionType, FinancialRiskTier
 
@@ -43,7 +43,7 @@ class ExecutionCeiling:
     action_type: FinancialActionType
     per_execution_max: float
     currency: CurrencyCode
-    max_daily_count: Optional[int]
+    max_daily_count: int | None
     require_permit: bool = False
 
 
@@ -67,7 +67,7 @@ class AutonomousExecutionBounds:
     require_runtime_verification: bool
     anomaly_detection_enabled: bool
     created_at: str
-    expires_at: Optional[str]
+    expires_at: str | None
     active: bool
 
 
@@ -82,12 +82,12 @@ class AutonomousExecutionRecord:
     action_value: float
     currency: CurrencyCode
     permitted: bool
-    denial_reason: Optional[str]
-    permit_id: Optional[str]
+    denial_reason: str | None
+    permit_id: str | None
     anomaly_detected: bool
-    anomaly_description: Optional[str]
+    anomaly_description: str | None
     attempted_at: str
-    executed_at: Optional[str]
+    executed_at: str | None
 
 
 @dataclass(frozen=True)
@@ -101,8 +101,8 @@ class AutonomousExecutionCheckResult:
     within_risk_tier: bool
     bounds_active: bool
     bounds_not_expired: bool
-    applicable_ceiling: Optional[ExecutionCeiling]
-    denial_reason: Optional[str]
+    applicable_ceiling: ExecutionCeiling | None
+    denial_reason: str | None
     violations: Sequence[str]
 
 
@@ -111,7 +111,7 @@ class AnomalyDetectionResult:
     """Result of ``detect_autonomous_anomaly``."""
 
     anomaly_detected: bool
-    description: Optional[str]
+    description: str | None
 
 
 def _now_iso() -> str:
@@ -127,7 +127,7 @@ def check_autonomous_bounds(
     risk_tier: FinancialRiskTier,
     current_daily_aggregate: float,
     current_daily_count: dict[str, int],
-    now: Optional[str] = None,
+    now: str | None = None,
 ) -> AutonomousExecutionCheckResult:
     """Check whether an autonomous execution is within declared bounds.
 
@@ -146,11 +146,9 @@ def check_autonomous_bounds(
 
     action_type_permitted = action_type in bounds.permitted_action_types
     if not action_type_permitted:
-        violations.append(
-            f"action type {action_type} not in agent's permitted set"
-        )
+        violations.append(f"action type {action_type} not in agent's permitted set")
 
-    applicable_ceiling: Optional[ExecutionCeiling] = next(
+    applicable_ceiling: ExecutionCeiling | None = next(
         (c for c in bounds.ceilings if c.action_type == action_type), None
     )
 
@@ -207,7 +205,9 @@ def check_autonomous_bounds(
         bounds_not_expired=bounds_not_expired,
         applicable_ceiling=applicable_ceiling,
         denial_reason=(
-            None if permitted else (violations[0] if violations else "execution out of bounds")
+            None
+            if permitted
+            else (violations[0] if violations else "execution out of bounds")
         ),
         violations=tuple(violations),
     )

@@ -20,8 +20,9 @@ Wire-stable as ``economic_evidence.v1``.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
-from typing import Literal, Optional, Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Literal
 
 from ._canonical import canonicalize_for_evidence
 from .financial_action import FinancialExecutionRecord
@@ -51,9 +52,9 @@ class ApprovalProvenance:
 # Forward-declared shape for liability_attribution.LiabilityAttributionRecord.
 # Imported lazily in the dataclass type annotation to avoid a circular import:
 # liability_attribution does not depend on economic_evidence.
-from .liability_attribution import LiabilityAttributionRecord  # noqa: E402
-from .financial_quorum import FinancialQuorumResult  # noqa: E402
 from .budgetary_governance import BudgetConstraintCheckResult  # noqa: E402
+from .financial_quorum import FinancialQuorumResult  # noqa: E402
+from .liability_attribution import LiabilityAttributionRecord  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -80,8 +81,8 @@ class EconomicEvidenceBundle:
     generated_at: str
     requested_by: str
     content_hash: str
-    signature: Optional[str] = None
-    signing_key_id: Optional[str] = None
+    signature: str | None = None
+    signing_key_id: str | None = None
     version: Literal["economic_evidence.v1"] = "economic_evidence.v1"
 
 
@@ -133,7 +134,7 @@ class EvidenceBundleVerificationResult:
     signature_valid: bool
     liability_chain_hash_matches: bool
     permit_ids_match: bool
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 def build_signable_content(
@@ -220,7 +221,9 @@ def verify_evidence_bundle_structure(
     signature_valid = bundle.signature is not None and len(bundle.signature) > 0
 
     valid = len(errors) == 0 and content_hash_valid
-    reason = None if valid else (errors[0] if errors else "bundle integrity check failed")
+    reason = (
+        None if valid else (errors[0] if errors else "bundle integrity check failed")
+    )
 
     return EvidenceBundleVerificationResult(
         valid=valid,

@@ -18,6 +18,7 @@ from urllib.parse import quote, urlparse
 import httpx
 
 from ._version import __version__
+from .approval_artifact import ApprovalReference
 from .audit import AuditEventsResult, AuditExportResult
 from .exceptions import (
     AtlaSentDenied,
@@ -27,7 +28,23 @@ from .exceptions import (
     RateLimitError,
     _normalize_permit_outcome,
 )
-from .approval_artifact import ApprovalReference
+from .governance_agents import (
+    GovernanceAgent,
+    GovernanceAgentEvaluation,
+    GovernanceAgentFinding,
+    ListGovernanceAgentsResult,
+    ListGovernanceEvaluationsResult,
+    ListGovernanceFindingsResult,
+)
+from .hitl import (
+    HitlApprovalsResult,
+    HitlChainResult,
+    HitlCreateRequest,
+    HitlEscalation,
+    HitlEscalationResult,
+    HitlStatus,
+    ListHitlEscalationsResult,
+)
 from .models import (
     ApiKeySelfResult,
     AuthorizationResult,
@@ -49,25 +66,6 @@ from .models import (
     VerifyPermitByIdResult,
     VerifyRequest,
     VerifyResult,
-)
-from .hitl import (
-    HitlApprovalsResult,
-    HitlChainResult,
-    HitlCreateRequest,
-    HitlEscalation,
-    HitlEscalationResult,
-    HitlStatus,
-    ListHitlEscalationsResult,
-)
-from .governance_agents import (
-    AgentEvidenceRef,
-    GovernanceAgent,
-    GovernanceAgentEvaluation,
-    GovernanceAgentFinding,
-    ListGovernanceAgentsResult,
-    ListGovernanceEvaluationsResult,
-    ListGovernanceFindingsResult,
-    highest_agent_finding_severity,
 )
 
 if TYPE_CHECKING:
@@ -103,7 +101,9 @@ def _compute_execution_hash(payload: dict) -> str:
             return [_sort_deep(i) for i in obj]
         return obj
 
-    canonical = json.dumps(_sort_deep(payload), separators=(",", ":"), ensure_ascii=False)
+    canonical = json.dumps(
+        _sort_deep(payload), separators=(",", ":"), ensure_ascii=False
+    )
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
@@ -336,9 +336,7 @@ class AtlaSentClient:
             actor_id=actor_id,
             context=ctx,
         )
-        logger.debug(
-            "evaluate_preflight action=%r actor=%r", action_type, actor_id
-        )
+        logger.debug("evaluate_preflight action=%r actor=%r", action_type, actor_id)
         data, rate_limit, request_id = self._post(
             "/v1-evaluate",
             req.model_dump(by_alias=True, exclude_none=True),
@@ -434,7 +432,11 @@ class AtlaSentClient:
     ) -> Permit:
         if not _ACTION_TYPE_RE.match(action):
             raise AtlaSentError(
-                f'action must be in dot-notation format (e.g. "production.deploy"). Got: {action!r}',
+                (
+                    "action must be in dot-notation format "
+                    '(e.g. "production.deploy"). '
+                    f"Got: {action!r}"
+                ),
                 code="bad_request",
             )
         ctx = context or {}
@@ -453,13 +455,15 @@ class AtlaSentClient:
                 audit_hash=audit_hash,
             ) from None
 
-        _ctx_env = ctx.get("environment") if isinstance(ctx.get("environment"), str) else None
+        _ctx_env = (
+            ctx.get("environment") if isinstance(ctx.get("environment"), str) else None
+        )
         if not _ctx_env:
-            logger.warning(
-                "environment not set on evaluate request context — "
-                "defaulting to 'production'. Set context['environment'] explicitly to suppress."
+            raise AtlaSentError(
+                "context.environment is required. Pass the environment where this "
+                "action executes (for example, 'production' or 'staging').",
+                code="bad_request",
             )
-            _ctx_env = "production"
 
         _eval_payload: dict[str, Any] = {
             "action_type": action,
@@ -471,7 +475,10 @@ class AtlaSentClient:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             verify_result = self.verify(
-                eval_result.permit_token, action, agent, ctx,
+                eval_result.permit_token,
+                action,
+                agent,
+                ctx,
                 environment=_ctx_env,
                 execution_hash=_execution_hash,
             )
@@ -660,11 +667,20 @@ class AtlaSentClient:
             raise AtlaSentError("permit_id is required", code="bad_request")
         path = f"/v1/permits/{quote(permit_id, safe='')}/verify"
         data, rate_limit, request_id = self._post(path, {})
-        envelope_keys = {"valid", "verification_type", "reason", "verified_at", "evidence"}
+        envelope_keys = {
+            "valid",
+            "verification_type",
+            "reason",
+            "verified_at",
+            "evidence",
+        }
         permit_row = {k: v for k, v in data.items() if k not in envelope_keys}
         if "valid" not in data or "evidence" not in data:
             raise AtlaSentError(
-                "Malformed /v1/permits/{id}/verify response: missing canonical envelope fields",
+                (
+                    "Malformed /v1/permits/{id}/verify response: "
+                    "missing canonical envelope fields"
+                ),
                 code="bad_response",
                 request_id=request_id,
                 response_body=data,
@@ -716,9 +732,7 @@ class AtlaSentClient:
         if cursor is not None:
             params["cursor"] = cursor
 
-        data, rate_limit, request_id = self._get(
-            "/v1/permits", params=params or None
-        )
+        data, rate_limit, request_id = self._get("/v1/permits", params=params or None)
         permits_raw = data.get("permits")
         if not isinstance(permits_raw, list):
             raise AtlaSentError(
@@ -979,7 +993,7 @@ class AtlaSentClient:
                     rate_limit=None,
                 )
             raise
-        _VARIANCE_MAP: dict[str, str] = {
+        variance_map: dict[str, str] = {
             "NONE": "NONE",
             "DECISION_CHANGED": "POLICY_DRIFT",
             "ENVELOPE_DRIFT": "ENVELOPE_DRIFT",
@@ -988,7 +1002,7 @@ class AtlaSentClient:
             "ENGINE_DRIFT": "ENGINE_DRIFT",
         }
         raw_variance = data.get("variance", "")
-        vk: ReplayVarianceKind = _VARIANCE_MAP.get(raw_variance, "NONE")
+        vk: ReplayVarianceKind = variance_map.get(raw_variance, "NONE")
         replay_dec = data.get("replay_decision")
         return ReplayResponse(
             decision_id=data.get("decision_id", evaluation_id),
@@ -1001,7 +1015,8 @@ class AtlaSentClient:
             engine_version_kind=data.get("engine_version_kind"),
             accepts_replay=bool(data.get("accepts_replay", True)),
             envelope_verification=data.get("envelope_verification"),
-            replayed_at=data.get("replayed_at") or datetime.now(timezone.utc).isoformat(),
+            replayed_at=data.get("replayed_at")
+            or datetime.now(timezone.utc).isoformat(),
             rate_limit=rate_limit,
         )
 

@@ -14,7 +14,6 @@ from pydantic import BaseModel, ConfigDict
 
 from .models import RateLimitState
 
-
 HitlQuorumTier = Literal[
     "single_approver",
     "simple_majority",
@@ -74,9 +73,9 @@ class HitlEscalation(BaseModel):
     max_escalation_depth: int
     fallback_decision: HitlFallbackDecision
     governance_advisory_id: str | None = None
-    expired_reason: Literal[
-        "sla_expired", "escalation_chain_exhausted", "manual_expire"
-    ] | None = None
+    expired_reason: (
+        Literal["sla_expired", "escalation_chain_exhausted", "manual_expire"] | None
+    ) = None
 
     quorum_progress: HitlQuorumProgress | None = None
 
@@ -113,9 +112,9 @@ class HitlCreateRequest(BaseModel):
 
     approver_pool: list[dict[str, Any]] | None = None
     quorum_threshold: int | None = None
-    ai_unavailable_fallback: Literal[
-        "escalate_to_human", "reduce_pool", "fail_closed"
-    ] | None = None
+    ai_unavailable_fallback: (
+        Literal["escalate_to_human", "reduce_pool", "fail_closed"] | None
+    ) = None
     fallback_human_role: str | None = None
 
     model_config = ConfigDict(extra="allow")

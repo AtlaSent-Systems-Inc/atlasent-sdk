@@ -254,9 +254,7 @@ class TestEvaluatePreflight:
         # The whole point of the helper is that it always sets the
         # `?include=constraint_trace` query — never optional, never
         # silently dropped.
-        assert mock_post.call_args.kwargs["params"] == {
-            "include": "constraint_trace"
-        }
+        assert mock_post.call_args.kwargs["params"] == {"include": "constraint_trace"}
         # The request body shape is identical to evaluate(): the trace
         # is requested via the URL, not the body.
         body = mock_post.call_args.kwargs["json"]
@@ -1458,10 +1456,13 @@ class TestGetPermit:
         assert exc_info.value.code == "bad_request"
 
     def test_surfaces_revocation(self, client, mocker):
-        revoked = dict(self.PERMIT, status="revoked",
-                       revoked_at="2026-05-07T01:10:00Z",
-                       revoked_by="user_admin",
-                       revoke_reason="approval rescinded")
+        revoked = dict(
+            self.PERMIT,
+            status="revoked",
+            revoked_at="2026-05-07T01:10:00Z",
+            revoked_by="user_admin",
+            revoke_reason="approval rescinded",
+        )
         resp = _mock_resp(mocker, json_data=revoked)
         mocker.patch.object(client._client, "get", return_value=resp)
         result = client.get_permit("pt_alpha")
@@ -1561,7 +1562,9 @@ class TestDeprecationWarnings:
     def test_client_authorize_emits_deprecation_warning(self, client, mocker):
         # Mock evaluate path so authorize() doesn't try to network.
         mocker.patch.object(
-            client, "evaluate", side_effect=AtlaSentDenied(
+            client,
+            "evaluate",
+            side_effect=AtlaSentDenied(
                 "deny",
                 permit_token="dec_x",
                 reason="policy denied",
@@ -1578,9 +1581,11 @@ class TestDeprecationWarnings:
             return_value=EvaluateResult(decision="allow", permit_token="t"),
         )
         mocker.patch.object(
-            client, "verify",
-            return_value=VerifyResult(valid=True, outcome="allow",
-                                      permit_hash="h", timestamp="t"),
+            client,
+            "verify",
+            return_value=VerifyResult(
+                valid=True, outcome="allow", permit_hash="h", timestamp="t"
+            ),
         )
         with pytest.warns(DeprecationWarning, match="gate"):
             client.gate("act", "actor")
@@ -1593,20 +1598,28 @@ class TestDeprecationWarnings:
             return_value=EvaluateResult(decision="allow", permit_token="t"),
         )
         mocker.patch.object(
-            client, "verify",
-            return_value=VerifyResult(valid=True, outcome="allow",
-                                      permit_hash="h", timestamp="t"),
+            client,
+            "verify",
+            return_value=VerifyResult(
+                valid=True, outcome="allow", permit_hash="h", timestamp="t"
+            ),
         )
         import warnings as _warnings
+
         with _warnings.catch_warnings():
             _warnings.simplefilter("error", DeprecationWarning)
-            client.protect(agent="a", action="production.deploy")  # must not raise
+            client.protect(
+                agent="a",
+                action="production.deploy",
+                context={"environment": "production"},
+            )  # must not raise
 
     def test_evaluate_does_not_emit_deprecation_warning(self, client, mocker):
         # Canonical surface — must not emit.
         resp = _mock_resp(mocker, json_data=EVALUATE_PERMIT)
         mocker.patch.object(client._client, "post", return_value=resp)
         import warnings as _warnings
+
         with _warnings.catch_warnings():
             _warnings.simplefilter("error", DeprecationWarning)
             client.evaluate("act", "actor")  # must not raise
@@ -1731,9 +1744,7 @@ class TestLegacyRevokeVerifyDeprecated:
             client.revoke_permit("dec_x")
 
     def test_legacy_verify_emits_warning(self, client, mocker):
-        resp = _mock_resp(
-            mocker, json_data={"valid": True, "outcome": "allow"}
-        )
+        resp = _mock_resp(mocker, json_data={"valid": True, "outcome": "allow"})
         mocker.patch.object(client._client, "post", return_value=resp)
         with pytest.warns(DeprecationWarning, match="verify"):
             client.verify("pt_x")

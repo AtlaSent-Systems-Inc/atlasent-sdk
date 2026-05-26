@@ -73,7 +73,7 @@ def verify_webhook(payload: str | bytes, signature: str, secret: str) -> bool:
     try:
         if not signature.startswith("sha256="):
             return False
-        received_hex = signature[len("sha256="):]
+        received_hex = signature[len("sha256=") :]
 
         payload_bytes: bytes = (
             payload if isinstance(payload, bytes) else payload.encode("utf-8")

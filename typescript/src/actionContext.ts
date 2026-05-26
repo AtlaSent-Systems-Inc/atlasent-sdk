@@ -99,11 +99,11 @@ export interface ResourceContext {
  * Deployment environment and infrastructure context.
  *
  * `name` is the field protect() reads to set the `environment` field
- * on the verify-permit request. Omitting it logs a console warning
- * and defaults to `"production"`.
+ * on the verify-permit request. Set it explicitly in runtime contexts
+ * so verification is bound to the executing environment.
  */
 export interface EnvironmentContext {
-  /** Deployment tier. Defaults to `"production"` in protect() when absent. */
+  /** Deployment tier (for example, `"production"` or `"staging"`). */
   name?: "production" | "staging" | "development" | "test" | string;
   /** Cloud or datacenter region (e.g. `"us-east-1"`, `"eu-west-1"`). */
   region?: string;
@@ -353,7 +353,7 @@ export function validateActionContext(
       field: "environment.name",
       code: "recommended",
       message:
-        "environment.name is not set; protect() will default to 'production' with a console warning",
+        "environment.name is not set; provide it so verify-permit can bind to the execution environment",
     });
   }
 

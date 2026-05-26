@@ -88,12 +88,15 @@ def test_object_keys_are_sorted_lexicographically() -> None:
 
 def test_nested_objects() -> None:
     # Whole-number float elision applies recursively.
-    assert canonicalize_for_evidence(
-        {"x": [1, 2.0, 2.5], "y": {"b": True, "a": None}}
-    ) == '{"x":[1,2,2.5],"y":{"a":null,"b":true}}'
+    assert (
+        canonicalize_for_evidence({"x": [1, 2.0, 2.5], "y": {"b": True, "a": None}})
+        == '{"x":[1,2,2.5],"y":{"a":null,"b":true}}'
+    )
 
 
-def test_dicts_with_same_data_produce_same_bytes_regardless_of_construction_order() -> None:
+def test_dicts_with_same_data_produce_same_bytes_regardless_of_construction_order() -> (
+    None
+):
     a = canonicalize_for_evidence({"first": 1, "second": 2, "third": 3})
     b = canonicalize_for_evidence({"third": 3, "first": 1, "second": 2})
     assert a == b

@@ -116,7 +116,9 @@ def test_per_execution_ceiling_blocks() -> None:
 
 def test_daily_count_limit_blocks() -> None:
     result = check_autonomous_bounds(
-        bounds=_bounds(ceilings=(_ceiling(per_execution_max=5_000, max_daily_count=10),)),
+        bounds=_bounds(
+            ceilings=(_ceiling(per_execution_max=5_000, max_daily_count=10),)
+        ),
         action_type="refund",
         action_value=100,
         currency="USD",

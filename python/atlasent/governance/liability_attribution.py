@@ -24,8 +24,9 @@ Wire-stable as ``liability_attribution.v1``.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Optional, Sequence
+from typing import Literal
 
 from ._canonical import canonicalize_for_evidence
 from .financial_action import FinancialRiskTier, LiabilityClassification
@@ -49,13 +50,13 @@ WeightDistribution = Literal["equal", "role_weighted"]
 # not 1.0 — weights are normalized at chain construction time. Values match
 # ``ROLE_WEIGHTS`` in the TS module byte-for-byte.
 ROLE_WEIGHTS: dict[str, float] = {
-    "authorizer":         0.30,
-    "delegator":          0.15,
-    "delegate":           0.15,
-    "executor":           0.25,
-    "approver":           0.05,
-    "override_actor":     0.40,
-    "supervisor":         0.10,
+    "authorizer": 0.30,
+    "delegator": 0.15,
+    "delegate": 0.15,
+    "executor": 0.25,
+    "approver": 0.05,
+    "override_actor": 0.40,
+    "supervisor": 0.10,
     "exception_approver": 0.05,
 }
 
@@ -70,7 +71,7 @@ class LiabilityParty:
     role: LiabilityPartyRole
     liability_weight: float
     acted_at: str
-    permit_id: Optional[str]
+    permit_id: str | None
 
     def to_dict(self) -> dict:
         return {
@@ -92,7 +93,7 @@ class _PartyInput:
     party_label: str
     party_type: PartyType
     acted_at: str
-    permit_id: Optional[str]
+    permit_id: str | None
 
 
 @dataclass(frozen=True)
@@ -105,7 +106,7 @@ class DelegationInput:
     delegate_label: str
     delegator_type: PartyType
     delegate_type: PartyType
-    permit_id: Optional[str]
+    permit_id: str | None
     acted_at: str
 
 
@@ -117,7 +118,7 @@ class OverrideInput:
     actor_label: str
     actor_type: PartyType
     justification: str
-    permit_id: Optional[str]
+    permit_id: str | None
     acted_at: str
 
 
@@ -134,7 +135,7 @@ class LiabilityAttributionInput:
     approvers: Sequence[_PartyInput] = field(default_factory=tuple)
     delegations: Sequence[DelegationInput] = field(default_factory=tuple)
     supervisors: Sequence[_PartyInput] = field(default_factory=tuple)
-    override: Optional[OverrideInput] = None
+    override: OverrideInput | None = None
 
 
 @dataclass(frozen=True)
@@ -153,7 +154,7 @@ class LiabilityAttributionRecord:
     delegation_present: bool
     supervisory_present: bool
     emergency_override: bool
-    override_justification: Optional[str]
+    override_justification: str | None
     chain_hash: str
     created_at: str
 
@@ -205,71 +206,85 @@ def build_liability_chain(
     """
     raw: list[dict] = []
 
-    raw.append({
-        "party_id": input.authorizer.party_id,
-        "party_label": input.authorizer.party_label,
-        "party_type": input.authorizer.party_type,
-        "role": "authorizer",
-        "acted_at": input.authorizer.acted_at,
-        "permit_id": input.authorizer.permit_id,
-    })
+    raw.append(
+        {
+            "party_id": input.authorizer.party_id,
+            "party_label": input.authorizer.party_label,
+            "party_type": input.authorizer.party_type,
+            "role": "authorizer",
+            "acted_at": input.authorizer.acted_at,
+            "permit_id": input.authorizer.permit_id,
+        }
+    )
 
     for d in input.delegations:
-        raw.append({
-            "party_id": d.delegator_id,
-            "party_label": d.delegator_label,
-            "party_type": d.delegator_type,
-            "role": "delegator",
-            "acted_at": d.acted_at,
-            "permit_id": d.permit_id,
-        })
-        raw.append({
-            "party_id": d.delegate_id,
-            "party_label": d.delegate_label,
-            "party_type": d.delegate_type,
-            "role": "delegate",
-            "acted_at": d.acted_at,
-            "permit_id": d.permit_id,
-        })
+        raw.append(
+            {
+                "party_id": d.delegator_id,
+                "party_label": d.delegator_label,
+                "party_type": d.delegator_type,
+                "role": "delegator",
+                "acted_at": d.acted_at,
+                "permit_id": d.permit_id,
+            }
+        )
+        raw.append(
+            {
+                "party_id": d.delegate_id,
+                "party_label": d.delegate_label,
+                "party_type": d.delegate_type,
+                "role": "delegate",
+                "acted_at": d.acted_at,
+                "permit_id": d.permit_id,
+            }
+        )
 
     for a in input.approvers:
-        raw.append({
-            "party_id": a.party_id,
-            "party_label": a.party_label,
-            "party_type": a.party_type,
-            "role": "approver",
-            "acted_at": a.acted_at,
-            "permit_id": a.permit_id,
-        })
+        raw.append(
+            {
+                "party_id": a.party_id,
+                "party_label": a.party_label,
+                "party_type": a.party_type,
+                "role": "approver",
+                "acted_at": a.acted_at,
+                "permit_id": a.permit_id,
+            }
+        )
 
     for s in input.supervisors:
-        raw.append({
-            "party_id": s.party_id,
-            "party_label": s.party_label,
-            "party_type": s.party_type,
-            "role": "supervisor",
-            "acted_at": s.acted_at,
-            "permit_id": s.permit_id,
-        })
+        raw.append(
+            {
+                "party_id": s.party_id,
+                "party_label": s.party_label,
+                "party_type": s.party_type,
+                "role": "supervisor",
+                "acted_at": s.acted_at,
+                "permit_id": s.permit_id,
+            }
+        )
 
-    raw.append({
-        "party_id": input.executor.party_id,
-        "party_label": input.executor.party_label,
-        "party_type": input.executor.party_type,
-        "role": "executor",
-        "acted_at": input.executor.acted_at,
-        "permit_id": input.executor.permit_id,
-    })
+    raw.append(
+        {
+            "party_id": input.executor.party_id,
+            "party_label": input.executor.party_label,
+            "party_type": input.executor.party_type,
+            "role": "executor",
+            "acted_at": input.executor.acted_at,
+            "permit_id": input.executor.permit_id,
+        }
+    )
 
     if input.override is not None:
-        raw.append({
-            "party_id": input.override.actor_id,
-            "party_label": input.override.actor_label,
-            "party_type": input.override.actor_type,
-            "role": "override_actor",
-            "acted_at": input.override.acted_at,
-            "permit_id": input.override.permit_id,
-        })
+        raw.append(
+            {
+                "party_id": input.override.actor_id,
+                "party_label": input.override.actor_label,
+                "party_type": input.override.actor_type,
+                "role": "override_actor",
+                "acted_at": input.override.acted_at,
+                "permit_id": input.override.permit_id,
+            }
+        )
 
     weights = compute_liability_weights(raw, distribution)
     return [
@@ -317,9 +332,7 @@ def validate_liability_chain(
 
     weight_sum = sum(p.liability_weight for p in chain)
     if abs(weight_sum - 1.0) > 0.01:
-        errors.append(
-            f"liability weights sum to {weight_sum:.4f}, expected 1.0"
-        )
+        errors.append(f"liability weights sum to {weight_sum:.4f}, expected 1.0")
 
     seen: set[str] = set()
     for p in chain:

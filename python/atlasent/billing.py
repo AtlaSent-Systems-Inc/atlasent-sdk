@@ -38,73 +38,74 @@ from typing import Any, Literal
 import httpx
 from pydantic import BaseModel, Field, model_validator
 
+# ─── Enumerations ──────────────────────────────────────────────────────────
 
-# ─── Enumerations ──────────────────────────────────────────────────────────────────────────────────────
 
 class AccessStatus(str, Enum):
-    active     = "active"
-    grace      = "grace"
+    active = "active"
+    grace = "grace"
     restricted = "restricted"
-    suspended  = "suspended"
+    suspended = "suspended"
 
 
 class BillingMode(str, Enum):
-    self_serve      = "self_serve"
-    invoice         = "invoice"
+    self_serve = "self_serve"
+    invoice = "invoice"
     manual_contract = "manual_contract"
 
 
 class InvoiceStatus(str, Enum):
-    none          = "none"
-    draft         = "draft"
-    open          = "open"
-    paid          = "paid"
-    overdue       = "overdue"
-    void          = "void"
+    none = "none"
+    draft = "draft"
+    open = "open"
+    paid = "paid"
+    overdue = "overdue"
+    void = "void"
     uncollectible = "uncollectible"
 
 
 class DenyReason(str, Enum):
-    billing_suspended        = "billing_suspended"
-    billing_restricted       = "billing_restricted"
-    billing_grace_period     = "billing_grace_period"
+    billing_suspended = "billing_suspended"
+    billing_restricted = "billing_restricted"
+    billing_grace_period = "billing_grace_period"
     billing_contract_expired = "billing_contract_expired"
-    billing_manual_override  = "billing_manual_override"
-    billing_unknown_state    = "billing_unknown_state"
+    billing_manual_override = "billing_manual_override"
+    billing_unknown_state = "billing_unknown_state"
 
 
 class AllowedAction(str, Enum):
-    govern             = "govern"
-    evaluate           = "evaluate"
-    audit              = "audit"
+    govern = "govern"
+    evaluate = "evaluate"
+    audit = "audit"
     audit_export_legal = "audit_export_legal"
-    billing_manage     = "billing_manage"
-    seat_add           = "seat_add"
-    plan_upgrade       = "plan_upgrade"
+    billing_manage = "billing_manage"
+    seat_add = "seat_add"
+    plan_upgrade = "plan_upgrade"
     noncritical_export = "noncritical_export"
-    api_access         = "api_access"
-    governance_read    = "governance_read"
+    api_access = "api_access"
+    governance_read = "governance_read"
 
 
-# ─── Models ────────────────────────────────────────────────────────────────────────────────────────────
+# ─── Models ────────────────────────────────────────────────────────────────
+
 
 class BillingEntitlement(BaseModel):
     """Billing entitlement returned by GET /v1/billing/entitlement."""
 
-    org_id:                  str
-    access_status:           AccessStatus
-    effective_status:        AccessStatus
-    allowed_actions:         list[AllowedAction] = Field(default_factory=list)
-    deny_reason:             DenyReason | None = None
-    warning:                 str | None = None
-    grace_until:             datetime | None = None
-    billing_mode:            str = "self_serve"
-    plan:                    str = "free"
-    invoice_status:          str = "none"
-    manual_override:         bool = False
-    manual_override_status:  str | None = None
-    manual_override_reason:  str | None = None
-    computed_at:             datetime
+    org_id: str
+    access_status: AccessStatus
+    effective_status: AccessStatus
+    allowed_actions: list[AllowedAction] = Field(default_factory=list)
+    deny_reason: DenyReason | None = None
+    warning: str | None = None
+    grace_until: datetime | None = None
+    billing_mode: str = "self_serve"
+    plan: str = "free"
+    invoice_status: str = "none"
+    manual_override: bool = False
+    manual_override_status: str | None = None
+    manual_override_reason: str | None = None
+    computed_at: datetime
 
     def has_action(self, action: str | AllowedAction) -> bool:
         """Return True if the given action is permitted under current entitlement."""
@@ -137,37 +138,38 @@ class BillingEntitlement(BaseModel):
 class AdminOverrideRequest(BaseModel):
     """Body for POST /v1/billing/admin-override."""
 
-    org_id:     str
-    status:     Literal["active", "grace", "restricted", "suspended"] | None = None
-    reason:     str = ""
+    org_id: str
+    status: Literal["active", "grace", "restricted", "suspended"] | None = None
+    reason: str = ""
     expires_at: datetime | None = None
 
 
 class AdminOverrideResponse(BaseModel):
     """Response from POST /v1/billing/admin-override."""
 
-    org_id:              str
-    new_status:          str | None = None
-    override_active:     bool = False
-    override_status:     str | None = None
-    override_reason:     str | None = None
+    org_id: str
+    new_status: str | None = None
+    override_active: bool = False
+    override_status: str | None = None
+    override_reason: str | None = None
     override_expires_at: datetime | None = None
 
 
 class BillingWebhookSubscription(BaseModel):
     """A billing webhook subscription as returned by GET/POST /v1/billing/webhooks."""
 
-    id:         str
-    org_id:     str
-    url:        str
-    events:     list[str]
-    active:     bool = True
+    id: str
+    org_id: str
+    url: str
+    events: list[str]
+    active: bool = True
     created_at: datetime
     updated_at: datetime | None = None
-    secret:     str | None = None  # only present on initial creation response
+    secret: str | None = None  # only present on initial creation response
 
 
-# ─── Signature verification ──────────────────────────────────────────────────────────────────────
+# ─── Signature verification ────────────────────────────────────────────────
+
 
 def verify_billing_webhook_signature(
     payload: bytes,
@@ -189,7 +191,8 @@ def verify_billing_webhook_signature(
     return hmac.compare_digest(expected, signature)
 
 
-# ─── Sync client ────────────────────────────────────────────────────────────────────────────────────────
+# ─── Sync client ───────────────────────────────────────────────────────────
+
 
 class BillingClient:
     """
@@ -279,7 +282,8 @@ class BillingClient:
         resp.raise_for_status()
 
 
-# ─── Async client ────────────────────────────────────────────────────────────────────────────────────
+# ─── Async client ──────────────────────────────────────────────────────────
+
 
 class AsyncBillingClient:
     """
@@ -316,7 +320,9 @@ class AsyncBillingClient:
         resp.raise_for_status()
         return BillingEntitlement.model_validate(resp.json())
 
-    async def set_override(self, request: AdminOverrideRequest) -> AdminOverrideResponse:
+    async def set_override(
+        self, request: AdminOverrideRequest
+    ) -> AdminOverrideResponse:
         """Apply or clear a manual billing override (async)."""
         resp: httpx.Response = await self._client._client.post(
             f"{self._client._base_url}/v1/billing/admin-override",

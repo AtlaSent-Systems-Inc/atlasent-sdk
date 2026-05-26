@@ -5,7 +5,8 @@ Mirrors ``typescript/src/claimLineage.ts``.
 Builds and verifies :class:`ClaimEvidenceLink` objects — signed, wire-stable
 artifacts that tie a canonical claim row to its full evidence chain:
 
-1. **``runtime_evidence``** — :class:`RuntimeEvidenceInput` from ``protect_with_evidence()``
+1. **``runtime_evidence``** — :class:`RuntimeEvidenceInput`
+    from ``protect_with_evidence()``
 2. **``deploy_evidence``** — deploy gate record
 3. **``integration_evidence``** — compliance run summary
 4. **``approval_artifact``** — HITL chain or pre-signed approval artifact
@@ -34,9 +35,9 @@ import hashlib
 import hmac as _hmac_module
 import json
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import Literal, TypedDict
 
 from .exceptions import AtlaSentError
 
@@ -86,7 +87,9 @@ class IntegrationEvidenceSlot:
 class ApprovalArtifactSlot:
     approval_id: str
     approval_kind: Literal["hitl_chain", "approval_artifact"]
-    quorum_type: Literal["single_approver", "simple_majority", "two_thirds", "unanimous"]
+    quorum_type: Literal[
+        "single_approver", "simple_majority", "two_thirds", "unanimous"
+    ]
     approver_count: int
     approver_ids: tuple[str, ...]
     approved_at: str
@@ -268,7 +271,9 @@ def _sha256_hex(text: str) -> str:
 
 
 def _hmac_sha256_base64url(payload: str, secret: str) -> str:
-    digest = _hmac_module.new(secret.encode(), payload.encode(), hashlib.sha256).digest()
+    digest = _hmac_module.new(
+        secret.encode(), payload.encode(), hashlib.sha256
+    ).digest()
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
 
@@ -322,7 +327,12 @@ def _to_integration_slot(
         return None
     d = inp  # type: ignore[assignment]
     controls = d.get("controls") or []
-    passing = sum(1 for c in controls if (c.get("status") if isinstance(c, dict) else getattr(c, "status", None)) == "pass")  # type: ignore[union-attr]
+    passing = sum(
+        1
+        for c in controls
+        if (c.get("status") if isinstance(c, dict) else getattr(c, "status", None))
+        == "pass"
+    )  # type: ignore[union-attr]
     failing = len(controls) - passing
     return IntegrationEvidenceSlot(
         run_id=d["id"],
@@ -336,7 +346,9 @@ def _to_integration_slot(
     )
 
 
-def _hitl_quorum_to_slot_quorum(tier: str) -> ApprovalArtifactSlot.__annotations__["quorum_type"]:  # type: ignore[type-arg]
+def _hitl_quorum_to_slot_quorum(
+    tier: str,
+) -> Literal["single_approver", "simple_majority", "two_thirds", "unanimous"]:
     if tier in ("single_approver", "two_thirds", "unanimous"):
         return tier  # type: ignore[return-value]
     return "simple_majority"
@@ -354,13 +366,19 @@ def _to_approval_slot(
         approved = [a for a in approvals if a.get("decision") == "approve"]
         timestamps = sorted(a["created_at"] for a in approved if "created_at" in a)
         escalation = chain["escalation"]
-        last_approved = timestamps[-1] if timestamps else escalation.get("created_at", "")
+        last_approved = (
+            timestamps[-1] if timestamps else escalation.get("created_at", "")
+        )
         return ApprovalArtifactSlot(
             approval_id=escalation.get("id", ""),
             approval_kind="hitl_chain",
-            quorum_type=_hitl_quorum_to_slot_quorum(escalation.get("quorum_required", "")),
+            quorum_type=_hitl_quorum_to_slot_quorum(
+                escalation.get("quorum_required", "")
+            ),
             approver_count=len(approved),
-            approver_ids=tuple(a.get("user_id") or a.get("actor_label") or "unknown" for a in approved),
+            approver_ids=tuple(
+                a.get("user_id") or a.get("actor_label") or "unknown" for a in approved
+            ),
             approved_at=last_approved,
             artifact_hash=chain["artifact_hash"],
         )
@@ -383,9 +401,9 @@ def _to_runtime_slot(
     permit_token = receipt.get("permit_id") or receipt.get("receipt_id", "")
     decision_raw = receipt.get("decision", "deny")
     decision: Literal["allow", "deny", "escalate"] = (
-        "allow" if decision_raw == "allow"
-        else "escalate" if decision_raw == "escalate"
-        else "deny"
+        "allow"
+        if decision_raw == "allow"
+        else "escalate" if decision_raw == "escalate" else "deny"
     )
     return RuntimeEvidenceSlot(
         permit_token=permit_token,
@@ -411,7 +429,9 @@ def _build_checklist(
     now: str,
 ) -> VerificationChecklist:
     delta_computed = delta.status == "computed"
-    policy_drift_clean: bool | None = (not delta.policy_drift_detected) if delta_computed else None
+    policy_drift_clean: bool | None = (
+        (not delta.policy_drift_detected) if delta_computed else None
+    )
     schema_drift_clean = not delta.schema_drift_detected
 
     all_pass = (
@@ -451,7 +471,9 @@ def build_claim_evidence_link(
     org_id: str | None = None,
     deploy_evidence: DeployEvidenceInput | NotApplicable | None = None,
     integration_evidence: IntegrationEvidenceInput | NotApplicable | None = None,
-    approval_artifact: HitlChainSummaryInput | SignedApprovalArtifactInput | NotApplicable | None = None,
+    approval_artifact: (
+        HitlChainSummaryInput | SignedApprovalArtifactInput | NotApplicable | None
+    ) = None,
     signing_secret: str | None = None,
     schema_version: str | None = None,
 ) -> ClaimEvidenceLink:
@@ -513,10 +535,18 @@ def build_claim_evidence_link(
 
     last_verified_at = now if verified_at_creation else None
     checklist = _build_checklist(
-        runtime, deploy_status, integration_status, approval_status, delta, last_verified_at, now,
+        runtime,
+        deploy_status,
+        integration_status,
+        approval_status,
+        delta,
+        last_verified_at,
+        now,
     )
 
-    link_algorithm: Literal["hmac-sha256", "none"] = "hmac-sha256" if signing_secret else "none"
+    link_algorithm: Literal["hmac-sha256", "none"] = (
+        "hmac-sha256" if signing_secret else "none"
+    )
 
     body: dict[str, object] = {
         "version": "claim_evidence_link.v1",
@@ -536,7 +566,9 @@ def build_claim_evidence_link(
     }
 
     link_hash = _compute_link_hash(body)
-    link_signature = _hmac_sha256_base64url(link_hash, signing_secret) if signing_secret else None
+    link_signature = (
+        _hmac_sha256_base64url(link_hash, signing_secret) if signing_secret else None
+    )
 
     return ClaimEvidenceLink(
         version="claim_evidence_link.v1",
@@ -564,7 +596,8 @@ def verify_claim_evidence_link(
     signing_secret: str | None = None,
     skip_permit_recheck: bool = False,
 ) -> VerifyClaimEvidenceLinkResult:
-    """Verify structural integrity and checklist freshness of a :class:`ClaimEvidenceLink`.
+    """Verify structural integrity and checklist freshness of a
+    :class:`ClaimEvidenceLink`.
 
     Checks:
 
@@ -612,7 +645,9 @@ def verify_claim_evidence_link(
         signature=link.runtime_evidence.signature,
         permit_revoked_at=link.runtime_evidence.permit_revoked_at,
         verified_at_claim_time=link.runtime_evidence.verified_at_claim_time,
-        verified_at_link_creation=hash_valid and sig_valid and link.runtime_evidence.verified_at_link_creation,
+        verified_at_link_creation=hash_valid
+        and sig_valid
+        and link.runtime_evidence.verified_at_link_creation,
     )
 
     checklist = _build_checklist(
@@ -621,7 +656,11 @@ def verify_claim_evidence_link(
         link.verification_checklist.integration_evidence_status,
         link.verification_checklist.approval_artifact_status,
         link.delta,
-        (link.verification_checklist.last_verified_at or now) if runtime.verified_at_link_creation else None,
+        (
+            (link.verification_checklist.last_verified_at or now)
+            if runtime.verified_at_link_creation
+            else None
+        ),
         now,
     )
 
@@ -636,9 +675,15 @@ def verify_claim_evidence_link(
         "revision": link.revision + 1,
         "link_algorithm": link.link_algorithm,
         "runtime_evidence": asdict(runtime),
-        "deploy_evidence": asdict(link.deploy_evidence) if link.deploy_evidence else None,
-        "integration_evidence": asdict(link.integration_evidence) if link.integration_evidence else None,
-        "approval_artifact": asdict(link.approval_artifact) if link.approval_artifact else None,
+        "deploy_evidence": (
+            asdict(link.deploy_evidence) if link.deploy_evidence else None
+        ),
+        "integration_evidence": (
+            asdict(link.integration_evidence) if link.integration_evidence else None
+        ),
+        "approval_artifact": (
+            asdict(link.approval_artifact) if link.approval_artifact else None
+        ),
         "delta": asdict(link.delta),
         "verification_checklist": asdict(checklist),
     }
@@ -723,7 +768,9 @@ class ActionBundleReceipt(TypedDict, total=False):
 
 
 class ActionBundleInput(TypedDict, total=False):
-    """Minimal ActionEvidenceBundle fields consumed by build_claim_evidence_link_from_action_bundle."""
+    """Minimal ActionEvidenceBundle fields consumed by
+    build_claim_evidence_link_from_action_bundle.
+    """
 
     bundle_id: str
     action: str
