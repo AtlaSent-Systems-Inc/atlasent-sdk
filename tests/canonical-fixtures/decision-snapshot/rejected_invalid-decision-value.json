@@ -1,0 +1,13 @@
+{
+  "decision_id": "11111111-1111-1111-1111-111111111111",
+  "org_id": "00000000-0000-0000-0000-000000000001",
+  "actor_id": "user_abc",
+  "action_type": "data.query",
+  "context_snapshot": {},
+  "policy_version": "bundle@3",
+  "consent_snapshot": null,
+  "decision": "maybe",
+  "policy_reason": "ambiguous",
+  "confidence_score": 0.5,
+  "evaluated_at": "2026-05-26T03:00:00.000Z"
+}

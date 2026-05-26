@@ -1,0 +1,67 @@
+name: canonical-schema-conformance
+
+# Phase 2 cross-repo parity gate. Phase 1 (.github/workflows/
+# canonical-schema-parity.yml) detects structural drift via hash
+# comparison; this job validates that representative payloads conform
+# (or are correctly rejected by) the canonical schemas vendored from
+# atlasent.
+#
+# Filename convention is the verdict:
+#   valid_*.json     MUST validate
+#   rejected_*.json  MUST NOT validate
+#
+# See tests/canonical-fixtures/README.md for the doctrine and
+# schemas/v1_1/PHASE-2-PARITY-PLAN.md in the atlasent repo for the
+# overall sequencing.
+#
+# Coexists with contract/tools/drift.py. The two cover different things:
+#   - drift.py keeps SDK code-gen in sync with SDK-local schema copies
+#     (intra-repo)
+#   - this workflow proves SDK-emitted/accepted payloads conform to the
+#     vendored canonical schemas from atlasent (cross-repo)
+# If the two disagree, the canonical conformance check wins.
+
+on:
+  pull_request:
+    paths:
+      - 'tests/canonical-fixtures/**'
+      - 'vendor/atlasent-canonical/**'
+      - 'scripts/run-canonical-conformance.sh'
+      - '.github/workflows/canonical-schema-conformance.yml'
+      - 'python/atlasent/models.py'
+      - 'typescript/src/client.ts'
+      - 'typescript/src/types.ts'
+      - 'contract/**'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/canonical-fixtures/**'
+      - 'vendor/atlasent-canonical/**'
+      - 'scripts/run-canonical-conformance.sh'
+      - '.github/workflows/canonical-schema-conformance.yml'
+      - 'python/atlasent/models.py'
+      - 'typescript/src/client.ts'
+      - 'typescript/src/types.ts'
+      - 'contract/**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canonical-schema-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    name: Canonical schema conformance (Phase 2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run conformance suite
+        run: scripts/run-canonical-conformance.sh

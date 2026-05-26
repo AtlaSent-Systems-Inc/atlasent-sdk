@@ -1,0 +1,18 @@
+{
+  "decision_id": "22222222-2222-2222-2222-222222222222",
+  "org_id": "00000000-0000-0000-0000-000000000001",
+  "actor_id": "service_account_clinical",
+  "action_type": "modify_patient_record",
+  "context_snapshot": {
+    "environment": "production"
+  },
+  "policy_version": "bundle@4",
+  "consent_snapshot": null,
+  "decision": "deny",
+  "policy_reason": "no consent record found",
+  "matched_rule_id": "33333333-3333-3333-3333-333333333333",
+  "confidence_score": 1.0,
+  "evaluated_at": "2026-05-26T03:01:00.000Z",
+  "delegation_id": null,
+  "delegation_ancestry": null
+}
