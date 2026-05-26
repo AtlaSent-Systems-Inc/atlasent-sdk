@@ -57,6 +57,7 @@ async function main(): Promise<void> {
     permitId: evaluation.permitId,
     agent: "ci-deploy-bot",
     action: "production.deploy",
+    environment: deployContext.environment,
   });
 
   if (!verification.verified) {

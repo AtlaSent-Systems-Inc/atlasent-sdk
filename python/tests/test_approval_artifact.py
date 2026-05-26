@@ -48,7 +48,6 @@ from atlasent import (
 )
 from atlasent.models import EvaluateRequest, VerifyRequest
 
-
 # ── Locate the cross-repo vectors. The Python SDK lives one level
 # below the contract dir, so walk up two parents. We tolerate the
 # vectors being absent in install layouts that ship the Python wheel
@@ -224,31 +223,37 @@ _BINDING = {
 
 def test_evaluate_result_picks_up_console_nested_permit_approval() -> None:
     """atlasent-console returns ``permit.approval`` per PermitV2."""
-    result = EvaluateResult.model_validate({
-        "decision": "allow",
-        "permit_token": "pt_x",
-        "permit": {"token": "pt_x", "approval": _BINDING},
-    })
+    result = EvaluateResult.model_validate(
+        {
+            "decision": "allow",
+            "permit_token": "pt_x",
+            "permit": {"token": "pt_x", "approval": _BINDING},
+        }
+    )
     assert isinstance(result.permit_approval, PermitApprovalBinding)
     assert result.permit_approval.approval_id == "apr_xyz"
 
 
 def test_evaluate_result_picks_up_api_top_level_permit_approval() -> None:
     """atlasent-api exposes top-level ``permit_approval``."""
-    result = EvaluateResult.model_validate({
-        "decision": "allow",
-        "permit_token": "pt_x",
-        "permit_approval": _BINDING,
-    })
+    result = EvaluateResult.model_validate(
+        {
+            "decision": "allow",
+            "permit_token": "pt_x",
+            "permit_approval": _BINDING,
+        }
+    )
     assert isinstance(result.permit_approval, PermitApprovalBinding)
     assert result.permit_approval.artifact_hash == _BINDING["artifact_hash"]
 
 
 def test_evaluate_result_permit_approval_absent_when_no_binding() -> None:
-    result = EvaluateResult.model_validate({
-        "decision": "allow",
-        "permit_token": "pt_x",
-    })
+    result = EvaluateResult.model_validate(
+        {
+            "decision": "allow",
+            "permit_token": "pt_x",
+        }
+    )
     assert result.permit_approval is None
 
 
@@ -256,12 +261,14 @@ def test_evaluate_result_permit_approval_absent_when_no_binding() -> None:
 
 
 def test_verify_result_surfaces_binding_on_success() -> None:
-    result = VerifyResult.model_validate({
-        "valid": True,
-        "outcome": "allow",
-        "consumed": True,
-        "approval": _BINDING,
-    })
+    result = VerifyResult.model_validate(
+        {
+            "valid": True,
+            "outcome": "allow",
+            "consumed": True,
+            "approval": _BINDING,
+        }
+    )
     assert result.valid is True
     assert result.consumed is True
     assert result.approval is not None
@@ -271,14 +278,16 @@ def test_verify_result_surfaces_binding_on_success() -> None:
 def test_verify_result_approval_linkage_missing_downgrade() -> None:
     """``APPROVAL_LINKAGE_MISSING`` returns ``valid=False`` AND
     ``consumed=True`` — the permit is burned, do not retry."""
-    result = VerifyResult.model_validate({
-        "valid": False,
-        "outcome": "deny",
-        "verify_error_code": "APPROVAL_LINKAGE_MISSING",
-        "reason": "permit lacks approval binding for an approval-required action",
-        "consumed": True,
-        "approval": None,
-    })
+    result = VerifyResult.model_validate(
+        {
+            "valid": False,
+            "outcome": "deny",
+            "verify_error_code": "APPROVAL_LINKAGE_MISSING",
+            "reason": "permit lacks approval binding for an approval-required action",
+            "consumed": True,
+            "approval": None,
+        }
+    )
     assert result.valid is False
     assert result.consumed is True
     assert result.verify_error_code == "APPROVAL_LINKAGE_MISSING"
@@ -291,14 +300,19 @@ def test_verify_result_approval_linkage_missing_downgrade() -> None:
 def test_trusted_issuers_config_round_trips_via_env_dict() -> None:
     """The config the server reads from ``APPROVAL_TRUSTED_ISSUERS``
     has the shape published in
-    ``contract/schemas/trusted-issuers-config.schema.json``. The
-    Python model parses and re-emits that dict losslessly so
-    operators can lint config in CI."""
+    ``contract/schemas/trusted-issuers-config.schema.json``.
+
+    The Python model parses and re-emits that dict losslessly so
+    operators can lint config in CI.
+    """
     raw = {
         "issuer.qa": {
             "kid-1": {
                 "alg": "HS256",
-                "key": "5555555555555555555555555555555555555555555555555555555555555555",
+                "key": (
+                    "55555555555555555555555555555555"
+                    "55555555555555555555555555555555"
+                ),
                 "allowed_action_types": ["deployment.production.*"],
                 "allowed_environments": ["production"],
                 "required_role": "qa_reviewer",
@@ -316,9 +330,11 @@ def test_trusted_issuers_config_round_trips_via_env_dict() -> None:
 
 def test_trusted_issuers_config_unscoped_entry_has_none_defaults() -> None:
     """Empty/missing scope fields mean 'any' for that dimension."""
-    cfg = ApprovalTrustedIssuersConfig.from_env_dict({
-        "issuer.qa": {"kid-1": {"alg": "HS256", "key": "00" * 32}},
-    })
+    cfg = ApprovalTrustedIssuersConfig.from_env_dict(
+        {
+            "issuer.qa": {"kid-1": {"alg": "HS256", "key": "00" * 32}},
+        }
+    )
     entry = cfg.root["issuer.qa"]["kid-1"]
     assert entry.allowed_action_types is None
     assert entry.allowed_environments is None
@@ -327,9 +343,11 @@ def test_trusted_issuers_config_unscoped_entry_has_none_defaults() -> None:
 
 def test_trusted_issuers_config_rejects_unknown_alg() -> None:
     with pytest.raises(ValidationError):
-        ApprovalTrustedIssuersConfig.from_env_dict({
-            "issuer.qa": {"kid-1": {"alg": "RS256", "key": "deadbeef"}},
-        })
+        ApprovalTrustedIssuersConfig.from_env_dict(
+            {
+                "issuer.qa": {"kid-1": {"alg": "RS256", "key": "deadbeef"}},
+            }
+        )
 
 
 # ── 7. Sub-shape parity helpers ───────────────────────────────────────
@@ -360,7 +378,6 @@ from atlasent import (  # noqa: E402
     IdentitySubject,
     IdentityTrustedIssuersConfig,
 )
-
 
 # Identity-assertion fixtures generated alongside the artifact ones.
 ID_VECTOR_NAMES = [
@@ -421,31 +438,49 @@ def test_identity_assertion_round_trip() -> None:
 
 def test_identity_assertion_extra_field_rejected() -> None:
     with pytest.raises(ValidationError):
-        IdentityAssertionV1.model_validate({
-            "version": "identity_assertion.v1",
-            "subject": {"principal_id": "u", "principal_kind": "human"},
-            "role": "r",
-            "binding": {"approval_id": "a", "action_hash": "f" * 64, "tenant_id": "t", "environment": "e"},
-            "issuer": {"type": "oidc", "issuer_id": "i", "kid": "k"},
-            "issued_at": "2026-01-01T00:00:00Z",
-            "expires_at": "2026-01-02T00:00:00Z",
-            "signature": "x",
-            "extra_field": "oops",
-        })
+        IdentityAssertionV1.model_validate(
+            {
+                "version": "identity_assertion.v1",
+                "subject": {"principal_id": "u", "principal_kind": "human"},
+                "role": "r",
+                "binding": {
+                    "approval_id": "a",
+                    "action_hash": "f" * 64,
+                    "tenant_id": "t",
+                    "environment": "e",
+                },
+                "issuer": {"type": "oidc", "issuer_id": "i", "kid": "k"},
+                "issued_at": "2026-01-01T00:00:00Z",
+                "expires_at": "2026-01-02T00:00:00Z",
+                "signature": "x",
+                "extra_field": "oops",
+            }
+        )
 
 
 def test_identity_assertion_only_oidc_issuer_type() -> None:
     with pytest.raises(ValidationError):
-        IdentityAssertionV1.model_validate({
-            "version": "identity_assertion.v1",
-            "subject": {"principal_id": "u", "principal_kind": "human"},
-            "role": "r",
-            "binding": {"approval_id": "a", "action_hash": "f" * 64, "tenant_id": "t", "environment": "e"},
-            "issuer": {"type": "approval_service", "issuer_id": "i", "kid": "k"},  # wrong
-            "issued_at": "2026-01-01T00:00:00Z",
-            "expires_at": "2026-01-02T00:00:00Z",
-            "signature": "x",
-        })
+        IdentityAssertionV1.model_validate(
+            {
+                "version": "identity_assertion.v1",
+                "subject": {"principal_id": "u", "principal_kind": "human"},
+                "role": "r",
+                "binding": {
+                    "approval_id": "a",
+                    "action_hash": "f" * 64,
+                    "tenant_id": "t",
+                    "environment": "e",
+                },
+                "issuer": {
+                    "type": "approval_service",
+                    "issuer_id": "i",
+                    "kid": "k",
+                },  # wrong
+                "issued_at": "2026-01-01T00:00:00Z",
+                "expires_at": "2026-01-02T00:00:00Z",
+                "signature": "x",
+            }
+        )
 
 
 def test_identity_trusted_issuers_config_round_trips() -> None:
@@ -492,7 +527,6 @@ from atlasent import (  # noqa: E402
     QuorumProof,
     QuorumRoleRequirement,
 )
-
 
 QUORUM_VECTORS_DIR = (
     Path(__file__).resolve().parent.parent.parent
@@ -560,10 +594,12 @@ def test_quorum_policy_round_trip() -> None:
 
 def test_quorum_policy_extra_field_rejected() -> None:
     with pytest.raises(ValidationError):
-        QuorumPolicy.model_validate({
-            "required_count": 1,
-            "unknown": "oops",
-        })
+        QuorumPolicy.model_validate(
+            {
+                "required_count": 1,
+                "unknown": "oops",
+            }
+        )
 
 
 def test_quorum_policy_required_count_must_be_positive() -> None:

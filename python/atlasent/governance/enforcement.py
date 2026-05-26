@@ -25,7 +25,7 @@ gates.
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from ..exceptions import AtlaSentError
 from .autonomous_financial import AutonomousExecutionCheckResult
@@ -89,7 +89,7 @@ class GovernanceEnforcementError(AtlaSentError):
         deny_code: str,
         reason: str,
         details: Any,
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
     ) -> None:
         self.gate: GovernanceGate = gate
         self.deny_code: str = deny_code
@@ -114,7 +114,9 @@ class GovernanceEnforcementError(AtlaSentError):
 # ─── financial_quorum ──────────────────────────────────────────────────
 
 
-def _financial_quorum_deny_code(result: FinancialQuorumResult) -> FinancialQuorumDenyCode:
+def _financial_quorum_deny_code(
+    result: FinancialQuorumResult,
+) -> FinancialQuorumDenyCode:
     """Map a failing :class:`FinancialQuorumResult` to a stable deny code.
 
     Check order matches the canonical TS ``evaluateFinancialQuorum`` so the
@@ -221,16 +223,17 @@ def enforce_autonomous_bounds(result: AutonomousExecutionCheckResult) -> None:
     raise GovernanceEnforcementError(
         gate="autonomous_bounds",
         deny_code=deny_code,
-        reason=result.denial_reason or f"autonomous execution out of bounds: {deny_code}",
+        reason=result.denial_reason
+        or f"autonomous execution out of bounds: {deny_code}",
         details=result,
     )
 
 
 def enforce_economic_governance(
     *,
-    quorum: Optional[FinancialQuorumResult] = None,
-    budget: Optional[BudgetConstraintCheckResult] = None,
-    autonomous: Optional[AutonomousExecutionCheckResult] = None,
+    quorum: FinancialQuorumResult | None = None,
+    budget: BudgetConstraintCheckResult | None = None,
+    autonomous: AutonomousExecutionCheckResult | None = None,
 ) -> None:
     """Convenience: layer all three gates in canonical order.
 

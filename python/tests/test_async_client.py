@@ -156,9 +156,7 @@ EVALUATE_PREFLIGHT_ALLOW_NO_TRACE = {
 
 class TestAsyncEvaluatePreflight:
     @pytest.mark.asyncio
-    async def test_appends_include_constraint_trace_query(
-        self, async_client, mocker
-    ):
+    async def test_appends_include_constraint_trace_query(self, async_client, mocker):
         mock_post = mocker.patch.object(
             async_client._client,
             "post",
@@ -169,9 +167,7 @@ class TestAsyncEvaluatePreflight:
         await async_client.evaluate_preflight(
             "close_period", "agent-1", {"period": "2025-12"}
         )
-        assert mock_post.call_args.kwargs["params"] == {
-            "include": "constraint_trace"
-        }
+        assert mock_post.call_args.kwargs["params"] == {"include": "constraint_trace"}
         body = mock_post.call_args.kwargs["json"]
         assert body == {
             "action_type": "close_period",
@@ -1034,8 +1030,11 @@ class TestParseSseEdgeCases:
 
 class TestAsyncGetPermit:
     PERMIT = {
-        "id": "pt_a", "org_id": "org_x", "actor_id": "agent-1",
-        "action_id": "ehr.write", "status": "verified",
+        "id": "pt_a",
+        "org_id": "org_x",
+        "actor_id": "agent-1",
+        "action_id": "ehr.write",
+        "status": "verified",
         "issued_at": "2026-05-07T01:00:00Z",
         "expires_at": "2026-05-07T01:15:00Z",
     }
@@ -1044,7 +1043,8 @@ class TestAsyncGetPermit:
     async def test_returns_permit(self, async_client, mocker):
         resp = _mock_resp(mocker, json_data=self.PERMIT)
         mock_get = mocker.patch.object(
-            async_client._client, "get",
+            async_client._client,
+            "get",
             return_value=resp,
         )
         result = await async_client.get_permit("pt_a")
@@ -1063,8 +1063,11 @@ class TestAsyncListPermits:
     LIST = {
         "permits": [
             {
-                "id": "pt_a", "org_id": "org_x", "actor_id": "a",
-                "action_id": "x", "status": "issued",
+                "id": "pt_a",
+                "org_id": "org_x",
+                "actor_id": "a",
+                "action_id": "x",
+                "status": "issued",
                 "issued_at": "2026-05-07T01:00:00Z",
                 "expires_at": "2026-05-07T01:15:00Z",
             }
@@ -1076,7 +1079,8 @@ class TestAsyncListPermits:
     async def test_returns_list(self, async_client, mocker):
         resp = _mock_resp(mocker, json_data=self.LIST)
         mock_get = mocker.patch.object(
-            async_client._client, "get",
+            async_client._client,
+            "get",
             return_value=resp,
         )
         result = await async_client.list_permits()
@@ -1088,7 +1092,8 @@ class TestAsyncListPermits:
     async def test_passes_filters(self, async_client, mocker):
         resp = _mock_resp(mocker, json_data=self.LIST)
         mock_get = mocker.patch.object(
-            async_client._client, "get",
+            async_client._client,
+            "get",
             return_value=resp,
         )
         await async_client.list_permits(status="revoked", actor_id="u_42")
@@ -1099,8 +1104,11 @@ class TestAsyncListPermits:
 
 class TestAsyncRevokePermitById:
     REVOKED = {
-        "id": "pt_a", "org_id": "org_x", "actor_id": "agent-1",
-        "action_id": "ehr.write", "status": "revoked",
+        "id": "pt_a",
+        "org_id": "org_x",
+        "actor_id": "agent-1",
+        "action_id": "ehr.write",
+        "status": "revoked",
         "issued_at": "2026-05-07T01:00:00Z",
         "expires_at": "2026-05-07T01:15:00Z",
         "revoked_at": "2026-05-07T01:10:00Z",
@@ -1112,7 +1120,8 @@ class TestAsyncRevokePermitById:
     async def test_returns_updated_permit(self, async_client, mocker):
         resp = _mock_resp(mocker, json_data=self.REVOKED)
         mock_post = mocker.patch.object(
-            async_client._client, "post",
+            async_client._client,
+            "post",
             return_value=resp,
         )
         result = await async_client.revoke_permit_by_id(
@@ -1128,15 +1137,22 @@ class TestAsyncRevokePermitById:
 
 class TestAsyncVerifyPermitById:
     VERIFY_OK = {
-        "valid": True, "verification_type": "permit", "reason": None,
+        "valid": True,
+        "verification_type": "permit",
+        "reason": None,
         "verified_at": "2026-05-07T01:00:00Z",
         "evidence": {
-            "permit_id": "pt_a", "status": "verified",
-            "actor_id": "agent-1", "action_id": "ehr.write",
+            "permit_id": "pt_a",
+            "status": "verified",
+            "actor_id": "agent-1",
+            "action_id": "ehr.write",
             "expires_at": "2026-05-07T01:15:00Z",
         },
-        "id": "pt_a", "org_id": "org_x", "actor_id": "agent-1",
-        "action_id": "ehr.write", "status": "verified",
+        "id": "pt_a",
+        "org_id": "org_x",
+        "actor_id": "agent-1",
+        "action_id": "ehr.write",
+        "status": "verified",
         "issued_at": "2026-05-07T01:00:00Z",
         "expires_at": "2026-05-07T01:15:00Z",
     }
@@ -1145,7 +1161,8 @@ class TestAsyncVerifyPermitById:
     async def test_returns_canonical_envelope(self, async_client, mocker):
         resp = _mock_resp(mocker, json_data=self.VERIFY_OK)
         mock_post = mocker.patch.object(
-            async_client._client, "post",
+            async_client._client,
+            "post",
             return_value=resp,
         )
         result = await async_client.verify_permit_by_id("pt_a")
@@ -1162,7 +1179,8 @@ class TestAsyncLegacyDeprecation:
     async def test_async_legacy_revoke_emits_warning(self, async_client, mocker):
         resp = _mock_resp(mocker, json_data={"revoked": True, "decision_id": "dec_x"})
         mocker.patch.object(
-            async_client._client, "post",
+            async_client._client,
+            "post",
             return_value=resp,
         )
         with pytest.warns(DeprecationWarning, match="revoke_permit"):
@@ -1172,7 +1190,8 @@ class TestAsyncLegacyDeprecation:
     async def test_async_legacy_verify_emits_warning(self, async_client, mocker):
         resp = _mock_resp(mocker, json_data={"valid": True, "outcome": "allow"})
         mocker.patch.object(
-            async_client._client, "post",
+            async_client._client,
+            "post",
             return_value=resp,
         )
         with pytest.warns(DeprecationWarning, match="verify"):

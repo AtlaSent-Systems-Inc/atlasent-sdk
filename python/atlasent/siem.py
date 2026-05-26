@@ -41,7 +41,9 @@ if TYPE_CHECKING:
 SiemFormat = Literal["splunk_hec", "elastic_ecs", "qradar_cef", "json"]
 SiemAuthType = Literal["bearer", "basic", "api_key", "none"]
 
-_VALID_FORMATS: frozenset[str] = frozenset({"splunk_hec", "elastic_ecs", "qradar_cef", "json"})
+_VALID_FORMATS: frozenset[str] = frozenset(
+    {"splunk_hec", "elastic_ecs", "qradar_cef", "json"}
+)
 _VALID_AUTH_TYPES: frozenset[str] = frozenset({"bearer", "basic", "api_key", "none"})
 
 
@@ -156,7 +158,9 @@ def upsert_siem_config(
     if format not in _VALID_FORMATS:
         raise ValueError(f"format must be one of: {', '.join(sorted(_VALID_FORMATS))}")
     if auth_type not in _VALID_AUTH_TYPES:
-        raise ValueError(f"auth_type must be one of: {', '.join(sorted(_VALID_AUTH_TYPES))}")
+        raise ValueError(
+            f"auth_type must be one of: {', '.join(sorted(_VALID_AUTH_TYPES))}"
+        )
     if not 1 <= batch_size <= 1000:
         raise ValueError(f"batch_size must be between 1 and 1000, got {batch_size}")
     if not 0 <= retry_count <= 10:
@@ -167,7 +171,8 @@ def upsert_siem_config(
         "format": format,
         "authType": auth_type,
         "enabled": enabled,
-        "includedEventTypes": included_event_types or ["permit", "deny", "override", "governance"],
+        "includedEventTypes": included_event_types
+        or ["permit", "deny", "override", "governance"],
         "batchSize": batch_size,
         "retryCount": retry_count,
     }

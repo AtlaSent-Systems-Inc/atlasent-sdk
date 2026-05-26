@@ -1862,7 +1862,7 @@ describe("evaluateBatch()", () => {
     });
   });
 
-  it("posts to /v1-evaluate-batch with snake_case body", async () => {
+  it("posts to /v1/evaluate/batch with snake_case body", async () => {
     let captured: { url: string; body: unknown } = { url: "", body: null };
     const fetchImpl = mockFetch((url, init) => {
       captured = { url, body: JSON.parse(init.body as string) };
@@ -1874,10 +1874,34 @@ describe("evaluateBatch()", () => {
       { agent: "bot", action: "production.deploy", context: { env: "prod" } },
     ]);
 
-    expect(captured.url).toContain("/v1-evaluate-batch");
+    expect(captured.url).toContain("/v1/evaluate/batch");
     expect(captured.body).toMatchObject({
       items: [{ action_type: "production.deploy", actor_id: "bot", context: { env: "prod" } }],
     });
+  });
+
+  it("falls back to /v1-evaluate-batch when canonical batch route is unavailable", async () => {
+    const fetchImpl = mockFetch((url) => {
+      if (url.includes("/v1/evaluate/batch")) {
+        return new Response("{}", {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("/v1-evaluate-batch")) {
+        return jsonResponse(BATCH_WIRE);
+      }
+      return new Response("unexpected", { status: 500 });
+    });
+    const client = makeClient(fetchImpl);
+
+    const result = await client.evaluateBatch([
+      { agent: "bot", action: "production.deploy" },
+    ]);
+
+    expect(result.batchId).toBe("batch-uuid-1");
+    expect(fetchImpl.mock.calls[0]?.[0]).toContain("/v1/evaluate/batch");
+    expect(fetchImpl.mock.calls[1]?.[0]).toContain("/v1-evaluate-batch");
   });
 
   it("includes caller-supplied batchId in the request body", async () => {

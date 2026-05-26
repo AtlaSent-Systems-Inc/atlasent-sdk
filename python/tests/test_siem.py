@@ -1,4 +1,5 @@
 """Tests for atlasent.siem — SIEM export configuration helpers."""
+
 from __future__ import annotations
 
 import json
@@ -45,23 +46,36 @@ def _mock_response(body: object, status: int = 200) -> MagicMock:
 class TestGetSiemConfig:
     def test_get_returns_config(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response(SIEM_CONFIG)) as mock_req:
+        with patch.object(
+            client._client, "request", return_value=_mock_response(SIEM_CONFIG)
+        ) as mock_req:
             result = get_siem_config(client, ORG_ID)
-        assert result["destinationUrl"] == "https://splunk.example.com:8088/services/collector"
+        assert (
+            result["destinationUrl"]
+            == "https://splunk.example.com:8088/services/collector"
+        )
         assert result["format"] == "splunk_hec"
         assert mock_req.call_args[0][0] == "GET"
         assert f"/v1/orgs/{ORG_ID}/siem-config" in mock_req.call_args[0][1]
 
     def test_get_404_raises(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response({"error": "SIEM not configured"}, 404)):
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response({"error": "SIEM not configured"}, 404),
+        ):
             with pytest.raises(AtlaSentError) as exc_info:
                 get_siem_config(client, ORG_ID)
         assert exc_info.value.status_code == 404
 
     def test_get_402_enterprise_required(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response({"error": "enterprise_required"}, 402)):
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response({"error": "enterprise_required"}, 402),
+        ):
             with pytest.raises(AtlaSentError) as exc_info:
                 get_siem_config(client, ORG_ID)
         assert exc_info.value.status_code == 402
@@ -70,7 +84,9 @@ class TestGetSiemConfig:
 class TestUpsertSiemConfig:
     def test_upsert_patch(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response(SIEM_CONFIG)) as mock_req:
+        with patch.object(
+            client._client, "request", return_value=_mock_response(SIEM_CONFIG)
+        ) as mock_req:
             result = upsert_siem_config(
                 client,
                 ORG_ID,
@@ -82,13 +98,18 @@ class TestUpsertSiemConfig:
         assert result["orgId"] == ORG_ID
         assert mock_req.call_args[0][0] == "PATCH"
         sent = json.loads(mock_req.call_args[1]["content"])
-        assert sent["destinationUrl"] == "https://splunk.example.com:8088/services/collector"
+        assert (
+            sent["destinationUrl"]
+            == "https://splunk.example.com:8088/services/collector"
+        )
         assert sent["format"] == "splunk_hec"
         assert sent["credential"] == "tok_abc"
 
     def test_upsert_omits_credential_when_none(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response(SIEM_CONFIG)) as mock_req:
+        with patch.object(
+            client._client, "request", return_value=_mock_response(SIEM_CONFIG)
+        ) as mock_req:
             upsert_siem_config(
                 client,
                 ORG_ID,
@@ -99,14 +120,25 @@ class TestUpsertSiemConfig:
 
     def test_default_event_types(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response(SIEM_CONFIG)) as mock_req:
-            upsert_siem_config(client, ORG_ID, destination_url="https://logs.example.com/events")
+        with patch.object(
+            client._client, "request", return_value=_mock_response(SIEM_CONFIG)
+        ) as mock_req:
+            upsert_siem_config(
+                client, ORG_ID, destination_url="https://logs.example.com/events"
+            )
         sent = json.loads(mock_req.call_args[1]["content"])
-        assert sent["includedEventTypes"] == ["permit", "deny", "override", "governance"]
+        assert sent["includedEventTypes"] == [
+            "permit",
+            "deny",
+            "override",
+            "governance",
+        ]
 
     def test_custom_event_types(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response(SIEM_CONFIG)) as mock_req:
+        with patch.object(
+            client._client, "request", return_value=_mock_response(SIEM_CONFIG)
+        ) as mock_req:
             upsert_siem_config(
                 client,
                 ORG_ID,
@@ -119,40 +151,69 @@ class TestUpsertSiemConfig:
     def test_raises_on_http_url(self):
         client = _client()
         with pytest.raises(ValueError, match="HTTPS"):
-            upsert_siem_config(client, ORG_ID, destination_url="http://insecure.example.com")
+            upsert_siem_config(
+                client, ORG_ID, destination_url="http://insecure.example.com"
+            )
 
     def test_raises_on_invalid_format(self):
         client = _client()
         with pytest.raises(ValueError, match="format"):
-            upsert_siem_config(client, ORG_ID, destination_url="https://logs.example.com", format="invalid")  # type: ignore[arg-type]
+            upsert_siem_config(
+                client,
+                ORG_ID,
+                destination_url="https://logs.example.com",
+                format="invalid",  # type: ignore[arg-type]
+            )
 
     def test_raises_on_invalid_auth_type(self):
         client = _client()
         with pytest.raises(ValueError, match="auth_type"):
-            upsert_siem_config(client, ORG_ID, destination_url="https://logs.example.com", auth_type="oauth2")  # type: ignore[arg-type]
+            upsert_siem_config(
+                client,
+                ORG_ID,
+                destination_url="https://logs.example.com",
+                auth_type="oauth2",  # type: ignore[arg-type]
+            )
 
     def test_raises_on_batch_size_out_of_range(self):
         client = _client()
         with pytest.raises(ValueError, match="batch_size"):
-            upsert_siem_config(client, ORG_ID, destination_url="https://logs.example.com", batch_size=0)
+            upsert_siem_config(
+                client, ORG_ID, destination_url="https://logs.example.com", batch_size=0
+            )
 
     def test_raises_on_retry_count_out_of_range(self):
         client = _client()
         with pytest.raises(ValueError, match="retry_count"):
-            upsert_siem_config(client, ORG_ID, destination_url="https://logs.example.com", retry_count=11)
+            upsert_siem_config(
+                client,
+                ORG_ID,
+                destination_url="https://logs.example.com",
+                retry_count=11,
+            )
 
     def test_402_plan_gate(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response({"error": "enterprise_required"}, 402)):
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response({"error": "enterprise_required"}, 402),
+        ):
             with pytest.raises(AtlaSentError) as exc_info:
-                upsert_siem_config(client, ORG_ID, destination_url="https://logs.example.com")
+                upsert_siem_config(
+                    client, ORG_ID, destination_url="https://logs.example.com"
+                )
         assert exc_info.value.status_code == 402
 
 
 class TestSiemTestDelivery:
     def test_success_response(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response({"success": True, "latencyMs": 42})) as mock_req:
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response({"success": True, "latencyMs": 42}),
+        ) as mock_req:
             result = siem_test_delivery(client, ORG_ID)
         assert result["success"] is True
         assert result["latencyMs"] == 42
@@ -161,21 +222,35 @@ class TestSiemTestDelivery:
 
     def test_failure_response(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response({"success": False, "error": "connection refused"})):
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response(
+                {"success": False, "error": "connection refused"}
+            ),
+        ):
             result = siem_test_delivery(client, ORG_ID)
         assert result["success"] is False
         assert "connection refused" in result["error"]
 
     def test_409_not_configured(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response({"error": "SIEM not configured"}, 409)):
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response({"error": "SIEM not configured"}, 409),
+        ):
             with pytest.raises(AtlaSentError) as exc_info:
                 siem_test_delivery(client, ORG_ID)
         assert exc_info.value.status_code == 409
 
     def test_402_plan_gate(self):
         client = _client()
-        with patch.object(client._client, "request", return_value=_mock_response({"error": "enterprise_required"}, 402)):
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response({"error": "enterprise_required"}, 402),
+        ):
             with pytest.raises(AtlaSentError) as exc_info:
                 siem_test_delivery(client, ORG_ID)
         assert exc_info.value.status_code == 402

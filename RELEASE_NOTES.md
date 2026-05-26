@@ -1,5 +1,40 @@
 # Release Notes
 
+## Unreleased — license normalization before publish
+
+- Normalized framework package licensing artifacts so publish outputs are
+  internally consistent:
+  - `@atlasent/langchain`, `@atlasent/llamaindex`, `@atlasent/cursor` now use
+    `Apache-2.0` across `package.json`, `LICENSE`, and README license sections.
+  - `atlasent-temporal-preview` now includes an Apache-2.0 `LICENSE` and
+    matching `pyproject.toml` metadata.
+  - `python/pyproject.toml` now matches `python/LICENSE` with `Apache-2.0`.
+
+## Unreleased — V1 runtime compatibility sweep (SDK 2.x)
+
+- Preserved SDK semver independence while tightening API-v1 runtime behavior:
+  - SDK packages remain on the `2.x` line while targeting API v1 routes.
+- Normalized cross-language `protect()` execution binding:
+  - Python `protect()` / `AsyncAtlaSentClient.protect()` now require
+    `context.environment` on allow-path verification (matching TypeScript
+    fail-closed behavior).
+  - Updated Python quickstart docs and examples to include explicit
+    `environment` in `protect()` context.
+- Improved route compatibility for batch and streaming evaluate in TypeScript:
+  - `evaluateBatch()` now targets canonical `POST /v1/evaluate/batch` and
+    falls back to legacy `POST /v1-evaluate-batch` when older runtimes return
+    `404`/`405`.
+  - `protectStream()` now targets canonical `POST /v1/evaluate/stream` and
+    falls back to legacy `POST /v1-evaluate-stream` on `404`/`405`.
+- Closed typed-error drift in Python:
+  - Added `feature_disabled` to `AtlaSentErrorCode` to match
+    `FeatureNotEnabledError` emitted by V2 endpoint helpers.
+- Validation performed in this branch:
+  - TypeScript: `npm run typecheck` passed.
+  - TypeScript: focused tests passed (`test/client.test.ts`,
+    `test/stream-hardening.test.ts`).
+  - Python: focused `tests/test_protect.py` passed.
+
 > **Current versions:** `@atlasent/sdk` **2.10.0** (npm, tag `typescript-v2.10.0`) ·
 > `atlasent` **2.10.0** (PyPI, tag `python-v2.10.0`).
 > Install: `npm install @atlasent/sdk` / `pip install atlasent`.

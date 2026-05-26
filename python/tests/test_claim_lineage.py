@@ -5,44 +5,32 @@ Mirrors typescript/test/claim-lineage.test.ts.
 
 from __future__ import annotations
 
-import hashlib
-import hmac as _hmac_module
-import base64
-import json
 from dataclasses import asdict
 
 import pytest
 
 from atlasent.claim_lineage import (
+    NOT_APPLICABLE,
     ActionBundleInput,
     ActionBundleReceipt,
-    ApprovalArtifactSlot,
     ClaimEvidenceLink,
-    DeployEvidenceInput,
-    DeployEvidenceSlot,
     DeltaSlot,
-    DriftDetail,
-    EvidenceSlotStatus,
+    DeployEvidenceInput,
     HitlChainSummaryInput,
     IntegrationEvidenceInput,
-    NOT_APPLICABLE,
     NotApplicable,
     RuntimeEvidenceInput,
-    RuntimeEvidenceSlot,
     SignedApprovalArtifactInput,
     VerificationChecklist,
-    VerifyClaimEvidenceLinkResult,
     _canonical_json,
     _compute_link_hash,
     _hmac_sha256_base64url,
-    _link_body_dict,
     _sha256_hex,
     build_claim_evidence_link,
     build_claim_evidence_link_from_action_bundle,
     verify_claim_evidence_link,
 )
 from atlasent.exceptions import AtlaSentError
-
 
 # ---------------------------------------------------------------------------
 # Helpers / Fixtures
@@ -100,8 +88,16 @@ def make_hitl_summary(**overrides: object) -> HitlChainSummaryInput:
             "created_at": "2026-05-20T09:55:00Z",
         },
         "approvals": [
-            {"decision": "approve", "user_id": "user-cfo", "created_at": "2026-05-20T09:56:00Z"},
-            {"decision": "approve", "user_id": "user-fm", "created_at": "2026-05-20T09:57:00Z"},
+            {
+                "decision": "approve",
+                "user_id": "user-cfo",
+                "created_at": "2026-05-20T09:56:00Z",
+            },
+            {
+                "decision": "approve",
+                "user_id": "user-fm",
+                "created_at": "2026-05-20T09:57:00Z",
+            },
         ],
         "artifact_hash": "b" * 64,
     }
@@ -168,7 +164,9 @@ def test_build_org_id_override():
 
 
 def test_runtime_evidence_allow():
-    link = build_claim_evidence_link(claim_id="c", runtime_evidence=make_receipt(decision="allow"))
+    link = build_claim_evidence_link(
+        claim_id="c", runtime_evidence=make_receipt(decision="allow")
+    )
     rt = link.runtime_evidence
     assert rt.verified_at_claim_time is True
     assert rt.verified_at_link_creation is True
@@ -177,7 +175,9 @@ def test_runtime_evidence_allow():
 
 
 def test_runtime_evidence_deny():
-    link = build_claim_evidence_link(claim_id="c", runtime_evidence=make_receipt(decision="deny"))
+    link = build_claim_evidence_link(
+        claim_id="c", runtime_evidence=make_receipt(decision="deny")
+    )
     rt = link.runtime_evidence
     assert rt.verified_at_claim_time is False
     assert rt.verified_at_link_creation is False
@@ -402,12 +402,16 @@ def test_policy_drift_clean_null_when_pending():
 
 
 def test_last_verified_at_set_for_allow():
-    link = build_claim_evidence_link(claim_id="c", runtime_evidence=make_receipt(decision="allow"))
+    link = build_claim_evidence_link(
+        claim_id="c", runtime_evidence=make_receipt(decision="allow")
+    )
     assert link.verification_checklist.last_verified_at is not None
 
 
 def test_last_verified_at_none_for_deny():
-    link = build_claim_evidence_link(claim_id="c", runtime_evidence=make_receipt(decision="deny"))
+    link = build_claim_evidence_link(
+        claim_id="c", runtime_evidence=make_receipt(decision="deny")
+    )
     assert link.verification_checklist.last_verified_at is None
 
 
@@ -486,7 +490,6 @@ def test_verify_increments_revision():
     )
     # Even though all_pass is False (delta pending), verify raises — so we
     # need a link that would pass. Patch the delta to "computed".
-    from dataclasses import replace
 
     computed_delta = DeltaSlot(
         status="computed",
@@ -759,6 +762,7 @@ def test_from_action_bundle_wrong_secret_fails_verify():
         make_action_bundle(), claim_id="c", signing_secret=BUNDLE_SIGNING_SECRET
     )
     import pytest
+
     with pytest.raises(AtlaSentError, match="ClaimEvidenceLink verification failed"):
         verify_claim_evidence_link(link, signing_secret="wrong-secret" + "x" * 20)
 

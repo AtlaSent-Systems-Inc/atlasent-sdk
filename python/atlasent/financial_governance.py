@@ -17,7 +17,7 @@ Wire-stable as ``financial_governance_client.v1``.
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -60,7 +60,7 @@ class FinancialActionClassRecord(BaseModel):
     risk_tier: FinancialRiskTier
     per_execution_ceiling: float
     ceiling_currency: CurrencyCode
-    daily_aggregate_ceiling: Optional[float] = None
+    daily_aggregate_ceiling: float | None = None
     require_permit: bool = False
     updated_at: str
     updated_by: str
@@ -83,8 +83,8 @@ class UpdateCeilingRequest(BaseModel):
     action_type: FinancialActionType
     per_execution_ceiling: float
     ceiling_currency: CurrencyCode
-    daily_aggregate_ceiling: Optional[float] = None
-    require_permit: Optional[bool] = None
+    daily_aggregate_ceiling: float | None = None
+    require_permit: bool | None = None
     updated_by: str
 
     model_config = {"extra": "allow"}
@@ -114,16 +114,16 @@ class FinancialExecutionRecord(BaseModel):
     currency: CurrencyCode
     risk_tier: FinancialRiskTier
     status: FinancialExecutionStatus
-    permit_id: Optional[str] = None
+    permit_id: str | None = None
     anomaly_detected: bool = False
-    anomaly_description: Optional[str] = None
-    frozen_at: Optional[str] = None
-    frozen_by: Optional[str] = None
-    freeze_reason: Optional[str] = None
-    reversed_at: Optional[str] = None
-    reversed_by: Optional[str] = None
-    reversal_reason: Optional[str] = None
-    executed_at: Optional[str] = None
+    anomaly_description: str | None = None
+    frozen_at: str | None = None
+    frozen_by: str | None = None
+    freeze_reason: str | None = None
+    reversed_at: str | None = None
+    reversed_by: str | None = None
+    reversal_reason: str | None = None
+    executed_at: str | None = None
     created_at: str
 
     model_config = {"extra": "allow"}
@@ -134,7 +134,7 @@ class ListExecutionsResponse(BaseModel):
 
     executions: list[FinancialExecutionRecord] = Field(default_factory=list)
     total: int = 0
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -195,7 +195,7 @@ class IncentiveSignalRecord(BaseModel):
     evidence: list[str] = Field(default_factory=list)
     detected_at: str
     reviewed: bool = False
-    reviewed_by: Optional[str] = None
+    reviewed_by: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -205,7 +205,7 @@ class ListIncentiveSignalsResponse(BaseModel):
 
     signals: list[IncentiveSignalRecord] = Field(default_factory=list)
     total: int = 0
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -236,7 +236,7 @@ class LiabilityPartyWire(BaseModel):
     role: str
     liability_weight: float
     acted_at: str
-    permit_id: Optional[str] = None
+    permit_id: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -256,7 +256,7 @@ class LiabilityAttributionServerRecord(BaseModel):
     delegation_present: bool = False
     supervisory_present: bool = False
     emergency_override: bool = False
-    override_justification: Optional[str] = None
+    override_justification: str | None = None
     chain_hash: str
     created_at: str
 
@@ -268,7 +268,7 @@ class ListLiabilityRecordsResponse(BaseModel):
 
     records: list[LiabilityAttributionServerRecord] = Field(default_factory=list)
     total: int = 0
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -297,7 +297,7 @@ class LiabilityEvidenceBundle(BaseModel):
     """SHA-256 over ``canonical_chain_json``.  Matches ``chain_hash`` on the record."""
     signature: str
     """Detached Ed25519 signature (base64url) over canonical bytes."""
-    signing_key_id: Optional[str] = None
+    signing_key_id: str | None = None
     generated_at: str
 
     model_config = {"extra": "allow"}

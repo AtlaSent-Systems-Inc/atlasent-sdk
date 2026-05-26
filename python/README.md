@@ -18,7 +18,11 @@ from atlasent import protect
 permit = protect(
     agent="deploy-bot",
     action="production.deploy",
-    context={"commit": commit, "approver": approver},
+    context={
+        "commit": commit,
+        "approver": approver,
+        "environment": "production",
+    },
 )
 # If we got here, the action is authorized end-to-end.
 # Otherwise protect() raised and the action never ran.
@@ -289,4 +293,4 @@ Sign up at [atlasent.io](https://atlasent.io) → Settings → API Keys.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](LICENSE).

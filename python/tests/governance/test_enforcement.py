@@ -29,7 +29,6 @@ from atlasent.governance.enforcement import (
     enforce_financial_quorum,
 )
 
-
 # ─── financial_quorum ──────────────────────────────────────────────────
 
 
@@ -63,10 +62,12 @@ def test_quorum_passes_silently_when_passed() -> None:
 
 def test_quorum_blocked_by_freeze() -> None:
     with pytest.raises(GovernanceEnforcementError) as exc_info:
-        enforce_financial_quorum(_quorum(
-            blocked_by_freeze=True,
-            denial_reason="action blocked by emergency freeze (frz_001)",
-        ))
+        enforce_financial_quorum(
+            _quorum(
+                blocked_by_freeze=True,
+                denial_reason="action blocked by emergency freeze (frz_001)",
+            )
+        )
     err = exc_info.value
     assert err.gate == "financial_quorum"
     assert err.deny_code == "blocked_by_emergency_freeze"
@@ -101,11 +102,13 @@ def test_quorum_regulator_approval_missing() -> None:
 def test_quorum_check_order_freeze_first() -> None:
     # Multiple checks failing simultaneously — freeze must win.
     with pytest.raises(GovernanceEnforcementError) as exc_info:
-        enforce_financial_quorum(_quorum(
-            blocked_by_freeze=True,
-            base_quorum_passed=False,
-            amount_threshold_satisfied=False,
-        ))
+        enforce_financial_quorum(
+            _quorum(
+                blocked_by_freeze=True,
+                base_quorum_passed=False,
+                amount_threshold_satisfied=False,
+            )
+        )
     assert exc_info.value.deny_code == "blocked_by_emergency_freeze"
 
 
@@ -132,10 +135,12 @@ def test_budget_passes_when_only_soft_warnings() -> None:
     result = BudgetConstraintCheckResult(
         permitted=True,
         hard_blocks=(),
-        soft_warnings=(BudgetViolation(
-            violation_type="limit_exceeded",
-            description="soft warning only",
-        ),),
+        soft_warnings=(
+            BudgetViolation(
+                violation_type="limit_exceeded",
+                description="soft warning only",
+            ),
+        ),
         limits_checked=(),
         constraints_checked=(),
     )
@@ -144,44 +149,58 @@ def test_budget_passes_when_only_soft_warnings() -> None:
 
 def test_budget_limit_exceeded() -> None:
     with pytest.raises(GovernanceEnforcementError) as exc_info:
-        enforce_budget_constraint(_budget_with_violations(BudgetViolation(
-            violation_type="limit_exceeded",
-            description="Action would exceed department limit",
-        )))
+        enforce_budget_constraint(
+            _budget_with_violations(
+                BudgetViolation(
+                    violation_type="limit_exceeded",
+                    description="Action would exceed department limit",
+                )
+            )
+        )
     assert exc_info.value.gate == "budget"
     assert exc_info.value.deny_code == "limit_exceeded"
 
 
 def test_budget_anonymous_agent_blocked() -> None:
     with pytest.raises(GovernanceEnforcementError) as exc_info:
-        enforce_budget_constraint(_budget_with_violations(BudgetViolation(
-            violation_type="anonymous_agent_blocked",
-            description="Anonymous agents not permitted for refund",
-        )))
+        enforce_budget_constraint(
+            _budget_with_violations(
+                BudgetViolation(
+                    violation_type="anonymous_agent_blocked",
+                    description="Anonymous agents not permitted for refund",
+                )
+            )
+        )
     assert exc_info.value.deny_code == "anonymous_agent_blocked"
 
 
 def test_budget_period_expired() -> None:
     with pytest.raises(GovernanceEnforcementError) as exc_info:
-        enforce_budget_constraint(_budget_with_violations(BudgetViolation(
-            violation_type="period_expired",
-            description="Budget limit period expired",
-        )))
+        enforce_budget_constraint(
+            _budget_with_violations(
+                BudgetViolation(
+                    violation_type="period_expired",
+                    description="Budget limit period expired",
+                )
+            )
+        )
     assert exc_info.value.deny_code == "period_expired"
 
 
 def test_budget_first_violation_wins() -> None:
     with pytest.raises(GovernanceEnforcementError) as exc_info:
-        enforce_budget_constraint(_budget_with_violations(
-            BudgetViolation(
-                violation_type="single_transaction_exceeds",
-                description="first",
-            ),
-            BudgetViolation(
-                violation_type="daily_aggregate_exceeds",
-                description="second",
-            ),
-        ))
+        enforce_budget_constraint(
+            _budget_with_violations(
+                BudgetViolation(
+                    violation_type="single_transaction_exceeds",
+                    description="first",
+                ),
+                BudgetViolation(
+                    violation_type="daily_aggregate_exceeds",
+                    description="second",
+                ),
+            )
+        )
     assert exc_info.value.deny_code == "single_transaction_exceeds"
 
 
@@ -258,12 +277,14 @@ def test_autonomous_risk_tier_exceeded() -> None:
 def test_autonomous_check_order_inactive_first() -> None:
     # All checks failing — inactive must win.
     with pytest.raises(GovernanceEnforcementError) as exc_info:
-        enforce_autonomous_bounds(_autonomous(
-            bounds_active=False,
-            bounds_not_expired=False,
-            action_type_permitted=False,
-            within_risk_tier=False,
-        ))
+        enforce_autonomous_bounds(
+            _autonomous(
+                bounds_active=False,
+                bounds_not_expired=False,
+                action_type_permitted=False,
+                within_risk_tier=False,
+            )
+        )
     assert exc_info.value.deny_code == "inactive"
 
 
@@ -283,10 +304,12 @@ def test_combined_short_circuits_on_quorum_failure() -> None:
     with pytest.raises(GovernanceEnforcementError) as exc_info:
         enforce_economic_governance(
             quorum=_quorum(base_quorum_passed=False),
-            budget=_budget_with_violations(BudgetViolation(
-                violation_type="limit_exceeded",
-                description="would also fail",
-            )),
+            budget=_budget_with_violations(
+                BudgetViolation(
+                    violation_type="limit_exceeded",
+                    description="would also fail",
+                )
+            ),
             autonomous=_autonomous(bounds_active=False),
         )
     assert exc_info.value.gate == "financial_quorum"
@@ -304,10 +327,12 @@ def test_combined_quorum_then_budget() -> None:
     with pytest.raises(GovernanceEnforcementError) as exc_info:
         enforce_economic_governance(
             quorum=_quorum(passed=True),
-            budget=_budget_with_violations(BudgetViolation(
-                violation_type="daily_aggregate_exceeds",
-                description="daily limit",
-            )),
+            budget=_budget_with_violations(
+                BudgetViolation(
+                    violation_type="daily_aggregate_exceeds",
+                    description="daily limit",
+                )
+            ),
         )
     assert exc_info.value.gate == "budget"
     assert exc_info.value.deny_code == "daily_aggregate_exceeds"
@@ -316,6 +341,7 @@ def test_combined_quorum_then_budget() -> None:
 def test_error_inherits_atlasent_error() -> None:
     # Existing ``except AtlaSentError`` handlers must catch governance enforcement.
     from atlasent.exceptions import AtlaSentError
+
     with pytest.raises(AtlaSentError):
         enforce_financial_quorum(_quorum(base_quorum_passed=False))
 

@@ -70,11 +70,11 @@ def test_liability_role_weights_match_fixture(fixture: dict) -> None:
     expected_weights = fixture["liability_role_weights"]["weights"]
     for role, weight in expected_weights.items():
         assert ROLE_WEIGHTS[role] == weight, (
-            f"ROLE_WEIGHTS[{role!r}] = {ROLE_WEIGHTS[role]}, "
-            f"fixture says {weight}"
+            f"ROLE_WEIGHTS[{role!r}] = {ROLE_WEIGHTS[role]}, " f"fixture says {weight}"
         )
     assert set(ROLE_WEIGHTS.keys()) == set(expected_weights.keys()), (
-        "Role taxonomy in ROLE_WEIGHTS diverges from fixture; both must be updated together"
+        "Role taxonomy in ROLE_WEIGHTS diverges from fixture; "
+        "both must be updated together"
     )
 
 

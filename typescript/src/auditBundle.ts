@@ -358,8 +358,11 @@ export async function verifyBundle(
     bundle = pathOrBundle;
   }
   const keys = await resolveKeys(options);
-  return verifyAuditBundle(bundle, keys, {
-    trustRoot: options?.trustRoot,
-    allowExpiredSnapshot: options?.allowExpiredSnapshot,
-  });
+  const verifyOptions = {
+    ...(options?.trustRoot !== undefined ? { trustRoot: options.trustRoot } : {}),
+    ...(options?.allowExpiredSnapshot !== undefined
+      ? { allowExpiredSnapshot: options.allowExpiredSnapshot }
+      : {}),
+  };
+  return verifyAuditBundle(bundle, keys, verifyOptions);
 }

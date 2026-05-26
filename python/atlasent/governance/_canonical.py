@@ -68,7 +68,9 @@ def canonicalize_for_evidence(value: Any) -> str:
     if isinstance(value, dict):
         keys = sorted(value.keys())
         parts = [
-            json.dumps(k, ensure_ascii=False) + ":" + canonicalize_for_evidence(value[k])
+            json.dumps(k, ensure_ascii=False)
+            + ":"
+            + canonicalize_for_evidence(value[k])
             for k in keys
         ]
         return "{" + ",".join(parts) + "}"

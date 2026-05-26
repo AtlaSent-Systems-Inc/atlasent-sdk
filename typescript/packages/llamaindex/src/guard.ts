@@ -218,11 +218,17 @@ export function withLlamaIndexGuard<
         ? await resolve(options.extraContext, name, input)
         : {};
       const context = { ...extra, tool_input: input };
+      const verifyEnvironment =
+        typeof context.environment === "string"
+          ? context.environment
+          : typeof context.environment_name === "string"
+            ? context.environment_name
+            : undefined;
 
       try {
         const evalResp = await client.evaluate({ agent, action, context });
 
-        if (evalResp.decision !== "ALLOW") {
+        if (evalResp.decision !== "allow") {
           return handleDenial(options.onDeny, {
             denied: true,
             decision: evalResp.decision,
@@ -237,6 +243,9 @@ export function withLlamaIndexGuard<
           agent,
           action,
           context,
+          ...(verifyEnvironment !== undefined
+            ? { environment: verifyEnvironment }
+            : {}),
         });
 
         if (!verifyResp.verified) {

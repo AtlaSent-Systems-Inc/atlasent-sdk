@@ -6,6 +6,16 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## Unreleased
+
+### Packaging
+
+- Normalized framework package licensing artifacts before publish:
+  - `@atlasent/langchain`, `@atlasent/llamaindex`, and `@atlasent/cursor`
+    now declare `"license": "Apache-2.0"` in `package.json`.
+  - Package `LICENSE` files were normalized to Apache-2.0 text.
+  - README license sections were updated to Apache-2.0.
+
 ## @atlasent/sdk 2.9.0 (2026-05-25)
 
 ### New features

@@ -19,8 +19,9 @@ Wire-stable as ``financial_quorum.v1``.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Optional, Sequence
+from typing import Literal
 
 from .financial_action import CurrencyCode, FinancialRiskTier
 
@@ -33,8 +34,8 @@ class FinancialRoleRequirement:
 
     role: str
     min: int
-    applies_above: Optional[float] = None
-    applies_to_tiers: Optional[Sequence[FinancialRiskTier]] = None
+    applies_above: float | None = None
+    applies_to_tiers: Sequence[FinancialRiskTier] | None = None
 
 
 @dataclass(frozen=True)
@@ -61,8 +62,8 @@ class FinancialQuorumPolicy:
     amount_thresholds: Sequence[AmountThreshold]
     reference_currency: CurrencyCode = "USD"
     emergency_freeze_active: bool = False
-    regulator_approval_threshold: Optional[float] = None
-    dual_release_threshold: Optional[float] = None
+    regulator_approval_threshold: float | None = None
+    dual_release_threshold: float | None = None
 
 
 @dataclass(frozen=True)
@@ -78,10 +79,10 @@ class EmergencyFreeze:
     triggered_by: str
     reason: str
     triggered_at: str
-    expires_at: Optional[str] = None
+    expires_at: str | None = None
     lifted: bool = False
-    lifted_at: Optional[str] = None
-    lifted_by: Optional[str] = None
+    lifted_at: str | None = None
+    lifted_by: str | None = None
 
 
 @dataclass(frozen=True)
@@ -94,7 +95,7 @@ class FinancialQuorumInput:
     present_roles: dict[str, int]
     approval_count: int
     regulator_approval_present: bool
-    base_quorum_proof: Optional[dict]
+    base_quorum_proof: dict | None
     active_freezes: Sequence[EmergencyFreeze] = field(default_factory=tuple)
 
 
@@ -108,8 +109,8 @@ class FinancialQuorumResult:
     financial_roles_satisfied: bool
     regulator_approval_missing: bool
     blocked_by_freeze: bool
-    base_quorum_proof: Optional[dict]
-    denial_reason: Optional[str]
+    base_quorum_proof: dict | None
+    denial_reason: str | None
     unmet_requirements: Sequence[str]
 
 
@@ -179,7 +180,10 @@ def evaluate_financial_quorum(input: FinancialQuorumInput) -> FinancialQuorumRes
     # Financial role requirements
     financial_roles_satisfied = True
     for req in input.policy.financial_role_requirements:
-        if req.applies_to_tiers is not None and input.risk_tier not in req.applies_to_tiers:
+        if (
+            req.applies_to_tiers is not None
+            and input.risk_tier not in req.applies_to_tiers
+        ):
             continue
         if req.applies_above is not None and input.action_value < req.applies_above:
             continue
@@ -215,7 +219,11 @@ def evaluate_financial_quorum(input: FinancialQuorumInput) -> FinancialQuorumRes
         regulator_approval_missing=regulator_missing,
         blocked_by_freeze=False,
         base_quorum_proof=input.base_quorum_proof,
-        denial_reason=None if passed else (unmet[0] if unmet else "financial quorum not satisfied"),
+        denial_reason=(
+            None
+            if passed
+            else (unmet[0] if unmet else "financial quorum not satisfied")
+        ),
         unmet_requirements=tuple(unmet),
     )
 

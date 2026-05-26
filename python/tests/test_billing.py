@@ -19,22 +19,21 @@ from atlasent.billing import (
     DenyReason,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-_NOW         = "2026-05-07T09:00:00Z"
+_NOW = "2026-05-07T09:00:00Z"
 _GRACE_UNTIL = "2026-05-14T09:00:00Z"
 
 
 def make_entitlement(**overrides: Any) -> BillingEntitlement:
     base: dict[str, Any] = {
-        "org_id":           "org_01",
-        "access_status":    "active",
+        "org_id": "org_01",
+        "access_status": "active",
         "effective_status": "active",
-        "allowed_actions":  [a.value for a in AllowedAction],
-        "computed_at":      _NOW,
+        "allowed_actions": [a.value for a in AllowedAction],
+        "computed_at": _NOW,
     }
     base.update(overrides)
     return BillingEntitlement.model_validate(base)
@@ -47,11 +46,11 @@ def make_http_mock(response_body: dict[str, Any], status_code: int = 200) -> Any
     mock_response.raise_for_status.return_value = None
 
     mock_http = MagicMock()
-    mock_http.get.return_value  = mock_response
+    mock_http.get.return_value = mock_response
     mock_http.post.return_value = mock_response
 
     mock_client = MagicMock()
-    mock_client._client     = mock_http
+    mock_client._client = mock_http
     mock_client._base_url = "https://api.example.com"
     return mock_client
 
@@ -110,7 +109,9 @@ class TestStatusHelpers:
         assert ent.is_blocked() is False
 
     def test_is_blocked_false_when_restricted(self) -> None:
-        ent = make_entitlement(access_status="restricted", effective_status="restricted")
+        ent = make_entitlement(
+            access_status="restricted", effective_status="restricted"
+        )
         assert ent.is_blocked() is False
 
 
@@ -156,18 +157,18 @@ class TestCoerceAllowedActions:
 class TestBillingEntitlementModel:
     def test_round_trips_full_grace_response(self) -> None:
         data = {
-            "org_id":           "org_02",
-            "access_status":    "grace",
+            "org_id": "org_02",
+            "access_status": "grace",
             "effective_status": "grace",
-            "allowed_actions":  ["govern", "evaluate", "audit", "billing_manage"],
-            "deny_reason":      "billing_grace_period",
-            "warning":          "Your grace period expires in 7 days.",
-            "grace_until":      _GRACE_UNTIL,
-            "billing_mode":     "invoice",
-            "plan":             "enterprise",
-            "invoice_status":   "overdue",
-            "manual_override":  False,
-            "computed_at":      _NOW,
+            "allowed_actions": ["govern", "evaluate", "audit", "billing_manage"],
+            "deny_reason": "billing_grace_period",
+            "warning": "Your grace period expires in 7 days.",
+            "grace_until": _GRACE_UNTIL,
+            "billing_mode": "invoice",
+            "plan": "enterprise",
+            "invoice_status": "overdue",
+            "manual_override": False,
+            "computed_at": _NOW,
         }
         ent = BillingEntitlement.model_validate(data)
         assert ent.access_status == AccessStatus.grace
@@ -192,12 +193,12 @@ class TestBillingEntitlementModel:
 
     def test_extra_fields_ignored(self) -> None:
         data = {
-            "org_id":           "org_03",
-            "access_status":    "active",
+            "org_id": "org_03",
+            "access_status": "active",
             "effective_status": "active",
-            "allowed_actions":  [],
-            "computed_at":      _NOW,
-            "future_field":     True,
+            "allowed_actions": [],
+            "computed_at": _NOW,
+            "future_field": True,
         }
         ent = BillingEntitlement.model_validate(data)
         assert ent.org_id == "org_03"
@@ -244,11 +245,11 @@ class TestAdminOverrideRequest:
 class TestBillingClient:
     def _entitlement_payload(self, status: str = "active") -> dict[str, Any]:
         return {
-            "org_id":           "org_01",
-            "access_status":    status,
+            "org_id": "org_01",
+            "access_status": status,
             "effective_status": status,
-            "allowed_actions":  ["govern", "evaluate"],
-            "computed_at":      _NOW,
+            "allowed_actions": ["govern", "evaluate"],
+            "computed_at": _NOW,
         }
 
     def test_get_entitlement_returns_model(self) -> None:
@@ -275,15 +276,17 @@ class TestBillingClient:
 
     def test_set_override_returns_response_model(self) -> None:
         payload = {
-            "org_id":          "org_01",
-            "new_status":      "grace",
+            "org_id": "org_01",
+            "new_status": "grace",
             "override_active": True,
             "override_status": "grace",
             "override_reason": "Contract extension",
         }
         mock_client = make_http_mock(payload)
         billing = BillingClient(mock_client)
-        req  = AdminOverrideRequest(org_id="org_01", status="grace", reason="Contract extension")
+        req = AdminOverrideRequest(
+            org_id="org_01", status="grace", reason="Contract extension"
+        )
         resp = billing.set_override(req)
         assert isinstance(resp, AdminOverrideResponse)
         assert resp.override_active is True
@@ -307,7 +310,7 @@ class TestBillingClient:
         mock_http = MagicMock()
         mock_http.get.return_value = mock_response
         mock_client = MagicMock()
-        mock_client._client     = mock_http
+        mock_client._client = mock_http
         mock_client._base_url = "https://api.example.com"
         billing = BillingClient(mock_client)
         with pytest.raises(httpx.HTTPStatusError):

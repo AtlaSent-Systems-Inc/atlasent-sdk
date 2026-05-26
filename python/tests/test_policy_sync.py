@@ -6,13 +6,11 @@ import pytest
 
 from atlasent.policy_sync import (
     PolicyBundleEntry,
-    PolicySyncDiff,
     PolicySyncRun,
     SubmitPolicySyncRequest,
     format_policy_sync_diff,
     is_policy_sync_terminal,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -160,20 +158,24 @@ class TestPolicySyncRun:
         assert len(run.diff.added) == 2
 
     def test_diff_defaults_to_none(self) -> None:
-        run = PolicySyncRun.model_validate({
-            "id": "psync_02",
-            "org_id": "org_01",
-            "status": "pending",
-        })
+        run = PolicySyncRun.model_validate(
+            {
+                "id": "psync_02",
+                "org_id": "org_01",
+                "status": "pending",
+            }
+        )
         assert run.diff is None
 
     def test_extra_fields_allowed(self) -> None:
-        run = PolicySyncRun.model_validate({
-            "id": "psync_03",
-            "org_id": "org_01",
-            "status": "validating",
-            "future_field": "x",
-        })
+        run = PolicySyncRun.model_validate(
+            {
+                "id": "psync_03",
+                "org_id": "org_01",
+                "status": "validating",
+                "future_field": "x",
+            }
+        )
         assert run.id == "psync_03"
 
 

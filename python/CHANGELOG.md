@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Packaging
+
+- Normalized licensing artifacts before publish:
+  - `python/pyproject.toml` now declares `Apache-2.0` to match `python/LICENSE`.
+  - `atlasent-temporal-preview` now declares `Apache-2.0` in
+    `python/atlasent_temporal_preview/pyproject.toml`.
+  - Added `python/atlasent_temporal_preview/LICENSE` with Apache-2.0 text.
+
 ## 2.7.0 -- 2026-05-24 -- risk envelope Phase C
 
 ### Added

@@ -6,15 +6,12 @@ import hashlib
 import hmac
 import json
 
-import pytest
-
 from atlasent.governance_webhooks import (
     WebhookDelivery,
     WebhookPayload,
     WebhookSubscription,
     verify_webhook_signature,
 )
-
 
 # ---------------------------------------------------------------------------
 # verify_webhook_signature
@@ -93,23 +90,27 @@ class TestWebhookSubscription:
         assert sub.description is None
 
     def test_optional_description(self) -> None:
-        sub = WebhookSubscription.model_validate({
-            "id": "wh_02",
-            "org_id": "org_01",
-            "url": "https://example.com/hook",
-            "events": [],
-            "description": "My webhook",
-        })
+        sub = WebhookSubscription.model_validate(
+            {
+                "id": "wh_02",
+                "org_id": "org_01",
+                "url": "https://example.com/hook",
+                "events": [],
+                "description": "My webhook",
+            }
+        )
         assert sub.description == "My webhook"
 
     def test_extra_fields_allowed(self) -> None:
-        sub = WebhookSubscription.model_validate({
-            "id": "wh_03",
-            "org_id": "org_01",
-            "url": "https://example.com/hook",
-            "events": [],
-            "future_field": "value",
-        })
+        sub = WebhookSubscription.model_validate(
+            {
+                "id": "wh_03",
+                "org_id": "org_01",
+                "url": "https://example.com/hook",
+                "events": [],
+                "future_field": "value",
+            }
+        )
         assert sub.id == "wh_03"
 
 
@@ -173,10 +174,12 @@ class TestWebhookPayload:
         assert evt.data["actor"] == "github:alice"
 
     def test_source_id_optional(self) -> None:
-        evt = WebhookPayload.model_validate({
-            "id": "evt_02",
-            "org_id": "org_01",
-            "event_type": "policy.violation",
-            "data": {},
-        })
+        evt = WebhookPayload.model_validate(
+            {
+                "id": "evt_02",
+                "org_id": "org_01",
+                "event_type": "policy.violation",
+                "data": {},
+            }
+        )
         assert evt.source_id is None

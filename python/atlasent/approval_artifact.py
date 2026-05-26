@@ -16,7 +16,7 @@ for the verifier's 13-step check order.
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -32,9 +32,9 @@ class ApprovalReviewer(BaseModel):
 
     principal_id: str
     principal_kind: PrincipalKind
-    email: Optional[str] = None
-    groups: Optional[list[str]] = None
-    roles: Optional[list[str]] = None
+    email: str | None = None
+    groups: list[str] | None = None
+    roles: list[str] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -108,7 +108,7 @@ class IdentityAssertionV1(BaseModel):
     issuer: IdentityIssuer
     issued_at: str
     expires_at: str
-    nonce: Optional[str] = Field(default=None, min_length=8)
+    nonce: str | None = Field(default=None, min_length=8)
     """Optional anti-replay nonce. The approval-artifact nonce is
     the primary defence; deployments that want assertion-level
     replay protection ledger this separately."""
@@ -130,10 +130,12 @@ class IdentityIssuerKey(BaseModel):
     """Hex-encoded HS256 secret or Ed25519 raw public key (32
     bytes / 64 hex chars). Ed25519 signatures may be hex or
     base64url; HS256 signatures are hex."""
-    allowed_roles: Optional[list[str]] = None
+    allowed_roles: list[str] | None = None
     """Per-issuer scope: roles this kid may attest. Empty/missing = unscoped."""
-    allowed_environments: Optional[list[str]] = None
-    """Per-issuer scope: environments this kid may attest in. Empty/missing = unscoped."""
+    allowed_environments: list[str] | None = None
+    """Per-issuer scope: environments this kid may attest in.
+    Empty/missing = unscoped.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -190,7 +192,7 @@ class ApprovalArtifactV1(BaseModel):
     expires_at: str
     nonce: str = Field(min_length=8)
     signature: str = Field(min_length=1)
-    identity_assertion: Optional[IdentityAssertionV1] = None
+    identity_assertion: IdentityAssertionV1 | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -203,8 +205,8 @@ class ApprovalReference(BaseModel):
     (preferred when the artifact is large).
     """
 
-    approval_id: Optional[str] = None
-    artifact: Optional[ApprovalArtifactV1] = None
+    approval_id: str | None = None
+    artifact: ApprovalArtifactV1 | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -261,17 +263,17 @@ class TrustedIssuerKey(BaseModel):
     public key (32 bytes / 64 hex chars). Ed25519 signatures may be
     hex or base64url; HS256 signatures are hex only."""
 
-    allowed_action_types: Optional[list[str]] = None
+    allowed_action_types: list[str] | None = None
     """Per-issuer scope: ``action_types`` this kid may approve.
     Entries match exactly OR with a trailing ``.*`` wildcard (e.g.
     ``production.*`` matches ``production.deploy``).
     Empty / missing = unscoped on action types."""
 
-    allowed_environments: Optional[list[str]] = None
+    allowed_environments: list[str] | None = None
     """Per-issuer scope: environments this kid may approve in (e.g.
     ``["production"]``). Empty / missing = unscoped."""
 
-    required_role: Optional[str] = None
+    required_role: str | None = None
     """When set, the issuer's ``required_role`` wins over the caller's
     ``requiredRole``. A misconfigured caller cannot broaden this
     issuer's authority."""
@@ -339,9 +341,9 @@ class QuorumIndependence(BaseModel):
     ``reviewer.principal_id`` is ALWAYS rejected regardless of
     these flags; these strengthen the requirement further."""
 
-    distinct_approval_issuers: Optional[bool] = None
+    distinct_approval_issuers: bool | None = None
     """When true, requires distinct approval-issuer identities."""
-    distinct_identity_issuers: Optional[bool] = None
+    distinct_identity_issuers: bool | None = None
     """When true, requires distinct identity-issuer identities."""
 
     model_config = ConfigDict(extra="forbid")
@@ -351,9 +353,9 @@ class QuorumPolicy(BaseModel):
     """Quorum policy describing what counts as passing."""
 
     required_count: int = Field(ge=1)
-    required_role_mix: Optional[list[QuorumRoleRequirement]] = None
-    independence: Optional[QuorumIndependence] = None
-    max_age_seconds: Optional[int] = Field(default=None, ge=1)
+    required_role_mix: list[QuorumRoleRequirement] | None = None
+    independence: QuorumIndependence | None = None
+    max_age_seconds: int | None = Field(default=None, ge=1)
     """Optional package-level staleness window. Layered on each
     artifact's own ``expires_at`` — both must be in the future."""
 
@@ -380,7 +382,7 @@ class ApprovalQuorumV1(BaseModel):
     environment: str
     issued_at: str
     policy: QuorumPolicy
-    approvals: list["ApprovalArtifactV1"] = Field(min_length=1)
+    approvals: list[ApprovalArtifactV1] = Field(min_length=1)
 
     model_config = ConfigDict(extra="forbid")
 

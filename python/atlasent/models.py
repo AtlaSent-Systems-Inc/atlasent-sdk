@@ -54,14 +54,8 @@ from pydantic import (
 )
 
 from .approval_artifact import (
-    ApprovalArtifactV1,
-    ApprovalIssuer,
     ApprovalReference,
-    ApprovalReviewer,
-    ApprovalTrustedIssuersConfig,
     PermitApprovalBinding,
-    PrincipalKind,
-    TrustedIssuerKey,
 )
 
 # Soft cap on top-level context properties. The hosted API hard-rejects
@@ -885,8 +879,10 @@ class StreamDecisionEvent(BaseModel):
         # Normalise to lowercase for parity with the TypeScript SDK and the
         # four-value decision literals used everywhere else in the SDK.
         raw_decision = data.get("decision", "allow" if permitted else "deny")
-        decision = raw_decision.lower() if isinstance(raw_decision, str) else (
-            "allow" if permitted else "deny"
+        decision = (
+            raw_decision.lower()
+            if isinstance(raw_decision, str)
+            else ("allow" if permitted else "deny")
         )
         return cls(
             decision=decision,
@@ -1019,9 +1015,9 @@ class EnforcementOutcome(BaseModel):
     permit_token: str | None = None
     expires_at: str | None = None
     outcome: Literal["allow", "deny"] | None = None
-    enforcement_action: Literal[
-        "raised", "logged_only", "passthrough", "skipped"
-    ] | None = None
+    enforcement_action: (
+        Literal["raised", "logged_only", "passthrough", "skipped"] | None
+    ) = None
     reason: str | None = None
     code: str | None = None
 
@@ -1093,14 +1089,12 @@ class ReplayResponse(BaseModel):
     variance_kind: ReplayVarianceKind
     original_decision: Literal["allow", "deny", "hold", "escalate"]
     original_deny_code: str | None = None
-    replayed_decision: (
-        Literal["allow", "deny", "hold", "escalate"] | None
-    ) = None
+    replayed_decision: Literal["allow", "deny", "hold", "escalate"] | None = None
     replayed_deny_code: str | None = None
     engine_version: str | None = None
-    engine_version_kind: (
-        Literal["active", "retired", "archival", "unknown"] | None
-    ) = None
+    engine_version_kind: Literal["active", "retired", "archival", "unknown"] | None = (
+        None
+    )
     accepts_replay: bool = True
     envelope_verification: (
         Literal["verified", "drift", "absent", "envelope_missing"] | None
@@ -1108,4 +1102,6 @@ class ReplayResponse(BaseModel):
     replayed_at: str
     rate_limit: RateLimitState | None = None
 
-    model_config = ConfigDict(extra="allow", populate_by_name=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        extra="allow", populate_by_name=True, arbitrary_types_allowed=True
+    )

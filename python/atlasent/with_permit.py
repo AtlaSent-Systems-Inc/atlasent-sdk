@@ -69,7 +69,9 @@ def _compute_execution_hash(payload: dict) -> str:
             return [sort_deep(i) for i in obj]
         return obj
 
-    canonical = json.dumps(sort_deep(payload), separators=(",", ":"), ensure_ascii=False)
+    canonical = json.dumps(
+        sort_deep(payload), separators=(",", ":"), ensure_ascii=False
+    )
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 

@@ -15,7 +15,12 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from atlasent import AsyncAtlaSentClient, StreamDecisionEvent, StreamParseError, StreamTimeoutError
+from atlasent import (
+    AsyncAtlaSentClient,
+    StreamDecisionEvent,
+    StreamParseError,
+    StreamTimeoutError,
+)
 from atlasent.exceptions import AtlaSentError
 
 API_KEY = "ask_test_stream_hardening"
@@ -144,8 +149,6 @@ class TestStreamReconnection:
         good_lines = _lines_from(_decision(), _done())
         good_response = _make_response(good_lines)
 
-        original_stream = _client()._client.stream
-
         def fake_stream(*args: Any, **kwargs: Any) -> Any:
             nonlocal call_count
             call_count += 1
@@ -174,14 +177,18 @@ class TestStreamReconnection:
             await _collect(client, stream_timeout_s=5.0, max_retries=2)
 
     async def test_sends_last_event_id_on_reconnect(self) -> None:
-        """The Last-Event-ID header is sent on reconnect when the server emitted an id."""
+        """The Last-Event-ID header is sent on reconnect
+        when the server emitted an id.
+        """
         call_count = 0
         captured_headers: dict[str, str] = {}
 
         # First call: raise ConnectError to trigger reconnect.
         # Second call: succeed with a stream that sends id and decision.
         second_lines = _lines_from(
-            "event: progress\nid: evt-abc\ndata: " + json.dumps({"stage": "loading"}) + "\n",
+            "event: progress\nid: evt-abc\ndata: "
+            + json.dumps({"stage": "loading"})
+            + "\n",
             _decision(),
             _done(),
         )
@@ -208,8 +215,6 @@ class TestStreamReconnection:
 
     async def test_sends_last_event_id_after_successful_partial_stream(self) -> None:
         """After reconnect, Last-Event-ID from a prior successful connection is sent."""
-        call_count = 0
-        captured_headers_on_reconnect: dict[str, str] = {}
 
         # First call: succeeds but drops after emitting an id-bearing event
         # then raises ConnectError to force reconnect in the outer loop.
@@ -347,12 +352,14 @@ class TestTerminalEventDetection:
 
 class TestStreamErrorTypeExports:
     def test_stream_timeout_error_importable_from_package_root(self) -> None:
-        from atlasent import StreamTimeoutError as STE  # noqa: PLC0415
-        assert STE is StreamTimeoutError
+        from atlasent import StreamTimeoutError  # noqa: PLC0415
+
+        assert StreamTimeoutError is not None
 
     def test_stream_parse_error_importable_from_package_root(self) -> None:
-        from atlasent import StreamParseError as SPE  # noqa: PLC0415
-        assert SPE is StreamParseError
+        from atlasent import StreamParseError  # noqa: PLC0415
+
+        assert StreamParseError is not None
 
     def test_stream_timeout_error_isinstance_check(self) -> None:
         err = StreamTimeoutError(30.0)

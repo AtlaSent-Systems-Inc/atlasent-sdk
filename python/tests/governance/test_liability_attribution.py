@@ -27,13 +27,13 @@ from atlasent.governance.liability_attribution import (
 def test_role_weights_lock_canonical_values() -> None:
     # These numbers are the contract. Changing them is a wire-breaking event.
     assert ROLE_WEIGHTS == {
-        "authorizer":         0.30,
-        "delegator":          0.15,
-        "delegate":           0.15,
-        "executor":           0.25,
-        "approver":           0.05,
-        "override_actor":     0.40,
-        "supervisor":         0.10,
+        "authorizer": 0.30,
+        "delegator": 0.15,
+        "delegate": 0.15,
+        "executor": 0.25,
+        "approver": 0.05,
+        "override_actor": 0.40,
+        "supervisor": 0.10,
         "exception_approver": 0.05,
     }
 
@@ -94,16 +94,18 @@ def test_build_chain_full_with_override() -> None:
         authorizer=_party("alice"),
         executor=_party("bob"),
         approvers=(_party("charlie"), _party("diana")),
-        delegations=(DelegationInput(
-            delegator_id="alice",
-            delegate_id="eve",
-            delegator_label="ALICE",
-            delegate_label="EVE",
-            delegator_type="human",
-            delegate_type="human",
-            permit_id=None,
-            acted_at="2026-05-08T11:30:00Z",
-        ),),
+        delegations=(
+            DelegationInput(
+                delegator_id="alice",
+                delegate_id="eve",
+                delegator_label="ALICE",
+                delegate_label="EVE",
+                delegator_type="human",
+                delegate_type="human",
+                permit_id=None,
+                acted_at="2026-05-08T11:30:00Z",
+            ),
+        ),
         supervisors=(_party("frank"),),
         override=OverrideInput(
             actor_id="grace",
@@ -115,7 +117,8 @@ def test_build_chain_full_with_override() -> None:
         ),
     )
     chain = build_liability_chain(inp)
-    # Order MUST be: authorizer, delegator, delegate, approvers..., supervisors..., executor, override_actor.
+    # Order MUST be: authorizer, delegator, delegate,
+    # approvers..., supervisors..., executor, override_actor.
     assert [p.role for p in chain] == [
         "authorizer",
         "delegator",
@@ -163,14 +166,22 @@ def test_validate_requires_override_actor_when_emergency() -> None:
 def test_validate_rejects_duplicate_party_role() -> None:
     chain = [
         LiabilityParty(
-            party_id="alice", party_label="ALICE", party_type="human",
-            role="approver", liability_weight=0.5,
-            acted_at="2026-05-08T12:00:00Z", permit_id=None,
+            party_id="alice",
+            party_label="ALICE",
+            party_type="human",
+            role="approver",
+            liability_weight=0.5,
+            acted_at="2026-05-08T12:00:00Z",
+            permit_id=None,
         ),
         LiabilityParty(
-            party_id="alice", party_label="ALICE", party_type="human",
-            role="approver", liability_weight=0.5,
-            acted_at="2026-05-08T12:01:00Z", permit_id=None,
+            party_id="alice",
+            party_label="ALICE",
+            party_type="human",
+            role="approver",
+            liability_weight=0.5,
+            acted_at="2026-05-08T12:01:00Z",
+            permit_id=None,
         ),
     ]
     result = validate_liability_chain(chain, has_emergency_override=False)
@@ -181,20 +192,40 @@ def test_validate_rejects_duplicate_party_role() -> None:
 def test_find_primary_returns_all_above_threshold() -> None:
     chain = [
         LiabilityParty(
-            party_id="a", party_label="A", party_type="human", role="authorizer",
-            liability_weight=0.40, acted_at="", permit_id=None,
+            party_id="a",
+            party_label="A",
+            party_type="human",
+            role="authorizer",
+            liability_weight=0.40,
+            acted_at="",
+            permit_id=None,
         ),
         LiabilityParty(
-            party_id="b", party_label="B", party_type="human", role="executor",
-            liability_weight=0.30, acted_at="", permit_id=None,
+            party_id="b",
+            party_label="B",
+            party_type="human",
+            role="executor",
+            liability_weight=0.30,
+            acted_at="",
+            permit_id=None,
         ),
         LiabilityParty(
-            party_id="c", party_label="C", party_type="human", role="approver",
-            liability_weight=0.10, acted_at="", permit_id=None,
+            party_id="c",
+            party_label="C",
+            party_type="human",
+            role="approver",
+            liability_weight=0.10,
+            acted_at="",
+            permit_id=None,
         ),
         LiabilityParty(
-            party_id="d", party_label="D", party_type="human", role="approver",
-            liability_weight=0.20, acted_at="", permit_id=None,
+            party_id="d",
+            party_label="D",
+            party_type="human",
+            role="approver",
+            liability_weight=0.20,
+            acted_at="",
+            permit_id=None,
         ),
     ]
     primary = find_primary_liability_parties(chain, threshold=0.20)

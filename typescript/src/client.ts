@@ -165,7 +165,11 @@ import type {
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const SDK_VERSION = "2.2.0";
+const SDK_VERSION = "2.10.0";
+const V1_EVALUATE_BATCH_PATH = "/v1/evaluate/batch";
+const V1_EVALUATE_BATCH_LEGACY_PATH = "/v1-evaluate-batch";
+const V1_EVALUATE_STREAM_PATH = "/v1/evaluate/stream";
+const V1_EVALUATE_STREAM_LEGACY_PATH = "/v1-evaluate-stream";
 
 function _buildUserAgent(): string {
   const isNode =
@@ -527,7 +531,8 @@ export class AtlaSentClient {
   /**
    * Batch evaluate — send up to 100 decisions in a single round-trip.
    *
-   * Wraps `POST /v1-evaluate-batch`. The server evaluates each item
+  * Wraps `POST /v1/evaluate/batch` (with fallback to
+  * `POST /v1-evaluate-batch` on older runtimes). The server evaluates each item
    * against the active policy bundle and returns results in the same
    * order as the input. One rate-limit token is consumed for the
    * whole batch, and one audit-chain entry lists every included
@@ -571,8 +576,9 @@ export class AtlaSentClient {
     const wireBody: Record<string, unknown> = { items: wireItems };
     if (batchId) wireBody.batch_id = batchId;
 
-    const { body: wire, rateLimit } = await this.post<EvaluateBatchWire>(
-      "/v1-evaluate-batch",
+    const { body: wire, rateLimit } = await this.postWithPathFallback<EvaluateBatchWire>(
+      V1_EVALUATE_BATCH_PATH,
+      V1_EVALUATE_BATCH_LEGACY_PATH,
       wireBody,
     );
 
@@ -936,6 +942,12 @@ export class AtlaSentClient {
     const agent = input.agent ?? "ci-deploy-bot";
     const action = input.action ?? PRODUCTION_DEPLOY_ACTION;
     const context = input.context ?? {};
+    const environment =
+      typeof (context as Record<string, unknown>).environment === "string"
+        ? ((context as Record<string, unknown>).environment as string)
+        : typeof (context as Record<string, unknown>).environment_name === "string"
+          ? ((context as Record<string, unknown>).environment_name as string)
+          : undefined;
 
     const evaluation = await this.evaluate({ agent, action, context });
     if (evaluation.decision !== "allow") {
@@ -957,6 +969,7 @@ export class AtlaSentClient {
       agent,
       action,
       context,
+      ...(environment !== undefined ? { environment } : {}),
     });
 
     if (!verification.verified) {
@@ -1485,7 +1498,8 @@ export class AtlaSentClient {
   }
 
   /**
-   * Open a streaming evaluation session against `POST /v1-evaluate-stream`.
+  * Open a streaming evaluation session against `POST /v1/evaluate/stream`
+  * (with fallback to `POST /v1-evaluate-stream` on older runtimes).
    *
    * Yields {@link StreamDecisionEvent} and {@link StreamProgressEvent} objects
    * as the server emits them. The iterator ends cleanly when the server sends
@@ -1528,7 +1542,7 @@ export class AtlaSentClient {
     };
 
     const requestId = globalThis.crypto.randomUUID();
-    const url = `${this.baseUrl}/v1-evaluate-stream`;
+    let streamPath = V1_EVALUATE_STREAM_PATH;
 
     let lastEventId: string | undefined;
     let retryCount = 0;
@@ -1556,7 +1570,7 @@ export class AtlaSentClient {
 
       let response: Response;
       try {
-        response = await this.fetchImpl(url, {
+        response = await this.fetchImpl(`${this.baseUrl}${streamPath}`, {
           method: "POST",
           headers,
           body: JSON.stringify(body),
@@ -1573,6 +1587,13 @@ export class AtlaSentClient {
       }
 
       if (!response.ok) {
+        if (
+          streamPath === V1_EVALUATE_STREAM_PATH &&
+          (response.status === 404 || response.status === 405)
+        ) {
+          streamPath = V1_EVALUATE_STREAM_LEGACY_PATH;
+          continue;
+        }
         throw await buildHttpError(response, requestId);
       }
 
@@ -1635,6 +1656,25 @@ export class AtlaSentClient {
     query?: URLSearchParams,
   ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
     return this.request<T>(path, "POST", body, query);
+  }
+
+  private async postWithPathFallback<T>(
+    primaryPath: string,
+    fallbackPath: string,
+    body: unknown,
+    query?: URLSearchParams,
+  ): Promise<{ body: T; rateLimit: RateLimitState | null }> {
+    try {
+      return await this.post<T>(primaryPath, body, query);
+    } catch (err) {
+      if (
+        err instanceof AtlaSentError &&
+        (err.status === 404 || err.status === 405)
+      ) {
+        return this.post<T>(fallbackPath, body, query);
+      }
+      throw err;
+    }
   }
 
   private async get<T>(

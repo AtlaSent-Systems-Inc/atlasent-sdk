@@ -342,11 +342,7 @@ def authorize_stream(
 
         event_name: str | None = None
         for raw_line in response.iter_lines():
-            line = (
-                raw_line.decode("utf-8")
-                if isinstance(raw_line, bytes)
-                else raw_line
-            )
+            line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
             if line == "":
                 event_name = None
                 continue

@@ -15,7 +15,7 @@ Wire-stable as ``auditor_access.v1``.
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -56,13 +56,13 @@ class AuditorAccessGrant(BaseModel):
     """Human-readable label for audit logs."""
     scopes: list[AuditorAccessScope]
     status: AuditorGrantStatus
-    expires_at: Optional[str] = None
+    expires_at: str | None = None
     """ISO 8601 — grant expires at this time; ``None`` means no expiry."""
     created_by: str
     created_at: str
-    revoked_at: Optional[str] = None
-    revoked_by: Optional[str] = None
-    revoke_reason: Optional[str] = None
+    revoked_at: str | None = None
+    revoked_by: str | None = None
+    revoke_reason: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -72,7 +72,7 @@ class ListAuditorGrantsResponse(BaseModel):
 
     grants: list[AuditorAccessGrant] = Field(default_factory=list)
     total: int = 0
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -86,7 +86,7 @@ class CreateAuditorGrantRequest(BaseModel):
     """Human-readable label shown in audit logs."""
     scopes: list[AuditorAccessScope]
     """At least one scope must be supplied."""
-    expires_at: Optional[str] = None
+    expires_at: str | None = None
     """ISO 8601 — omit for a non-expiring grant."""
 
     model_config = {"extra": "allow"}
@@ -117,8 +117,8 @@ class AuditorAccessEvent(BaseModel):
     auditor_principal: str
     action: str
     """Action the auditor performed, e.g. ``\"read_audit_events\"``."""
-    resource_type: Optional[str] = None
-    resource_id: Optional[str] = None
+    resource_type: str | None = None
+    resource_id: str | None = None
     occurred_at: str
 
     model_config = {"extra": "allow"}
@@ -129,7 +129,7 @@ class ListAuditorAccessEventsResponse(BaseModel):
 
     events: list[AuditorAccessEvent] = Field(default_factory=list)
     total: int = 0
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
 
     model_config = {"extra": "allow"}
 
