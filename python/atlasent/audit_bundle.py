@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    from atlasent.trust_root import TrustRootSnapshot
 
 
 def _require_crypto():  # type: ignore[return]
@@ -212,8 +213,31 @@ def _load_keys(public_keys_pem: Iterable[str] | None) -> list[VerifyKey]:
 def verify_audit_bundle(
     bundle: dict,
     keys: list[VerifyKey],
+    trust_root: TrustRootSnapshot | None = None,
+    allow_expired_snapshot: bool = False,
 ) -> BundleVerificationResult:
-    """Verify a parsed bundle dict against a set of candidate public keys."""
+    """Verify a parsed bundle dict against a set of candidate public keys.
+
+    If ``trust_root`` is provided, the snapshot expiry is checked first
+    (fail-closed per ADR-005 D3), then revocation and role are checked
+    after a successful signature verification.
+    """
+
+    # ── ADR-005 D3: fail-closed snapshot expiry check ─────────────────
+    if trust_root is not None:
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        valid_until = datetime.fromisoformat(
+            trust_root.valid_until.replace("Z", "+00:00")
+        )
+        if now > valid_until and not allow_expired_snapshot:
+            return BundleVerificationResult(
+                chain_integrity_ok=False,
+                signature_valid=False,
+                head_hash_matches=False,
+                reason="trust_snapshot_expired",
+            )
 
     events = bundle.get("events") or []
     if not isinstance(events, list):
@@ -273,6 +297,29 @@ def verify_audit_bundle(
         except (ValueError, TypeError) as err:
             reason = f"signature check failed: {err}"
 
+    # ── ADR-005: revocation and role checks (after signature) ─────────
+    if signature_valid and trust_root is not None:
+        kid = bundle.get("signing_key_id") if isinstance(bundle.get("signing_key_id"), str) else None
+        if kid is not None:
+            is_revoked = any(r.kid == kid for r in trust_root.revoked_keys)
+            if is_revoked:
+                return BundleVerificationResult(
+                    chain_integrity_ok=chain_integrity_ok,
+                    signature_valid=False,
+                    head_hash_matches=head_hash_matches,
+                    tampered_event_ids=tampered,
+                    reason="key_revoked",
+                )
+            key_entry = next((k for k in trust_root.keys if k.kid == kid), None)
+            if key_entry is not None and key_entry.role != "R3_audit":
+                return BundleVerificationResult(
+                    chain_integrity_ok=chain_integrity_ok,
+                    signature_valid=False,
+                    head_hash_matches=head_hash_matches,
+                    tampered_event_ids=tampered,
+                    reason="key_role_mismatch",
+                )
+
     if not chain_integrity_ok and reason is None:
         if tampered:
             reason = f"hash mismatch for {len(tampered)} event(s)"
@@ -294,6 +341,8 @@ def verify_audit_bundle(
 def verify_bundle(
     path: str | Path,
     public_keys_pem: Iterable[str] | None = None,
+    trust_root: TrustRootSnapshot | None = None,
+    allow_expired_snapshot: bool = False,
 ) -> BundleVerificationResult:
     """Load a JSON bundle from disk and verify it.
 
@@ -302,6 +351,9 @@ def verify_bundle(
     but ``signature_valid`` is always False (with an explanatory
     ``reason``) — so callers that want a complete offline check MUST
     supply the trust set.
+
+    ``trust_root`` enables ADR-005 D3 expiry + revocation + role checks.
+    ``allow_expired_snapshot`` opts out of fail-closed expiry (air-gap use).
     """
 
     data = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -311,4 +363,6 @@ def verify_bundle(
         data = data["bundle"]
 
     keys = _load_keys(public_keys_pem)
-    return verify_audit_bundle(data, keys)
+    return verify_audit_bundle(
+        data, keys, trust_root=trust_root, allow_expired_snapshot=allow_expired_snapshot
+    )

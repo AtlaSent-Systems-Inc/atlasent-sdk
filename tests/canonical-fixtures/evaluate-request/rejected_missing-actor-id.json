@@ -1,0 +1,10 @@
+{
+  "action": {
+    "id": "act_001",
+    "type": "data.query"
+  },
+  "target": {
+    "id": "tgt_001",
+    "type": "patient_record"
+  }
+}

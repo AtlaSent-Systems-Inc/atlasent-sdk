@@ -23,7 +23,8 @@ jobs:
     name: Test and publish Go SDK
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write   # needed to upload release assets
+      id-token: write   # required for cosign keyless signing (Sigstore OIDC)
 
     steps:
       - uses: actions/checkout@v6
@@ -55,6 +56,58 @@ jobs:
             "github.com/atlasent-systems-inc/atlasent-sdk/go@${{ steps.version.outputs.version }}" \
             || echo "Proxy indexing in progress — pkg.go.dev will index within minutes"
 
+      # ── R4: cosign keyless signing ───────────────────────────────────────
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Download Go module zip from proxy
+        # Download the canonical module zip (the same artifact consumers
+        # fetch from the module proxy) so we can sign it with cosign.
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          MODULE="github.com/atlasent-systems-inc/atlasent-sdk/go"
+          # GOMODCACHE the zip to a known path
+          go mod download -json "${MODULE}@${VERSION}" 2>/dev/null || true
+          # Fall back: use the proxy download endpoint directly
+          ENCODED_MODULE="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1],safe=""))' "${MODULE}")"
+          curl -fsSL \
+            "https://proxy.golang.org/${ENCODED_MODULE}/@v/${VERSION}.zip" \
+            -o go-module.zip || true
+          # If the zip isn't available from the proxy yet, create a local zip
+          if [ ! -f go-module.zip ] || [ ! -s go-module.zip ]; then
+            echo "Proxy zip not yet available; creating local archive instead"
+            zip -r go-module.zip go/
+          fi
+          echo "Module zip size: $(wc -c < go-module.zip) bytes"
+
+      - name: Sign Go module zip (keyless, Sigstore Fulcio + Rekor)
+        # cosign uses the GitHub Actions OIDC token — no long-lived key secret.
+        # The resulting bundle contains the certificate chain and
+        # transparency-log entry needed to verify the signature.
+        run: |
+          cosign sign-blob \
+            --yes \
+            --bundle=go-module.zip.bundle \
+            go-module.zip
+
+      - name: Verify signature
+        run: |
+          cosign verify-blob \
+            --bundle=go-module.zip.bundle \
+            --certificate-identity-regexp='https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/.github/workflows/publish-go.yml@refs/tags/go/v.*' \
+            --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
+            go-module.zip
+
+      - name: Upload signature bundle to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ steps.version.outputs.tag }}" \
+            go-module.zip.bundle \
+            --clobber
+
       - name: Summary
         run: |
           echo "## Go SDK Published" >> "$GITHUB_STEP_SUMMARY"
@@ -65,3 +118,4 @@ jobs:
           echo "| Version | \`${{ steps.version.outputs.version }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Module | \`github.com/atlasent-systems-inc/atlasent-sdk/go\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| pkg.go.dev | https://pkg.go.dev/github.com/atlasent-systems-inc/atlasent-sdk/go@${{ steps.version.outputs.version }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Cosign bundle | \`go-module.zip.bundle\` (attached to GitHub release) |" >> "$GITHUB_STEP_SUMMARY"

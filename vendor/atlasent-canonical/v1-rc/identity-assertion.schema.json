@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.atlasent.io/v1.1/identity-assertion.schema.json",
+  "title": "IdentityAssertionV1 (v1.1)",
+  "description": "Signed assertion from a trusted identity provider (OIDC issuer / SSO) vouching that the reviewer named in an approval_artifact.v1 is a real human with a specific role. Independent trust root from the approval issuer; both signatures must verify before the evaluate path issues a permit for an approval-required action. Mirrored from atlasent-sdk/contract/schemas/identity-assertion.schema.json; the two MUST stay in lockstep.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "subject",
+    "role",
+    "binding",
+    "issuer",
+    "issued_at",
+    "expires_at",
+    "signature"
+  ],
+  "properties": {
+    "version": { "type": "string", "const": "identity_assertion.v1" },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_kind"],
+      "properties": {
+        "principal_id":   { "type": "string", "minLength": 1 },
+        "principal_kind": { "type": "string", "enum": ["human", "agent", "service_account"] }
+      }
+    },
+    "role": { "type": "string", "minLength": 1 },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approval_id", "action_hash", "tenant_id", "environment"],
+      "properties": {
+        "approval_id": { "type": "string", "minLength": 1 },
+        "action_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "tenant_id":   { "type": "string", "minLength": 1 },
+        "environment": { "type": "string" }
+      }
+    },
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "issuer_id", "kid"],
+      "properties": {
+        "type":      { "type": "string", "const": "oidc" },
+        "issuer_id": { "type": "string", "minLength": 1 },
+        "kid":       { "type": "string", "minLength": 1 }
+      }
+    },
+    "issued_at":  { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "nonce":      { "type": "string", "minLength": 8 },
+    "signature":  { "type": "string", "minLength": 1 }
+  }
+}

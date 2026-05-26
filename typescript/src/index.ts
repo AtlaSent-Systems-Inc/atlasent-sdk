@@ -274,6 +274,17 @@ export type {
   OverrideEventType,
   OverrideV1,
 } from "./overrides.js";
+export type {
+  TrustRootSnapshot,
+  TrustRootKey,
+  TrustRootRevocationEntry,
+  TrustRootManagerOptions,
+} from "./trustRoot.js";
+export {
+  TrustRootManager,
+  getGlobalTrustRootManager,
+  __setGlobalTrustRootManagerForTests,
+} from "./trustRoot.js";
 
 // ── Economic Governance & Liability Attribution ────────────────────────────────────────────
 export {

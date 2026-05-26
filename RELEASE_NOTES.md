@@ -35,6 +35,14 @@
     `test/stream-hardening.test.ts`).
   - Python: focused `tests/test_protect.py` passed.
 
+> **Current versions:** `@atlasent/sdk` **2.10.0** (npm, tag `typescript-v2.10.0`) ·
+> `atlasent` **2.10.0** (PyPI, tag `python-v2.10.0`).
+> Install: `npm install @atlasent/sdk` / `pip install atlasent`.
+> Full per-version detail is in `typescript/CHANGELOG.md` and
+> `python/CHANGELOG.md`. This file highlights major surface changes.
+
+---
+
 ## v2.0.0 — Wire-format reconciliation + dual-shape compat bridges (TS + Py)
 
 **Release date:** 2026-05-05
@@ -96,6 +104,10 @@ Requires a coordinated `atlasent-api` deploy (`handler.ts` wired for
 
 Python-only: `EvaluateResult.decision` changes from `True`/`False` to
 `"allow"`/`"deny"`. The `.permitted` attribute preserves the legacy bool.
+
+> **v2.1.0 – v2.10.0:** Additive releases on the 2.x line. No breaking
+> changes. See `typescript/CHANGELOG.md` and `python/CHANGELOG.md` for
+> full per-version detail.
 
 ---
 
@@ -214,8 +226,8 @@ Full OpenAPI entry in `contract/openapi-v2.yaml` with `temporal` tag.
 
 ### Temporal workflow helpers updated (preview)
 
-`atlasent-temporal-preview` / `@atlasent/temporal-preview` (PRs #90
-/ #89) have been updated in lockstep:
+`atlasent-temporal-preview` / `@atlasent/temporal-preview` have been
+updated in lockstep:
 
 - `bulk_revoke_atlasent_permits` / `bulkRevokeAtlaSentPermits`
   activities now make a real HTTP call via `AtlaSentV2Client` /

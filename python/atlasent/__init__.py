@@ -265,6 +265,14 @@ from .v2_endpoints import (
 )
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
+from .trust_root import (
+    TrustRootKey,
+    TrustRootManager,
+    TrustRootRevocationEntry,
+    TrustRootSnapshot,
+    get_global_trust_root_manager,
+    _set_global_trust_root_manager_for_tests,
+)
 
 #: Canonical Deploy Gate V1 protected action. Mirrors the TypeScript
 #: SDK's ``PRODUCTION_DEPLOY_ACTION``. Use this string (or the constant)

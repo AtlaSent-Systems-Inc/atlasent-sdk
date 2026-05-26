@@ -1,9 +1,30 @@
 # Proposal 002 — Offline audit-bundle format
 
-**Status:** `DRAFT`
+**Status:** `DRAFT` (partially resolved — see Status update below)
 **Needs decisions from:** API team (bundle container + field layout),
 security team (crypto suite + key management + canonicalization), ops
 (public key distribution + rotation).
+
+## Status update — 2026-05-26
+
+Open questions **2** (public key distribution) and **3** (key
+rotation + historical bundles) are **resolved** by the canonical
+trust-root architecture:
+
+- [ADR-005](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/docs/adr/ADR-005-trust-root-semantics.md) decisions **D1** (single global JWKS in V1; `tenant` field reserved for V2), **D2** (4h refresh target, 5min floor), **D3** (fail-closed snapshot expiry by default; `allow_expired_snapshot` opt-out for air-gap).
+- [`atlasent/schemas/trust-root/v1/atlasent-verifier-keys.schema.json`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/schemas/trust-root/v1/atlasent-verifier-keys.schema.json) — the canonical JWKS shape with `kid`, `role`, `valid_from`, `valid_until`, `replaced_by`, `revoked`. Historical bundles remain verifiable because retired keys stay in the JWKS with `replaced_by` pointing at their successor.
+- [`atlasent/docs/design/TRUST_ROOT_ARCHITECTURE.md`](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/docs/design/TRUST_ROOT_ARCHITECTURE.md) §3.4 (JWKS layout), §5.1 (SDK hybrid trust-snapshot bootstrap), §9 (rotation/revocation runbooks).
+
+The SDK implementation work for the hybrid bootstrap + revocation
+enforcement is tracked in
+[`atlasent-sdk#289`](https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/issues/289)
+and will replace the placeholder PROPOSAL-002 §3.2 "default
+(c) + (d) fallback" recommendation with the now-canonical hybrid
+model.
+
+Questions **1** (bundle container — NDJSON vs zip vs CBOR), **4**
+(chain anchor), **5** (redaction / replay), and **6** (verification
+levels) remain in scope for this proposal.
 
 ## Problem statement
 
@@ -122,39 +143,22 @@ expose the reason for audit tooling to display.
    Security team + regulator-facing teams to weigh in on what
    auditors actually prefer holding.
 
-2. **Public key distribution.** Four plausible answers, each with
-   different trust implications:
-   - **(a) Embed the public key in the bundle header** alongside
-     `key_id`. Verifier trusts the bundle's own claim about its
-     signer. BAD unless the bundle's origin is separately
-     authenticated (out-of-band TLS / signed email / physical
-     delivery). Not recommended.
-   - **(b) Pinned in the SDK distribution.** SDK ships a hard-coded
-     list of valid `key_id` → public key mappings at build time.
-     Safest against man-in-the-middle but breaks on key rotation:
-     every rotation requires a new SDK release to every customer.
-   - **(c) Published at a well-known HTTPS URL** (e.g.
-     `https://keys.atlasent.io/.well-known/audit-keys.json`).
-     Verifier fetches + caches. TLS trust chain anchors the key.
-     Tradeoff: verifier needs internet; "offline" means
-     "air-gapped after an initial online fetch."
-   - **(d) Customer-local trust store.** SDK accepts a
-     `trust_store_path` argument; customer manages the key store
-     themselves. Most flexible, most operational burden.
+2. ~~**Public key distribution.**~~ **RESOLVED — see Status update
+   above.** Hybrid model: SDK ships a pinned snapshot of the JWKS
+   at build time and optionally refreshes from
+   `https://keys.atlasent.io/.well-known/atlasent-verifier-keys.json`
+   on a 4h cadence (per ADR-005 D2). Refresh failure falls back to
+   the pinned snapshot. Customer-supplied trust stores remain
+   supported for air-gap via `--trust-store` on the CLI and
+   `allow_expired_snapshot` on the SDK (per ADR-005 D3).
 
-   Default recommendation in the proposal: **(c) + (d) fallback** —
-   SDK defaults to fetching from the well-known URL with a 24h
-   cache; callers can override with a local trust store for truly
-   air-gapped verification.
-
-3. **Key rotation + historical bundles.** A bundle signed under
-   `ak_2026_q1` must remain verifiable after the key rotates to
-   `ak_2026_q2`. The trust store needs to carry ALL historical
-   public keys with their `valid_from` / `valid_until` windows,
-   and verifiers check that the bundle's `issued_at` falls within
-   the `key_id`'s valid window. Proposal: the well-known URL serves
-   a signed JWKS-like document with the full key history; SDKs
-   cache it and re-verify old bundles against it.
+3. ~~**Key rotation + historical bundles.**~~ **RESOLVED — see
+   Status update above.** The JWKS carries every key ever issued
+   (active, retired, revoked) with `valid_from` / `valid_until` /
+   `replaced_by`. Verifiers check that the bundle's `issued_at`
+   falls within the `key_id`'s validity window and that the KID is
+   not on `atlasent-revocations.json`. The architecture doc §9
+   covers the operator-side rotation procedure (planned + emergency).
 
 4. **Chain anchor.** Where does `chain_anchor` (the `prev_hash` for
    the first event in a bundle) come from? Three options:

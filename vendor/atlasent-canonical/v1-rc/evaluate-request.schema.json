@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.atlasent.io/v1.1/evaluate-request.schema.json",
+  "title": "EvaluateRequest (v1.1)",
+  "description": "POST /v1/evaluate request. actor_id is REQUIRED on every call.",
+  "type": "object",
+  "required": ["actor_id", "action", "target"],
+  "properties": {
+    "actor_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "org_id":   { "$ref": "_common.schema.json#/$defs/uuid" },
+    "action": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id":       { "type": "string", "minLength": 1 },
+        "type":     { "type": "string", "minLength": 1 },
+        "metadata": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id":          { "type": "string", "minLength": 1 },
+        "type":        { "type": "string", "minLength": 1 },
+        "environment": { "$ref": "_common.schema.json#/$defs/environment" },
+        "metadata":    { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "context": { "$ref": "_common.schema.json#/$defs/safeContext" },
+    "consent": { "type": "object" },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional signed approval. When the action requires human approval, the evaluate path verifies this artifact before issuing a permit; failure denies. Schema for the artifact lives in approval-artifact.schema.json.",
+      "properties": {
+        "approval_id": { "type": "string" },
+        "artifact":    { "$ref": "approval-artifact.schema.json" }
+      }
+    },
+    "require_approval": {
+      "type": "boolean",
+      "description": "Caller assertion that this action requires verified human approval. Echoed onto the verify path so the consumer can hard-deny when the permit's persisted `approval` block is missing."
+    }
+  },
+  "additionalProperties": false
+}

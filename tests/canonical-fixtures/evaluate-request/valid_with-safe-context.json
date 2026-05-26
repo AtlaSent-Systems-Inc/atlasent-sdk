@@ -1,0 +1,20 @@
+{
+  "actor_id": "service_account_clinical",
+  "org_id": "00000000-0000-0000-0000-000000000001",
+  "action": {
+    "id": "act_modify_record",
+    "type": "modify_patient_record",
+    "metadata": { "reason": "amendment" }
+  },
+  "target": {
+    "id": "patient_42",
+    "type": "patient_record",
+    "environment": "production"
+  },
+  "context": {
+    "environment": "production",
+    "action_metadata": { "ticket": "TICKET-1234" },
+    "risk_flags": ["high_value"]
+  },
+  "require_approval": true
+}
