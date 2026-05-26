@@ -31,8 +31,17 @@ KEYS_BASE_URL = "https://keys.atlasent.io/.well-known"
 TrustKeyRole = Literal["R1_release", "R2_permit", "R3_audit", "R4_pack"]
 
 _TRUST_ROOT_KEY_FIELDS = {
-    "kid", "role", "kty", "alg", "x", "crv",
-    "valid_from", "valid_until", "replaced_by", "revoked", "tenant",
+    "kid",
+    "role",
+    "kty",
+    "alg",
+    "x",
+    "crv",
+    "valid_from",
+    "valid_until",
+    "replaced_by",
+    "revoked",
+    "tenant",
 }
 _REVOCATION_ENTRY_FIELDS = {"kid", "revoked_at", "role", "reason"}
 
@@ -180,8 +189,7 @@ class TrustRootManager:
             issued_at=data["index"].get("issued_at", self._snapshot.issued_at),
             keys=[_make_trust_root_key(kd) for kd in keys_data],
             revoked_keys=[
-                _make_revocation_entry(rd)
-                for rd in revoc_data.get("revoked_keys", [])
+                _make_revocation_entry(rd) for rd in revoc_data.get("revoked_keys", [])
             ],
             revoked_identities=revoc_data.get("revoked_identities", []),
         )
@@ -204,8 +212,7 @@ def _load_vendor_snapshot() -> TrustRootSnapshot:
         )
         keys = [_make_trust_root_key(kd) for kd in verifier_keys_raw.get("keys", [])]
         revoked_keys = [
-            _make_revocation_entry(rd)
-            for rd in revocations_raw.get("revoked_keys", [])
+            _make_revocation_entry(rd) for rd in revocations_raw.get("revoked_keys", [])
         ]
         return TrustRootSnapshot(
             valid_until=index["valid_until"],
