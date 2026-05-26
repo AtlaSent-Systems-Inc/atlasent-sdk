@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
     from atlasent.trust_root import TrustRootSnapshot
 
 
@@ -299,7 +300,11 @@ def verify_audit_bundle(
 
     # ── ADR-005: revocation and role checks (after signature) ─────────
     if signature_valid and trust_root is not None:
-        kid = bundle.get("signing_key_id") if isinstance(bundle.get("signing_key_id"), str) else None
+        kid = (
+            bundle.get("signing_key_id")
+            if isinstance(bundle.get("signing_key_id"), str)
+            else None
+        )
         if kid is not None:
             is_revoked = any(r.kid == kid for r in trust_root.revoked_keys)
             if is_revoked:

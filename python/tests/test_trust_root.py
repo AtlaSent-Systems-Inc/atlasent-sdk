@@ -8,8 +8,6 @@ contract/vectors/trust-root/ are shared with the TypeScript SDK.
 from __future__ import annotations
 
 import json
-import threading
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -17,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from atlasent.audit_bundle import VerifyKey, verify_audit_bundle
 from atlasent.trust_root import (
     TrustRootKey,
     TrustRootManager,
@@ -25,15 +24,17 @@ from atlasent.trust_root import (
     _set_global_trust_root_manager_for_tests,
     get_global_trust_root_manager,
 )
-from atlasent.audit_bundle import VerifyKey, verify_audit_bundle
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VECTORS_DIR = REPO_ROOT / "contract" / "vectors" / "trust-root"
 FIXTURES_DIR = REPO_ROOT / "contract" / "vectors" / "audit-bundles"
-PUBLIC_PEM = (FIXTURES_DIR / "signing-key.pub.pem").read_text() if FIXTURES_DIR.exists() else ""
+PUBLIC_PEM = (
+    (FIXTURES_DIR / "signing-key.pub.pem").read_text() if FIXTURES_DIR.exists() else ""
+)
 
 try:
     from atlasent.audit_bundle import _require_crypto
+
     _require_crypto()
     _CRYPTO_OK = True
 except BaseException:
@@ -47,22 +48,45 @@ pytestmark = pytest.mark.skipif(
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 
+
 def _make_snapshot(**overrides: Any) -> TrustRootSnapshot:
     defaults = dict(
         valid_until="2099-01-01T00:00:00Z",
         issued_at="2026-01-01T00:00:00Z",
         keys=[
-            TrustRootKey(kid="test-key", role="R3_audit", kty="OKP", alg="EdDSA",
-                         crv="Ed25519", x="uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ"),
-            TrustRootKey(kid="permit-kid", role="R2_permit", kty="OKP", alg="EdDSA",
-                         crv="Ed25519", x="uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ"),
-            TrustRootKey(kid="revoked-kid", role="R3_audit", kty="OKP", alg="EdDSA",
-                         crv="Ed25519", x="uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
-                         revoked=True),
+            TrustRootKey(
+                kid="test-key",
+                role="R3_audit",
+                kty="OKP",
+                alg="EdDSA",
+                crv="Ed25519",
+                x="uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
+            ),
+            TrustRootKey(
+                kid="permit-kid",
+                role="R2_permit",
+                kty="OKP",
+                alg="EdDSA",
+                crv="Ed25519",
+                x="uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
+            ),
+            TrustRootKey(
+                kid="revoked-kid",
+                role="R3_audit",
+                kty="OKP",
+                alg="EdDSA",
+                crv="Ed25519",
+                x="uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
+                revoked=True,
+            ),
         ],
         revoked_keys=[
-            TrustRootRevocationEntry(kid="revoked-kid", revoked_at="2026-05-01T12:00:00Z",
-                                     role="R3_audit", reason="test revocation for SDK test vectors"),
+            TrustRootRevocationEntry(
+                kid="revoked-kid",
+                revoked_at="2026-05-01T12:00:00Z",
+                role="R3_audit",
+                reason="test revocation for SDK test vectors",
+            ),
         ],
         revoked_identities=[],
     )
@@ -77,6 +101,7 @@ def _load_vector(filename: str) -> dict:
 
 def _load_verify_key(pem: str) -> VerifyKey:
     from cryptography.hazmat.primitives import serialization
+
     key = serialization.load_pem_public_key(pem.encode())
     return VerifyKey(key_id="pem_0", public_key=key)  # type: ignore[arg-type]
 
@@ -96,7 +121,9 @@ def test_check_expiry_ok_for_future_valid_until() -> None:
 
 
 def test_check_expiry_expired_for_past_valid_until() -> None:
-    snap = _make_snapshot(valid_until="2020-01-01T00:00:00Z", issued_at="2019-01-01T00:00:00Z")
+    snap = _make_snapshot(
+        valid_until="2020-01-01T00:00:00Z", issued_at="2019-01-01T00:00:00Z"
+    )
     mgr = TrustRootManager(snap, disable_refresh=True)
     assert mgr.check_expiry() == "expired"
 
@@ -141,8 +168,9 @@ def test_replace_snapshot_swaps_active_snapshot() -> None:
 
 def test_refresh_interval_floor_enforced() -> None:
     # 1-second interval is below 5-minute floor — should clamp silently
-    mgr = TrustRootManager(_make_snapshot(), disable_refresh=False,
-                            refresh_interval_seconds=1)
+    mgr = TrustRootManager(
+        _make_snapshot(), disable_refresh=False, refresh_interval_seconds=1
+    )
     mgr.stop_refresh()
 
 
@@ -167,7 +195,10 @@ def test_refresh_replaces_snapshot_on_success() -> None:
     snap = _make_snapshot()
     mgr = TrustRootManager(snap, disable_refresh=True)
 
-    new_index = {"valid_until": "2030-01-01T00:00:00Z", "issued_at": "2026-06-01T00:00:00Z"}
+    new_index = {
+        "valid_until": "2030-01-01T00:00:00Z",
+        "issued_at": "2026-06-01T00:00:00Z",
+    }
     new_keys = {"keys": [k.__dict__ for k in snap.keys]}
     new_revoc = {"revoked_keys": [], "revoked_identities": []}
 
@@ -249,7 +280,9 @@ def test_vector_allow_expired() -> None:
     )
     key = _load_verify_key(PUBLIC_PEM)
 
-    r = verify_audit_bundle(bundle, [key], trust_root=trust_root, allow_expired_snapshot=True)
+    r = verify_audit_bundle(
+        bundle, [key], trust_root=trust_root, allow_expired_snapshot=True
+    )
     assert r.verified
 
 
