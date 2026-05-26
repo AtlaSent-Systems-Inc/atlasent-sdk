@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.atlasent.io/v1.1/_common.schema.json",
+  "title": "AtlaSent v1.1 — common definitions",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "iso8601": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sha256Hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["allow", "deny", "hold", "escalate"]
+    },
+    "ruleEffect": {
+      "type": "string",
+      "enum": ["allow", "deny", "hold", "escalate", "flag"]
+    },
+    "executionStatus": {
+      "type": "string",
+      "enum": [
+        "allowed",
+        "denied",
+        "held",
+        "pending",
+        "timed_out",
+        "partially_executed",
+        "failed",
+        "unknown"
+      ]
+    },
+    "reconciliationStatus": {
+      "type": "string",
+      "enum": ["aligned", "divergent", "pending"]
+    },
+    "delegationInvalidReason": {
+      "type": "string",
+      "enum": [
+        "no_delegation_found",
+        "principal_mismatch",
+        "action_type_not_allowed",
+        "constraint_violation",
+        "revoked",
+        "not_yet_granted"
+      ]
+    },
+    "driftReason": {
+      "type": "string",
+      "enum": [
+        "policy_version_unavailable",
+        "decision_value_changed",
+        "reason_changed",
+        "confidence_drift",
+        "snapshot_corrupted"
+      ]
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["production", "staging", "development"]
+    },
+    "confidenceScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "reversibilityClass": {
+      "type": "string",
+      "enum": ["reversible", "deferred_reversible", "irreversible"],
+      "description": "reversible: outcome can be undone with no lasting effect (e.g. read-only queries, idempotent config sets). deferred_reversible: outcome can be undone but requires effort and time (e.g. production deploy — rollback is possible but costly). irreversible: outcome cannot be undone (e.g. database schema drop, financial wire transfer, physical actuation). Used to gate approval requirements and to classify evidence bundles."
+    },
+    "haltTrigger": {
+      "type": "string",
+      "enum": ["revocation", "lease_expired", "policy_changed", "manual", "cascade_halt"],
+      "description": "revocation: a scope revocation swept or polled during execution (PROD-D9). lease_expired: the continuous-authorization lease TTL elapsed without renewal. policy_changed: the governing policy was updated to deny during execution. manual: a human operator issued an explicit halt. cascade_halt: a parent execution was halted and the halt cascaded to this child execution."
+    },
+    "principalType": {
+      "type": "string",
+      "enum": ["human", "org", "service", "agent", "device"],
+      "description": "human: a natural person. org: an organization acting as a principal. service: a software service account or API key holder. agent: an autonomous AI agent operating on behalf of a human or org. device: a physical device or robot acting under delegated authority. The 'agent' and 'device' types are reserved for the v2/v3 delegation model; no behavioral difference from 'service' in v1.x."
+    },
+    "permitStatus": {
+      "type": "string",
+      "enum": ["active", "expired", "revoked", "consumed"],
+      "description": "active: permit is valid and may be used. expired: TTL elapsed or lease_expires_at passed without renewal. revoked: a matching scope_revocations entry was swept (PROD-D9). consumed: permit was used for a one-shot action and may not be reused."
+    },
+    "delegationAncestryEntry": {
+      "type": "object",
+      "description": "One hop in the delegation chain from originating principal to executing actor. Index 0 in an ancestry array is the top-level grant (closest to the originating principal). Captured immutably at permit issuance time.",
+      "required": ["delegation_id", "from_principal_id", "granted_at"],
+      "properties": {
+        "delegation_id":        { "$ref": "#/$defs/uuid" },
+        "from_principal_id":    { "$ref": "#/$defs/uuid" },
+        "to_actor_id":          { "type": "string", "minLength": 1, "maxLength": 256 },
+        "granted_at":           { "$ref": "#/$defs/iso8601" },
+        "allowed_action_types": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "attestationProvider": {
+      "type": "string",
+      "description": "Well-known attestation providers: spiffe (SPIFFE/SVID x509 workload identity), tpm (Trusted Platform Module hardware attestation), enclave (confidential computing: AMD SEV / Intel TDX / AWS Nitro), oidc (OIDC identity token). Custom providers use the form 'custom:<identifier>'."
+    },
+    "simulationScenarioType": {
+      "type": "string",
+      "enum": [
+        "single_agent",
+        "delegation_chain",
+        "concurrent_fleet",
+        "blast_radius",
+        "cascade_halt",
+        "policy_drift"
+      ],
+      "description": "single_agent: one actor, one action class, baseline pass/fail. delegation_chain: tests a full N-hop delegation ancestry chain. concurrent_fleet: N concurrent agents executing the same action class — tests contention and permit issuance under load. blast_radius: simulate POST /v1/revoke-scope and count how many active permits match the revocation scope pattern. cascade_halt: simulate a parent execution halt and measure how many child executions receive the cascade signal. policy_drift: simulate a policy version change mid-execution and measure decision divergence."
+    },
+    "forbiddenContextKey": {
+      "description": "Keys that AtlaSent rejects as input. Behavioral / emotional / pattern inference is out of scope.",
+      "type": "string",
+      "enum": [
+        "emotionalState",
+        "emotional_state",
+        "mood",
+        "sentiment",
+        "behavioralPattern",
+        "behavioral_pattern",
+        "behaviorScore",
+        "behavior_score",
+        "patternInference",
+        "pattern_inference"
+      ]
+    },
+    "safeContext": {
+      "type": "object",
+      "description": "Whitelisted context shape. Forbidden keys MUST be rejected with HTTP 400.",
+      "properties": {
+        "environment": { "$ref": "#/$defs/environment" },
+        "action_metadata": { "type": "object" },
+        "risk_flags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true,
+      "not": {
+        "anyOf": [
+          { "required": ["emotionalState"] },
+          { "required": ["emotional_state"] },
+          { "required": ["mood"] },
+          { "required": ["sentiment"] },
+          { "required": ["behavioralPattern"] },
+          { "required": ["behavioral_pattern"] },
+          { "required": ["behaviorScore"] },
+          { "required": ["behavior_score"] },
+          { "required": ["patternInference"] },
+          { "required": ["pattern_inference"] }
+        ]
+      }
+    }
+  }
+}

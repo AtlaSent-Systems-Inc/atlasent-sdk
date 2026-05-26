@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.atlasent.io/v1.1/permit.schema.json",
+  "title": "Permit",
+  "x-status": "stable",
+  "description": "Capability lease issued by AtlaSent when a decision is 'allow'. A permit is a time-bounded, revocable, optionally renewable authority artifact — the unit of access in the continuous-authorization model. The evaluate-response carries flat permit_* fields for v1.x compatibility; this schema is the canonical internal record shape and the shape returned by GET /v1/permits/:id.",
+  "type": "object",
+  "required": [
+    "id",
+    "org_id",
+    "decision_id",
+    "actor_id",
+    "action_class",
+    "token",
+    "issued_at",
+    "expires_at",
+    "renewable",
+    "status"
+  ],
+  "properties": {
+    "id":           { "$ref": "_common.schema.json#/$defs/uuid" },
+    "org_id":       { "$ref": "_common.schema.json#/$defs/uuid" },
+    "decision_id":  { "$ref": "_common.schema.json#/$defs/uuid" },
+    "actor_id":     { "type": "string", "minLength": 1, "maxLength": 256 },
+    "action_class": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque bearer token. Treat as a secret; do not log."
+    },
+    "issued_at":  { "$ref": "_common.schema.json#/$defs/iso8601" },
+    "expires_at": {
+      "$ref": "_common.schema.json#/$defs/iso8601",
+      "description": "Absolute expiry. The permit is invalid after this time regardless of lease state."
+    },
+    "lease_expires_at": {
+      "oneOf": [
+        { "$ref": "_common.schema.json#/$defs/iso8601" },
+        { "type": "null" }
+      ],
+      "description": "Continuous-authorization lease expiry. Null when renewable is false. Advances on each successful POST /v1/permits/:id/renew. A renewable permit is only valid if both expires_at and lease_expires_at are in the future."
+    },
+    "max_lease_duration_ms": {
+      "oneOf": [
+        { "type": "integer", "minimum": 1000, "maximum": 86400000 },
+        { "type": "null" }
+      ],
+      "description": "Maximum duration of a single lease renewal window in milliseconds, bounded by expires_at. Null when renewable is false."
+    },
+    "renewable": {
+      "type": "boolean",
+      "description": "Whether this permit supports continuous-authorization lease renewal. When true, SDK guards should configure permitRevalidationIntervalMs (PROD-D9) to poll GET /v1/permits/:id/valid and renew via POST /v1/permits/:id/renew."
+    },
+    "revocation_scope": {
+      "oneOf": [
+        { "type": "string", "minLength": 1, "maxLength": 512 },
+        { "type": "null" }
+      ],
+      "description": "The scope pattern that a POST /v1/revoke-scope call would match to revoke this permit. Derived from action_class at issuance. Used by the PROD-D9 sweep materializer to join scope_revocations against active permits."
+    },
+    "status": { "$ref": "_common.schema.json#/$defs/permitStatus" },
+    "revoked_at": {
+      "oneOf": [
+        { "$ref": "_common.schema.json#/$defs/iso8601" },
+        { "type": "null" }
+      ]
+    },
+    "revocation_id": {
+      "oneOf": [
+        { "$ref": "_common.schema.json#/$defs/uuid" },
+        { "type": "null" }
+      ],
+      "description": "ID of the scope_revocations row that caused this permit to be revoked. Populated by the sweep materializer."
+    },
+    "delegation_id": {
+      "oneOf": [
+        { "$ref": "_common.schema.json#/$defs/uuid" },
+        { "type": "null" }
+      ],
+      "description": "The delegation record that authorized this permit, if the evaluation was for a delegated actor."
+    },
+    "delegation_ancestry": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": { "$ref": "_common.schema.json#/$defs/delegationAncestryEntry" },
+          "maxItems": 16,
+          "description": "Ordered delegation hops from originating principal to executing actor, captured immutably at permit issuance. Index 0 is the top-level grant."
+        },
+        { "type": "null" }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

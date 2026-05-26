@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.atlasent.io/v1.1/audit-chain-entry.schema.json",
+  "title": "AuditChainEntry",
+  "description": "Append-only, hash-linked log entry. hash = sha256(prev_hash || canonical(snapshot)).",
+  "type": "object",
+  "required": ["org_id", "sequence", "decision_id", "prev_hash", "hash", "recorded_at"],
+  "properties": {
+    "org_id":      { "$ref": "_common.schema.json#/$defs/uuid" },
+    "sequence":    { "type": "integer", "minimum": 0 },
+    "decision_id": { "$ref": "_common.schema.json#/$defs/uuid" },
+    "prev_hash":   { "$ref": "_common.schema.json#/$defs/sha256Hex" },
+    "hash":        { "$ref": "_common.schema.json#/$defs/sha256Hex" },
+    "recorded_at": { "$ref": "_common.schema.json#/$defs/iso8601" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if":   { "properties": { "sequence": { "const": 0 } } },
+      "then": { "properties": { "prev_hash": { "const": "0000000000000000000000000000000000000000000000000000000000000000" } } }
+    }
+  ]
+}
