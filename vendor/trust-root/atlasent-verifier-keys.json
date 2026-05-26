@@ -1,0 +1,44 @@
+{
+  "schema": "atlasent-verifier-keys/v1",
+  "keys": [
+    {
+      "kid": "test-key",
+      "role": "R3_audit",
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "alg": "EdDSA",
+      "x": "uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z",
+      "replaced_by": null,
+      "revoked": false,
+      "tenant": null
+    },
+    {
+      "kid": "permit-kid",
+      "role": "R2_permit",
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "alg": "EdDSA",
+      "x": "uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z",
+      "replaced_by": null,
+      "revoked": false,
+      "tenant": null
+    },
+    {
+      "kid": "revoked-kid",
+      "role": "R3_audit",
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "alg": "EdDSA",
+      "x": "uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z",
+      "replaced_by": null,
+      "revoked": true,
+      "tenant": null
+    }
+  ]
+}

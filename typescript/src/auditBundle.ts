@@ -19,6 +19,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { webcrypto } from "node:crypto";
+import type { TrustRootSnapshot } from "./trustRoot.js";
 
 const GENESIS_HASH = "0".repeat(64);
 
@@ -73,6 +74,14 @@ export interface VerifyBundleOptions {
   publicKeysPem?: readonly string[];
   /** Already-imported keys, paired with registry ids (rotation hint). */
   keys?: readonly VerifyKey[];
+  /** Trust-root snapshot for revocation + expiry checks. */
+  trustRoot?: TrustRootSnapshot;
+  /**
+   * Opt out of fail-closed snapshot expiry check (ADR-005 D3).
+   * Intended for air-gap / offline use cases.
+   * Emits a one-time warning per process start.
+   */
+  allowExpiredSnapshot?: boolean;
 }
 
 // ─── Canonicalization ─────────────────────────────────────────────────────────
@@ -205,7 +214,28 @@ async function resolveKeys(options: VerifyBundleOptions | undefined): Promise<Ve
 export async function verifyAuditBundle(
   bundle: AuditBundle,
   keys: readonly VerifyKey[],
+  trustRootOpts?: {
+    trustRoot?: TrustRootSnapshot;
+    allowExpiredSnapshot?: boolean;
+  },
 ): Promise<BundleVerificationResult> {
+  // ── ADR-005 D3: fail-closed snapshot expiry check ──────────────────
+  if (trustRootOpts?.trustRoot) {
+    const snap = trustRootOpts.trustRoot;
+    const now = Date.now();
+    const validUntil = new Date(snap.valid_until).getTime();
+    if (now > validUntil && !trustRootOpts.allowExpiredSnapshot) {
+      return {
+        chainIntegrityOk: false,
+        signatureValid: false,
+        headHashMatches: false,
+        tamperedEventIds: [],
+        reason: "trust_snapshot_expired",
+        verified: false,
+      };
+    }
+  }
+
   const events: ChainEvent[] = Array.isArray(bundle.events) ? (bundle.events as ChainEvent[]) : [];
 
   const { adjacencyOk, tamperedIds } = await verifyChainEvents(events);
@@ -253,6 +283,38 @@ export async function verifyAuditBundle(
     }
   }
 
+  // ── ADR-005: revocation check (after signature, before returning) ──
+  if (signatureValid && trustRootOpts?.trustRoot) {
+    const snap = trustRootOpts.trustRoot;
+    const kid = typeof bundle.signing_key_id === "string" ? bundle.signing_key_id : null;
+    if (kid !== null) {
+      // Check revocation
+      const isRevoked = snap.revoked_keys.some((r) => r.kid === kid);
+      if (isRevoked) {
+        return {
+          chainIntegrityOk,
+          signatureValid: false,
+          headHashMatches,
+          tamperedEventIds: tamperedIds,
+          reason: "key_revoked",
+          verified: false,
+        };
+      }
+      // Check role: audit bundles must be signed by R3_audit
+      const keyEntry = snap.keys.find((k) => k.kid === kid);
+      if (keyEntry && keyEntry.role !== "R3_audit") {
+        return {
+          chainIntegrityOk,
+          signatureValid: false,
+          headHashMatches,
+          tamperedEventIds: tamperedIds,
+          reason: "key_role_mismatch",
+          verified: false,
+        };
+      }
+    }
+  }
+
   if (!chainIntegrityOk && reason === undefined) {
     if (tamperedIds.length > 0) reason = `hash mismatch for ${tamperedIds.length} event(s)`;
     else if (!adjacencyOk) reason = "chain adjacency broken";
@@ -296,5 +358,8 @@ export async function verifyBundle(
     bundle = pathOrBundle;
   }
   const keys = await resolveKeys(options);
-  return verifyAuditBundle(bundle, keys);
+  return verifyAuditBundle(bundle, keys, {
+    trustRoot: options?.trustRoot,
+    allowExpiredSnapshot: options?.allowExpiredSnapshot,
+  });
 }
