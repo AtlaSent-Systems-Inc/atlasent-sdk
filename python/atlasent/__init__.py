@@ -239,6 +239,14 @@ from .siem import (
     siem_test_delivery,
     upsert_siem_config,
 )
+from .trust_root import (
+    TrustRootKey,
+    TrustRootManager,
+    TrustRootRevocationEntry,
+    TrustRootSnapshot,
+    _set_global_trust_root_manager_for_tests,
+    get_global_trust_root_manager,
+)
 from .v2_endpoints import (
     BATCH_PATH as V2_BATCH_PATH,
 )
@@ -265,14 +273,6 @@ from .v2_endpoints import (
 )
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
-from .trust_root import (
-    TrustRootKey,
-    TrustRootManager,
-    TrustRootRevocationEntry,
-    TrustRootSnapshot,
-    get_global_trust_root_manager,
-    _set_global_trust_root_manager_for_tests,
-)
 
 #: Canonical Deploy Gate V1 protected action. Mirrors the TypeScript
 #: SDK's ``PRODUCTION_DEPLOY_ACTION``. Use this string (or the constant)
@@ -504,4 +504,11 @@ __all__ = [
     "list_evidence_exports",
     "get_evidence_export",
     "create_evidence_export",
+    # Trust root helpers (Wave C parity).
+    "TrustRootKey",
+    "TrustRootManager",
+    "TrustRootRevocationEntry",
+    "TrustRootSnapshot",
+    "get_global_trust_root_manager",
+    "_set_global_trust_root_manager_for_tests",
 ]
