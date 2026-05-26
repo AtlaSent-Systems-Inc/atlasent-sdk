@@ -36,9 +36,6 @@ jobs:
   e2e:
     name: E2E — evaluate → permit → audit
     runs-on: ubuntu-latest
-    # Skip entirely on forks that have not configured the secrets.
-    # The `secrets` context is available in `if:` expressions.
-    if: ${{ secrets.ATLASENT_API_URL != '' }}
     environment: staging
     defaults:
       run:
@@ -47,7 +44,22 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Check required secrets
+        id: precheck
+        env:
+          ATLASENT_API_URL: ${{ secrets.ATLASENT_API_URL }}
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+          ATLASENT_TEST_ORG_ID: ${{ secrets.ATLASENT_TEST_ORG_ID }}
+        run: |
+          if [ -n "$ATLASENT_API_URL" ] && [ -n "$ATLASENT_API_KEY" ] && [ -n "$ATLASENT_TEST_ORG_ID" ]; then
+            echo "have_secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Skipping E2E critical path because required secrets are not configured."
+            echo "have_secrets=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Use Node.js 20.x
+        if: steps.precheck.outputs.have_secrets == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: "20.x"
@@ -55,9 +67,11 @@ jobs:
           cache-dependency-path: typescript/package-lock.json
 
       - name: Install dependencies
+        if: steps.precheck.outputs.have_secrets == 'true'
         run: npm ci
 
       - name: Run E2E critical path suite
+        if: steps.precheck.outputs.have_secrets == 'true'
         env:
           ATLASENT_API_URL: ${{ secrets.ATLASENT_API_URL }}
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
