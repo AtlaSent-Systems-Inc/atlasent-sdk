@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.atlasent.io/v1.1/approval-artifact.schema.json",
+  "title": "ApprovalArtifactV1",
+  "description": "Signed attestation that a human reviewer approved a specific action. Verified by the evaluate path before issuing a permit_token. The agent cannot self-declare authority; the artifact is bound to the exact action via action_hash, signed by a trusted issuer, and replay-protected via nonce. Wire-stable as `approval_artifact.v1`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "approval_id",
+    "tenant_id",
+    "action_type",
+    "resource_id",
+    "action_hash",
+    "reviewer",
+    "issuer",
+    "issued_at",
+    "expires_at",
+    "nonce",
+    "signature"
+  ],
+  "properties": {
+    "version":      { "type": "string", "const": "approval_artifact.v1" },
+    "approval_id":  { "type": "string", "minLength": 1, "maxLength": 256 },
+    "tenant_id":    { "type": "string", "minLength": 1, "maxLength": 256 },
+    "action_type":  { "type": "string", "minLength": 1, "maxLength": 256 },
+    "resource_id":  { "type": "string", "minLength": 1, "maxLength": 512 },
+    "action_hash":  { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_kind"],
+      "properties": {
+        "principal_id":   { "type": "string", "minLength": 1 },
+        "principal_kind": { "type": "string", "enum": ["human", "agent", "service_account"] },
+        "email":          { "type": "string", "format": "email" },
+        "groups":         { "type": "array", "items": { "type": "string" } },
+        "roles":          { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "issuer_id", "kid"],
+      "properties": {
+        "type":      { "type": "string", "enum": ["oidc", "approval_service"] },
+        "issuer_id": { "type": "string", "minLength": 1 },
+        "kid":       { "type": "string", "minLength": 1 }
+      }
+    },
+    "issued_at":  { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "nonce":      { "type": "string", "minLength": 8 },
+    "signature":  { "type": "string", "minLength": 1 },
+    "identity_assertion": {
+      "$ref": "identity-assertion.schema.json"
+    }
+  }
+}

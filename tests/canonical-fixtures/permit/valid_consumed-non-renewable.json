@@ -1,0 +1,17 @@
+{
+  "id": "55555555-5555-5555-5555-555555555555",
+  "org_id": "00000000-0000-0000-0000-000000000001",
+  "decision_id": "22222222-2222-2222-2222-222222222222",
+  "actor_id": "service_account_clinical",
+  "action_class": "modify_patient_record",
+  "token": "tok_one_shot",
+  "issued_at": "2026-05-26T03:01:00.000Z",
+  "expires_at": "2026-05-26T04:01:00.000Z",
+  "lease_expires_at": null,
+  "max_lease_duration_ms": null,
+  "renewable": false,
+  "revocation_scope": null,
+  "status": "consumed",
+  "revoked_at": null,
+  "revocation_id": null
+}

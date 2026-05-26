@@ -1,0 +1,11 @@
+{
+  "actor_id": "user_abc123",
+  "action": {
+    "id": "act_001",
+    "type": "data.query"
+  },
+  "target": {
+    "id": "tgt_001",
+    "type": "patient_record"
+  }
+}
