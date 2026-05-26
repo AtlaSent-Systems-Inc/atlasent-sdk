@@ -33,7 +33,7 @@ permissions:
   contents: read
 
 jobs:
-  # ── Determine which package to publish ────────────────────────────────────
+  # ── Determine which package to publish ─────────────────────────────────────
   resolve:
     name: Resolve package from tag
     runs-on: ubuntu-latest
@@ -71,7 +71,7 @@ jobs:
             exit 1
           fi
 
-  # ── Test ──────────────────────────────────────────────────────────────────
+  # ── Test ────────────────────────────────────────────────────────────
   test:
     name: Test ${{ needs.resolve.outputs.package_name }}
     runs-on: ubuntu-latest
@@ -106,14 +106,17 @@ jobs:
       - name: Build
         run: npm run build
 
-  # ── Publish ────────────────────────────────────────────────────────────────
+  # ── Publish ──────────────────────────────────────────────────────────
   publish:
     name: Publish ${{ needs.resolve.outputs.package_name }} to npm
     runs-on: ubuntu-latest
     needs: [resolve, test]
     environment: npm
+    # id-token: write is required for:
+    #   1. `npm publish --provenance` (Sigstore-backed npm provenance).
+    #   2. cosign keyless signing (Sigstore Fulcio + Rekor, R4).
     permissions:
-      id-token: write   # required for npm publish --provenance
+      id-token: write
       contents: read
     defaults:
       run:
@@ -162,6 +165,40 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Pack tarball for signing
+        # Create the real tarball so cosign can sign it before we publish.
+        run: npm pack
+
+      # ── R4: cosign keyless signing ──────────────────────────────────────
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Sign npm tarball (keyless, Sigstore Fulcio + Rekor)
+        run: |
+          TARBALL="$(ls *.tgz | head -1)"
+          cosign sign-blob \
+            --yes \
+            --bundle="${TARBALL}.bundle" \
+            "${TARBALL}"
+          echo "TARBALL=${TARBALL}" >> "$GITHUB_ENV"
+
+      - name: Verify signature
+        run: |
+          cosign verify-blob \
+            --bundle="${TARBALL}.bundle" \
+            --certificate-identity-regexp='https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/.github/workflows/publish-npm-behavior.yml@refs/tags/(behavior|typescript)-v.*' \
+            --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
+            "${TARBALL}"
+
+      - name: Upload signature bundle as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarball-cosign-bundle-${{ needs.resolve.outputs.package_name }}
+          path: ${{ needs.resolve.outputs.package_dir }}/${{ env.TARBALL }}.bundle
+          retention-days: 90
 
       - name: Inspect tarball contents (dry-run)
         # Logs the exact file list that would ship to the registry.
