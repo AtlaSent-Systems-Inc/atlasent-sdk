@@ -265,6 +265,14 @@ from .evidence_exports import (
     get_evidence_export,
     create_evidence_export,
 )
+from .trust_root import (
+    TrustRootKey,
+    TrustRootManager,
+    TrustRootRevocationEntry,
+    TrustRootSnapshot,
+    get_global_trust_root_manager,
+    _set_global_trust_root_manager_for_tests,
+)
 
 #: Canonical Deploy Gate V1 protected action. Mirrors the TypeScript
 #: SDK's ``PRODUCTION_DEPLOY_ACTION``. Use this string (or the constant)

@@ -1,0 +1,12 @@
+{
+  "schema": "atlasent-sigstore-identities/v1",
+  "identities": [
+    {
+      "role": "R1_release_engine",
+      "identity_regexp": "^https://github\\.com/AtlaSent-Systems-Inc/atlasent-api/\\.github/workflows/publish-runtime\\.yml@refs/tags/v[0-9].*$",
+      "oidc_issuer": "https://token.actions.githubusercontent.com",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": null
+    }
+  ]
+}

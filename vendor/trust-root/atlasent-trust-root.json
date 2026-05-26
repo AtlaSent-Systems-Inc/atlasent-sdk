@@ -1,0 +1,18 @@
+{
+  "schema": "atlasent-trust-root/v1",
+  "issued_at": "2026-05-26T00:00:00Z",
+  "valid_until": "2026-12-01T00:00:00Z",
+  "trust_root_signer": {
+    "sigstore_identity": "https://github.com/AtlaSent-Systems-Inc/atlasent-keys/.github/workflows/publish.yml@refs/heads/main",
+    "oidc_issuer": "https://token.actions.githubusercontent.com"
+  },
+  "resources": [
+    { "path": "/.well-known/atlasent-verifier-keys.json", "sha256": "pending", "sig": "/.well-known/atlasent-verifier-keys.json.sig" },
+    { "path": "/.well-known/atlasent-sigstore-identities.json", "sha256": "pending", "sig": "/.well-known/atlasent-sigstore-identities.json.sig" },
+    { "path": "/.well-known/atlasent-revocations.json", "sha256": "pending", "sig": "/.well-known/atlasent-revocations.json.sig" }
+  ],
+  "v2_anchors": {
+    "transparency_log_url": null,
+    "transparency_log_pubkey": null
+  }
+}
