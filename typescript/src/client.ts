@@ -178,6 +178,13 @@ import {
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const SDK_VERSION = "2.10.0";
+
+/**
+ * Guard flag: emit the browser-environment warning at most once per
+ * module-load lifetime. Prevents console spam when many client
+ * instances are constructed in the same bundle.
+ */
+let warnedBrowser = false;
 const V1_EVALUATE_BATCH_PATH = "/v1/evaluate/batch";
 const V1_EVALUATE_BATCH_LEGACY_PATH = "/v1-evaluate-batch";
 const V1_EVALUATE_STREAM_PATH = "/v1/evaluate/stream";
@@ -431,6 +438,19 @@ export class AtlaSentClient {
           "Minimum supported browsers: Chrome 103+, Firefox 100+, Safari 16+. " +
           "Upgrade your browser or add an AbortSignal.timeout polyfill.",
         { code: "network" },
+      );
+    }
+    if (
+      !warnedBrowser &&
+      typeof (globalThis as Record<string, unknown>)["window"] !== "undefined" &&
+      typeof process === "undefined"
+    ) {
+      warnedBrowser = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[@atlasent/sdk] Running in a browser environment. " +
+          "API keys should not be exposed in client-side bundles. " +
+          "Use a server-side proxy instead.",
       );
     }
     this.apiKey = _validateApiKey(options.apiKey);

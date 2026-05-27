@@ -216,6 +216,7 @@ from .policy_sync import (
     format_policy_sync_diff,
     is_policy_sync_terminal,
 )
+from .replay import EvidenceVerificationResult, verify_evidence_bundle
 from .require_permit import ProtectedAction, classify_command, require_permit
 from .scim import (
     SCIM_GROUP_SCHEMA,
@@ -495,6 +496,9 @@ __all__ = [
     "evaluate_many",
     "authorize_stream",
     "graphql",
+    # Phase 3 offline replay client — verify evidence bundles without backend.
+    "verify_evidence_bundle",
+    "EvidenceVerificationResult",
     # BCCAE V1 — Phase 3 Execution Assurance substrate.
     # Standalone BCCAEClient with bccae:* scopes — not part of the
     # Deploy Gate V1 customer API surface.

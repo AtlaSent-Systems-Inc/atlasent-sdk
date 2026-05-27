@@ -175,6 +175,12 @@ export type {
   ReplayRequest,
   ReplayResponse,
   ReplayVarianceKind,
+  EvidenceBundleVerifyResult,
+  OfflineEvidenceBundleData,
+} from "./replay.js";
+export {
+  verifyEvidenceBundle,
+  _computeEvidenceRootHash,
 } from "./replay.js";
 export {
   DEFAULT_RETRY_POLICY,

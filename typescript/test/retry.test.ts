@@ -132,10 +132,10 @@ describe("hasAttemptsLeft", () => {
   });
 
   it("uses the default policy when none is supplied", () => {
-    // DEFAULT_RETRY_POLICY.maxAttempts === 4.
+    // DEFAULT_RETRY_POLICY.maxAttempts === 3.
+    expect(hasAttemptsLeft(0)).toBe(true);
     expect(hasAttemptsLeft(1)).toBe(true);
-    expect(hasAttemptsLeft(2)).toBe(true);
-    expect(hasAttemptsLeft(3)).toBe(false);
+    expect(hasAttemptsLeft(2)).toBe(false);
   });
 });
 

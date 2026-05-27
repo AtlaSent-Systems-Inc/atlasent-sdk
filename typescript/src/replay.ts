@@ -96,6 +96,7 @@ export interface ReplayRequest {
   evaluationId: string;
 }
 
+import { createHash } from "node:crypto";
 import type { RateLimitState } from "./types.js";
 import type { DecisionCanonical } from "./types.js";
 
@@ -128,4 +129,138 @@ export interface ReplayResponse {
   replayedAt: string;
   /** Rate-limit state from response headers. */
   rateLimit: RateLimitState | null;
+}
+
+// ── Phase 3 offline bundle verification ───────────────────────────────────────
+
+/**
+ * Result of offline evidence bundle verification via {@link verifyEvidenceBundle}.
+ *
+ * Named distinctly from {@link BundleVerificationResult} in `auditBundle.ts`
+ * which carries chain-integrity and signature fields for audit export bundles.
+ * This result covers the lighter-weight structural + hash-integrity check used
+ * by the Phase 3 replay client.
+ */
+export interface EvidenceBundleVerifyResult {
+  /** `true` when all checks passed. */
+  valid: boolean;
+  /** The `bundle_id` from the top-level bundle object, if present. */
+  bundleId: string | undefined;
+  /** The first `permit_id` found in the permits array (convenience). */
+  permitId: string | undefined;
+  /** Human-readable failure description; `undefined` when `valid` is `true`. */
+  reason: string | undefined;
+}
+
+/**
+ * Offline shape of an evidence bundle as returned by
+ * `GET /v1/evidence-bundles/:id` and downloaded for replay verification.
+ */
+export interface OfflineEvidenceBundleData {
+  bundle_id?: string;
+  org_id?: string;
+  status?: string;
+  permits?: Array<{ permit_id?: string; evaluation_id?: string }>;
+  hash_chain?: { root_hash?: string; entry_count?: number };
+  [key: string]: unknown;
+}
+
+/**
+ * Verify an evidence bundle offline without a backend round-trip.
+ *
+ * Checks:
+ * 1. Bundle has required fields (`bundle_id`, `org_id`, `status`).
+ * 2. `status` is `"ready"`.
+ * 3. Root hash integrity if `hash_chain` is present (SHA-256 via Node crypto).
+ *
+ * Does **not** require `AtlaSentClient` or network access.
+ *
+ * @example
+ * ```ts
+ * import { verifyEvidenceBundle } from "@atlasent/sdk";
+ *
+ * const result = verifyEvidenceBundle(bundleJson);
+ * if (result.valid) {
+ *   console.log("verified, first permit:", result.permitId);
+ * } else {
+ *   console.error("verification failed:", result.reason);
+ * }
+ * ```
+ */
+export function verifyEvidenceBundle(
+  bundle: OfflineEvidenceBundleData,
+): EvidenceBundleVerifyResult {
+  if (!bundle || typeof bundle !== "object" || Array.isArray(bundle)) {
+    return {
+      valid: false,
+      bundleId: undefined,
+      permitId: undefined,
+      reason: "bundle must be a non-null object",
+    };
+  }
+
+  for (const field of ["bundle_id", "org_id", "status"] as const) {
+    if (!(field in bundle)) {
+      return {
+        valid: false,
+        bundleId: bundle.bundle_id,
+        permitId: undefined,
+        reason: `missing required field: ${field}`,
+      };
+    }
+  }
+
+  if (bundle.status !== "ready") {
+    return {
+      valid: false,
+      bundleId: bundle.bundle_id,
+      permitId: undefined,
+      reason: `bundle status is '${bundle.status}', expected 'ready'`,
+    };
+  }
+
+  const permits = bundle.permits ?? [];
+
+  if (bundle.hash_chain?.root_hash !== undefined) {
+    const computed = _computeEvidenceRootHash(permits);
+    if (computed !== bundle.hash_chain.root_hash) {
+      return {
+        valid: false,
+        bundleId: bundle.bundle_id,
+        permitId: undefined,
+        reason: "root hash mismatch — bundle may have been tampered",
+      };
+    }
+  }
+
+  return {
+    valid: true,
+    bundleId: bundle.bundle_id,
+    permitId: permits[0]?.permit_id,
+    reason: undefined,
+  };
+}
+
+/**
+ * Compute a deterministic SHA-256 root hash over the permits list.
+ * Uses `JSON.stringify` with sorted keys via a replacer for canonical form.
+ *
+ * @internal
+ */
+export function _computeEvidenceRootHash(
+  permits: OfflineEvidenceBundleData["permits"],
+): string {
+  const list = permits ?? [];
+  // Sort keys deterministically at every depth using JSON + replacer pattern
+  const canonical = JSON.stringify(list, (_, value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+          a < b ? -1 : a > b ? 1 : 0,
+        ),
+      );
+    }
+    return value;
+  });
+  return createHash("sha256").update(canonical).digest("hex");
 }
