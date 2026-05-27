@@ -28,12 +28,10 @@
  * It avoids thundering-herd retries from many SDK instances that hit
  * a 429 in the same window.
  *
- * Default schedule matches the Python SDK:
- *   attempt 0 (1st retry): base 2 000 ms, jittered in [0, 2 000)
- *   attempt 1 (2nd retry): base 4 000 ms, jittered in [0, 4 000)
- *   attempt 2 (3rd retry): base 8 000 ms, jittered in [0, 8 000)
- *   attempt 3 (4th retry): capped at 16 000 ms, jittered in [0, 16 000)
- * Total attempts (including initial): 4
+ * Default schedule:
+ *   attempt 0 (1st retry): base 250 ms, jittered in [0, 250)
+ *   attempt 1 (2nd retry): base 500 ms, jittered in [0, 500)
+ * Total attempts (including initial): 3
  */
 
 import { AtlaSentError, type AtlaSentErrorCode } from "./errors.js";
@@ -41,13 +39,15 @@ import { AtlaSentError, type AtlaSentErrorCode } from "./errors.js";
 /**
  * Defaults for {@link RetryPolicy}.
  *
- * Matches the Python SDK's backoff schedule:
- *   2 s → 4 s → 8 s → 16 s (4 total attempts, cap at 16 s).
+ * Exponential backoff with full jitter, base 250 ms, capped at 10 s:
+ *   attempt 0 (1st retry): base 250 ms, jittered in [0, 250)
+ *   attempt 1 (2nd retry): base 500 ms, jittered in [0, 500)
+ * Total attempts (including initial): 3
  */
 export const DEFAULT_RETRY_POLICY: Required<RetryPolicy> = {
-  maxAttempts: 4,
-  baseDelayMs: 2_000,
-  maxDelayMs: 16_000,
+  maxAttempts: 3,
+  baseDelayMs: 250,
+  maxDelayMs: 10_000,
 };
 
 /**
