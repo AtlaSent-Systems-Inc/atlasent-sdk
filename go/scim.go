@@ -172,6 +172,43 @@ func (g *SCIMGroupsClient) List(ctx context.Context, params SCIMListParams) (SCI
 	return resp, nil
 }
 
+// Create provisions a new SCIM group.
+func (g *SCIMGroupsClient) Create(ctx context.Context, orgID string, group map[string]any) (map[string]any, error) {
+	schemas, _ := group["schemas"].([]any)
+	if len(schemas) == 0 {
+		group["schemas"] = []string{SCIMGroupSchema}
+	}
+	var out map[string]any
+	if err := g.c.post(ctx, scimGroupsPath(orgID), group, &out); err != nil {
+		return nil, fmt.Errorf("atlasent: scim.groups.create: %w", err)
+	}
+	return out, nil
+}
+
+// Update replaces a SCIM group (full replacement, PUT).
+func (g *SCIMGroupsClient) Update(ctx context.Context, orgID, groupID string, group map[string]any) (map[string]any, error) {
+	path := fmt.Sprintf("%s/%s", scimGroupsPath(orgID), url.PathEscape(groupID))
+	var out map[string]any
+	if err := g.c.put(ctx, path, group, &out); err != nil {
+		return nil, fmt.Errorf("atlasent: scim.groups.update: %w", err)
+	}
+	return out, nil
+}
+
+// Delete deprovisions a SCIM group.
+func (g *SCIMGroupsClient) Delete(ctx context.Context, orgID, groupID string) error {
+	path := fmt.Sprintf("%s/%s", scimGroupsPath(orgID), url.PathEscape(groupID))
+	resp, err := g.c.do(ctx, "DELETE", path, nil)
+	if err != nil {
+		return fmt.Errorf("atlasent: scim.groups.delete: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+	if resp.StatusCode >= 400 {
+		return apiError(resp)
+	}
+	return nil
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 func scimUsersPath(orgID string) string {

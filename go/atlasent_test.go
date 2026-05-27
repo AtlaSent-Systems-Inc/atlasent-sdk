@@ -165,3 +165,159 @@ func TestAuth_RefreshWithIdP(t *testing.T) {
 		t.Errorf("AccessToken = %q, want %q", tokens.AccessToken, "new_access")
 	}
 }
+
+func TestSCIM_Groups_Create(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/scim/v2/org1/Groups", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		schemas, _ := body["schemas"].([]any)
+		if len(schemas) == 0 {
+			t.Error("expected schemas to be injected, got none")
+		} else {
+			found := false
+			for _, s := range schemas {
+				if s == atlasent.SCIMGroupSchema {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected schema %q to be present in %v", atlasent.SCIMGroupSchema, schemas)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+			"id":          "grp_new",
+			"displayName": "New Group",
+			"schemas":     []string{atlasent.SCIMGroupSchema},
+		})
+	})
+
+	client := newTestClient(t, mux)
+	result, err := client.SCIM.Groups.Create(context.Background(), "org1", map[string]any{
+		"displayName": "New Group",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result["id"] != "grp_new" {
+		t.Errorf("id = %v, want %q", result["id"], "grp_new")
+	}
+}
+
+func TestSCIM_Groups_Delete(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/scim/v2/org1/Groups/grp1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	client := newTestClient(t, mux)
+	err := client.SCIM.Groups.Delete(context.Background(), "org1", "grp1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestMiddleware_Allow(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1-evaluate", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+			"decision":     "allow",
+			"permit_token": "tok_mw1",
+			"audit_hash":   "deadbeef",
+			"reason":       "policy allows",
+		})
+	})
+	mux.HandleFunc("/v1-verify-permit", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+			"valid":       true,
+			"permit_hash": "hashxyz",
+			"timestamp":   "2026-05-27T00:00:00Z",
+		})
+	})
+
+	client := newTestClient(t, mux)
+	var capturedCtx context.Context
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedCtx = r.Context()
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := client.Middleware(nil)(next)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-AtlaSent-Action", "production.deploy")
+	req.Header.Set("X-AtlaSent-Subject", "deploy-bot")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rr.Code)
+	}
+	if capturedCtx == nil {
+		t.Fatal("next handler was not called")
+	}
+	permit, ok := capturedCtx.Value(atlasent.PermitContextKey).(atlasent.Permit)
+	if !ok {
+		t.Fatal("expected Permit in context, got none or wrong type")
+	}
+	if permit.PermitID != "tok_mw1" {
+		t.Errorf("PermitID = %q, want %q", permit.PermitID, "tok_mw1")
+	}
+}
+
+func TestMiddleware_Deny(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1-evaluate", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+			"decision":     "deny",
+			"permit_token": "tok_denied",
+			"reason":       "policy denies",
+		})
+	})
+
+	client := newTestClient(t, mux)
+	nextCalled := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := client.Middleware(nil)(next)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-AtlaSent-Action", "production.deploy")
+	req.Header.Set("X-AtlaSent-Subject", "deploy-bot")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rr.Code)
+	}
+	if nextCalled {
+		t.Error("next handler should not have been called on deny")
+	}
+	var body map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if body["error"] != "denied" {
+		t.Errorf("error = %q, want %q", body["error"], "denied")
+	}
+	if body["reason"] != "policy denies" {
+		t.Errorf("reason = %q, want %q", body["reason"], "policy denies")
+	}
+}

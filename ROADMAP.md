@@ -25,7 +25,7 @@ independently of platform phases (see Doctrine 5 above).
 ## v1 contract status — May 2026
 
 The SDKs implement the stable AtlaSent **v1** contract
-(`evaluate → permit → verify → audit`).
+(`evaluate → permit → verify → execute → audit`).
 
 - **TypeScript `@atlasent/sdk` 2.10.0** on npm (tag: `typescript-v2.10.0`) — implements `v1`
   contract.
