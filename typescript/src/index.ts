@@ -254,7 +254,7 @@ export type {
 } from "./approvalQuorum.js";
 
 // ── V1 Proof bundle ──────────────────────────────────────────────────────────────────────────────────────
-Export type {
+export type {
   GovernanceEvent,
   PermitV1,
 } from "./v1Types.js";
@@ -508,7 +508,7 @@ export type {
 } from "./incidentReconstruction.js";
 
 // ── Connector Management & Organizational Risk Graph ──────────────────────────────────────────────────────
-Export type {
+export type {
   ConnectorType,
   ConnectorStatus,
   ConnectorRow,
@@ -774,7 +774,7 @@ export {
 } from "./claimLineage.js";
 
 // ── BCCAE V1 — Phase 3 Execution Assurance substrate ───────────────────────────────────────────────
-Export {
+export {
   BCCAEClient,
   generateBccaeNonce,
   type BccaeActorType,

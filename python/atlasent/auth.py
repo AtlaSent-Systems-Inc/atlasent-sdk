@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 from .exceptions import AtlaSentError
 
@@ -157,7 +158,6 @@ def refresh_with_idp(
     """
     if not idp_id:
         raise AtlaSentError("idp_id is required", code="bad_request")
-    from urllib.parse import quote
     path = f"/v1/auth/idp/{quote(idp_id, safe='')}/token/refresh"
     return _post(client, path, {
         "refresh_token": refresh_token,
