@@ -149,11 +149,14 @@ class TestScimUsersClient:
             "request",
             return_value=_mock_response(updated),
         ) as mock_req:
-            result = scim.users.update(ORG_ID, "scim-user-1", {"userName": "bob@example.com"})
+            result = scim.users.update(
+                ORG_ID, "scim-user-1", {"userName": "bob@example.com"}
+            )
         assert result["active"] is False
         assert mock_req.call_args[0][0] == "PUT"
-        assert f"/Users/{ORG_ID}" not in mock_req.call_args[0][1]  # url has org then user
-        assert "scim-user-1" in mock_req.call_args[0][1]
+        called_url = mock_req.call_args[0][1]
+        assert f"/Users/{ORG_ID}" not in called_url  # url has org then user_id
+        assert "scim-user-1" in called_url
 
     def test_delete_user_204(self):
         client = _client()
