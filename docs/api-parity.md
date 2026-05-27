@@ -69,6 +69,47 @@ Format: each row maps an SDK method slug to its API handler status. Statuses:
 
 <!-- python-registry-end -->
 
+## Phase 2 SDK methods (evidence bundles, SCIM, multi-IdP auth)
+
+These methods were added in the Phase 2 wave (branch
+`claude/moores-law-execution-governance-m2m4o`, 2026-05-27). They do not use
+the `@hitl-method` annotation mechanism (they are not HITL surfaces), so they
+are listed here as a reference rather than in the registry block above.
+
+### Evidence bundles (`/v1/evidence-bundles`)
+
+| Method | TS source | Python source | API path | Status |
+|---|---|---|---|---|
+| `evidenceBundles.create` | `evidence-bundle.ts:create` | `evidence_bundle.py:create_evidence_bundle` | `POST /v1/evidence-bundles` | `alpha` |
+| `evidenceBundles.get` | `evidence-bundle.ts:get` | `evidence_bundle.py:get_evidence_bundle` | `GET /v1/evidence-bundles/{bundleId}` | `alpha` |
+| `evidenceBundles.download` | `evidence-bundle.ts:download` | `evidence_bundle.py:download_evidence_bundle` | `GET /v1/evidence-bundles/{bundleId}/download` | `alpha` |
+
+### SCIM provisioning (`/scim/v2/*`)
+
+| Method | TS source | Python source | API path | Status |
+|---|---|---|---|---|
+| `scim.users.list` | `scim.ts:users.list` | `scim_client.py:ScimUsersClient.list` | `GET /scim/v2/{orgId}/Users` | `ga` |
+| `scim.users.create` | `scim.ts:users.create` | `scim_client.py:ScimUsersClient.create` | `POST /scim/v2/{orgId}/Users` | `ga` |
+| `scim.users.update` | `scim.ts:users.update` | `scim_client.py:ScimUsersClient.update` | `PUT /scim/v2/{orgId}/Users/{id}` | `ga` |
+| `scim.users.delete` | `scim.ts:users.delete` | `scim_client.py:ScimUsersClient.delete` | `DELETE /scim/v2/{orgId}/Users/{id}` | `ga` |
+| `scim.groups.list` | `scim.ts:groups.list` | `scim_client.py:ScimGroupsClient.list` | `GET /scim/v2/{orgId}/Groups` | `ga` |
+| `scim.groups.create` | `scim.ts:groups.create` | `scim_client.py:ScimGroupsClient.create` | `POST /scim/v2/{orgId}/Groups` | `ga` |
+| `scim.groups.delete` | `scim.ts:groups.delete` | `scim_client.py:ScimGroupsClient.delete` | `DELETE /scim/v2/{orgId}/Groups/{id}` | `ga` |
+
+### Multi-IdP token refresh (`/v1/auth/*`)
+
+| Method | TS source | Python source | API path | Status |
+|---|---|---|---|---|
+| `auth.refresh` | `auth.ts:refresh` | `auth.py:refresh_token` | `POST /v1/auth/token/refresh` | `ga` |
+| `auth.refreshWithIdp` | `auth.ts:refreshWithIdp` | `auth.py:refresh_with_idp` | `POST /v1/auth/idp/{idpId}/token/refresh` | `ga` |
+| `auth.listIdpConnections` | `auth.ts:listIdpConnections` | `auth.py:list_idp_connections` | `GET /v1/auth/idp-connections` | `ga` |
+
+### Simulation (placeholder — handler `absent`)
+
+| Method | TS source | Python source | API path | Status |
+|---|---|---|---|---|
+| `simulation.run` | _(not yet implemented)_ | _(not yet implemented)_ | `POST /v1/simulation/run` | `absent` |
+
 ## Backfill plan (existing HITL surface)
 
 The SDK already exports HITL-adjacent methods that predate this matrix:

@@ -1,0 +1,31 @@
+# go-release.yml — convenience alias for the canonical publish-go.yml workflow.
+#
+# Both workflows use the same tag prefix: go/vX.Y.Z
+# This file exists so operators searching for "go-release" find the trigger.
+# The actual publish logic lives in publish-go.yml.
+#
+# To release the Go SDK:
+#   git tag go/v2.0.0
+#   git push origin go/v2.0.0
+#
+# pkg.go.dev will index the module at:
+#   https://pkg.go.dev/github.com/atlasent-systems-inc/atlasent-sdk/go/v2
+
+name: Go SDK release (alias — see publish-go.yml)
+
+on:
+  push:
+    tags:
+      - 'go/v*'
+
+jobs:
+  forward:
+    name: Forward to publish-go
+    runs-on: ubuntu-latest
+    steps:
+      - name: Note
+        run: |
+          echo "go-release.yml: tag $GITHUB_REF_NAME detected."
+          echo "The canonical publish workflow is publish-go.yml, which"
+          echo "also matched this tag and is running in parallel."
+          echo "This job is a no-op informational step."

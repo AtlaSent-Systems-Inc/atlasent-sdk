@@ -162,6 +162,18 @@ import type {
   ImpersonationToken,
   ImpersonationValidationResult,
 } from "./crossOrgImpersonation.js";
+import {
+  makeScimClient,
+  type ScimSubClient,
+} from "./scim.js";
+import {
+  makeEvidenceBundleClient,
+  type EvidenceBundleSubClient,
+} from "./evidence-bundle.js";
+import {
+  makeAuthClient,
+  type AuthSubClient,
+} from "./auth.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -400,6 +412,13 @@ export class AtlaSentClient {
   private readonly userAgent: string;
   private readonly retryPolicy: Required<RetryPolicy>;
 
+  /** SCIM 2.0 provisioning sub-client. Access as `client.scim`. */
+  readonly scim: ScimSubClient;
+  /** Evidence bundle sub-client. Access as `client.evidenceBundles`. */
+  readonly evidenceBundles: EvidenceBundleSubClient;
+  /** Auth / token management sub-client. Access as `client.auth`. */
+  readonly auth: AuthSubClient;
+
   constructor(options: AtlaSentClientOptions) {
     if (!options.apiKey || typeof options.apiKey !== "string") {
       throw new AtlaSentError("apiKey is required", {
@@ -423,6 +442,21 @@ export class AtlaSentClient {
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.userAgent = _buildUserAgent();
     this.retryPolicy = mergePolicy(options.retryPolicy ?? {});
+    this.scim = makeScimClient(
+      (path, body, query) => this._post(path, body, query),
+      (path, query) => this._get(path, query),
+      (path, body) => this._put(path, body),
+      (path) => this._delete(path),
+    );
+    this.evidenceBundles = makeEvidenceBundleClient(
+      (path, body) => this._post(path, body),
+      (path, query) => this._get(path, query),
+      (path) => this._getRaw(path),
+    );
+    this.auth = makeAuthClient(
+      (path, body) => this._post(path, body),
+      (path) => this._get(path),
+    );
   }
 
   /**
@@ -2618,6 +2652,99 @@ export class AtlaSentClient {
       params,
     );
     return [...(body.evaluations ?? [])];
+  }
+
+  // ── Private adapters for sub-client factories ──────────────────────────────
+  // Thin wrappers that expose the private request infrastructure to sub-client
+  // factories (scim, evidenceBundles, auth) without widening the public API.
+
+  private async _post<T>(
+    path: string,
+    body: unknown,
+    query?: URLSearchParams,
+  ): Promise<{ body: T }> {
+    const { body: b } = await this.post<T>(path, body, query);
+    return { body: b };
+  }
+
+  private async _get<T>(
+    path: string,
+    query?: URLSearchParams,
+  ): Promise<{ body: T }> {
+    const { body: b } = await this.get<T>(path, query);
+    return { body: b };
+  }
+
+  private async _put<T>(path: string, body: unknown): Promise<{ body: T }> {
+    return this._requestRaw<T>(path, "PUT", body, undefined);
+  }
+
+  private async _delete(path: string): Promise<void> {
+    await this._requestRaw<Record<string, unknown>>(path, "DELETE", undefined, undefined);
+  }
+
+  private async _getRaw(path: string): Promise<ArrayBuffer> {
+    const url = `${this.baseUrl}${path}`;
+    const requestId = globalThis.crypto.randomUUID();
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.apiKey}`,
+      "User-Agent": this.userAgent,
+      "X-Request-ID": requestId,
+      "X-AtlaSent-Protocol-Version": "1",
+    };
+    const response = await this.fetchImpl(url, {
+      method: "GET",
+      headers,
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new AtlaSentError(`GET ${path} returned ${response.status}`, {
+        code: response.status >= 500 ? "server_error" : "bad_request",
+        status: response.status,
+        requestId,
+      });
+    }
+    return response.arrayBuffer();
+  }
+
+  private async _requestRaw<T>(
+    path: string,
+    method: "PUT" | "DELETE",
+    body: unknown,
+    query: URLSearchParams | undefined,
+  ): Promise<{ body: T }> {
+    const qs =
+      query && Array.from(query).length > 0 ? `?${query.toString()}` : "";
+    const url = `${this.baseUrl}${path}${qs}`;
+    const requestId = globalThis.crypto.randomUUID();
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      Authorization: `Bearer ${this.apiKey}`,
+      "User-Agent": this.userAgent,
+      "X-Request-ID": requestId,
+      "X-AtlaSent-Protocol-Version": "1",
+    };
+    if (method === "PUT" && body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
+    const init: RequestInit = { method, headers, signal: AbortSignal.timeout(this.timeoutMs) };
+    if (method === "PUT" && body !== undefined) {
+      init.body = JSON.stringify(body);
+    }
+    const response = await this.fetchImpl(url, init);
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new AtlaSentError(`${method} ${path} returned ${response.status}`, {
+        code: response.status >= 500 ? "server_error" : "bad_request",
+        status: response.status,
+        requestId,
+      });
+    }
+    if (method === "DELETE") {
+      return { body: {} as T };
+    }
+    return { body: (await response.json()) as T };
   }
 }
 

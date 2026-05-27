@@ -21,3 +21,9 @@ jobs:
         with:
           fail-on-severity: moderate
           comment-summary-in-pr: on-failure
+          # GHSA-j5w8-q4qc-rx2x and GHSA-f6x5-jh6r-wrfv are both in
+          # golang.org/x/crypto/ssh and crypto/ssh/agent. The Go SDK in
+          # go/ is HTTP-only and never imports crypto/ssh or crypto/ssh/agent,
+          # so these code paths are unreachable. Allowlisted pending
+          # golang.org/x/net upgrade that will pull a patched crypto version.
+          allow-ghsas: GHSA-j5w8-q4qc-rx2x, GHSA-f6x5-jh6r-wrfv
