@@ -16,7 +16,7 @@
 > `contract/schemas/v2/` are **code-level identifiers** — preserved
 > per Doctrines 3, 4, and 5.
 >
-> **Last updated:** 2026-05-25
+> **Last updated:** 2026-05-27
 
 Client SDKs: TypeScript (`@atlasent/sdk`), Python (`atlasent`). Nothing
 ships to customers until these ship. SDK package SemVer evolves
@@ -27,10 +27,11 @@ independently of platform phases (see Doctrine 5 above).
 The SDKs implement the stable AtlaSent **v1** contract
 (`evaluate → permit → verify → execute → audit`).
 
-- **TypeScript `@atlasent/sdk` 2.10.0** on npm (tag: `typescript-v2.10.0`) — implements `v1`
-  contract.
-- **Python `atlasent` 2.10.0** on PyPI (tag: `python-v2.10.0`) — implements `v1` contract.
-- **Go SDK** — removed; will be re-added on customer demand.
+- **TypeScript `@atlasent/sdk` 2.11.0** on npm (tag: `typescript-v2.11.0`) — implements `v1`
+  contract. Adds `client.auth`, `client.scim`, `client.evidenceBundles` sub-clients; TS retries with jitter; browser API key warning; `verifyEvidenceBundle` offline replay.
+- **Python `atlasent` 2.11.0** on PyPI (tag: `python-v2.11.0`) — implements `v1` contract.
+  Adds `atlasent.auth`, `atlasent.scim_client`, `atlasent.evidence_bundle`, `atlasent.replay`; unified `DecisionValue` type; `permit_expires_at` on `Permit`; `reasons: list[str]` on `EvaluateResult`.
+- **Go SDK** — **reinstated** at `2.11.0`. `go/` module at `github.com/atlasent-systems-inc/atlasent-sdk/go/v2`. Includes `(*Client).Middleware()` net/http middleware, full `SCIMGroupsClient` (Create/Update/Delete), `put()` helper, `PermitContextKey`. 10 tests green.
 - **Framework guard packages** (`@atlasent/langchain`,
   `@atlasent/llamaindex`, `@atlasent/cursor`) at 1.6.0 — tests green, README +
   LICENSE in place; **not yet published to npm** (blocked on org-wide
@@ -43,25 +44,24 @@ Remaining to close out the current SDK-publishing arc:
 
 Known gaps tracked for later phases:
 
-- TS retry logic with jitter.
-- Unified decision type across TS + Python.
-- Browser guard (prevent accidental API key exposure in browser
-  bundles).
+- Batch evaluate (blocked on atlasent-api `/v1/evaluate/batch` endpoint).
+- Streaming evaluate (blocked on atlasent-api SSE endpoint).
+- Sentry breadcrumbs on retry (Phase 2 stretch goal).
 
 ## Phase 1 — Stabilization & Pilot Readiness (SDK slice)
 
 Additive on the `v1` contract. The SDKs ship the stable `v1` surface
 plus the framework guards required for pilot deployments.
 
-1. **TS SDK published** — `@atlasent/sdk` **2.10.0 on npm** (tag: `typescript-v2.10.0`).
+1. **TS SDK published** — `@atlasent/sdk` **2.11.0 on npm** (tag: `typescript-v2.11.0`).
    `@atlasent/types` lives in
    `atlasent-api/packages/types`; whether it ships as a separate npm
    package or folds into `@atlasent/sdk` is open.
-2. **Python SDK published** — `atlasent` **2.10.0 on PyPI** (tag: `python-v2.10.0`).
+2. **Python SDK published** — `atlasent` **2.11.0 on PyPI** (tag: `python-v2.11.0`).
    Sync + async clients, `protect()` / `authorize()` / `gate()` /
    `evaluate()` / `verify()`, `@atlasent_guard` + `@async_atlasent_guard`
    decorators, typed errors, `TTLCache`, audit-bundle verification.
-3. **Go SDK** — removed. Re-add as a separate module on customer demand.
+3. **Go SDK** — **reinstated at 2.11.0**. Module path `github.com/atlasent-systems-inc/atlasent-sdk/go/v2`.
 4. **`v1`-only API sweep** — done in the 1.x line.
 5. **Offline verifier** — `@atlasent/verify` zero-dep Node CLI +
    library packaged. `verify_audit_bundle()` ships in both
@@ -96,32 +96,21 @@ plus the framework guards required for pilot deployments.
 Additive on `v1`. Brings the SDKs to enterprise-procurement readiness
 on top of the stable contract.
 
-- **Retries with jitter + Sentry breadcrumbs** — the `authorize()` call
-  should retry transient failures (429 with `Retry-After`, 5xx) and
-  record breadcrumbs.
-- **Unified decision type** — consistent shape across TS and Python
-  SDKs.
-- **Browser guard** — prevent accidental API key exposure in browser
-  bundles; add bundler warning.
-- **Batch evaluate** — client-side batching → one HTTP call for N
-  decisions. Requires an atlasent-api batch endpoint on `/v1`.
-- **Streaming evaluate** — for long-lived agents, keep the connection
-  warm; server-sent events for risk updates.
+- ✅ **Retries with jitter** — `authorize()` / `protect()` retry transient 429 (`Retry-After` honoured as backoff floor) and 5xx. Full jitter, `maxAttempts: 3`, cap 10 s. Shipped in 2.11.0.
+- ✅ **Unified decision type** — `DecisionValue = Literal["allow","deny","hold","escalate"]` exported from Python `atlasent` (mirrors TS `Decision`). `Permit.permit_expires_at` added (mirrors TS `permitExpiresAt`). `EvaluateResult.reasons: list[str]` added (mirrors TS `reasons: string[]`). Shipped in 2.11.0.
+- ✅ **Browser guard** — one-time `console.warn` in `AtlaSentClient` constructor when real browser context detected. Shipped in 2.11.0.
+- **Batch evaluate** — blocked on atlasent-api `/v1/evaluate/batch` endpoint.
+- **Streaming evaluate** — blocked on atlasent-api SSE endpoint.
+- **Sentry breadcrumbs** — stretch goal; deferred to after pilot feedback.
 
 ## Phase 3 — Execution Assurance & Operational Sovereignty (SDK slice)
 
 Additive on `v1`. Raises the SDK surface to deterministic execution
 assurance.
 
-- **Go parity** — re-add Go SDK (on customer demand) and match TS's
-  observer pattern (middleware, gRPC interceptors). Module path
-  suffix (`/v2`, `/v3`) follows Go's SemVer convention; it tracks the
-  SDK contract, not the platform (Doctrine 5).
-- **MCP server bump** — co-versioning with the SDK so
-  `claude_desktop_config.json` entries don't drift.
-- **Offline replay client** — verify a decision via signed bundle
-  without backend round-trip; pairs with the deterministic-replay
-  capability in Phase 3.
+- ✅ **Go parity** — Go SDK reinstated at 2.11.0. `(*Client).Middleware()` net/http middleware, full `SCIMGroupsClient`. Module path suffix (`/v2`) follows Go's SemVer convention.
+- ✅ **MCP server bump** — atlasent-mcp-server co-versioned to 2.11.0.
+- ✅ **Offline replay client** — `verify_evidence_bundle()` (Python) and `verifyEvidenceBundle()` (TypeScript) verify an evidence bundle without a backend round-trip. 25 tests each. Shipped in 2.11.0.
 
 ## Publishing mechanics
 
