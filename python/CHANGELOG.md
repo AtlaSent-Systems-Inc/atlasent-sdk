@@ -21,6 +21,36 @@
   - `get_evidence_bundle(client, org_id, bundle_id)`
   - `download_evidence_bundle(client, org_id, bundle_id, format)`
 
+- **`DecisionValue` type alias** — `Literal["allow", "deny", "hold", "escalate"]`,
+  the canonical four-value decision type mirroring the TypeScript `Decision` type.
+  Exported from the `atlasent` top-level namespace.
+
+- **`Permit.permit_expires_at: str | None`** — new field mirroring TypeScript
+  `permitExpiresAt`. Populated from the server's `expires_at` field in `protect()`.
+  `None` when the server does not return an expiry.
+
+- **`EvaluateResult.reasons: list[str]`** — new field mirroring TypeScript
+  `reasons: string[]`. Populated from the wire array when present; when the server
+  returns only a singular `reason` string the SDK wraps it in a one-element list
+  for backward compatibility.
+
+- **`atlasent.replay` module** — offline evidence-bundle verifier:
+  - `verify_evidence_bundle(bundle) -> EvidenceVerificationResult` — verifies an
+    evidence bundle dict offline without a backend round-trip. Checks required
+    fields, `status == 'ready'`, and SHA-256 root hash integrity when a
+    `hash_chain` is present.
+  - `EvidenceVerificationResult(valid, permit_id, bundle_id, reason)` — result
+    dataclass returned by `verify_evidence_bundle`.
+  - Both `verify_evidence_bundle` and `EvidenceVerificationResult` are exported
+    from the `atlasent` top-level namespace.
+
+### Notes
+
+- **Retries (Python parity note):** The Python client already retries transient
+  errors with exponential back-off. No new Python-specific retry change landed in
+  2.11.0 — the retry-with-jitter enhancement documented in the TypeScript changelog
+  is TypeScript-only for this release.
+
 ## Unreleased
 
 ### Packaging

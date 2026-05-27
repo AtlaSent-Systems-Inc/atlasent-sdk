@@ -41,6 +41,71 @@ SCIM-provisioned users and groups:
 - `client.evidenceBundles.get(orgId, bundleId)`
 - `client.evidenceBundles.download(orgId, bundleId, { format? })` — returns `ArrayBuffer`
 
+#### `Decision` — unified decision type alias (Phase 2)
+
+`Decision = "allow" | "deny" | "hold" | "escalate"` is now exported from the
+package root as a canonical type alias. Use it for typed `switch` statements and
+function signatures that accept or return a decision value.
+
+```typescript
+import type { Decision } from "@atlasent/sdk";
+
+function handleDecision(d: Decision) { ... }
+```
+
+#### `Permit.permitExpiresAt` — permit expiry surface (Phase 2)
+
+`Permit` now carries an optional `permitExpiresAt: string | undefined` field
+populated from the server's `expires_at` on `protect()` responses. Callers can
+use this for proactive permit-refresh scheduling without polling `/v1/permits/:id`.
+
+#### `EvaluateResult.reasons` — plural reasons array (Phase 2)
+
+`EvaluateResult` now carries `reasons: string[]` alongside the existing singular
+`reason` string. The array is populated directly from the wire `reasons` field;
+when the server returns only a singular `reason` the SDK wraps it in a
+one-element array for backward compatibility. New code should prefer `reasons`.
+
+#### Retries with jitter (Phase 2)
+
+The SDK's internal retry loop now uses **full-jitter exponential back-off** on
+transient errors (5xx, network timeout, `ECONNRESET`). Previously the back-off
+was a fixed delay. The jitter prevents thundering-herd retry storms in
+high-concurrency deployments. Maximum retry count and base delay are unchanged;
+no public API surface change.
+
+#### Browser guard warning (Phase 2)
+
+When the SDK detects it is running in a browser context (i.e. `window` is
+defined and `process` is not), it now emits a `console.warn` advising that API
+keys should not be used client-side. No error is thrown — the warning is
+informational only and can be suppressed by passing `{ suppressBrowserWarning:
+true }` in the client constructor options.
+
+#### `verifyEvidenceBundle(bundle)` — offline evidence-bundle verifier (Phase 3)
+
+A new top-level `verifyEvidenceBundle(bundle)` function verifies a compliance
+evidence bundle dict offline without a backend round-trip:
+
+```typescript
+import { verifyEvidenceBundle } from "@atlasent/sdk";
+
+const result = verifyEvidenceBundle(bundle);
+if (!result.valid) {
+  console.error(result.reason);
+}
+```
+
+Checks:
+1. Required top-level fields are present.
+2. `bundle.status === "ready"`.
+3. SHA-256 root hash integrity when `hash_chain` is present.
+
+Returns `EvidenceVerificationResult: { valid: boolean; permitId?: string; bundleId?: string; reason?: string }`.
+
+Both `verifyEvidenceBundle` and `EvidenceVerificationResult` are exported from
+the package root.
+
 ## Unreleased
 
 ### Packaging
