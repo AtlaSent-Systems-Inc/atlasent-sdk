@@ -65,7 +65,7 @@ import (
 const (
 	DefaultBaseURL = "https://api.atlasent.io"
 	DefaultTimeout = 10 * time.Second
-	SDKVersion     = "2.0.0"
+	SDKVersion     = "2.11.0"
 )
 
 // Options configures the AtlaSent client.
@@ -155,6 +155,15 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 
 func (c *Client) post(ctx context.Context, path string, body any, out any) error {
 	resp, err := c.do(ctx, http.MethodPost, path, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close() //nolint:errcheck
+	return decodeResponse(resp, out)
+}
+
+func (c *Client) put(ctx context.Context, path string, body any, out any) error {
+	resp, err := c.do(ctx, http.MethodPut, path, body)
 	if err != nil {
 		return err
 	}

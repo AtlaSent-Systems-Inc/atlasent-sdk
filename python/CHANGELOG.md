@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.11.0 -- 2026-05-27 -- auth helpers, SCIM sub-client, evidence-bundle sub-client
+
+### Added
+
+- **`atlasent.auth`** module — token management and multi-IdP refresh helpers:
+  - `refresh_token(client, refresh_token)` — `POST /v1/auth/token/refresh`
+  - `refresh_with_idp(client, idp_id, refresh_token)` — refresh against a
+    named SSO connection (`POST /v1/auth/idp/{idpId}/token/refresh`)
+  - `list_idp_connections(client)` — `GET /v1/auth/idp-connections`
+
+- **`atlasent.scim_client`** module — fluent SCIM 2.0 provisioning sub-client
+  mirroring the TypeScript `client.scim.*` surface:
+  - `ScimClient(client)` — exposes `.users` and `.groups` sub-clients
+  - `ScimUsersClient`: `list`, `create`, `update`, `delete`
+  - `ScimGroupsClient`: `list`, `create`, `delete`
+
+- **`atlasent.evidence_bundle`** module — compliance evidence bundle helpers:
+  - `create_evidence_bundle(client, org_id, **kwargs)`
+  - `get_evidence_bundle(client, org_id, bundle_id)`
+  - `download_evidence_bundle(client, org_id, bundle_id, format)`
+
 ## Unreleased
 
 ### Packaging

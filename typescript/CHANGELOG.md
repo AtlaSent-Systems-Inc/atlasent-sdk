@@ -6,6 +6,41 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.11.0 (2026-05-27)
+
+### New features
+
+#### `client.auth` — multi-IdP token management sub-client
+
+`AtlaSentClient` now exposes a `client.auth` sub-client for programmatic token
+lifecycle management:
+
+- `client.auth.refresh(refreshToken)` — refresh against the default IdP
+  (`POST /v1/auth/token/refresh`). Returns `{ accessToken, refreshToken, tokenType, expiresIn }`.
+- `client.auth.refreshWithIdp(idpId, refreshToken)` — refresh against a named
+  SSO connection (`POST /v1/auth/idp/{idpId}/token/refresh`).
+- `client.auth.listIdpConnections()` — list available IdP connections for the
+  org (`GET /v1/auth/idp-connections`). Returns `{ id, name, provider, enabled, isDefault, createdAt, domains? }[]`.
+
+#### `client.scim` — SCIM 2.0 provisioning sub-client
+
+`AtlaSentClient` now exposes a `client.scim` sub-client for managing
+SCIM-provisioned users and groups:
+
+- `client.scim.users.list(orgId, { filter?, startIndex?, count? })`
+- `client.scim.users.create(orgId, user)` — `schemas` injected automatically
+- `client.scim.users.update(orgId, userId, user)` — full PUT replacement
+- `client.scim.users.delete(orgId, userId)`
+- `client.scim.groups.list(orgId, { filter?, startIndex?, count? })`
+- `client.scim.groups.create(orgId, group)`
+- `client.scim.groups.delete(orgId, groupId)`
+
+#### `client.evidenceBundles` — compliance evidence bundle sub-client
+
+- `client.evidenceBundles.create(orgId, { incidentId?, includedPermits?, includeOverrides? })`
+- `client.evidenceBundles.get(orgId, bundleId)`
+- `client.evidenceBundles.download(orgId, bundleId, { format? })` — returns `ArrayBuffer`
+
 ## Unreleased
 
 ### Packaging
