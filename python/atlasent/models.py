@@ -81,6 +81,16 @@ def _warn_oversize_context(value: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
+# ── Canonical decision type (mirrors TypeScript Decision / DecisionCanonical) ─
+
+#: Four-value decision vocabulary.  Mirrors the TypeScript SDK's
+#: ``Decision`` / ``DecisionCanonical`` union type so polyglot users can
+#: annotate decision variables identically in both languages.
+#:
+#: >>> from atlasent import DecisionValue
+#: >>> def handle(decision: DecisionValue) -> None: ...
+DecisionValue = Literal["allow", "deny", "hold", "escalate"]
+
 # ── Rate-limit state (shared by evaluate + verify) ───────────────────
 
 
@@ -289,6 +299,10 @@ class EvaluateResult(BaseModel):
     request_id: str = ""
     expires_at: str = ""
     denial: dict[str, Any] | None = None
+    # Mirrors TypeScript SDK's ``reasons: string[]``. For deny/hold/escalate
+    # decisions contains the policy engine's explanation(s); for allow often
+    # empty. ``reason`` (singular) is the first element and kept for compat.
+    reasons: list[str] = field(default_factory=list)
     # Permit ↔ approval-artifact binding. Present iff /v1-evaluate
     # verified an ApprovalArtifactV1 for this issuance — the cryptographic
     # proof of which signed approval authorized this permit.
@@ -343,6 +357,17 @@ class EvaluateResult(BaseModel):
             out["decision_id"] = out["permit_token"]
         if "reason" not in out and isinstance(out.get("denial"), dict):
             out["reason"] = str(out["denial"].get("reason", ""))
+
+        # Populate `reasons` (mirrors TS `reasons: string[]`).
+        # Accept a wire-provided list first; fall back to wrapping `reason`.
+        if "reasons" not in out or not out["reasons"]:
+            wire_reasons = out.get("reasons")
+            if isinstance(wire_reasons, list) and wire_reasons:
+                out["reasons"] = [str(r) for r in wire_reasons]
+            elif out.get("reason"):
+                out["reasons"] = [str(out["reason"])]
+            else:
+                out["reasons"] = []
 
         # Permit-approval binding. The atlasent-console wire shape
         # nests it under ``permit.approval`` (PermitV2.approval); the
@@ -696,6 +721,9 @@ class Permit:
         audit_hash: Hash-chained audit-trail entry (21 CFR Part 11).
         reason: Human-readable explanation from the policy engine.
         timestamp: ISO 8601 timestamp of the verification.
+        permit_expires_at: ISO 8601 expiration timestamp of the permit.
+            ``None`` on pre-rollout servers that don't emit ``expires_at``.
+            Mirrors TypeScript SDK's ``permitExpiresAt``.
     """
 
     permit_id: str
@@ -703,6 +731,7 @@ class Permit:
     audit_hash: str
     reason: str = ""
     timestamp: str = ""
+    permit_expires_at: str | None = None
 
 
 @dataclass

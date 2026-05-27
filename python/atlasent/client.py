@@ -498,6 +498,7 @@ class AtlaSentClient:
             audit_hash=eval_result.audit_hash,
             reason=eval_result.reason,
             timestamp=verify_result.timestamp,
+            permit_expires_at=eval_result.expires_at or None,
         )
 
     def gate(
