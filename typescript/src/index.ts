@@ -253,8 +253,8 @@ export type {
   QuorumRoleRequirement,
 } from "./approvalQuorum.js";
 
-// ── V1 Proof bundle ───────────────────────────────────────────────────────────────────────
-export type {
+// ── V1 Proof bundle ──────────────────────────────────────────────────────────────────────────────────────
+Export type {
   GovernanceEvent,
   PermitV1,
 } from "./v1Types.js";
@@ -264,7 +264,7 @@ export type {
   ProofResponse,
 } from "./proof.js";
 
-// ── V1 Override types ────────────────────────────────────────────────────────────────────
+// ── V1 Override types ────────────────────────────────────────────────────────────────────────────────────
 export type {
   CreateOverrideRequest,
   OverrideEvent,
@@ -286,7 +286,7 @@ export {
   __setGlobalTrustRootManagerForTests,
 } from "./trustRoot.js";
 
-// ── Economic Governance & Liability Attribution ────────────────────────────────────────────
+// ── Economic Governance & Liability Attribution ─────────────────────────────────────────────────────────────
 export {
   DEFAULT_RISK_TIER_THRESHOLDS,
   classifyRiskTier,
@@ -415,7 +415,7 @@ export {
   type RiskTimelinePoint,
 } from "./financialDashboard.js";
 
-// ── Governance enforcement layer ───────────────────────────────────────────────────────────────
+// ── Governance enforcement layer ────────────────────────────────────────────────────────────────────────────────────────
 export {
   GovernanceEnforcementError,
   enforceAutonomousBounds,
@@ -429,7 +429,7 @@ export {
   type GovernanceGate,
 } from "./governanceEnforcement.js";
 
-// ── Governance Webhooks, Compliance Evidence & Policy Sync ────────────────────────────────────
+// ── Governance Webhooks, Compliance Evidence & Policy Sync ────────────────────────────────────────────
 export {
   verifyWebhookSignature,
   type CreateWebhookSubscriptionRequest,
@@ -478,7 +478,7 @@ export {
   WebhookVerificationError,
 } from "./webhook.js";
 
-// ── Governance Graph & Incident Reconstruction ────────────────────────────────────────────
+// ── Governance Graph & Incident Reconstruction ────────────────────────────────────────────────
 export type {
   GovernanceGraphQueryType,
   GovernanceGraphQueryParams,
@@ -507,8 +507,8 @@ export type {
   IncidentTimelineResponse,
 } from "./incidentReconstruction.js";
 
-// ── Connector Management & Organizational Risk Graph ──────────────────────────────────────────
-export type {
+// ── Connector Management & Organizational Risk Graph ──────────────────────────────────────────────────────
+Export type {
   ConnectorType,
   ConnectorStatus,
   ConnectorRow,
@@ -543,7 +543,7 @@ export type {
   ListOrgRiskHistoryResponse,
 } from "./orgRiskGraph.js";
 
-// ── Cross-Org Permission Negotiation ───────────────────────────────────────────────────────
+// ── Cross-Org Permission Negotiation ────────────────────────────────────────────────────────────────────────────
 export {
   summarizeCrossOrgPermission,
   type CrossOrgPermissionCheckListParams,
@@ -552,7 +552,7 @@ export {
   type CrossOrgTrustHop,
 } from "./crossOrgPermission.js";
 
-// ── Anomaly Response Automation ───────────────────────────────────────────────────────────────
+// ── Anomaly Response Automation ─────────────────────────────────────────────────────────────────────────────────────
 export {
   highestSeverityAction,
   matchAnomalyRules,
@@ -563,7 +563,7 @@ export {
   type TriggerAnomalyResponseRequest,
 } from "./anomalyResponse.js";
 
-// ── Budget Exception Workflows ───────────────────────────────────────────────────────────────────
+// ── Budget Exception Workflows ──────────────────────────────────────────────────────────────────────────────────────────
 export {
   isBudgetExceptionActive,
   isBudgetExceptionTerminal,
@@ -573,7 +573,7 @@ export {
   type CreateBudgetExceptionRequest,
 } from "./budgetExceptions.js";
 
-// ── Regulatory Escalation Chain ────────────────────────────────────────────────────────────────
+// ── Regulatory Escalation Chain ────────────────────────────────────────────────────────────────────────────────────
 export {
   isEscalationSlaBreached,
   isRegulatoryEscalationTerminal,
@@ -583,7 +583,7 @@ export {
   type RegulatoryEscalationStatus,
 } from "./regulatoryEscalation.js";
 
-// ── Incentive Signal Feedback Loop ─────────────────────────────────────────────────────────────
+// ── Incentive Signal Feedback Loop ───────────────────────────────────────────────────────────────────────────────────────
 export {
   computeSignalEngagementRate,
   isSubstantiveSignalResponse,
@@ -594,7 +594,7 @@ export {
   type SignalActionType,
 } from "./incentiveSignalFeedback.js";
 
-// ── Cross-Org Impersonation ──────────────────────────────────────────────────────────────────
+// ── Cross-Org Impersonation ──────────────────────────────────────────────────────────────────────────────────────────
 export {
   clampTokenDuration,
   isImpersonationGrantUsable,
@@ -604,7 +604,7 @@ export {
   type ImpersonationValidationResult,
 } from "./crossOrgImpersonation.js";
 
-// ── V2 Wave-A endpoints ───────────────────────────────────────────────────────────────────────
+// ── V2 Wave-A endpoints ──────────────────────────────────────────────────────────────────────────────────────────────────
 export {
   FeatureNotEnabledError,
   V2_BATCH_PATH,
@@ -630,7 +630,7 @@ export {
   type V2Transport,
 } from "./v2.js";
 
-// ── Approval / Override Runtime ────────────────────────────────────────────────────────────
+// ── Approval / Override Runtime ────────────────────────────────────────────────────────────────────────────────────
 export {
   configureApprovalRuntime,
   createEscalation,
@@ -650,7 +650,7 @@ export {
   type WaitForApprovalOptions,
 } from "./approvalRuntime.js";
 
-// ── Context Layer ───────────────────────────────────────────────────────────────────────
+// ── Context Layer ───────────────────────────────────────────────────────────────────────────────────────────────────────
 export {
   DEFAULT_REDACTION_RULES,
   buildActionContext,
@@ -672,7 +672,7 @@ export {
   type ValidateContextOptions,
 } from "./actionContext.js";
 
-// ── Shadow Mode ──────────────────────────────────────────────────────────────────────────
+// ── Shadow Mode ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 export {
   configureShadow,
   protectShadow,
@@ -684,7 +684,7 @@ export {
   type ShadowOutcome,
 } from "./shadow.js";
 
-// ── Enterprise Control Surface ────────────────────────────────────────────────────────────
+// ── Enterprise Control Surface ────────────────────────────────────────────────────────────────────────────────────
 export {
   checkIntegrationHealth,
   configureControlSurface,
@@ -701,7 +701,7 @@ export {
   type ReportProtectedActionOptions,
 } from "./controlSurface.js";
 
-// ── Pilot Verticals ────────────────────────────────────────────────────────────────────────
+// ── Pilot Verticals ────────────────────────────────────────────────────────────────────────────────────────────────────────
 export {
   protectDeploy,
   type DeployGateOptions,
@@ -773,12 +773,8 @@ export {
   type BuildFromActionBundleOpts,
 } from "./claimLineage.js";
 
-// ── BCCAE V1 — Phase 3 Execution Assurance substrate ───────────────────────
-//
-// Standalone BCCAEClient — separate from AtlaSentClient because BCCAE
-// uses different API scopes (bccae:evaluate / bccae:execute / bccae:revoke /
-// bccae:audit) and is not a Deploy Gate V1 customer API surface.
-export {
+// ── BCCAE V1 — Phase 3 Execution Assurance substrate ───────────────────────────────────────────────
+Export {
   BCCAEClient,
   generateBccaeNonce,
   type BccaeActorType,
@@ -798,13 +794,7 @@ export {
   type BccaeEvidenceResponse,
 } from "./bccae.js";
 
-// ── Constrained governance agents (advisory read surface) ───────────────────
-//
-// Doctrine: evaluation ≠ authorization ≠ execution. The exports below
-// are read-only types and the rollup helper. The client methods
-// (listGovernanceAgents / listGovernanceFindings / listGovernanceEvaluations)
-// live on AtlaSentClient. There is no invocation method on the SDK —
-// running an agent is a CI concern.
+// ── Constrained governance agents (advisory read surface) ───────────────────────────────────────────────
 export {
   highestAgentFindingSeverity,
   type AgentAuthorityDomain,
@@ -822,3 +812,41 @@ export {
   type ListGovernanceFindingsQuery,
   type ListGovernanceFindingsResponse,
 } from "./governanceAgents.js";
+
+// ── SCIM 2.0 Provisioning ─────────────────────────────────────────────────────────────────────────────────────────
+export {
+  makeScimClient,
+  SCIM_GROUP_SCHEMA,
+  SCIM_PATCH_OP_SCHEMA,
+  SCIM_USER_SCHEMA,
+  type ScimEmail,
+  type ScimGroupRef,
+  type ScimGroupsSubClient,
+  type ScimListParams,
+  type ScimListResponse,
+  type ScimMeta,
+  type ScimName,
+  type ScimPatchOp,
+  type ScimSubClient,
+  type ScimUser,
+  type ScimUserCreate,
+  type ScimUsersSubClient,
+  type ScimUserUpdate,
+} from "./scim.js";
+
+// ── Evidence Bundles ──────────────────────────────────────────────────────────────────────────────────────────────
+export {
+  makeEvidenceBundleClient,
+  type EvidenceBundle,
+  type EvidenceBundleCreateParams,
+  type EvidenceBundleStatus,
+  type EvidenceBundleSubClient,
+} from "./evidence-bundle.js";
+
+// ── Auth Token Management ─────────────────────────────────────────────────────────────────────────────────────────────
+export {
+  makeAuthClient,
+  type AuthSubClient,
+  type IdpConnection,
+  type TokenResponse,
+} from "./auth.js";
