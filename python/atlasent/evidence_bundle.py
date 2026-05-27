@@ -14,7 +14,9 @@ Usage::
 
     client = AtlaSentClient(api_key="...")
 
-    bundle = create_evidence_bundle(client, incident_id="inc_abc123", include_overrides=True)
+    bundle = create_evidence_bundle(
+        client, incident_id="inc_abc123", include_overrides=True
+    )
     same_bundle = get_evidence_bundle(client, bundle["bundle_id"])
     pdf_bytes = download_evidence_bundle(client, bundle["bundle_id"], format="pdf")
 """

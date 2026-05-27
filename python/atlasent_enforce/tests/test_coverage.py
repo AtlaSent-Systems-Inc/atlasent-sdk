@@ -44,7 +44,10 @@ def test_classify_5xx_returns_fallback() -> None:
 
 def test_classify_no_http_status_returns_fallback() -> None:
     # Line 24: no reason_code, no http_status → plain fallback
-    assert classify_client_error(_PlainError("boom"), "evaluate_unavailable") == "evaluate_unavailable"
+    assert (
+        classify_client_error(_PlainError("boom"), "evaluate_unavailable")
+        == "evaluate_unavailable"
+    )
 
 
 # ── evaluate() throws ────────────────────────────────────────────────────────
