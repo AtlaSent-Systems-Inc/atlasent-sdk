@@ -118,9 +118,7 @@ class ScimUsersClient:
             SCIM ListResponse dict with ``totalResults`` and ``Resources``.
         """
         qs = _qs(filter=filter, start_index=start_index, count=count)
-        return _request(
-            self._client, "GET", f"/scim/v2/{_enc(org_id)}/Users{qs}"
-        )
+        return _request(self._client, "GET", f"/scim/v2/{_enc(org_id)}/Users{qs}")
 
     def create(
         self,
@@ -195,9 +193,7 @@ class ScimGroupsClient:
     ) -> dict[str, Any]:
         """``GET /scim/v2/{orgId}/Groups`` — list provisioned groups."""
         qs = _qs(filter=filter, start_index=start_index, count=count)
-        return _request(
-            self._client, "GET", f"/scim/v2/{_enc(org_id)}/Groups{qs}"
-        )
+        return _request(self._client, "GET", f"/scim/v2/{_enc(org_id)}/Groups{qs}")
 
     def create(
         self,
@@ -207,9 +203,7 @@ class ScimGroupsClient:
         """``POST /scim/v2/{orgId}/Groups`` — create a group."""
         if "schemas" not in group:
             group = {**group, "schemas": [SCIM_GROUP_SCHEMA]}
-        return _request(
-            self._client, "POST", f"/scim/v2/{_enc(org_id)}/Groups", group
-        )
+        return _request(self._client, "POST", f"/scim/v2/{_enc(org_id)}/Groups", group)
 
     def delete(
         self,

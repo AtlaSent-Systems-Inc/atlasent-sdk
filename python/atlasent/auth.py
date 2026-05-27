@@ -124,10 +124,14 @@ def refresh_token(
         atlasent.exceptions.AtlaSentError: On 401 (invalid token) or
             other non-2xx responses.
     """
-    return _post(client, "/v1/auth/token/refresh", {
-        "refresh_token": refresh_token,
-        "grant_type": "refresh_token",
-    })
+    return _post(
+        client,
+        "/v1/auth/token/refresh",
+        {
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+        },
+    )
 
 
 def refresh_with_idp(
@@ -159,11 +163,15 @@ def refresh_with_idp(
     if not idp_id:
         raise AtlaSentError("idp_id is required", code="bad_request")
     path = f"/v1/auth/idp/{quote(idp_id, safe='')}/token/refresh"
-    return _post(client, path, {
-        "refresh_token": refresh_token,
-        "grant_type": "refresh_token",
-        "idp_id": idp_id,
-    })
+    return _post(
+        client,
+        path,
+        {
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+            "idp_id": idp_id,
+        },
+    )
 
 
 def list_idp_connections(

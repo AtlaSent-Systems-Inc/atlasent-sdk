@@ -12,7 +12,9 @@ from atlasent.exceptions import AtlaSentError
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 
-def _make_response(status_code: int, body: object, headers: dict | None = None) -> MagicMock:
+def _make_response(
+    status_code: int, body: object, headers: dict | None = None
+) -> MagicMock:
     resp = MagicMock()
     resp.status_code = status_code
     resp.headers = headers or {}
