@@ -1,11 +1,14 @@
-"""Tests for atlasent.evidence_bundle helpers."""
+"""Tests for atlasent.evidence_bundle — create, get, download helpers."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+import json
+from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
+from atlasent import AtlaSentClient
 from atlasent.evidence_bundle import (
     create_evidence_bundle,
     download_evidence_bundle,
@@ -13,170 +16,227 @@ from atlasent.evidence_bundle import (
 )
 from atlasent.exceptions import AtlaSentError
 
+API_KEY = "ask_test_evidence_bundle"
+BASE_URL = "https://api.atlasent.io"
 
-def _make_response(
-    status_code: int,
-    body: object,
-    *,
-    raw: bytes = b"",
-    headers: dict | None = None,
-) -> MagicMock:
-    resp = MagicMock()
-    resp.status_code = status_code
-    resp.headers = headers or {}
-    resp.json.return_value = body
-    resp.content = raw
+
+def _client() -> AtlaSentClient:
+    return AtlaSentClient(api_key=API_KEY, base_url=BASE_URL)
+
+
+def _mock_response(body: object, status: int = 200) -> MagicMock:
+    resp = MagicMock(spec=httpx.Response)
+    resp.status_code = status
+    resp.headers = {"X-Request-ID": "req-test-123"}
+    if body is not None and not isinstance(body, bytes):
+        resp.json = MagicMock(return_value=body)
+        resp.content = json.dumps(body).encode()
+    else:
+        resp.json = MagicMock(side_effect=ValueError("no json"))
+        resp.content = body if isinstance(body, bytes) else b""
     return resp
 
 
-def _make_client(response: MagicMock) -> MagicMock:
-    client = MagicMock()
-    client._base_url = "https://api.atlasent.io"
-    http = MagicMock()
-    http.request.return_value = response
-    client._client = http
-    return client
-
-
-STUB_BUNDLE = {
-    "bundle_id": "bnd_abc",
-    "org_id": "org_xyz",
-    "incident_id": "inc_123",
-    "status": "pending",
-    "included_permits": [],
-    "include_overrides": False,
-    "format": "json",
-    "created_at": "2026-01-01T00:00:00Z",
-    "expires_at": "2026-01-08T00:00:00Z",
+SAMPLE_BUNDLE = {
+    "bundle_id": "bundle_abc123",
+    "org_id": "org_test",
+    "incident_id": "inc_001",
+    "status": "ready",
+    "created_at": "2026-05-27T12:00:00Z",
 }
 
 
-# ── create_evidence_bundle ────────────────────────────────────────────────────
+class TestCreateEvidenceBundle:
+    def test_create_minimal(self):
+        client = _client()
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response(SAMPLE_BUNDLE, 201),
+        ) as mock_req:
+            result = create_evidence_bundle(client, "inc_001")
+        assert result["bundle_id"] == "bundle_abc123"
+        assert mock_req.call_args[0][0] == "POST"
+        sent = json.loads(mock_req.call_args[1]["content"])
+        assert sent["incident_id"] == "inc_001"
+        assert "included_permits" not in sent
+        assert "include_overrides" not in sent
+
+    def test_create_with_permits_and_overrides(self):
+        client = _client()
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response(SAMPLE_BUNDLE, 201),
+        ) as mock_req:
+            create_evidence_bundle(
+                client,
+                "inc_001",
+                included_permits=["permit_a", "permit_b"],
+                include_overrides=True,
+            )
+        sent = json.loads(mock_req.call_args[1]["content"])
+        assert sent["included_permits"] == ["permit_a", "permit_b"]
+        assert sent["include_overrides"] is True
+
+    def test_create_400_raises(self):
+        client = _client()
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response({"error": "bad request"}, 400),
+        ):
+            with pytest.raises(AtlaSentError) as exc_info:
+                create_evidence_bundle(client, "")
+        assert exc_info.value.status_code == 400
+
+    def test_create_500_raises(self):
+        client = _client()
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response({"message": "internal error"}, 500),
+        ):
+            with pytest.raises(AtlaSentError) as exc_info:
+                create_evidence_bundle(client, "inc_001")
+        assert exc_info.value.status_code == 500
+
+    def test_create_malformed_json_raises(self):
+        client = _client()
+        resp = MagicMock(spec=httpx.Response)
+        resp.status_code = 200
+        resp.headers = {"X-Request-ID": "req-123"}
+        resp.json = MagicMock(side_effect=ValueError("bad json"))
+        with patch.object(client._client, "request", return_value=resp):
+            with pytest.raises(AtlaSentError) as exc_info:
+                create_evidence_bundle(client, "inc_001")
+        assert exc_info.value.code == "bad_response"
 
 
-def test_create_posts_to_correct_path() -> None:
-    resp = _make_response(200, STUB_BUNDLE)
-    client = _make_client(resp)
-    result = create_evidence_bundle(client, incident_id="inc_123")
-    url = client._client.request.call_args[0][1]
-    assert url.endswith("/v1/evidence-bundles")
-    assert result["bundle_id"] == "bnd_abc"
+class TestGetEvidenceBundle:
+    def test_get_by_id(self):
+        client = _client()
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response(SAMPLE_BUNDLE),
+        ) as mock_req:
+            result = get_evidence_bundle(client, "bundle_abc123")
+        assert result["bundle_id"] == "bundle_abc123"
+        assert mock_req.call_args[0][0] == "GET"
+        assert "bundle_abc123" in mock_req.call_args[0][1]
+
+    def test_get_empty_id_raises(self):
+        client = _client()
+        with pytest.raises(AtlaSentError) as exc_info:
+            get_evidence_bundle(client, "")
+        assert exc_info.value.code == "bad_request"
+
+    def test_get_url_encodes_id(self):
+        client = _client()
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response(SAMPLE_BUNDLE),
+        ) as mock_req:
+            get_evidence_bundle(client, "bundle/with/slashes")
+        url = mock_req.call_args[0][1]
+        assert "bundle%2Fwith%2Fslashes" in url
+
+    def test_get_404_raises(self):
+        client = _client()
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response({"error": "not found"}, 404),
+        ):
+            with pytest.raises(AtlaSentError) as exc_info:
+                get_evidence_bundle(client, "missing")
+        assert exc_info.value.status_code == 404
+
+    def test_get_json_error_no_message(self):
+        client = _client()
+        resp = MagicMock(spec=httpx.Response)
+        resp.status_code = 400
+        resp.headers = {"X-Request-ID": "req-123"}
+        resp.json = MagicMock(side_effect=ValueError("no json"))
+        with patch.object(client._client, "request", return_value=resp):
+            with pytest.raises(AtlaSentError) as exc_info:
+                get_evidence_bundle(client, "bundle_abc")
+        assert exc_info.value.status_code == 400
+
+    def test_get_204_returns_none(self):
+        client = _client()
+        resp = MagicMock(spec=httpx.Response)
+        resp.status_code = 204
+        resp.headers = {"X-Request-ID": "req-123"}
+        with patch.object(client._client, "request", return_value=resp):
+            result = get_evidence_bundle(client, "bundle_abc")
+        assert result is None
 
 
-def test_create_sends_incident_id() -> None:
-    import json as _json
+class TestDownloadEvidenceBundle:
+    def test_download_json_default(self):
+        client = _client()
+        pdf_bytes = b'{"bundle": "data"}'
+        resp = MagicMock(spec=httpx.Response)
+        resp.status_code = 200
+        resp.headers = {"X-Request-ID": "req-123"}
+        resp.content = pdf_bytes
+        with patch.object(client._client, "request", return_value=resp) as mock_req:
+            result = download_evidence_bundle(client, "bundle_abc")
+        assert result == pdf_bytes
+        url = mock_req.call_args[0][1]
+        assert "format=json" in url
 
-    resp = _make_response(200, STUB_BUNDLE)
-    client = _make_client(resp)
-    create_evidence_bundle(client, incident_id="inc_123")
-    body = _json.loads(client._client.request.call_args[1]["content"])
-    assert body["incident_id"] == "inc_123"
+    def test_download_pdf_format(self):
+        client = _client()
+        pdf_bytes = b"%PDF-1.4 ..."
+        resp = MagicMock(spec=httpx.Response)
+        resp.status_code = 200
+        resp.headers = {"X-Request-ID": "req-123"}
+        resp.content = pdf_bytes
+        with patch.object(client._client, "request", return_value=resp) as mock_req:
+            result = download_evidence_bundle(client, "bundle_abc", format="pdf")
+        assert result == pdf_bytes
+        url = mock_req.call_args[0][1]
+        assert "format=pdf" in url
 
+    def test_download_empty_id_raises(self):
+        client = _client()
+        with pytest.raises(AtlaSentError) as exc_info:
+            download_evidence_bundle(client, "")
+        assert exc_info.value.code == "bad_request"
 
-def test_create_sends_optional_fields() -> None:
-    import json as _json
+    def test_download_url_encodes_id(self):
+        client = _client()
+        resp = MagicMock(spec=httpx.Response)
+        resp.status_code = 200
+        resp.headers = {"X-Request-ID": "req-123"}
+        resp.content = b"data"
+        with patch.object(client._client, "request", return_value=resp) as mock_req:
+            download_evidence_bundle(client, "bundle/abc")
+        url = mock_req.call_args[0][1]
+        assert "bundle%2Fabc" in url
 
-    resp = _make_response(200, STUB_BUNDLE)
-    client = _make_client(resp)
-    create_evidence_bundle(
-        client,
-        incident_id="inc_123",
-        included_permits=["pt_1"],
-        include_overrides=True,
-    )
-    body = _json.loads(client._client.request.call_args[1]["content"])
-    assert body["included_permits"] == ["pt_1"]
-    assert body["include_overrides"] is True
+    def test_download_404_raises(self):
+        client = _client()
+        with patch.object(
+            client._client,
+            "request",
+            return_value=_mock_response({"error": "not found"}, 404),
+        ):
+            with pytest.raises(AtlaSentError) as exc_info:
+                download_evidence_bundle(client, "bundle_abc")
+        assert exc_info.value.status_code == 404
 
-
-def test_create_raises_on_400() -> None:
-    resp = _make_response(400, {"error": "bad_request"})
-    client = _make_client(resp)
-    with pytest.raises(AtlaSentError) as exc_info:
-        create_evidence_bundle(client, incident_id="inc_123")
-    assert exc_info.value.code == "bad_request"
-
-
-def test_create_raises_on_500() -> None:
-    resp = _make_response(500, {})
-    client = _make_client(resp)
-    with pytest.raises(AtlaSentError) as exc_info:
-        create_evidence_bundle(client, incident_id="inc_123")
-    assert exc_info.value.code == "server_error"
-
-
-def test_create_raises_on_malformed_json() -> None:
-    resp = _make_response(200, None)
-    resp.json.side_effect = ValueError("bad json")
-    client = _make_client(resp)
-    with pytest.raises(AtlaSentError):
-        create_evidence_bundle(client, incident_id="inc_123")
-
-
-# ── get_evidence_bundle ───────────────────────────────────────────────────────
-
-
-def test_get_calls_correct_path() -> None:
-    resp = _make_response(200, STUB_BUNDLE)
-    client = _make_client(resp)
-    result = get_evidence_bundle(client, "bnd_abc")
-    url = client._client.request.call_args[0][1]
-    assert "/v1/evidence-bundles/bnd_abc" in url
-    assert result["bundle_id"] == "bnd_abc"
-
-
-def test_get_url_encodes_bundle_id() -> None:
-    resp = _make_response(200, STUB_BUNDLE)
-    client = _make_client(resp)
-    get_evidence_bundle(client, "bnd/special")
-    url = client._client.request.call_args[0][1]
-    assert "bnd%2Fspecial" in url
-
-
-def test_get_raises_on_404() -> None:
-    resp = _make_response(404, {"error": "not_found"})
-    client = _make_client(resp)
-    with pytest.raises(AtlaSentError):
-        get_evidence_bundle(client, "bnd_missing")
-
-
-# ── download_evidence_bundle ──────────────────────────────────────────────────
-
-
-def test_download_returns_bytes() -> None:
-    resp = _make_response(200, None, raw=b"%PDF-1.4 content")
-    client = _make_client(resp)
-    result = download_evidence_bundle(client, "bnd_abc", format="pdf")
-    assert isinstance(result, bytes)
-    assert result == b"%PDF-1.4 content"
-
-
-def test_download_default_format_is_json() -> None:
-    resp = _make_response(200, None, raw=b"{}")
-    client = _make_client(resp)
-    download_evidence_bundle(client, "bnd_abc")
-    url = client._client.request.call_args[0][1]
-    assert "format=json" in url
-
-
-def test_download_passes_pdf_format() -> None:
-    resp = _make_response(200, None, raw=b"PDF")
-    client = _make_client(resp)
-    download_evidence_bundle(client, "bnd_abc", format="pdf")
-    url = client._client.request.call_args[0][1]
-    assert "format=pdf" in url
-
-
-def test_download_url_encodes_bundle_id() -> None:
-    resp = _make_response(200, None, raw=b"data")
-    client = _make_client(resp)
-    download_evidence_bundle(client, "bnd/abc", format="json")
-    url = client._client.request.call_args[0][1]
-    assert "bnd%2Fabc" in url
-
-
-def test_download_raises_on_error() -> None:
-    resp = _make_response(403, {"error": "forbidden"})
-    client = _make_client(resp)
-    with pytest.raises(AtlaSentError):
-        download_evidence_bundle(client, "bnd_abc")
+    def test_download_malformed_json_on_error_still_raises(self):
+        client = _client()
+        resp = MagicMock(spec=httpx.Response)
+        resp.status_code = 500
+        resp.headers = {"X-Request-ID": "req-123"}
+        resp.json = MagicMock(side_effect=ValueError("no json"))
+        with patch.object(client._client, "request", return_value=resp):
+            with pytest.raises(AtlaSentError) as exc_info:
+                download_evidence_bundle(client, "bundle_abc")
+        assert exc_info.value.status_code == 500
