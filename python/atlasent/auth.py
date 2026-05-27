@@ -56,7 +56,7 @@ def _post(
             err = response.json()
             msg = err.get("error") or err.get("message")
         except (ValueError, AttributeError):
-            pass
+            pass  # non-JSON error body — fall through to status-code message
         raise AtlaSentError(
             msg or f"POST {path} returned {response.status_code}",
             status_code=response.status_code,
@@ -88,7 +88,7 @@ def _get(
             err = response.json()
             msg = err.get("error") or err.get("message")
         except (ValueError, AttributeError):
-            pass
+            pass  # non-JSON error body — fall through to status-code message
         raise AtlaSentError(
             msg or f"GET {path} returned {response.status_code}",
             status_code=response.status_code,

@@ -74,7 +74,7 @@ def _request(
             err = response.json()
             msg = err.get("error") or err.get("message")
         except (ValueError, AttributeError):
-            pass
+            pass  # non-JSON error body — fall through to status-code message
         raise AtlaSentError(
             msg or f"SCIM {method} {path} returned {response.status_code}",
             status_code=response.status_code,
