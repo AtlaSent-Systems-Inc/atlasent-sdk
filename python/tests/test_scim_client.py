@@ -6,12 +6,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from atlasent.exceptions import AtlaSentError
 from atlasent.scim_client import (
     SCIM_GROUP_SCHEMA,
     SCIM_USER_SCHEMA,
     ScimClient,
 )
-from atlasent.exceptions import AtlaSentError
 
 
 def _make_response(
