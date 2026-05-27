@@ -216,6 +216,7 @@ from .policy_sync import (
     format_policy_sync_diff,
     is_policy_sync_terminal,
 )
+from .replay import EvidenceVerificationResult, verify_evidence_bundle
 from .require_permit import ProtectedAction, classify_command, require_permit
 from .scim import (
     SCIM_GROUP_SCHEMA,
@@ -271,7 +272,6 @@ from .v2_endpoints import (
     evaluate_many,
     graphql,
 )
-from .replay import EvidenceVerificationResult, verify_evidence_bundle
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
 
