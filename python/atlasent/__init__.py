@@ -271,6 +271,7 @@ from .v2_endpoints import (
     evaluate_many,
     graphql,
 )
+from .replay import EvidenceVerificationResult, verify_evidence_bundle
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
 
@@ -495,6 +496,9 @@ __all__ = [
     "evaluate_many",
     "authorize_stream",
     "graphql",
+    # Phase 3 offline replay client — verify evidence bundles without backend.
+    "verify_evidence_bundle",
+    "EvidenceVerificationResult",
     # BCCAE V1 — Phase 3 Execution Assurance substrate.
     # Standalone BCCAEClient with bccae:* scopes — not part of the
     # Deploy Gate V1 customer API surface.
