@@ -12,6 +12,7 @@ from atlasent.behavior import (
     BehaviorEvent,
     ConsentDeniedError,
     ConsentManager,
+    EmotionalVector,
     InMemoryBehaviorLedger,
     MemoryStorage,
     StateEventCache,
@@ -60,7 +61,6 @@ class TestRedactStateSnapshot:
     def test_strips_id_user_id_created_at_confidence_note(self) -> None:
         s = _sample_snapshot()
         summary = redact_state_snapshot(s)
-        # Summary fields are exactly the closed enum + bounded numeric set.
         assert set(asdict(summary).keys()) == {
             "emotional_state",
             "intensity",
@@ -69,6 +69,7 @@ class TestRedactStateSnapshot:
             "body_state",
             "cognitive_load",
             "readiness_level",
+            "emotional_vector",
         }
 
     def test_preserves_bounded_fields(self) -> None:
@@ -88,6 +89,42 @@ class TestRedactStateSnapshot:
         s = _sample_snapshot()
         summary = redact_state_snapshot(s)
         assert "private free-form text" not in json.dumps(asdict(summary))
+
+
+class TestEmotionalVector:
+    def test_vector_passes_through_redaction(self) -> None:
+        vec = EmotionalVector(valence=0.2, arousal=0.8, dominance=0.3)
+        s = StateSnapshot(
+            id="snap_2",
+            user_id="u_1",
+            emotional_state="tense",
+            intensity=7,
+            stress_level=6,
+            pressure_level=5,
+            body_state="tight",
+            cognitive_load=8,
+            readiness_level="low",
+            confidence_score=0.9,
+            created_at="2026-04-26T12:00:00Z",
+            emotional_vector=vec,
+        )
+        summary = redact_state_snapshot(s)
+        assert summary.emotional_vector == vec
+
+    def test_none_vector_stays_none_after_redaction(self) -> None:
+        s = _sample_snapshot()  # no emotional_vector set
+        summary = redact_state_snapshot(s)
+        assert summary.emotional_vector is None
+
+    def test_vector_contains_only_bounded_floats(self) -> None:
+        vec = EmotionalVector(valence=0.5, arousal=0.5, dominance=0.5)
+        data = asdict(vec)
+        assert set(data.keys()) == {"valence", "arousal", "dominance"}
+        assert all(isinstance(v, float) for v in data.values())
+        serialised = json.dumps(data)
+        assert "valence" in serialised
+        assert "arousal" in serialised
+        assert "dominance" in serialised
 
 
 # ---------------------------------------------------------------------------

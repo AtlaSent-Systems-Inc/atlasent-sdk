@@ -28,6 +28,7 @@ Quick start::
         readiness_level="low",
         confidence_score=0.8,
         created_at="2026-04-26T12:00:00Z",
+        emotional_vector=EmotionalVector(valence=0.2, arousal=0.8, dominance=0.3),
     )
     summary = redact_state_snapshot(snapshot)
 
@@ -103,6 +104,24 @@ ReadinessLevel = Literal["low", "medium", "high"]
 
 
 @dataclass(frozen=True)
+class EmotionalVector:
+    """Dimensional emotional coordinates in PAD space, each bounded 0..1.
+
+    - ``valence``:   negative (0) → positive (1) affect
+    - ``arousal``:   calm (0) → activated (1)
+    - ``dominance``: submissive (0) → in-control (1)
+
+    All dimensions are bounded floats with no free-form text, so the
+    vector is safe to include in a :class:`StateEventSummary` that
+    crosses an app boundary.
+    """
+
+    valence: float  # 0..1
+    arousal: float  # 0..1
+    dominance: float  # 0..1
+
+
+@dataclass(frozen=True)
 class StateSnapshot:
     """On-device shape with all raw fields.
 
@@ -122,6 +141,7 @@ class StateSnapshot:
     confidence_score: float  # 0..1
     created_at: str  # ISO 8601
     note: str | None = None  # NEVER part of the redacted summary
+    emotional_vector: EmotionalVector | None = None
 
 
 @dataclass(frozen=True)
@@ -135,6 +155,7 @@ class StateEventSummary:
     body_state: BodyState
     cognitive_load: int
     readiness_level: ReadinessLevel
+    emotional_vector: EmotionalVector | None = None
 
 
 @dataclass(frozen=True)
@@ -305,6 +326,9 @@ def redact_state_snapshot(s: StateSnapshot) -> StateEventSummary:
     Drops ``id``, ``user_id``, ``created_at``, ``confidence_score``,
     and any ``note`` field. The remaining fields are bounded numeric
     ranges or closed enums and carry no free-form text.
+
+    ``emotional_vector``, when present, is passed through unchanged —
+    it contains only bounded floats and is safe to cross an app boundary.
     """
     return StateEventSummary(
         emotional_state=s.emotional_state,
@@ -314,6 +338,7 @@ def redact_state_snapshot(s: StateSnapshot) -> StateEventSummary:
         body_state=s.body_state,
         cognitive_load=s.cognitive_load,
         readiness_level=s.readiness_level,
+        emotional_vector=s.emotional_vector,
     )
 
 
@@ -411,6 +436,7 @@ __all__ = [
     "ConsentStorage",
     "DEFAULT_CONSENT",
     "EmotionalState",
+    "EmotionalVector",
     "InMemoryBehaviorLedger",
     "MemoryStorage",
     "ReadinessLevel",
