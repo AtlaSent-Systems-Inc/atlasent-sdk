@@ -34,6 +34,7 @@ wrappers and will be removed in ``atlasent`` v3. Migrate to
 """
 
 from ._version import __version__
+from .access_governance_log import AccessGovernanceLogClient
 from .approval_artifact import (
     ApprovalArtifactV1,
     ApprovalIssuer,
@@ -219,8 +220,6 @@ from .policy_sync import (
 )
 from .replay import EvidenceVerificationResult, verify_evidence_bundle
 from .require_permit import ProtectedAction, classify_command, require_permit
-from .sso_client import SsoClient
-from .access_governance_log import AccessGovernanceLogClient
 from .scim import (
     SCIM_GROUP_SCHEMA,
     SCIM_PATCH_OP_SCHEMA,
@@ -243,6 +242,7 @@ from .siem import (
     siem_test_delivery,
     upsert_siem_config,
 )
+from .sso_client import SsoClient
 from .trust_root import (
     TrustRootKey,
     TrustRootManager,
