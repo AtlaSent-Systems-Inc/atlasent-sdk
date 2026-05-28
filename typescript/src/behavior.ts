@@ -318,9 +318,9 @@ export function redactStateSnapshot(s: StateSnapshot): StateEventSummary {
     body_state: s.body_state,
     cognitive_load: s.cognitive_load,
     readiness_level: s.readiness_level,
-    ...(s.emotional_vector !== undefined && {
-      emotional_vector: s.emotional_vector,
-    }),
+    ...(s.emotional_vector !== undefined
+      ? { emotional_vector: s.emotional_vector }
+      : {}),
   };
 }
 
