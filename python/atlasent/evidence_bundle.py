@@ -164,3 +164,59 @@ def download_evidence_bundle(
     path = f"/v1/evidence-bundles/{quote(bundle_id, safe='')}/download?{qs}"
     result = _do(client, "GET", path, raw=True)
     return result  # type: ignore[return-value]
+
+
+class EvidenceBundlesClient:
+    """Sub-client for evidence bundle operations on ``AtlaSentClient``.
+
+    Access via ``client.evidence_bundles``::
+
+        client = AtlaSentClient(api_key="...")
+        bundles = client.evidence_bundles.list()
+        bundle  = client.evidence_bundles.create("inc_abc123")
+        pdf     = client.evidence_bundles.download(bundle["bundle_id"], format="pdf")
+    """
+
+    def __init__(self, client: AtlaSentClient) -> None:
+        self._client = client
+
+    def list(
+        self,
+        *,
+        execution_id: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        """``GET /v1/evidence-bundles`` — list bundles for the org."""
+        params: dict[str, str] = {}
+        if execution_id is not None:
+            params["execution_id"] = execution_id
+        if limit is not None:
+            params["limit"] = str(limit)
+        if cursor is not None:
+            params["cursor"] = cursor
+        qs = ("?" + urlencode(params)) if params else ""
+        return _do(self._client, "GET", f"/v1/evidence-bundles{qs}")  # type: ignore[return-value]
+
+    def create(
+        self,
+        incident_id: str,
+        *,
+        included_permits: list[str] | None = None,
+        include_overrides: bool = False,
+    ) -> dict[str, Any]:
+        """``POST /v1/evidence-bundles`` — create a new evidence bundle."""
+        return create_evidence_bundle(
+            self._client,
+            incident_id,
+            included_permits=included_permits,
+            include_overrides=include_overrides,
+        )  # type: ignore[return-value]
+
+    def get(self, bundle_id: str) -> dict[str, Any]:
+        """``GET /v1/evidence-bundles/{id}`` — retrieve a bundle by ID."""
+        return get_evidence_bundle(self._client, bundle_id)  # type: ignore[return-value]
+
+    def download(self, bundle_id: str, *, format: str = "json") -> bytes:  # noqa: A002
+        """``GET /v1/evidence-bundles/{id}/download`` — download bundle bytes."""
+        return download_evidence_bundle(self._client, bundle_id, format=format)

@@ -21,6 +21,7 @@ from ._version import __version__
 from .access_governance_log import AccessGovernanceLogClient
 from .approval_artifact import ApprovalReference
 from .audit import AuditEventsResult, AuditExportResult
+from .evidence_bundle import EvidenceBundlesClient
 from .exceptions import (
     AtlaSentDenied,
     AtlaSentDeniedError,
@@ -238,6 +239,7 @@ class AtlaSentClient:
         )
         self.sso = SsoClient(self)
         self.access_governance_log = AccessGovernanceLogClient(self)
+        self.evidence_bundles = EvidenceBundlesClient(self)
 
     # ── properties ────────────────────────────────────────────
 
