@@ -321,7 +321,7 @@ def test_check_expiry_warns_once_at_half_life(caplog: pytest.LogCaptureFixture) 
             status = mgr.check_expiry()
             assert status == "half_life"
             assert any(
-                "[atlasent] Trust snapshot expires in" in r.message
+                "[atlasent] Trust snapshot at half-life: expires in" in r.message
                 for r in caplog.records
             )
             count = len(caplog.records)
