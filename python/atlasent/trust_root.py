@@ -5,8 +5,11 @@ Loads the vendor snapshot at import time.  Optionally refreshes from
 (default 4h, floor 5 min per ADR-005 D2).  Refresh failure is silent.
 
 Snapshot expiry is fail-closed (ADR-005 D3): ``check_expiry()`` returns
-``"expired"`` when ``valid_until`` passes, causing callers to raise
+``"expired"`` when ``valid_until`` passes, emits a one-time
+``logging.warning`` per process, and causes callers to raise
 ``BundleVerificationError(reason="trust_snapshot_expired")`` by default.
+A half-life warning is also emitted once per process when the snapshot
+passes its midpoint.
 """
 
 from __future__ import annotations
@@ -223,7 +226,7 @@ class TrustRootManager:
         self.replace_snapshot(new_snap)
 
 
-# ─── Load the vendor snapshot ─────────────────────────────────────────────────
+# ─── Load the vendor snapshot ─────────────────────────────────────────────────────
 
 _VENDOR_DIR = Path(__file__).parent.parent.parent / "vendor" / "trust-root"
 
