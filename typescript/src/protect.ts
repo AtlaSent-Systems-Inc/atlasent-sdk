@@ -32,9 +32,11 @@ import type { DeployGateRequest, DeployGateResponse } from "./types.js";
 import {
   AtlaSentDeniedError,
   AtlaSentError,
+  BundleVerificationError,
   normalizePermitOutcome,
   type AtlaSentDecision,
 } from "./errors.js";
+import { getGlobalTrustRootManager } from "./trustRoot.js";
 import type { AtlaSentClientOptions, ConstraintTrace } from "./types.js";
 import {
   buildDecisionReceiptPayload,
@@ -251,6 +253,17 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
       `action must be in dot-notation format (e.g. "production.deploy"). Got: ${JSON.stringify(request.action)}`,
       { code: "bad_request" },
     );
+  }
+  // ADR-005 D3: fail-closed on expired trust snapshot. checkExpiry() also
+  // emits the one-time half-life warning if >50% of validity window has elapsed.
+  const trustMgr = getGlobalTrustRootManager({ disableRefresh: false });
+  if (trustMgr.checkExpiry() === "expired") {
+    const snap = trustMgr.getSnapshot();
+    throw new BundleVerificationError({
+      bundleReason: "trust_snapshot_expired",
+      snapshotValidUntil: snap.valid_until,
+      snapshotFetchedAt: snap.issued_at,
+    });
   }
   const client = getClient();
   const evaluation = await client.evaluate(request);

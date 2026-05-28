@@ -70,6 +70,7 @@ export {
   AtlaSentDeniedError,
   AtlaSentEscalateError,
   AtlaSentError,
+  BundleVerificationError,
   PermitRevoked,
   StreamParseError,
   StreamTimeoutError,

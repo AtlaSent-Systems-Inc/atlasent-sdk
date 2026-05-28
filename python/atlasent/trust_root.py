@@ -112,6 +112,14 @@ class TrustRootManager:
             return self._snapshot
 
     def check_expiry(self) -> Literal["ok", "half_life", "expired"]:
+        """Check whether the snapshot is expired; emit one-time warnings.
+
+        Returns ``"ok"``, ``"half_life"``, or ``"expired"``.
+        Emits a :mod:`logging` WARNING (via the ``atlasent`` logger) once
+        per process for each of the half-life and expired conditions.
+        """
+        global _half_life_warning_emitted, _expired_warning_emitted
+
         snap = self.get_snapshot()
         from datetime import datetime, timezone
 
@@ -120,10 +128,29 @@ class TrustRootManager:
         issued_at = datetime.fromisoformat(snap.issued_at.replace("Z", "+00:00"))
 
         if now > valid_until:
+            if not _expired_warning_emitted:
+                _expired_warning_emitted = True
+                days_ago = (now - valid_until).days
+                logger.warning(
+                    "[atlasent] Trust snapshot expired %d day(s) ago "
+                    "(valid_until: %s). Update to a newer SDK build or "
+                    "enable allow_expired_snapshot.",
+                    days_ago,
+                    snap.valid_until,
+                )
             return "expired"
         window = (valid_until - issued_at).total_seconds()
         half_life = issued_at.timestamp() + window / 2
         if now.timestamp() > half_life:
+            if not _half_life_warning_emitted:
+                _half_life_warning_emitted = True
+                days_left = (valid_until - now).days
+                logger.warning(
+                    "[atlasent] Trust snapshot expires in %d day(s) "
+                    "(valid_until: %s). Plan an SDK update.",
+                    days_left,
+                    snap.valid_until,
+                )
             return "half_life"
         return "ok"
 

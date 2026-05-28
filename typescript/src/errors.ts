@@ -148,13 +148,15 @@ export type PermitOutcome =
   | "permit_consumed"
   | "permit_expired"
   | "permit_revoked"
-  | "permit_not_found";
+  | "permit_not_found"
+  | "permit_signing_key_revoked";
 
 const KNOWN_PERMIT_OUTCOMES: ReadonlySet<string> = new Set([
   "permit_consumed",
   "permit_expired",
   "permit_revoked",
   "permit_not_found",
+  "permit_signing_key_revoked",
 ]);
 
 /**
@@ -267,6 +269,61 @@ export class AtlaSentDeniedError extends AtlaSentError {
    */
   get isNotFound(): boolean {
     return this.outcome === "permit_not_found";
+  }
+}
+
+// ── Bundle verification error (ADR-005 D3 fail-closed, trust-root Phase 2) ──────
+
+/**
+ * Thrown when bundle or permit verification fails due to a trust-root
+ * condition: expired snapshot, revoked signing key, or key role mismatch.
+ *
+ * Extends {@link AtlaSentDeniedError} so `instanceof AtlaSentDeniedError`
+ * catches these failures alongside policy denials; use
+ * `instanceof BundleVerificationError` to branch specifically.
+ *
+ * The `reason` field discriminates the failure kind:
+ * - `"trust_snapshot_expired"` — the pinned trust snapshot's `valid_until`
+ *   has passed; obtain a fresh SDK build or enable `allowExpiredSnapshot`.
+ * - `"key_revoked"` — the signing KID appears in `atlasent-revocations.json`.
+ * - `"key_role_mismatch"` — the signing key's role does not match the
+ *   expected role for this artifact type (e.g. R3_audit for audit bundles).
+ */
+export class BundleVerificationError extends AtlaSentDeniedError {
+  override name: string = "BundleVerificationError";
+
+  /** Discriminator for the trust-root failure kind. */
+  readonly bundleReason:
+    | "trust_snapshot_expired"
+    | "key_revoked"
+    | "key_role_mismatch";
+
+  /** `valid_until` of the snapshot that triggered the failure, if applicable. */
+  readonly snapshotValidUntil: string | undefined;
+  /** `issued_at` of the snapshot (proxy for `fetchedAt`), if applicable. */
+  readonly snapshotFetchedAt: string | undefined;
+  /** Whether the snapshot came from the pinned vendor file or a live refresh. */
+  readonly snapshotSource: "pinned" | "live" | undefined;
+
+  constructor(opts: {
+    bundleReason:
+      | "trust_snapshot_expired"
+      | "key_revoked"
+      | "key_role_mismatch";
+    evaluationId?: string;
+    snapshotValidUntil?: string;
+    snapshotFetchedAt?: string;
+    snapshotSource?: "pinned" | "live";
+  }) {
+    super({
+      decision: "deny",
+      evaluationId: opts.evaluationId ?? "",
+      reason: `Bundle verification failed: ${opts.bundleReason}`,
+    });
+    this.bundleReason = opts.bundleReason;
+    this.snapshotValidUntil = opts.snapshotValidUntil;
+    this.snapshotFetchedAt = opts.snapshotFetchedAt;
+    this.snapshotSource = opts.snapshotSource;
   }
 }
 
