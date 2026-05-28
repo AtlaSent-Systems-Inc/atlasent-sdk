@@ -129,6 +129,7 @@ from .exceptions import (
     AtlaSentDeniedError,
     AtlaSentError,
     AtlaSentErrorCode,
+    BundleVerificationError,
     ConfigurationError,
     PermissionDeniedError,
     PermitOutcome,
@@ -318,6 +319,7 @@ __all__ = [
     "AtlaSentDeniedError",
     "PermissionDeniedError",
     "PermitOutcome",
+    "BundleVerificationError",
     "ConfigurationError",
     "RateLimitError",
     "StreamTimeoutError",
@@ -484,4 +486,10 @@ __all__ = [
     "list_evidence_exports",
     "get_evidence_export",
     "create_evidence_export",
+    # Trust-root V1 (bootstrap + snapshot management).
+    "TrustRootKey",
+    "TrustRootManager",
+    "TrustRootRevocationEntry",
+    "TrustRootSnapshot",
+    "get_global_trust_root_manager",
 ]

@@ -42,6 +42,7 @@ PermitOutcome = Literal[
     "permit_expired",
     "permit_revoked",
     "permit_not_found",
+    "permit_signing_key_revoked",
 ]
 """Reason an already-issued permit failed verification.
 
@@ -57,7 +58,13 @@ facing matrix this discriminator drives.
 """
 
 _KNOWN_PERMIT_OUTCOMES: frozenset[str] = frozenset(
-    {"permit_consumed", "permit_expired", "permit_revoked", "permit_not_found"}
+    {
+        "permit_consumed",
+        "permit_expired",
+        "permit_revoked",
+        "permit_not_found",
+        "permit_signing_key_revoked",
+    }
 )
 
 
@@ -226,7 +233,7 @@ class AtlaSentDeniedError(AtlaSentDenied):
         # store it on this subclass for now.
         self.request_id = request_id
 
-    # ── Outcome discriminators ────────────────────────────────────────
+    # ── Outcome discriminators ──────────────────────────────────
     # Convenience predicates that mirror the operator runbook's matrix.
     # Callers can branch directly on the outcome strings; these are
     # sugar so the common cases are explicit at the call site.
@@ -254,6 +261,13 @@ class AtlaSentDeniedError(AtlaSentDenied):
         (typo, cross-tenant lookup, or pre-issuance race).
         """
         return self.outcome == "permit_not_found"
+
+    @property
+    def is_signing_key_revoked(self) -> bool:
+        """``True`` when the permit's signing key KID appears in the
+        trust-root revocation list (ADR-005 D3 R2/R3 key rotation).
+        """
+        return self.outcome == "permit_signing_key_revoked"
 
 
 class StreamTimeoutError(AtlaSentError):
@@ -329,3 +343,47 @@ class RateLimitError(AtlaSentError):
             code="rate_limited",
             request_id=request_id,
         )
+
+
+# ── Bundle verification error (ADR-005 D3 fail-closed expiry / revocation) ───
+
+
+class BundleVerificationError(AtlaSentError):
+    """Raised by :func:`verify_audit_bundle` / :func:`verify_bundle` when
+    the active trust-root snapshot is expired (ADR-005 D3) or the bundle's
+    signing key is revoked / has the wrong role.
+
+    This exception is **always raised** — it is never returned as a
+    :class:`BundleVerificationResult` because ADR-005 D3 requires that
+    an expired snapshot or revoked key constitutes a hard enforcement
+    action, not a soft verification failure.
+
+    To opt out of fail-closed expiry (air-gap / offline use), pass
+    ``allow_expired_snapshot=True`` to :func:`verify_bundle`.
+
+    Attributes:
+        reason: Machine-readable reason code:
+            ``"trust_snapshot_expired"`` — the snapshot's ``valid_until``
+            has passed; ``"key_revoked"`` — the signing KID is in the
+            revocation list; ``"key_role_mismatch"`` — wrong role.
+        snapshot_valid_until: ISO-8601 ``valid_until`` of the snapshot.
+        snapshot_fetched_at: ISO-8601 ``issued_at`` / fetch time of the snapshot.
+        snapshot_source: ``"pinned"`` (vendor bundle) or ``"live"`` (refreshed).
+        kid: Which key id was revoked or role-mismatched, when applicable.
+    """
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        snapshot_valid_until: str | None = None,
+        snapshot_fetched_at: str | None = None,
+        snapshot_source: str | None = None,
+        kid: str | None = None,
+    ) -> None:
+        self.reason = reason
+        self.snapshot_valid_until = snapshot_valid_until
+        self.snapshot_fetched_at = snapshot_fetched_at
+        self.snapshot_source = snapshot_source
+        self.kid = kid
+        super().__init__(f"AtlaSent audit bundle verification failed: {reason}")
