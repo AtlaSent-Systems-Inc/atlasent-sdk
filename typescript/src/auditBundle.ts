@@ -228,7 +228,7 @@ export async function verifyAuditBundle(
     const validUntil = new Date(snap.valid_until).getTime();
     if (now > validUntil && !trustRootOpts.allowExpiredSnapshot) {
       throw new BundleVerificationError({
-        bundleReason: "trust_snapshot_expired",
+        reason: "trust_snapshot_expired",
         snapshotValidUntil: snap.valid_until,
         snapshotFetchedAt: snap.issued_at,
       });
@@ -290,7 +290,7 @@ export async function verifyAuditBundle(
       const isRevoked = snap.revoked_keys.some((r) => r.kid === kid);
       if (isRevoked) {
         throw new BundleVerificationError({
-          bundleReason: "key_revoked",
+          reason: "key_revoked",
           snapshotValidUntil: snap.valid_until,
           snapshotFetchedAt: snap.issued_at,
           kid,
@@ -300,7 +300,7 @@ export async function verifyAuditBundle(
       const keyEntry = snap.keys.find((k) => k.kid === kid);
       if (keyEntry && keyEntry.role !== "R3_audit") {
         throw new BundleVerificationError({
-          bundleReason: "key_role_mismatch",
+          reason: "key_role_mismatch",
           snapshotValidUntil: snap.valid_until,
           snapshotFetchedAt: snap.issued_at,
           kid,

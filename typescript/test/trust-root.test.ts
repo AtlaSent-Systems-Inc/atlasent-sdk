@@ -308,7 +308,7 @@ describe("checkExpiry warnings (ADR-005 D3)", () => {
     const status = mgr.checkExpiry();
     expect(status).toBe("half_life");
     expect(warnSpy).toHaveBeenCalledOnce();
-    expect(warnSpy.mock.calls[0]![0]).toContain("[atlasent] Trust snapshot expires in");
+    expect(warnSpy.mock.calls[0]![0]).toContain("[atlasent] Trust snapshot at half-life:");
     // Second call does not emit again
     mgr.checkExpiry();
     expect(warnSpy).toHaveBeenCalledOnce();
