@@ -45,9 +45,9 @@ function makeMockFetch(overrides: MockFetchArgs = {}) {
     "atlasent-revocations.json": { revoked_keys: revokedKeys, revoked_identities: [] },
   };
 
-  return vi.fn(async (input: string | URL | Request) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    const lastPart = url.split("/").pop()!;
+  return vi.fn(async (url: string | URL | Request) => {
+    const urlStr = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+    const lastPart = urlStr.split("/").pop()!;
     const data = responses[lastPart];
     if (!data) {
       return { ok: false, json: () => Promise.resolve({}) } as unknown as Response;
@@ -138,9 +138,9 @@ describe("B3.2 refresh integration test", () => {
     const originalSnap = makeSnap({ valid_until: "2026-06-01T00:00:00Z" });
     const mgr = new TrustRootManager(originalSnap, {
       disableRefresh: true,
-      fetch: vi.fn(async (input: string | URL | Request) => {
-        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-        const lastPart = url.split("/").pop()!;
+      fetch: vi.fn(async (url: string | URL | Request) => {
+        const urlStr = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        const lastPart = urlStr.split("/").pop()!;
         const data: Record<string, unknown> = {
           "atlasent-trust-root.json": {}, // missing valid_until
           "atlasent-verifier-keys.json": { keys: [] },
