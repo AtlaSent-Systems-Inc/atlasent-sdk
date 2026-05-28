@@ -316,7 +316,8 @@ def test_check_expiry_warns_once_at_half_life(caplog: pytest.LogCaptureFixture) 
             status = mgr.check_expiry()
             assert status == "half_life"
             assert any(
-                "[atlasent] Trust snapshot expires in" in r.message for r in caplog.records
+                "[atlasent] Trust snapshot expires in" in r.message
+                for r in caplog.records
             )
             count = len(caplog.records)
             mgr.check_expiry()
@@ -333,7 +334,10 @@ def test_check_expiry_warns_once_at_expired(caplog: pytest.LogCaptureFixture) ->
     tr_mod._expired_warning_emitted = False
     try:
         mgr = TrustRootManager(
-            _make_snapshot(valid_until="2020-01-01T00:00:00Z", issued_at="2019-01-01T00:00:00Z"),
+            _make_snapshot(
+                valid_until="2020-01-01T00:00:00Z",
+                issued_at="2019-01-01T00:00:00Z",
+            ),
             disable_refresh=True,
         )
         with caplog.at_level("WARNING", logger="atlasent"):
@@ -408,4 +412,5 @@ def test_permit_signing_key_revoked_in_known_outcomes() -> None:
     from atlasent.exceptions import _KNOWN_PERMIT_OUTCOMES, _normalize_permit_outcome
 
     assert "permit_signing_key_revoked" in _KNOWN_PERMIT_OUTCOMES
-    assert _normalize_permit_outcome("permit_signing_key_revoked") == "permit_signing_key_revoked"
+    result = _normalize_permit_outcome("permit_signing_key_revoked")
+    assert result == "permit_signing_key_revoked"
