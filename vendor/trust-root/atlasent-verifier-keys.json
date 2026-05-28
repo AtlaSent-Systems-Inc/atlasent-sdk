@@ -2,6 +2,19 @@
   "schema": "atlasent-verifier-keys/v1",
   "keys": [
     {
+      "kid": "v2-audit-2026",
+      "role": "R3_audit",
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "alg": "EdDSA",
+      "x": "IctfKl2VEOaRBX9jvoYnUc2cInF81WgywU5iY3_Ui44",
+      "valid_from": "2026-05-28T00:00:00Z",
+      "valid_until": "2027-06-01T00:00:00Z",
+      "replaced_by": null,
+      "revoked": false,
+      "tenant": null
+    },
+    {
       "kid": "test-key",
       "role": "R3_audit",
       "kty": "OKP",
@@ -10,7 +23,7 @@
       "x": "uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
       "valid_from": "2026-01-01T00:00:00Z",
       "valid_until": "2027-01-01T00:00:00Z",
-      "replaced_by": null,
+      "replaced_by": "v2-audit-2026",
       "revoked": false,
       "tenant": null
     },

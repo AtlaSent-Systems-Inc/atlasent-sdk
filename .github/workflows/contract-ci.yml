@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "contract/**"
+      - "vendor/trust-root/**"
       - "python/atlasent/models.py"
       - "python/atlasent_v2_alpha/atlasent_v2_alpha/types.py"
       - "typescript/src/client.ts"
@@ -16,6 +17,7 @@ on:
     branches: [main]
     paths:
       - "contract/**"
+      - "vendor/trust-root/**"
       - "python/atlasent/models.py"
       - "python/atlasent_v2_alpha/atlasent_v2_alpha/types.py"
       - "typescript/src/client.ts"
@@ -46,6 +48,9 @@ jobs:
 
       - name: Validate vectors against schemas
         run: python contract/tools/validate_vectors.py
+
+      - name: Validate trust-root vectors
+        run: python contract/tools/validate_trust_root_vectors.py
 
       - name: Validate OpenAPI spec (+ schema sync check)
         run: python contract/tools/validate_openapi.py
