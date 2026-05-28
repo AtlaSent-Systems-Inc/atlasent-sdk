@@ -18,6 +18,7 @@ from urllib.parse import quote, urlparse
 import httpx
 
 from ._version import __version__
+from .access_governance_log import AccessGovernanceLogClient
 from .approval_artifact import ApprovalReference
 from .audit import AuditEventsResult, AuditExportResult
 from .exceptions import (
@@ -67,6 +68,7 @@ from .models import (
     VerifyRequest,
     VerifyResult,
 )
+from .sso_client import SsoClient
 
 if TYPE_CHECKING:
     from .cache import TTLCache
@@ -234,6 +236,18 @@ class AtlaSentClient:
             },
             timeout=self._timeout,
         )
+        self.sso = SsoClient(self)
+        self.access_governance_log = AccessGovernanceLogClient(self)
+
+    # ── properties ────────────────────────────────────────────
+
+    @property
+    def api_key(self) -> str:
+        return self._api_key
+
+    @property
+    def base_url(self) -> str:
+        return self._base_url
 
     # ── public API ───────────────────────────────────────────
 
