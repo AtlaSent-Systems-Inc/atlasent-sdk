@@ -123,9 +123,10 @@ class TestTrustRootManagerCoverage:
         with mock.patch("atlasent.trust_root.threading.Timer") as mock_timer_cls:
             mock_timer_cls.return_value = mock.MagicMock()
             mgr = TrustRootManager(self._make_snap(), disable_refresh=True)
-        with mock.patch.object(mgr, "_do_refresh") as mock_refresh, mock.patch.object(
-            mgr, "_schedule_refresh"
-        ) as mock_schedule:
+        with (
+            mock.patch.object(mgr, "_do_refresh") as mock_refresh,
+            mock.patch.object(mgr, "_schedule_refresh") as mock_schedule,
+        ):
             mgr._do_refresh_and_reschedule()
         mock_refresh.assert_called_once()
         mock_schedule.assert_called_once()
