@@ -845,6 +845,8 @@ export {
   makeEvidenceBundleClient,
   type EvidenceBundle,
   type EvidenceBundleCreateParams,
+  type EvidenceBundleListPage,
+  type EvidenceBundleListParams,
   type EvidenceBundleStatus,
   type EvidenceBundleSubClient,
 } from "./evidence-bundle.js";

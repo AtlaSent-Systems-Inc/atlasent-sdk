@@ -75,6 +75,30 @@ export interface EvidenceBundleCreateParams {
   includeOverrides?: boolean;
 }
 
+/** Query parameters for {@link EvidenceBundleSubClient.list}. */
+export interface EvidenceBundleListParams {
+  /** Filter bundles to a specific execution ID. */
+  executionId?: string;
+  /** Maximum number of bundles to return. */
+  limit?: number;
+  /** Opaque cursor from a previous list response for pagination. */
+  cursor?: string;
+}
+
+/** Paginated response from {@link EvidenceBundleSubClient.list}. */
+export interface EvidenceBundleListPage {
+  /** Evidence bundles for this page. */
+  bundles: EvidenceBundle[];
+  /** Pass as `cursor` to `list()` to fetch the next page. `null` means no more pages. */
+  nextCursor: string | null;
+}
+
+/** Wire shape for the list response. */
+interface EvidenceBundleListWire {
+  bundles: EvidenceBundleWire[];
+  next_cursor?: string | null;
+}
+
 /** Wire shape returned by POST /v1/evidence-bundles. */
 interface EvidenceBundleWire {
   bundle_id: string;
@@ -111,6 +135,19 @@ function wireToBundle(w: EvidenceBundleWire): EvidenceBundle {
  * Accessed as `client.evidenceBundles` on {@link AtlaSentClient}.
  */
 export interface EvidenceBundleSubClient {
+  /**
+   * List evidence bundles for the org, with optional filters and pagination.
+   *
+   * ```ts
+   * const page = await client.evidenceBundles.list({ limit: 20 });
+   * for (const bundle of page.bundles) { ... }
+   * if (page.nextCursor) {
+   *   const next = await client.evidenceBundles.list({ cursor: page.nextCursor });
+   * }
+   * ```
+   */
+  list(params?: EvidenceBundleListParams): Promise<EvidenceBundleListPage>;
+
   /**
    * Create a new evidence bundle.
    *
@@ -158,6 +195,18 @@ export function makeEvidenceBundleClient(
   getRawFn: (path: string) => Promise<ArrayBuffer>,
 ): EvidenceBundleSubClient {
   return {
+    async list(params: EvidenceBundleListParams = {}): Promise<EvidenceBundleListPage> {
+      const qs = new URLSearchParams();
+      if (params.executionId !== undefined) qs.set("execution_id", params.executionId);
+      if (params.limit !== undefined) qs.set("limit", String(params.limit));
+      if (params.cursor !== undefined) qs.set("cursor", params.cursor);
+      const { body } = await getFn<EvidenceBundleListWire>("/v1/evidence-bundles", qs.size > 0 ? qs : undefined);
+      return {
+        bundles: (body.bundles ?? []).map(wireToBundle),
+        nextCursor: body.next_cursor ?? null,
+      };
+    },
+
     async create(params: EvidenceBundleCreateParams): Promise<EvidenceBundle> {
       const payload: Record<string, unknown> = {
         incident_id: params.incidentId,

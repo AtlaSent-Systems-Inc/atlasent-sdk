@@ -81,6 +81,45 @@ describe("evidenceBundles.get", () => {
   });
 });
 
+describe("evidenceBundles.list", () => {
+  const WIRE_LIST = { bundles: [WIRE_BUNDLE], next_cursor: "cur_abc" };
+
+  it("GETs /v1/evidence-bundles with no query params when called with no args", async () => {
+    const { eb, getFn } = makeMocks();
+    getFn.mockResolvedValue({ body: { bundles: [], next_cursor: null } });
+    const page = await eb.list();
+    expect(getFn).toHaveBeenCalledWith("/v1/evidence-bundles", undefined);
+    expect(page.bundles).toEqual([]);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  it("passes limit, cursor, and executionId as query params", async () => {
+    const { eb, getFn } = makeMocks();
+    getFn.mockResolvedValue({ body: WIRE_LIST });
+    await eb.list({ limit: 10, cursor: "cur_prev", executionId: "exec_1" });
+    const qs = getFn.mock.calls[0]![1] as URLSearchParams;
+    expect(qs.get("limit")).toBe("10");
+    expect(qs.get("cursor")).toBe("cur_prev");
+    expect(qs.get("execution_id")).toBe("exec_1");
+  });
+
+  it("maps wire bundles to camelCase and returns nextCursor", async () => {
+    const { eb, getFn } = makeMocks();
+    getFn.mockResolvedValue({ body: WIRE_LIST });
+    const page = await eb.list({ limit: 1 });
+    expect(page.bundles).toHaveLength(1);
+    expect(page.bundles[0]!.bundleId).toBe("bnd_abc");
+    expect(page.nextCursor).toBe("cur_abc");
+  });
+
+  it("returns nextCursor null when not present", async () => {
+    const { eb, getFn } = makeMocks();
+    getFn.mockResolvedValue({ body: { bundles: [WIRE_BUNDLE] } });
+    const page = await eb.list();
+    expect(page.nextCursor).toBeNull();
+  });
+});
+
 describe("evidenceBundles.download", () => {
   it("calls getRaw with json format by default", async () => {
     const { eb, getRawFn } = makeMocks();
