@@ -345,6 +345,7 @@ __all__ = [
     "BundleVerificationError",
     "PermissionDeniedError",
     "PermitOutcome",
+    "BundleVerificationError",
     "ConfigurationError",
     "RateLimitError",
     "StreamTimeoutError",
@@ -516,7 +517,7 @@ __all__ = [
     "list_evidence_exports",
     "get_evidence_export",
     "create_evidence_export",
-    # Trust root helpers (Wave C parity).
+    # Trust-root V1 (bootstrap + snapshot management).
     "TrustRootKey",
     "TrustRootManager",
     "TrustRootRevocationEntry",

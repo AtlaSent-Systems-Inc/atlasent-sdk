@@ -270,6 +270,14 @@ export class AtlaSentDeniedError extends AtlaSentError {
   get isNotFound(): boolean {
     return this.outcome === "permit_not_found";
   }
+
+  /**
+   * `true` when the permit's signing key KID appears in the
+   * trust-root revocation list (ADR-005 D3 R2/R3 key rotation).
+   */
+  get isSigningKeyRevoked(): boolean {
+    return this.outcome === "permit_signing_key_revoked";
+  }
 }
 
 // ── Bundle verification error (ADR-005 D3 fail-closed, trust-root Phase 2) ──────
@@ -414,5 +422,62 @@ export class PermitRevoked extends AtlaSentError {
     );
     this.permitId = permitId;
     this.revocationId = revocationId;
+  }
+}
+
+// ── Bundle verification error (ADR-005 D3 fail-closed expiry / revocation) ────
+
+/**
+ * Initialization options for {@link BundleVerificationError}.
+ */
+export interface BundleVerificationErrorInit {
+  /**
+   * Machine-readable reason code:
+   *   - `trust_snapshot_expired`: the snapshot's `valid_until` has passed
+   *     and `allowExpiredSnapshot` was not set.
+   *   - `key_revoked`: the bundle's `signing_key_id` appears in
+   *     `revoked_keys` of the active trust snapshot.
+   *   - `key_role_mismatch`: the signing key's `role` is not `"R3_audit"`.
+   */
+  reason: "trust_snapshot_expired" | "key_revoked" | "key_role_mismatch";
+  /** ISO-8601 `valid_until` of the snapshot that caused the failure. */
+  snapshotValidUntil?: string;
+  /** ISO-8601 `issued_at` of the snapshot (its fetch/pin time). */
+  snapshotFetchedAt?: string;
+  /** Whether the snapshot came from the bundled vendor files or a live refresh. */
+  snapshotSource?: "pinned" | "live";
+  /** Which key id was revoked or role-mismatched, when applicable. */
+  kid?: string;
+}
+
+/**
+ * Thrown by {@link verifyAuditBundle} / {@link verifyBundle} when the
+ * active trust-root snapshot is expired (ADR-005 D3) or the bundle's
+ * signing key is revoked / has the wrong role.
+ *
+ * This error is **always thrown** — it is never returned as a
+ * {@link BundleVerificationResult} because ADR-005 D3 requires that
+ * an expired snapshot or revoked key constitutes a hard enforcement
+ * action, not a soft verification failure.
+ *
+ * To opt out of fail-closed expiry (air-gap / offline use), pass
+ * `allowExpiredSnapshot: true` to `verifyBundle`.
+ */
+export class BundleVerificationError extends AtlaSentError {
+  override name = "BundleVerificationError";
+
+  readonly reason: BundleVerificationErrorInit["reason"];
+  readonly snapshotValidUntil: string | undefined;
+  readonly snapshotFetchedAt: string | undefined;
+  readonly snapshotSource: "pinned" | "live" | undefined;
+  readonly kid: string | undefined;
+
+  constructor(init: BundleVerificationErrorInit) {
+    super(`AtlaSent audit bundle verification failed: ${init.reason}`);
+    this.reason = init.reason;
+    this.snapshotValidUntil = init.snapshotValidUntil;
+    this.snapshotFetchedAt = init.snapshotFetchedAt;
+    this.snapshotSource = init.snapshotSource;
+    this.kid = init.kid;
   }
 }
