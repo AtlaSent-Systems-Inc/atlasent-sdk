@@ -116,8 +116,8 @@ class EmotionalVector:
     crosses an app boundary.
     """
 
-    valence: float    # 0..1
-    arousal: float    # 0..1
+    valence: float  # 0..1
+    arousal: float  # 0..1
     dominance: float  # 0..1
 
 
