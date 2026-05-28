@@ -6,6 +6,62 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.12.0 (2026-05-28)
+
+### New features
+
+#### Trust-root V1 — vendor snapshot, background refresh, fail-closed expiry
+
+`@atlasent/sdk` now ships a vendored trust-root snapshot and a background
+refresh manager implementing ADR-005 D2/D3/D4.
+
+**`TrustRootManager`** (`src/trustRoot.ts`):
+- Loads `vendor/trust-root/` at startup; falls back gracefully if files
+  are missing.
+- Refreshes from `https://keys.atlasent.io/.well-known/` every 4 hours
+  (floor: 5 min) via a non-blocking background timer.
+- `getGlobalTrustRootManager()` — singleton accessor; idempotent across
+  multiple imports.
+- `checkExpiry()` — returns `"ok" | "half_life" | "expired"` and emits
+  one-time `console.warn` at the half-life point and on expiry.
+
+**Global auto-inject (B2.3):**
+`verifyBundle()` automatically calls `getGlobalTrustRootManager().getSnapshot()`
+when no explicit `trustRoot` option is passed.
+
+**Fail-closed expiry (B2.4) — ⚠ breaking change:**
+`verifyAuditBundle()` now **throws** `BundleVerificationError` when the
+trust snapshot is expired instead of returning `{ verified: false }`.
+Callers that branch on `result.verified === false` must migrate to:
+```ts
+try {
+  await verifyAuditBundle(bundle, keys);
+} catch (err) {
+  if (err instanceof BundleVerificationError) { /* ... */ }
+}
+```
+Pass `allowExpiredSnapshot: true` to disable fail-closed for air-gap
+environments (emits one-time warning per process).
+
+**Revocation enforcement (B2.5):**
+- `BundleVerificationError(reason: "key_revoked")` — key in `revoked_keys`.
+- `BundleVerificationError(reason: "key_role_mismatch")` — key role is not
+  `R3_audit`.
+- New `PermitOutcome` literal: `"permit_signing_key_revoked"`.
+- `AtlaSentDeniedError.isSigningKeyRevoked` convenience getter.
+
+**`BundleVerificationError`** extends `AtlaSentError` and carries:
+`reason`, `snapshotValidUntil`, `snapshotFetchedAt`, `snapshotSource`, `kid`.
+
+### Tests
+
+- `test/trust-root-b31-smoke.test.ts` — 8 bootstrap smoke tests (vendor
+  snapshot loads, dates parseable, ≥1 key, idempotent manager).
+- `test/trust-root-b32-refresh.test.ts` — 6 refresh integration tests
+  (mock fetch updates `valid_until`, keys, revoked_keys; silent on errors).
+
+---
+
 ## @atlasent/sdk 2.11.0 (2026-05-27)
 
 ### New features

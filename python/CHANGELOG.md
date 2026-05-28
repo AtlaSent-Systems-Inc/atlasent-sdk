@@ -1,5 +1,51 @@
 # Changelog
 
+## 2.13.0 -- 2026-05-28 -- Trust-root V1 (vendor snapshot, background refresh, fail-closed expiry)
+
+### Added
+
+- **`TrustRootManager`** (`atlasent.trust_root`) — vendor snapshot + background
+  refresh implementing ADR-005 D2/D3/D4:
+  - Loads `vendor/trust-root/` at startup via `_load_vendor_snapshot()`.
+  - Refreshes from `https://keys.atlasent.io/.well-known/` every 4 hours
+    (floor: 5 min) using a thread-safe `threading.Timer`.
+  - `get_global_trust_root_manager()` — process-singleton accessor.
+  - `check_expiry()` — returns `"ok" | "half_life" | "expired"`; emits
+    `logger.warning` once per process at half-life and expiry.
+
+- **Global auto-inject (B2.3):** `verify_bundle()` automatically uses
+  `get_global_trust_root_manager().get_snapshot()` when no `trust_root`
+  argument is supplied.
+
+- **`BundleVerificationError`** (new exception, `atlasent.exceptions`) —
+  extends `AtlaSentDeniedError`; carries `reason`, `snapshot_valid_until`,
+  `snapshot_fetched_at`, `snapshot_source`, `kid`.
+
+- **`PermitOutcome`** — new literal `"permit_signing_key_revoked"`.
+- **`AtlaSentDeniedError.is_signing_key_revoked`** convenience property.
+
+### Breaking change (B2.4)
+
+`verify_audit_bundle()` now **raises** `BundleVerificationError` on trust
+failures instead of returning a falsy result. Callers must migrate to:
+
+```python
+try:
+    verify_audit_bundle(bundle, keys)
+except BundleVerificationError as err:
+    ...  # err.reason, err.snapshot_valid_until, etc.
+```
+
+Pass `allow_expired_snapshot=True` to opt out for air-gap environments.
+
+### Tests
+
+- `tests/test_trust_root_b31_smoke.py` — 9 bootstrap smoke tests.
+- `tests/test_trust_root_b32_refresh.py` — 5 refresh integration tests
+  using `unittest.mock.patch("urllib.request.urlopen")`.
+
+---
+
 ## 2.12.0 -- 2026-05-28 -- SSO, access-governance-log, and evidence-bundle sub-clients wired into AtlaSentClient
 
 ### Added
