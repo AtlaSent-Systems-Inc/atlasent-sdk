@@ -240,7 +240,7 @@ def verify_audit_bundle(
         )
         if now > valid_until and not allow_expired_snapshot:
             raise BundleVerificationError(
-                "trust_snapshot_expired",
+                bundle_reason="trust_snapshot_expired",
                 snapshot_valid_until=trust_root.valid_until,
                 snapshot_fetched_at=trust_root.issued_at,
             )
@@ -314,7 +314,7 @@ def verify_audit_bundle(
             is_revoked = any(r.kid == kid for r in trust_root.revoked_keys)
             if is_revoked:
                 raise BundleVerificationError(
-                    "key_revoked",
+                    bundle_reason="key_revoked",
                     snapshot_valid_until=trust_root.valid_until,
                     snapshot_fetched_at=trust_root.issued_at,
                     kid=kid,
@@ -322,7 +322,7 @@ def verify_audit_bundle(
             key_entry = next((k for k in trust_root.keys if k.kid == kid), None)
             if key_entry is not None and key_entry.role != "R3_audit":
                 raise BundleVerificationError(
-                    "key_role_mismatch",
+                    bundle_reason="key_role_mismatch",
                     snapshot_valid_until=trust_root.valid_until,
                     snapshot_fetched_at=trust_root.issued_at,
                     kid=kid,

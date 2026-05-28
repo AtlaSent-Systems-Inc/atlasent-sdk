@@ -75,25 +75,25 @@ EMPTY_BUNDLE: dict[str, Any] = {
 
 class TestBundleVerificationError:
     def test_message_includes_reason(self) -> None:
-        err = BundleVerificationError("trust_snapshot_expired")
+        err = BundleVerificationError(bundle_reason="trust_snapshot_expired")
         assert "trust_snapshot_expired" in str(err)
 
     def test_carries_all_fields(self) -> None:
         err = BundleVerificationError(
-            "key_revoked",
+            bundle_reason="key_revoked",
             snapshot_valid_until="2020-01-01T00:00:00Z",
             snapshot_fetched_at="2019-01-01T00:00:00Z",
             snapshot_source="pinned",
             kid="kid-abc",
         )
-        assert err.reason == "key_revoked"
+        assert err.bundle_reason == "key_revoked"
         assert err.snapshot_valid_until == "2020-01-01T00:00:00Z"
         assert err.snapshot_fetched_at == "2019-01-01T00:00:00Z"
         assert err.snapshot_source == "pinned"
         assert err.kid == "kid-abc"
 
     def test_is_instance_of_atlasent_error(self) -> None:
-        err = BundleVerificationError("key_role_mismatch")
+        err = BundleVerificationError(bundle_reason="key_role_mismatch")
         assert isinstance(err, Exception)
         assert isinstance(err, AtlaSentError)
         assert isinstance(err, BundleVerificationError)
