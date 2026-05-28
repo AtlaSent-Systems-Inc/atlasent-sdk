@@ -118,12 +118,13 @@ class TestEmotionalVector:
 
     def test_vector_contains_only_bounded_floats(self) -> None:
         vec = EmotionalVector(valence=0.5, arousal=0.5, dominance=0.5)
-        serialised = json.dumps(asdict(vec))
+        data = asdict(vec)
+        assert set(data.keys()) == {"valence", "arousal", "dominance"}
+        assert all(isinstance(v, float) for v in data.values())
+        serialised = json.dumps(data)
         assert "valence" in serialised
         assert "arousal" in serialised
         assert "dominance" in serialised
-        # No free-form strings
-        assert serialised == '{"valence": 0.5, "arousal": 0.5, "dominance": 0.5}'
 
 
 # ---------------------------------------------------------------------------
