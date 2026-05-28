@@ -7,8 +7,9 @@
  * Refresh failure is silent — falls back to the in-memory snapshot.
  *
  * Snapshot expiry (valid_until) is fail-closed per ADR-005 D3:
- * checkExpiry() returns "expired" when expired (unless
- * allowExpiredSnapshot=true is passed to verifyAuditBundle).
+ * checkExpiry() emits a one-time console.warn at half-life, and again
+ * on expiry. verifyAuditBundle throws BundleVerificationError when
+ * expired (unless allowExpiredSnapshot=true is passed).
  */
 
 import { readFileSync } from "node:fs";
@@ -61,7 +62,7 @@ const REFRESH_INTERVAL_MS_DEFAULT = 4 * 60 * 60 * 1000; // 4 hours
 const REFRESH_INTERVAL_MS_FLOOR = 5 * 60 * 1000; // 5 minutes
 const KEYS_BASE_URL = "https://keys.atlasent.io/.well-known";
 
-// Half-life warning: emitted once per process when >50% of validity window elapsed
+// Half-life and expiry warnings: emitted once per process (ADR-005 D3).
 let _halfLifeWarningEmitted = false;
 let _expiredWarningEmitted = false;
 
@@ -107,6 +108,9 @@ export class TrustRootManager {
   /**
    * Check whether the snapshot is expired, warn at half-life.
    * Returns "ok" | "half_life" | "expired".
+   *
+   * Emits console.warn once per process at half-life (ADR-005 D3).
+   * Emits console.warn once per process on expiry.
    */
   checkExpiry(): "ok" | "half_life" | "expired" {
     const snap = this._snapshot;
@@ -115,11 +119,26 @@ export class TrustRootManager {
     const validUntil = new Date(snap.valid_until).getTime();
 
     if (now > validUntil) {
+      if (!_expiredWarningEmitted) {
+        _expiredWarningEmitted = true;
+        console.warn(
+          `[AtlaSent] trust-root snapshot expired at ${snap.valid_until} — ` +
+            `bundle verification is fail-closed until the snapshot refreshes. ` +
+            `Pass allowExpiredSnapshot:true to opt out (air-gap only).`,
+        );
+      }
       return "expired";
     }
     const window = validUntil - issuedAt;
     const halfLife = issuedAt + window / 2;
     if (now > halfLife) {
+      if (!_halfLifeWarningEmitted) {
+        _halfLifeWarningEmitted = true;
+        console.warn(
+          `[AtlaSent] trust-root snapshot is past its half-life ` +
+            `(valid until ${snap.valid_until}) — a background refresh should occur soon.`,
+        );
+      }
       return "half_life";
     }
     return "ok";
@@ -279,9 +298,3 @@ export function __setGlobalTrustRootManagerForTests(
 }
 
 export { _resetWarningFlags as __resetWarningFlagsForTests };
-
-// Suppress unused-variable warnings for the warning-emitted flags
-// (they are exported-for-tests via __resetWarningFlagsForTests and
-// read by future code that will emit console.warn).
-void _halfLifeWarningEmitted;
-void _expiredWarningEmitted;

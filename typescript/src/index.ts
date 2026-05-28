@@ -70,6 +70,7 @@ export {
   AtlaSentDeniedError,
   AtlaSentEscalateError,
   AtlaSentError,
+  BundleVerificationError,
   PermitRevoked,
   StreamParseError,
   StreamTimeoutError,
@@ -79,6 +80,7 @@ export {
   type AtlaSentEscalateErrorInit,
   type AtlaSentErrorCode,
   type AtlaSentErrorInit,
+  type BundleVerificationErrorInit,
   type PermitOutcome,
 } from "./errors.js";
 export {
