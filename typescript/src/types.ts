@@ -585,6 +585,18 @@ export interface AtlaSentClientOptions {
    * Pass `{ maxAttempts: 1 }` to disable retries entirely.
    */
   retryPolicy?: import("./retry.js").RetryPolicy;
+  /**
+   * Base URL for the trust-root host (default: https://keys.atlasent.io/.well-known).
+   * Override for air-gapped / enterprise mirror deployments.
+   * Per ADR-005 D2.
+   */
+  trustRootUrl?: string;
+  /**
+   * Trust-root snapshot refresh interval in milliseconds.
+   * Default: 4 hours.  Floor: 5 minutes (ADR-005 D2).
+   * Set to 0 to inherit the default.
+   */
+  trustSnapshotRefreshMs?: number;
 }
 
 // ── Permit lifecycle (canonical REST shapes) ──────────────────────────────────

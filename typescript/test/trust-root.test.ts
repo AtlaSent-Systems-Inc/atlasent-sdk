@@ -13,10 +13,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   TrustRootManager,
+  __resetWarningFlagsForTests,
   __setGlobalTrustRootManagerForTests,
   getGlobalTrustRootManager,
   type TrustRootSnapshot,
 } from "../src/trustRoot.js";
+import { BundleVerificationError } from "../src/errors.js";
 import { verifyAuditBundle, type VerifyKey } from "../src/auditBundle.js";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
@@ -245,6 +247,87 @@ describe("trust-root vectors", () => {
 
     const r = await verifyAuditBundle(bundle, keys, { trustRoot, allowExpiredSnapshot: true });
     expect(r.verified).toBe(true);
+  });
+});
+
+// ─── BundleVerificationError ──────────────────────────────────────────────────
+
+describe("BundleVerificationError", () => {
+  it("is an instance of AtlaSentDeniedError", async () => {
+    const err = new BundleVerificationError({ bundleReason: "trust_snapshot_expired" });
+    const { AtlaSentDeniedError } = await import("../src/errors.js");
+    expect(err).toBeInstanceOf(AtlaSentDeniedError);
+  });
+
+  it("bundleReason is trust_snapshot_expired", () => {
+    const err = new BundleVerificationError({ bundleReason: "trust_snapshot_expired" });
+    expect(err.bundleReason).toBe("trust_snapshot_expired");
+  });
+
+  it("carries snapshotValidUntil when provided", () => {
+    const err = new BundleVerificationError({
+      bundleReason: "trust_snapshot_expired",
+      snapshotValidUntil: "2020-01-01T00:00:00Z",
+      snapshotFetchedAt: "2019-01-01T00:00:00Z",
+    });
+    expect(err.snapshotValidUntil).toBe("2020-01-01T00:00:00Z");
+  });
+
+  it("key_revoked reason", () => {
+    const err = new BundleVerificationError({ bundleReason: "key_revoked" });
+    expect(err.bundleReason).toBe("key_revoked");
+    expect(err.decision).toBe("deny");
+  });
+});
+
+// ─── Half-life and expired warnings ──────────────────────────────────────────
+
+describe("checkExpiry warnings (ADR-005 D3)", () => {
+  beforeEach(() => {
+    __resetWarningFlagsForTests();
+  });
+
+  afterEach(() => {
+    __resetWarningFlagsForTests();
+  });
+
+  it("emits console.warn once at half-life and returns half_life", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const issued = new Date(Date.now() - 366 * 24 * 60 * 60 * 1000).toISOString();
+    const until = new Date(Date.now() + 364 * 24 * 60 * 60 * 1000).toISOString();
+    const mgr = new TrustRootManager(makeSnapshot({ issued_at: issued, valid_until: until }), {
+      disableRefresh: true,
+    });
+    const status = mgr.checkExpiry();
+    expect(status).toBe("half_life");
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0]![0]).toContain("[atlasent] Trust snapshot expires in");
+    // Second call does not emit again
+    mgr.checkExpiry();
+    expect(warnSpy).toHaveBeenCalledOnce();
+    warnSpy.mockRestore();
+  });
+
+  it("emits console.warn once at expiry and returns expired", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const mgr = new TrustRootManager(
+      makeSnapshot({ valid_until: "2020-01-01T00:00:00Z", issued_at: "2019-01-01T00:00:00Z" }),
+      { disableRefresh: true },
+    );
+    expect(mgr.checkExpiry()).toBe("expired");
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0]![0]).toContain("[atlasent] Trust snapshot expired");
+    mgr.checkExpiry();
+    expect(warnSpy).toHaveBeenCalledOnce();
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn when snapshot is healthy", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const mgr = new TrustRootManager(makeSnapshot(), { disableRefresh: true });
+    expect(mgr.checkExpiry()).toBe("ok");
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it("bundle_role_mismatch → key_role_mismatch", async () => {

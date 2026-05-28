@@ -28,6 +28,11 @@ import {
   type AtlaSentErrorCode,
   type AtlaSentErrorInit,
 } from "./errors.js";
+import {
+  TrustRootManager,
+  getGlobalTrustRootManager,
+  type TrustRootSnapshot,
+} from "./trustRoot.js";
 import { PRODUCTION_DEPLOY_ACTION } from "./types.js";
 import type {
   ApiKeySelfResponse,
@@ -437,6 +442,8 @@ export class AtlaSentClient {
   readonly sso: SsoSubClient;
   /** Access governance log sub-client. Access as `client.accessGovernanceLog`. */
   readonly accessGovernanceLog: AccessGovernanceLogSubClient;
+  /** Trust-root snapshot manager for this client instance. */
+  readonly trustRoot: TrustRootManager;
 
   constructor(options: AtlaSentClientOptions) {
     if (!options.apiKey || typeof options.apiKey !== "string") {
@@ -498,6 +505,25 @@ export class AtlaSentClient {
     this.accessGovernanceLog = makeAccessGovernanceLogClient(
       (path, query) => this._get(path, query),
     );
+    // Wire trust-root manager. Prefer custom options over the global manager
+    // so clients with custom trustRootUrl or trustSnapshotRefreshMs get their
+    // own manager; otherwise share the process-global singleton.
+    if (options.trustRootUrl !== undefined || options.trustSnapshotRefreshMs !== undefined) {
+      const globalSnap = getGlobalTrustRootManager({ disableRefresh: true }).getSnapshot();
+      this.trustRoot = new TrustRootManager(globalSnap, {
+        ...(options.trustRootUrl !== undefined && { refreshBaseUrl: options.trustRootUrl }),
+        ...(options.trustSnapshotRefreshMs !== undefined && { refreshIntervalMs: options.trustSnapshotRefreshMs }),
+      });
+    } else {
+      this.trustRoot = getGlobalTrustRootManager();
+    }
+    // Emit expiry warning once at construction time.
+    this.trustRoot.checkExpiry();
+  }
+
+  /** Return the current trust-root snapshot (pinned or last successful refresh). */
+  getTrustSnapshot(): TrustRootSnapshot {
+    return this.trustRoot.getSnapshot();
   }
 
   /**

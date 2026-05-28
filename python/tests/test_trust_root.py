@@ -295,3 +295,122 @@ def test_vector_role_mismatch() -> None:
     r = verify_audit_bundle(bundle, [key], trust_root=trust_root)
     assert not r.verified
     assert r.reason == "key_role_mismatch"
+
+
+# ─── checkExpiry warning emission (ADR-005 D3) ───────────────────────────────
+
+
+def test_check_expiry_warns_once_at_half_life(caplog: pytest.LogCaptureFixture) -> None:
+    import atlasent.trust_root as tr_mod
+
+    tr_mod._half_life_warning_emitted = False
+    tr_mod._expired_warning_emitted = False
+    try:
+        now = datetime.now(timezone.utc)
+        issued = (now - timedelta(days=366)).isoformat().replace("+00:00", "Z")
+        until = (now + timedelta(days=364)).isoformat().replace("+00:00", "Z")
+        mgr = TrustRootManager(
+            _make_snapshot(issued_at=issued, valid_until=until), disable_refresh=True
+        )
+        with caplog.at_level("WARNING", logger="atlasent"):
+            status = mgr.check_expiry()
+            assert status == "half_life"
+            assert any(
+                "[atlasent] Trust snapshot expires in" in r.message
+                for r in caplog.records
+            )
+            count = len(caplog.records)
+            mgr.check_expiry()
+            assert len(caplog.records) == count
+    finally:
+        tr_mod._half_life_warning_emitted = False
+        tr_mod._expired_warning_emitted = False
+
+
+def test_check_expiry_warns_once_at_expired(caplog: pytest.LogCaptureFixture) -> None:
+    import atlasent.trust_root as tr_mod
+
+    tr_mod._half_life_warning_emitted = False
+    tr_mod._expired_warning_emitted = False
+    try:
+        mgr = TrustRootManager(
+            _make_snapshot(
+                valid_until="2020-01-01T00:00:00Z",
+                issued_at="2019-01-01T00:00:00Z",
+            ),
+            disable_refresh=True,
+        )
+        with caplog.at_level("WARNING", logger="atlasent"):
+            status = mgr.check_expiry()
+            assert status == "expired"
+            assert any(
+                "[atlasent] Trust snapshot expired" in r.message for r in caplog.records
+            )
+            count = len(caplog.records)
+            mgr.check_expiry()
+            assert len(caplog.records) == count
+    finally:
+        tr_mod._half_life_warning_emitted = False
+        tr_mod._expired_warning_emitted = False
+
+
+def test_check_expiry_no_warning_when_healthy(caplog: pytest.LogCaptureFixture) -> None:
+    import atlasent.trust_root as tr_mod
+
+    tr_mod._half_life_warning_emitted = False
+    tr_mod._expired_warning_emitted = False
+    try:
+        mgr = TrustRootManager(_make_snapshot(), disable_refresh=True)
+        with caplog.at_level("WARNING", logger="atlasent"):
+            assert mgr.check_expiry() == "ok"
+            assert not any("Trust snapshot" in r.message for r in caplog.records)
+    finally:
+        tr_mod._half_life_warning_emitted = False
+        tr_mod._expired_warning_emitted = False
+
+
+# ─── BundleVerificationError ──────────────────────────────────────────────────
+
+
+def test_bundle_verification_error_is_atlasent_denied_error() -> None:
+    from atlasent.exceptions import AtlaSentDeniedError, BundleVerificationError
+
+    err = BundleVerificationError(bundle_reason="trust_snapshot_expired")
+    assert isinstance(err, AtlaSentDeniedError)
+
+
+def test_bundle_verification_error_bundle_reason() -> None:
+    from atlasent.exceptions import BundleVerificationError
+
+    err = BundleVerificationError(bundle_reason="trust_snapshot_expired")
+    assert err.bundle_reason == "trust_snapshot_expired"
+    assert err.decision == "deny"
+
+
+def test_bundle_verification_error_key_revoked() -> None:
+    from atlasent.exceptions import BundleVerificationError
+
+    err = BundleVerificationError(bundle_reason="key_revoked")
+    assert err.bundle_reason == "key_revoked"
+
+
+def test_bundle_verification_error_carries_snapshot_valid_until() -> None:
+    from atlasent.exceptions import BundleVerificationError
+
+    err = BundleVerificationError(
+        bundle_reason="trust_snapshot_expired",
+        snapshot_valid_until="2020-01-01T00:00:00Z",
+        snapshot_fetched_at="2019-01-01T00:00:00Z",
+    )
+    assert err.snapshot_valid_until == "2020-01-01T00:00:00Z"
+
+
+# ─── permit_signing_key_revoked outcome ──────────────────────────────────────
+
+
+def test_permit_signing_key_revoked_in_known_outcomes() -> None:
+    from atlasent.exceptions import _KNOWN_PERMIT_OUTCOMES, _normalize_permit_outcome
+
+    assert "permit_signing_key_revoked" in _KNOWN_PERMIT_OUTCOMES
+    result = _normalize_permit_outcome("permit_signing_key_revoked")
+    assert result == "permit_signing_key_revoked"

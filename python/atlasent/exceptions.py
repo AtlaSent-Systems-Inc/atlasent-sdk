@@ -43,6 +43,7 @@ PermitOutcome = Literal[
     "permit_expired",
     "permit_revoked",
     "permit_not_found",
+    "permit_signing_key_revoked",
 ]
 """Reason an already-issued permit failed verification.
 
@@ -58,7 +59,13 @@ facing matrix this discriminator drives.
 """
 
 _KNOWN_PERMIT_OUTCOMES: frozenset[str] = frozenset(
-    {"permit_consumed", "permit_expired", "permit_revoked", "permit_not_found"}
+    {
+        "permit_consumed",
+        "permit_expired",
+        "permit_revoked",
+        "permit_not_found",
+        "permit_signing_key_revoked",
+    }
 )
 
 
@@ -255,6 +262,51 @@ class AtlaSentDeniedError(AtlaSentDenied):
         (typo, cross-tenant lookup, or pre-issuance race).
         """
         return self.outcome == "permit_not_found"
+
+
+BundleVerificationReason = Literal[
+    "trust_snapshot_expired",
+    "key_revoked",
+    "key_role_mismatch",
+]
+"""Discriminator for :class:`BundleVerificationError` failures."""
+
+
+class BundleVerificationError(AtlaSentDeniedError):
+    """Raised when bundle or permit verification fails due to a trust-root
+    condition: expired snapshot, revoked signing key, or key role mismatch.
+
+    Extends :class:`AtlaSentDeniedError` so ``isinstance(e, AtlaSentDeniedError)``
+    catches these failures alongside policy denials; use
+    ``isinstance(e, BundleVerificationError)`` to branch specifically.
+
+    Attributes:
+        bundle_reason: Discriminator — ``"trust_snapshot_expired"``,
+            ``"key_revoked"``, or ``"key_role_mismatch"``.
+        snapshot_valid_until: ``valid_until`` of the expired snapshot, if applicable.
+        snapshot_fetched_at: ``issued_at`` of the snapshot (proxy for fetch time).
+        snapshot_source: Whether the snapshot came from the pinned vendor file
+            or a live refresh.
+    """
+
+    def __init__(
+        self,
+        *,
+        bundle_reason: BundleVerificationReason,
+        evaluation_id: str = "",
+        snapshot_valid_until: str | None = None,
+        snapshot_fetched_at: str | None = None,
+        snapshot_source: Literal["pinned", "live"] | None = None,
+    ) -> None:
+        super().__init__(
+            decision="deny",
+            evaluation_id=evaluation_id,
+            reason=f"Bundle verification failed: {bundle_reason}",
+        )
+        self.bundle_reason = bundle_reason
+        self.snapshot_valid_until = snapshot_valid_until
+        self.snapshot_fetched_at = snapshot_fetched_at
+        self.snapshot_source = snapshot_source
 
 
 class StreamTimeoutError(AtlaSentError):

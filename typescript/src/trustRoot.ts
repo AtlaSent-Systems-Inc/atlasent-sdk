@@ -105,8 +105,8 @@ export class TrustRootManager {
   }
 
   /**
-   * Check whether the snapshot is expired, warn at half-life.
-   * Returns "ok" | "half_life" | "expired".
+   * Check whether the snapshot is expired, emit one-time warnings at
+   * half-life and expiry.  Returns "ok" | "half_life" | "expired".
    */
   checkExpiry(): "ok" | "half_life" | "expired" {
     const snap = this._snapshot;
@@ -115,11 +115,29 @@ export class TrustRootManager {
     const validUntil = new Date(snap.valid_until).getTime();
 
     if (now > validUntil) {
+      if (!_expiredWarningEmitted) {
+        _expiredWarningEmitted = true;
+        const daysAgo = Math.floor((now - validUntil) / (24 * 60 * 60 * 1000));
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[atlasent] Trust snapshot expired ${daysAgo} day(s) ago (valid_until: ${snap.valid_until}). ` +
+            "Update to a newer SDK build or enable allowExpiredSnapshot.",
+        );
+      }
       return "expired";
     }
     const window = validUntil - issuedAt;
     const halfLife = issuedAt + window / 2;
     if (now > halfLife) {
+      if (!_halfLifeWarningEmitted) {
+        _halfLifeWarningEmitted = true;
+        const daysLeft = Math.floor((validUntil - now) / (24 * 60 * 60 * 1000));
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[atlasent] Trust snapshot expires in ${daysLeft} day(s) (valid_until: ${snap.valid_until}). ` +
+            "Plan an SDK update.",
+        );
+      }
       return "half_life";
     }
     return "ok";
@@ -279,9 +297,3 @@ export function __setGlobalTrustRootManagerForTests(
 }
 
 export { _resetWarningFlags as __resetWarningFlagsForTests };
-
-// Suppress unused-variable warnings for the warning-emitted flags
-// (they are exported-for-tests via __resetWarningFlagsForTests and
-// read by future code that will emit console.warn).
-void _halfLifeWarningEmitted;
-void _expiredWarningEmitted;
