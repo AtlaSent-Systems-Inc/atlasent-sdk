@@ -856,3 +856,21 @@ export {
   type IdpConnection,
   type TokenResponse,
 } from "./auth.js";
+
+// ── SSO Administration ────────────────────────────────────────────────────────────────────────────────────────────────
+export {
+  wireToSsoConnection,
+  wireToSsoJitRule,
+  wireToSsoEvent,
+  wireToSsoReadiness,
+  type SsoConnection,
+  type SsoConnectionWire,
+  type SsoJitRule,
+  type SsoJitRuleWire,
+  type SsoEvent,
+  type SsoEventWire,
+  type SsoEnforceAction,
+  type SsoReadiness,
+  type SsoReadinessWire,
+  type SsoRole,
+} from "./sso.js";
