@@ -87,7 +87,9 @@ class SsoClient:
 
     def get_connection(self, connection_id: str) -> dict[str, Any]:
         """Return a single SSO connection by ID."""
-        return _request(self._client, "GET", f"/v1/sso/connections/{_enc(connection_id)}")
+        return _request(
+            self._client, "GET", f"/v1/sso/connections/{_enc(connection_id)}"
+        )
 
     def create_connection(
         self,
@@ -121,7 +123,10 @@ class SsoClient:
         connection_id: str,
         **fields: Any,
     ) -> dict[str, Any]:
-        """Patch an existing SSO connection. Pass keyword args matching wire field names."""
+        """Patch an existing SSO connection.
+
+        Pass keyword args matching wire field names.
+        """
         return _request(
             self._client,
             "PATCH",
@@ -194,7 +199,9 @@ class SsoClient:
         ``action="enable"``  → sso_enabled=True, enforce_sso=False
         ``action="enforce"`` → sso_enabled=True, enforce_sso=True
         """
-        return _request(self._client, "POST", "/v1/sso/enforce", body={"action": action})
+        return _request(
+            self._client, "POST", "/v1/sso/enforce", body={"action": action}
+        )
 
     def get_status(self) -> dict[str, Any]:
         """Return the four-boolean enforcement readiness checklist."""
