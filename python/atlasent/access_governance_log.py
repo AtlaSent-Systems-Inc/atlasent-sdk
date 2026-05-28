@@ -23,6 +23,7 @@ Usage::
 from __future__ import annotations
 
 import json
+import urllib.request as urllib_request
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
@@ -43,8 +44,6 @@ def _request(
         "Authorization": f"Bearer {client.api_key}",
         "Accept": "application/json",
     }
-    import urllib.request as urllib_request
-
     req = urllib_request.Request(url, headers=headers, method="GET")
     try:
         with urllib_request.urlopen(req) as resp:

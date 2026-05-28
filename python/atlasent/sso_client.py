@@ -28,6 +28,7 @@ Usage::
 from __future__ import annotations
 
 import json
+import urllib.request as urllib_request
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, urlencode
 
@@ -55,8 +56,6 @@ def _request(
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    import urllib.request as urllib_request
-
     data = json.dumps(body).encode() if body is not None else None
     req = urllib_request.Request(url, data=data, headers=headers, method=method)
     try:
