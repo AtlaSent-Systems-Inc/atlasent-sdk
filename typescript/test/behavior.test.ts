@@ -271,7 +271,7 @@ describe("StateEventCache", () => {
     const vec: EmotionalVector = { valence: 0.6, arousal: 0.4, dominance: 0.7 };
     const cache = new StateEventCache(5);
     cache.add(redactStateSnapshot({ ...SAMPLE_SNAPSHOT, emotional_vector: vec }));
-    const [entry] = cache.recent();
+    const entry = cache.recent()[0]!;
     expect(entry.emotional_vector).toEqual(vec);
   });
 });
