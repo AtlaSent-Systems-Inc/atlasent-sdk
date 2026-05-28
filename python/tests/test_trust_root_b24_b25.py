@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 
+from atlasent.audit_bundle import verify_audit_bundle, verify_bundle
 from atlasent.exceptions import (
     AtlaSentDeniedError,
     AtlaSentError,
@@ -27,8 +28,6 @@ from atlasent.trust_root import (
     _set_global_trust_root_manager_for_tests,
     get_global_trust_root_manager,
 )
-from atlasent.audit_bundle import verify_audit_bundle, verify_bundle
-
 
 # ─── Helpers ────────────────────────────────────────────────────────────────────────
 
@@ -104,7 +103,10 @@ class TestBundleVerificationError:
 
 class TestPermitSigningKeyRevoked:
     def test_normalize_recognises_new_outcome(self) -> None:
-        assert _normalize_permit_outcome("permit_signing_key_revoked") == "permit_signing_key_revoked"
+        assert (
+            _normalize_permit_outcome("permit_signing_key_revoked")
+            == "permit_signing_key_revoked"
+        )
 
     def test_normalize_returns_none_for_unknown(self) -> None:
         assert _normalize_permit_outcome("unknown_outcome") is None
@@ -148,7 +150,9 @@ class TestCheckExpiryWarnings:
         assert result == "expired"
         assert any("expired" in r.message for r in caplog.records)
 
-    def test_expired_warning_emitted_only_once(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_expired_warning_emitted_only_once(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         mgr = TrustRootManager(_expired_snap(), disable_refresh=True)
         with caplog.at_level(logging.WARNING, logger="atlasent.trust_root"):
             mgr.check_expiry()
@@ -164,7 +168,9 @@ class TestCheckExpiryWarnings:
         assert result == "half_life"
         assert any("half-life" in r.message for r in caplog.records)
 
-    def test_half_life_warning_emitted_only_once(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_half_life_warning_emitted_only_once(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         mgr = TrustRootManager(_half_life_snap(), disable_refresh=True)
         with caplog.at_level(logging.WARNING, logger="atlasent.trust_root"):
             mgr.check_expiry()
@@ -178,7 +184,9 @@ class TestCheckExpiryWarnings:
             mgr.check_expiry()
         assert len(caplog.records) == 0
 
-    def test_reset_allows_second_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_reset_allows_second_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         mgr = TrustRootManager(_expired_snap(), disable_refresh=True)
         with caplog.at_level(logging.WARNING, logger="atlasent.trust_root"):
             mgr.check_expiry()  # first warning

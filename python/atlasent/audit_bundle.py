@@ -380,6 +380,7 @@ def verify_bundle(
     effective_trust_root = trust_root
     if effective_trust_root is None:
         from atlasent.trust_root import get_global_trust_root_manager  # noqa: PLC0415
+
         effective_trust_root = get_global_trust_root_manager().get_snapshot()
     return verify_audit_bundle(
         data,

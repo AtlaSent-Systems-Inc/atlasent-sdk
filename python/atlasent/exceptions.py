@@ -395,5 +395,3 @@ class RateLimitError(AtlaSentError):
 
 
 # ── Bundle verification error (ADR-005 D3 fail-closed expiry / revocation) ───
-
-

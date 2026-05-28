@@ -66,9 +66,15 @@ def _make_urlopen_fn(
         revoked_keys = []
 
     responses: dict[str, dict] = {
-        "atlasent-trust-root.json": {"valid_until": valid_until, "issued_at": issued_at},
+        "atlasent-trust-root.json": {
+            "valid_until": valid_until,
+            "issued_at": issued_at,
+        },
         "atlasent-verifier-keys.json": {"keys": keys},
-        "atlasent-revocations.json": {"revoked_keys": revoked_keys, "revoked_identities": []},
+        "atlasent-revocations.json": {
+            "revoked_keys": revoked_keys,
+            "revoked_identities": [],
+        },
     }
 
     def mock_urlopen(url: str, timeout: int = 10):
@@ -87,8 +93,13 @@ def reset_global_manager():
 
 class TestB32RefreshIntegration:
     def test_do_refresh_updates_valid_until(self):
-        mgr = TrustRootManager(_make_snap(valid_until="2026-06-01T00:00:00Z"), disable_refresh=True)
-        with patch("urllib.request.urlopen", new=_make_urlopen_fn(valid_until="2030-01-01T00:00:00Z")):
+        mgr = TrustRootManager(
+            _make_snap(valid_until="2026-06-01T00:00:00Z"), disable_refresh=True
+        )
+        with patch(
+            "urllib.request.urlopen",
+            new=_make_urlopen_fn(valid_until="2030-01-01T00:00:00Z"),
+        ):
             mgr._do_refresh_inner()
         assert mgr.get_snapshot().valid_until == "2030-01-01T00:00:00Z"
 
@@ -112,8 +123,16 @@ class TestB32RefreshIntegration:
 
     def test_do_refresh_updates_revoked_keys(self):
         mgr = TrustRootManager(_make_snap(), disable_refresh=True)
-        revoked = [{"kid": "bad-key", "revoked_at": "2026-01-01T00:00:00Z", "reason": "compromise"}]
-        with patch("urllib.request.urlopen", new=_make_urlopen_fn(revoked_keys=revoked)):
+        revoked = [
+            {
+                "kid": "bad-key",
+                "revoked_at": "2026-01-01T00:00:00Z",
+                "reason": "compromise",
+            }
+        ]
+        with patch(
+            "urllib.request.urlopen", new=_make_urlopen_fn(revoked_keys=revoked)
+        ):
             mgr._do_refresh_inner()
         assert mgr.is_revoked("bad-key")
 
