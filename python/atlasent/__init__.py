@@ -34,6 +34,7 @@ wrappers and will be removed in ``atlasent`` v3. Migrate to
 """
 
 from ._version import __version__
+from .access_governance_log import AccessGovernanceLogClient
 from .approval_artifact import (
     ApprovalArtifactV1,
     ApprovalIssuer,
@@ -241,6 +242,7 @@ from .siem import (
     siem_test_delivery,
     upsert_siem_config,
 )
+from .sso_client import SsoClient
 from .trust_root import (
     TrustRootKey,
     TrustRootManager,
@@ -500,6 +502,8 @@ __all__ = [
     "graphql",
     # Phase 3 offline replay client — verify evidence bundles without backend.
     "verify_evidence_bundle",
+    "SsoClient",
+    "AccessGovernanceLogClient",
     "EvidenceVerificationResult",
     # BCCAE V1 — Phase 3 Execution Assurance substrate.
     # Standalone BCCAEClient with bccae:* scopes — not part of the

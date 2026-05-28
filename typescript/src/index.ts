@@ -863,14 +863,29 @@ export {
   wireToSsoJitRule,
   wireToSsoEvent,
   wireToSsoReadiness,
+  makeSsoClient,
   type SsoConnection,
   type SsoConnectionWire,
+  type SsoConnectionInput,
   type SsoJitRule,
   type SsoJitRuleWire,
+  type SsoJitRuleInput,
+  type SsoJitRulePatch,
   type SsoEvent,
   type SsoEventWire,
   type SsoEnforceAction,
+  type SsoEnforceResult,
   type SsoReadiness,
   type SsoReadinessWire,
   type SsoRole,
+  type SsoSubClient,
 } from "./sso.js";
+
+// ── Access Governance Log ─────────────────────────────────────────────────────
+export {
+  makeAccessGovernanceLogClient,
+  type AccessGovernanceEvent,
+  type AccessGovernanceLogPage,
+  type AccessGovernanceLogQuery,
+  type AccessGovernanceLogSubClient,
+} from "./access-governance-log.js";

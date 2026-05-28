@@ -174,6 +174,14 @@ import {
   makeAuthClient,
   type AuthSubClient,
 } from "./auth.js";
+import {
+  makeSsoClient,
+  type SsoSubClient,
+} from "./sso.js";
+import {
+  makeAccessGovernanceLogClient,
+  type AccessGovernanceLogSubClient,
+} from "./access-governance-log.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -425,6 +433,10 @@ export class AtlaSentClient {
   readonly evidenceBundles: EvidenceBundleSubClient;
   /** Auth / token management sub-client. Access as `client.auth`. */
   readonly auth: AuthSubClient;
+  /** SSO administration sub-client. Access as `client.sso`. */
+  readonly sso: SsoSubClient;
+  /** Access governance log sub-client. Access as `client.accessGovernanceLog`. */
+  readonly accessGovernanceLog: AccessGovernanceLogSubClient;
 
   constructor(options: AtlaSentClientOptions) {
     if (!options.apiKey || typeof options.apiKey !== "string") {
@@ -476,6 +488,15 @@ export class AtlaSentClient {
     this.auth = makeAuthClient(
       (path, body) => this._post(path, body),
       (path) => this._get(path),
+    );
+    this.sso = makeSsoClient(
+      (path, query) => this._get(path, query),
+      (path, body) => this._post(path, body),
+      (path, body) => this._patch(path, body),
+      (path) => this._delete(path),
+    );
+    this.accessGovernanceLog = makeAccessGovernanceLogClient(
+      (path, query) => this._get(path, query),
     );
   }
 
@@ -2699,6 +2720,10 @@ export class AtlaSentClient {
     return this._requestRaw<T>(path, "PUT", body, undefined);
   }
 
+  private async _patch<T>(path: string, body: unknown): Promise<{ body: T }> {
+    return this._requestRaw<T>(path, "PATCH", body, undefined);
+  }
+
   private async _delete(path: string): Promise<void> {
     await this._requestRaw<Record<string, unknown>>(path, "DELETE", undefined, undefined);
   }
@@ -2730,7 +2755,7 @@ export class AtlaSentClient {
 
   private async _requestRaw<T>(
     path: string,
-    method: "PUT" | "DELETE",
+    method: "PUT" | "PATCH" | "DELETE",
     body: unknown,
     query: URLSearchParams | undefined,
   ): Promise<{ body: T }> {
