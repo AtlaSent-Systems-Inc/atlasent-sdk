@@ -130,8 +130,10 @@ stripped). Public key distribution is handled separately (see below).
 7. Return BundleVerification { bundle_id, event_count, key_id, ok: true }.
 ```
 
-Failure paths return `ok: false` plus a human-readable reason; SDKs
-expose the reason for audit tooling to display.
+Failure paths **throw** `BundleVerificationError` (they do NOT return
+`{ ok: false }`). This is fail-closed behaviour per ADR-005 D3: a
+missed exception is more visible than a silently ignored falsy return.
+See the error taxonomy below for the full set of thrown reason codes.
 
 ## Open questions
 
@@ -197,17 +199,37 @@ expose the reason for audit tooling to display.
 
 ## SDK implementation sketch
 
+> **B2.4 note — fail-closed semantics (ADR-005 D3):** `verifyBundle` /
+> `verify_bundle` **throw** `BundleVerificationError` on any failure.
+> They do NOT return `{ ok: false }` or a falsy result. Callers should
+> handle the thrown error rather than branching on a return value.
+> Trust-root checks (snapshot expiry, key revocation, role mismatches)
+> fire before the signature check; all three paths throw the same
+> error class so catch blocks need only one branch.
+
 ### TypeScript
 
 ```ts
 import { verifyBundle, BundleVerificationError } from "@atlasent/sdk";
 
-const result = await verifyBundle("./audit-2026-Q2.atlasent-bundle.jsonl");
-// result: { ok: true, bundleId, eventCount, keyId, issuedAt }
-//      OR { ok: false, reason: "signature invalid" }
-
-if (!result.ok) {
-  throw new BundleVerificationError(result.reason);
+// Happy path — throws on any failure, never returns { ok: false }.
+try {
+  const result = await verifyBundle(
+    "./audit-2026-Q2.atlasent-bundle.jsonl",
+    // trustRoot is optional; omitting it uses the global trust-root
+    // manager snapshot (auto-fetched from keys.atlasent.io at startup).
+    // For air-gapped environments pass { allowExpiredSnapshot: true }.
+  );
+  console.log(`Verified ${result.eventCount} events, bundle ${result.bundleId}`);
+} catch (err) {
+  if (err instanceof BundleVerificationError) {
+    // err.reason    — see reason-code table below
+    // err.kid       — key ID involved (when applicable)
+    // err.snapshotValidUntil  — ISO-8601, populated for trust_snapshot_expired
+    // err.snapshotFetchedAt   — ISO-8601, populated for trust_snapshot_expired
+    // err.snapshotSource      — "vendor" | "remote", populated for trust_snapshot_expired
+    console.error(`Bundle verification failed: ${err.reason}`);
+  }
 }
 ```
 
@@ -220,13 +242,23 @@ everything in the Node stdlib.
 ```python
 from atlasent import verify_bundle, BundleVerificationError
 
-result = verify_bundle("./audit-2026-Q2.atlasent-bundle.jsonl")
-# result: BundleVerification(ok=True, bundle_id=..., event_count=...,
-#                            key_id=..., issued_at=...)
-#      or BundleVerification(ok=False, reason="signature invalid")
-
-if not result.ok:
-    raise BundleVerificationError(result.reason)
+# Happy path — raises on any failure, never returns result with ok=False.
+try:
+    result = verify_bundle(
+        "./audit-2026-Q2.atlasent-bundle.jsonl",
+        # trust_root is optional; omitting it uses the global trust-root
+        # manager snapshot (auto-fetched from keys.atlasent.io at startup).
+        # For air-gapped environments pass allow_expired_snapshot=True.
+    )
+    print(f"Verified {result.event_count} events, bundle {result.bundle_id}")
+except BundleVerificationError as exc:
+    # exc.reason              — see reason-code table below
+    # exc.kid                 — key ID involved (when applicable)
+    # exc.snapshot_valid_until  — ISO-8601, populated for trust_snapshot_expired
+    # exc.snapshot_fetched_at   — ISO-8601, populated for trust_snapshot_expired
+    # exc.snapshot_source       — "vendor" | "remote", populated for trust_snapshot_expired
+    print(f"Bundle verification failed: {exc.reason}")
+    raise
 ```
 
 Implementation uses `cryptography.hazmat.primitives.asymmetric.ed25519`.
@@ -237,13 +269,41 @@ SDK was previously dep-free on crypto.
 
 One new error class in each SDK:
 
-- **`BundleVerificationError`** (extends `AtlaSentError`). Distinct
-  from auth-time errors because verification happens offline and
-  has a different remediation story (check the key store, re-fetch
-  keys, re-download the bundle).
+**`BundleVerificationError`** (extends `AtlaSentError`). Thrown (never
+returned) on any trust or signature failure. Distinct from auth-time
+errors because verification happens offline and has a different
+remediation story (check the key store, re-fetch keys, re-download the
+bundle).
 
-Carries `bundle_id` (when readable), `key_id` (when readable), and
-`reason` — the specific failure cause from the verification algorithm.
+Carries:
+- `reason` — the specific failure cause (see table below)
+- `kid` — the key ID involved, when applicable
+- `snapshotValidUntil` / `snapshot_valid_until` — ISO-8601 timestamp
+  when the cached trust snapshot expires; populated for
+  `trust_snapshot_expired`
+- `snapshotFetchedAt` / `snapshot_fetched_at` — ISO-8601 timestamp when
+  the cached snapshot was last fetched; populated for
+  `trust_snapshot_expired`
+- `snapshotSource` / `snapshot_source` — `"vendor"` or `"remote"`,
+  indicating whether the snapshot came from the vendored file or a
+  live refresh; populated for `trust_snapshot_expired`
+
+**Reason codes thrown by `verifyBundle` / `verify_bundle`:**
+
+| `reason` | Thrown when | Remediation |
+|---|---|---|
+| `trust_snapshot_expired` | Cached trust-root snapshot is past its `valid_until` and `allowExpiredSnapshot` is not set | Wait for background refresh, or pass `allowExpiredSnapshot: true` for air-gapped use |
+| `key_revoked` | `key_id` from the bundle header appears in the snapshot's revocation list | Investigate key compromise; contact AtlaSent support |
+| `key_role_mismatch` | `key_id` exists in the snapshot but is not authorized for the `bundle-signing` role | Config / rotation error; verify your trust-root snapshot is current |
+| `signature_invalid` | Ed25519 signature verification failed | Bundle tampered or corrupted; do not trust its contents |
+| `chain_broken` | Hash chain mismatch between consecutive events | Bundle tampered or truncated |
+| `unknown_key_id` | `key_id` from the bundle header is not present in the trust store | Trust store out of date, or bundle from an unknown issuer |
+
+**Air-gap opt-out:** Pass `allowExpiredSnapshot: true` (TypeScript) or
+`allow_expired_snapshot=True` (Python) to skip the expiry check. This
+is intended only for fully offline / air-gapped environments where a
+background refresh is impossible. Once-per-process warnings are still
+emitted to `console.warn` / the `atlasent.trust_root` logger.
 
 ## Test vector requirements
 
@@ -257,21 +317,25 @@ New vectors under `contract/vectors/bundles/`:
   - `bundle_large.jsonl` — header + 10,000 events + signature (to
     exercise streaming verification).
 
-- **Negative fixtures** (must fail verification with specific
-  reasons):
+- **Negative fixtures** (must throw `BundleVerificationError` with
+  the specified `reason`):
   - `INVALID_tampered_event.jsonl` — one event's `context` altered;
-    signature invalid.
+    expected reason: `signature_invalid`.
   - `INVALID_broken_chain.jsonl` — event[2].prev_hash doesn't match
-    event[1].audit_hash.
+    event[1].audit_hash; expected reason: `chain_broken`.
   - `INVALID_bad_signature.jsonl` — header + events valid, but
-    signature is wrong.
+    signature is wrong; expected reason: `signature_invalid`.
   - `INVALID_unknown_key_id.jsonl` — `key_id` in header not in the
-    trust store.
+    trust store; expected reason: `unknown_key_id`.
   - `INVALID_wrong_version.jsonl` — `atlasent_bundle: "v2"` (SDK
     rejects until v2 is specified).
+  - `INVALID_revoked_key.jsonl` — `key_id` appears in snapshot
+    revocation list; expected reason: `key_revoked`.
+  - `INVALID_expired_snapshot.jsonl` — trust snapshot's `valid_until`
+    is in the past; expected reason: `trust_snapshot_expired`.
 
 Each comes with an accompanying `<name>.expected.json` describing
-the expected `BundleVerification` output.
+the expected thrown error fields (`reason`, `kid` when applicable).
 
 Plus a synthetic test-only public key pair checked into
 `contract/vectors/bundles/test-keys/` for reproducible vector
