@@ -138,7 +138,7 @@ export class TrustRootManager {
         const daysLeft = Math.floor((validUntil - now) / (24 * 60 * 60 * 1000));
         // eslint-disable-next-line no-console
         console.warn(
-          `[atlasent] Trust snapshot expires in ${daysLeft} day(s) (valid_until: ${snap.valid_until}). ` +
+          `[atlasent] Trust snapshot expires in ${daysLeft} day(s) — past half-life (valid_until: ${snap.valid_until}). ` +
             "Plan an SDK update.",
         );
       }

@@ -312,6 +312,8 @@ export class BundleVerificationError extends AtlaSentDeniedError {
   readonly snapshotFetchedAt: string | undefined;
   /** Whether the snapshot came from the pinned vendor file or a live refresh. */
   readonly snapshotSource: "pinned" | "live" | undefined;
+  /** Which key id was revoked or role-mismatched, when applicable. */
+  readonly kid: string | undefined;
 
   constructor(opts: {
     bundleReason:
@@ -322,16 +324,18 @@ export class BundleVerificationError extends AtlaSentDeniedError {
     snapshotValidUntil?: string;
     snapshotFetchedAt?: string;
     snapshotSource?: "pinned" | "live";
+    kid?: string;
   }) {
     super({
       decision: "deny",
       evaluationId: opts.evaluationId ?? "",
-      reason: `Bundle verification failed: ${opts.bundleReason}`,
+      reason: opts.bundleReason,
     });
     this.bundleReason = opts.bundleReason;
     this.snapshotValidUntil = opts.snapshotValidUntil;
     this.snapshotFetchedAt = opts.snapshotFetchedAt;
     this.snapshotSource = opts.snapshotSource;
+    this.kid = opts.kid;
   }
 }
 
@@ -425,59 +429,3 @@ export class PermitRevoked extends AtlaSentError {
   }
 }
 
-// ── Bundle verification error (ADR-005 D3 fail-closed expiry / revocation) ────
-
-/**
- * Initialization options for {@link BundleVerificationError}.
- */
-export interface BundleVerificationErrorInit {
-  /**
-   * Machine-readable reason code:
-   *   - `trust_snapshot_expired`: the snapshot's `valid_until` has passed
-   *     and `allowExpiredSnapshot` was not set.
-   *   - `key_revoked`: the bundle's `signing_key_id` appears in
-   *     `revoked_keys` of the active trust snapshot.
-   *   - `key_role_mismatch`: the signing key's `role` is not `"R3_audit"`.
-   */
-  reason: "trust_snapshot_expired" | "key_revoked" | "key_role_mismatch";
-  /** ISO-8601 `valid_until` of the snapshot that caused the failure. */
-  snapshotValidUntil?: string;
-  /** ISO-8601 `issued_at` of the snapshot (its fetch/pin time). */
-  snapshotFetchedAt?: string;
-  /** Whether the snapshot came from the bundled vendor files or a live refresh. */
-  snapshotSource?: "pinned" | "live";
-  /** Which key id was revoked or role-mismatched, when applicable. */
-  kid?: string;
-}
-
-/**
- * Thrown by {@link verifyAuditBundle} / {@link verifyBundle} when the
- * active trust-root snapshot is expired (ADR-005 D3) or the bundle's
- * signing key is revoked / has the wrong role.
- *
- * This error is **always thrown** — it is never returned as a
- * {@link BundleVerificationResult} because ADR-005 D3 requires that
- * an expired snapshot or revoked key constitutes a hard enforcement
- * action, not a soft verification failure.
- *
- * To opt out of fail-closed expiry (air-gap / offline use), pass
- * `allowExpiredSnapshot: true` to `verifyBundle`.
- */
-export class BundleVerificationError extends AtlaSentError {
-  override name = "BundleVerificationError";
-
-  readonly reason: BundleVerificationErrorInit["reason"];
-  readonly snapshotValidUntil: string | undefined;
-  readonly snapshotFetchedAt: string | undefined;
-  readonly snapshotSource: "pinned" | "live" | undefined;
-  readonly kid: string | undefined;
-
-  constructor(init: BundleVerificationErrorInit) {
-    super(`AtlaSent audit bundle verification failed: ${init.reason}`);
-    this.reason = init.reason;
-    this.snapshotValidUntil = init.snapshotValidUntil;
-    this.snapshotFetchedAt = init.snapshotFetchedAt;
-    this.snapshotSource = init.snapshotSource;
-    this.kid = init.kid;
-  }
-}

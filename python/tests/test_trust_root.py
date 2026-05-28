@@ -185,7 +185,7 @@ def test_stop_refresh_idempotent() -> None:
     mgr.stop_refresh()  # second call is a no-op
 
 
-# ─── Refresh behaviour ─────────────────────────────────────────────────────────────────
+# ─── Refresh behaviour ───────────────────────────────────────────────────────────────
 
 
 def test_refresh_silent_on_network_failure() -> None:

@@ -294,6 +294,7 @@ class BundleVerificationError(AtlaSentDeniedError):
         snapshot_fetched_at: ``issued_at`` of the snapshot (proxy for fetch time).
         snapshot_source: Whether the snapshot came from the pinned vendor file
             or a live refresh.
+        kid: Which key id was revoked or role-mismatched, when applicable.
     """
 
     def __init__(
@@ -304,16 +305,18 @@ class BundleVerificationError(AtlaSentDeniedError):
         snapshot_valid_until: str | None = None,
         snapshot_fetched_at: str | None = None,
         snapshot_source: Literal["pinned", "live"] | None = None,
+        kid: str | None = None,
     ) -> None:
         super().__init__(
             decision="deny",
             evaluation_id=evaluation_id,
-            reason=f"Bundle verification failed: {bundle_reason}",
+            reason=bundle_reason,
         )
         self.bundle_reason = bundle_reason
         self.snapshot_valid_until = snapshot_valid_until
         self.snapshot_fetched_at = snapshot_fetched_at
         self.snapshot_source = snapshot_source
+        self.kid = kid
 
 
 class StreamTimeoutError(AtlaSentError):
@@ -392,44 +395,3 @@ class RateLimitError(AtlaSentError):
 
 
 # ── Bundle verification error (ADR-005 D3 fail-closed expiry / revocation) ───
-
-
-class BundleVerificationError(AtlaSentError):
-    """Raised by :func:`verify_audit_bundle` / :func:`verify_bundle` when
-    the active trust-root snapshot is expired (ADR-005 D3) or the bundle's
-    signing key is revoked / has the wrong role.
-
-    This exception is **always raised** — it is never returned as a
-    :class:`BundleVerificationResult` because ADR-005 D3 requires that
-    an expired snapshot or revoked key constitutes a hard enforcement
-    action, not a soft verification failure.
-
-    To opt out of fail-closed expiry (air-gap / offline use), pass
-    ``allow_expired_snapshot=True`` to :func:`verify_bundle`.
-
-    Attributes:
-        reason: Machine-readable reason code:
-            ``"trust_snapshot_expired"`` — the snapshot's ``valid_until``
-            has passed; ``"key_revoked"`` — the signing KID is in the
-            revocation list; ``"key_role_mismatch"`` — wrong role.
-        snapshot_valid_until: ISO-8601 ``valid_until`` of the snapshot.
-        snapshot_fetched_at: ISO-8601 ``issued_at`` / fetch time of the snapshot.
-        snapshot_source: ``"pinned"`` (vendor bundle) or ``"live"`` (refreshed).
-        kid: Which key id was revoked or role-mismatched, when applicable.
-    """
-
-    def __init__(
-        self,
-        reason: str,
-        *,
-        snapshot_valid_until: str | None = None,
-        snapshot_fetched_at: str | None = None,
-        snapshot_source: str | None = None,
-        kid: str | None = None,
-    ) -> None:
-        self.reason = reason
-        self.snapshot_valid_until = snapshot_valid_until
-        self.snapshot_fetched_at = snapshot_fetched_at
-        self.snapshot_source = snapshot_source
-        self.kid = kid
-        super().__init__(f"AtlaSent audit bundle verification failed: {reason}")
