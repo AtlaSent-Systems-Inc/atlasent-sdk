@@ -3,6 +3,10 @@
 Covers ADR-005 D2 (refresh scheduling), D3 (fail-closed expiry),
 and D4 (revocation + role checks).  The test vectors in
 contract/vectors/trust-root/ are shared with the TypeScript SDK.
+
+Note: B2.4 changed verify_audit_bundle to RAISE BundleVerificationError
+on expiry/revocation/role-mismatch instead of returning a falsy result.
+The vector tests below assert that behaviour.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from atlasent.exceptions import BundleVerificationError
 from atlasent.trust_root import (
     TrustRootKey,
     TrustRootManager,
@@ -45,7 +50,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-# ─── Helpers ────────────────────────────────────────────────────────────────
+# ─── Helpers ────────────────────────────────────────────────────────────────────────
 
 def _make_snapshot(**overrides: Any) -> TrustRootSnapshot:
     defaults = dict(
@@ -81,7 +86,7 @@ def _load_verify_key(pem: str) -> VerifyKey:
     return VerifyKey(key_id="pem_0", public_key=key)  # type: ignore[arg-type]
 
 
-# ─── TrustRootManager unit tests ────────────────────────────────────────────
+# ─── TrustRootManager unit tests ──────────────────────────────────────────────────
 
 
 def test_get_snapshot_returns_initial() -> None:
@@ -152,7 +157,7 @@ def test_stop_refresh_idempotent() -> None:
     mgr.stop_refresh()  # second call is a no-op
 
 
-# ─── Refresh behaviour ───────────────────────────────────────────────────────
+# ─── Refresh behaviour ─────────────────────────────────────────────────────────────────
 
 
 def test_refresh_silent_on_network_failure() -> None:
@@ -189,7 +194,7 @@ def test_refresh_replaces_snapshot_on_success() -> None:
     assert mgr.get_snapshot().valid_until == "2030-01-01T00:00:00Z"
 
 
-# ─── Global manager ──────────────────────────────────────────────────────────
+# ─── Global manager ───────────────────────────────────────────────────────────────────
 
 
 def test_get_global_manager_returns_valid_snapshot() -> None:
@@ -212,7 +217,7 @@ def test_get_global_manager_same_instance_on_repeat() -> None:
         _set_global_trust_root_manager_for_tests(None)
 
 
-# ─── Trust-root vector suite ─────────────────────────────────────────────────
+# ─── Trust-root vector suite (B2.4: raises BundleVerificationError) ──────────────────
 
 
 def test_vector_revoked_kid() -> None:
@@ -221,9 +226,9 @@ def test_vector_revoked_kid() -> None:
     trust_root = _make_snapshot()
     key = _load_verify_key(PUBLIC_PEM)
 
-    r = verify_audit_bundle(bundle, [key], trust_root=trust_root)
-    assert not r.verified
-    assert r.reason == "key_revoked"
+    with pytest.raises(BundleVerificationError) as exc_info:
+        verify_audit_bundle(bundle, [key], trust_root=trust_root)
+    assert exc_info.value.reason == "key_revoked"
 
 
 def test_vector_expired_snapshot() -> None:
@@ -235,9 +240,9 @@ def test_vector_expired_snapshot() -> None:
     )
     key = _load_verify_key(PUBLIC_PEM)
 
-    r = verify_audit_bundle(bundle, [key], trust_root=trust_root)
-    assert not r.verified
-    assert r.reason == "trust_snapshot_expired"
+    with pytest.raises(BundleVerificationError) as exc_info:
+        verify_audit_bundle(bundle, [key], trust_root=trust_root)
+    assert exc_info.value.reason == "trust_snapshot_expired"
 
 
 def test_vector_allow_expired() -> None:
@@ -259,6 +264,6 @@ def test_vector_role_mismatch() -> None:
     trust_root = _make_snapshot()
     key = _load_verify_key(PUBLIC_PEM)
 
-    r = verify_audit_bundle(bundle, [key], trust_root=trust_root)
-    assert not r.verified
-    assert r.reason == "key_role_mismatch"
+    with pytest.raises(BundleVerificationError) as exc_info:
+        verify_audit_bundle(bundle, [key], trust_root=trust_root)
+    assert exc_info.value.reason == "key_role_mismatch"

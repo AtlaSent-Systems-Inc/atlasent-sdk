@@ -5,8 +5,11 @@ Loads the vendor snapshot at import time.  Optionally refreshes from
 (default 4h, floor 5 min per ADR-005 D2).  Refresh failure is silent.
 
 Snapshot expiry is fail-closed (ADR-005 D3): ``check_expiry()`` returns
-``"expired"`` when ``valid_until`` passes, causing callers to raise
+``"expired"`` when ``valid_until`` passes, emits a one-time
+``logging.warning`` per process, and causes callers to raise
 ``BundleVerificationError(reason="trust_snapshot_expired")`` by default.
+A half-life warning is also emitted once per process when the snapshot
+passes its midpoint.
 """
 
 from __future__ import annotations
@@ -103,6 +106,12 @@ class TrustRootManager:
             return self._snapshot
 
     def check_expiry(self) -> Literal["ok", "half_life", "expired"]:
+        """Return expiry status and emit one-time warnings per process.
+
+        Emits ``logger.warning`` once when the snapshot passes its
+        half-life (ADR-005 D3) and once when it fully expires.
+        """
+        global _half_life_warning_emitted, _expired_warning_emitted
         snap = self.get_snapshot()
         from datetime import datetime, timezone
 
@@ -111,10 +120,25 @@ class TrustRootManager:
         issued_at = datetime.fromisoformat(snap.issued_at.replace("Z", "+00:00"))
 
         if now > valid_until:
+            if not _expired_warning_emitted:
+                _expired_warning_emitted = True
+                logger.warning(
+                    "[AtlaSent] trust-root snapshot expired at %s — "
+                    "bundle verification is fail-closed until the snapshot refreshes. "
+                    "Pass allow_expired_snapshot=True to opt out (air-gap only).",
+                    snap.valid_until,
+                )
             return "expired"
         window = (valid_until - issued_at).total_seconds()
         half_life = issued_at.timestamp() + window / 2
         if now.timestamp() > half_life:
+            if not _half_life_warning_emitted:
+                _half_life_warning_emitted = True
+                logger.warning(
+                    "[AtlaSent] trust-root snapshot is past its half-life "
+                    "(valid until %s) — a background refresh should occur soon.",
+                    snap.valid_until,
+                )
             return "half_life"
         return "ok"
 
@@ -188,7 +212,7 @@ class TrustRootManager:
         self.replace_snapshot(new_snap)
 
 
-# ─── Load the vendor snapshot ─────────────────────────────────────────────────
+# ─── Load the vendor snapshot ─────────────────────────────────────────────────────
 
 _VENDOR_DIR = Path(__file__).parent.parent.parent / "vendor" / "trust-root"
 

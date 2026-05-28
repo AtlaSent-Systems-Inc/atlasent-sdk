@@ -4,6 +4,10 @@
  * Covers ADR-005 D2 (refresh scheduling), D3 (fail-closed expiry),
  * and D4 (revocation + role checks).  The test vectors in
  * contract/vectors/trust-root/ are shared with the Python SDK.
+ *
+ * Note: B2.4 changed verifyAuditBundle to THROW BundleVerificationError
+ * on expiry/revocation/role-mismatch instead of returning a falsy result.
+ * The vector tests below assert that behaviour.
  */
 
 import { readFileSync } from "node:fs";
@@ -17,6 +21,7 @@ import {
   getGlobalTrustRootManager,
   type TrustRootSnapshot,
 } from "../src/trustRoot.js";
+import { BundleVerificationError } from "../src/errors.js";
 import { verifyAuditBundle, type VerifyKey } from "../src/auditBundle.js";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
@@ -24,7 +29,7 @@ const VECTORS_DIR = resolve(HERE, "..", "..", "contract", "vectors", "trust-root
 const FIXTURES_DIR = resolve(HERE, "..", "..", "contract", "vectors", "audit-bundles");
 const PUBLIC_PEM = readFileSync(resolve(FIXTURES_DIR, "signing-key.pub.pem"), "utf8");
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────────
 
 async function keysFromPem(pem: string, keyId: string): Promise<VerifyKey[]> {
   const b64 = pem
@@ -72,7 +77,7 @@ function loadVector(filename: string): Record<string, unknown> {
   return JSON.parse(line!) as Record<string, unknown>;
 }
 
-// ─── TrustRootManager unit tests ─────────────────────────────────────────────
+// ─── TrustRootManager unit tests ───────────────────────────────────────────────────
 
 describe("TrustRootManager", () => {
   it("getSnapshot returns initial snapshot", () => {
@@ -146,7 +151,7 @@ describe("TrustRootManager", () => {
   });
 });
 
-// ─── Refresh tests ───────────────────────────────────────────────────────────
+// ─── Refresh tests ───────────────────────────────────────────────────────────────────
 
 describe("TrustRootManager refresh", () => {
   it("silently ignores network failure", async () => {
@@ -188,7 +193,7 @@ describe("TrustRootManager refresh", () => {
   });
 });
 
-// ─── Global manager ──────────────────────────────────────────────────────────
+// ─── Global manager ────────────────────────────────────────────────────────────────────
 
 describe("getGlobalTrustRootManager", () => {
   afterEach(() => {
@@ -210,30 +215,34 @@ describe("getGlobalTrustRootManager", () => {
   });
 });
 
-// ─── Trust-root vector suite ─────────────────────────────────────────────────
+// ─── Trust-root vector suite (B2.4: throws BundleVerificationError) ───────────────────
 
 describe("trust-root vectors", () => {
-  it("bundle_revoked_kid → key_revoked", async () => {
+  it("bundle_revoked_kid → throws BundleVerificationError(key_revoked)", async () => {
     const vec = loadVector("bundle_revoked_kid.jsonl");
     const bundle = vec.bundle as Record<string, unknown>;
     const trustRoot = makeSnapshot();
     const keys = await keysFromPem(PUBLIC_PEM, "pem_0");
 
-    const r = await verifyAuditBundle(bundle, keys, { trustRoot });
-    expect(r.verified).toBe(false);
-    expect(r.reason).toBe("key_revoked");
+    await expect(
+      verifyAuditBundle(bundle, keys, { trustRoot }),
+    ).rejects.toMatchObject({ reason: "key_revoked" });
+
+    await expect(
+      verifyAuditBundle(bundle, keys, { trustRoot }),
+    ).rejects.toBeInstanceOf(BundleVerificationError);
   });
 
-  it("bundle_expired_snapshot → trust_snapshot_expired", async () => {
+  it("bundle_expired_snapshot → throws BundleVerificationError(trust_snapshot_expired)", async () => {
     const vec = loadVector("bundle_expired_snapshot.jsonl");
     const bundle = vec.bundle as Record<string, unknown>;
     const stale = vec.stale_snapshot as { valid_until: string; issued_at: string };
     const trustRoot = makeSnapshot({ valid_until: stale.valid_until, issued_at: stale.issued_at });
     const keys = await keysFromPem(PUBLIC_PEM, "pem_0");
 
-    const r = await verifyAuditBundle(bundle, keys, { trustRoot });
-    expect(r.verified).toBe(false);
-    expect(r.reason).toBe("trust_snapshot_expired");
+    await expect(
+      verifyAuditBundle(bundle, keys, { trustRoot }),
+    ).rejects.toMatchObject({ reason: "trust_snapshot_expired" });
   });
 
   it("bundle_allow_expired → verified when allow_expired_snapshot=true", async () => {
@@ -247,14 +256,14 @@ describe("trust-root vectors", () => {
     expect(r.verified).toBe(true);
   });
 
-  it("bundle_role_mismatch → key_role_mismatch", async () => {
+  it("bundle_role_mismatch → throws BundleVerificationError(key_role_mismatch)", async () => {
     const vec = loadVector("bundle_role_mismatch.jsonl");
     const bundle = vec.bundle as Record<string, unknown>;
     const trustRoot = makeSnapshot();
     const keys = await keysFromPem(PUBLIC_PEM, "pem_0");
 
-    const r = await verifyAuditBundle(bundle, keys, { trustRoot });
-    expect(r.verified).toBe(false);
-    expect(r.reason).toBe("key_role_mismatch");
+    await expect(
+      verifyAuditBundle(bundle, keys, { trustRoot }),
+    ).rejects.toMatchObject({ reason: "key_role_mismatch" });
   });
 });
