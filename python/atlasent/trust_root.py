@@ -149,8 +149,8 @@ class TrustRootManager:
                 _half_life_warning_emitted = True
                 days_left = (valid_until - now).days
                 logger.warning(
-                    "[atlasent] Trust snapshot expires in %d day(s) — "
-                    "past half-life (valid_until: %s). Plan an SDK update.",
+                    "[atlasent] Trust snapshot at half-life: expires in %d day(s) "
+                    "(valid_until: %s). Plan an SDK update.",
                     days_left,
                     snap.valid_until,
                 )
