@@ -1,7 +1,7 @@
 {
   "schema": "atlasent-trust-root/v1",
-  "issued_at": "2026-05-26T00:00:00Z",
-  "valid_until": "2026-12-01T00:00:00Z",
+  "issued_at": "2026-05-28T00:00:00Z",
+  "valid_until": "2027-06-01T00:00:00Z",
   "trust_root_signer": {
     "sigstore_identity": "https://github.com/AtlaSent-Systems-Inc/atlasent-keys/.github/workflows/publish.yml@refs/heads/main",
     "oidc_issuer": "https://token.actions.githubusercontent.com"
