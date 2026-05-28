@@ -878,3 +878,12 @@ export {
   type SsoRole,
   type SsoSubClient,
 } from "./sso.js";
+
+// ── Access Governance Log ─────────────────────────────────────────────────────
+export {
+  makeAccessGovernanceLogClient,
+  type AccessGovernanceEvent,
+  type AccessGovernanceLogPage,
+  type AccessGovernanceLogQuery,
+  type AccessGovernanceLogSubClient,
+} from "./access-governance-log.js";

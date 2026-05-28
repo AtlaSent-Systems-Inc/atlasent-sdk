@@ -178,6 +178,10 @@ import {
   makeSsoClient,
   type SsoSubClient,
 } from "./sso.js";
+import {
+  makeAccessGovernanceLogClient,
+  type AccessGovernanceLogSubClient,
+} from "./access-governance-log.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -431,6 +435,8 @@ export class AtlaSentClient {
   readonly auth: AuthSubClient;
   /** SSO administration sub-client. Access as `client.sso`. */
   readonly sso: SsoSubClient;
+  /** Access governance log sub-client. Access as `client.accessGovernanceLog`. */
+  readonly accessGovernanceLog: AccessGovernanceLogSubClient;
 
   constructor(options: AtlaSentClientOptions) {
     if (!options.apiKey || typeof options.apiKey !== "string") {
@@ -488,6 +494,9 @@ export class AtlaSentClient {
       (path, body) => this._post(path, body),
       (path, body) => this._patch(path, body),
       (path) => this._delete(path),
+    );
+    this.accessGovernanceLog = makeAccessGovernanceLogClient(
+      (path, query) => this._get(path, query),
     );
   }
 
