@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.12.0 -- 2026-05-28 -- SSO, access-governance-log, and evidence-bundle sub-clients wired into AtlaSentClient
+
+### Added
+
+- **`client.sso`** (`SsoClient`) — fluent sub-client for SSO connection management:
+  - `list_connections()`, `get_connection(id)`, `create_connection(**kwargs)`,
+    `update_connection(id, **kwargs)`, `delete_connection(id)`,
+    `activate_connection(id)`, `deactivate_connection(id)`
+  - JIT rule management: `list_jit_rules(conn_id)`, `create_jit_rule(conn_id, **kwargs)`,
+    `patch_jit_rule(conn_id, rule_id, **kwargs)`, `delete_jit_rule(conn_id, rule_id)`
+  - SSO enforcement and readiness: `enforce(org_id, **kwargs)`, `get_status(org_id)`
+
+- **`client.access_governance_log`** (`AccessGovernanceLogClient`) — paginated access
+  governance event log:
+  - `list(**kwargs)` — `GET /v1/access-governance-log` with optional `limit`, `cursor`,
+    `event_type`, `actor_id`, `from_`, `to` filters
+
+- **`client.evidence_bundles`** (`EvidenceBundlesClient`) — compliance evidence bundle
+  sub-client (wraps the existing `atlasent.evidence_bundle` standalone functions):
+  - `list(**kwargs)`, `create(incident_id, **kwargs)`, `get(bundle_id)`,
+    `download(bundle_id, format="json")`
+
+- **`client.api_key`** and **`client.base_url`** public read-only properties on
+  `AtlaSentClient` (previously only accessible as `_api_key` / `_base_url`).
+
+### Tests
+
+- 42 new unit tests across `tests/test_sso_client.py` and
+  `tests/test_access_governance_log.py` — covers all endpoints, query-param
+  forwarding, error handling, and empty-body responses. Coverage remains above 95%.
+
 ## 2.11.0 -- 2026-05-27 -- auth helpers, SCIM sub-client, evidence-bundle sub-client
 
 ### Added
