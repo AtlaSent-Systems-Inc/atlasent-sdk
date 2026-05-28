@@ -869,6 +869,8 @@ export {
   type SsoConnectionInput,
   type SsoJitRule,
   type SsoJitRuleWire,
+  type SsoJitRuleInput,
+  type SsoJitRulePatch,
   type SsoEvent,
   type SsoEventWire,
   type SsoEnforceAction,

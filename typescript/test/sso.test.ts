@@ -306,3 +306,151 @@ describe("sso.getStatus", () => {
     expect(result.serviceApiKeysReviewed).toBe(true);
   });
 });
+
+// ── JIT rules ─────────────────────────────────────────────────────────────────
+
+const WIRE_JIT_RULE = {
+  id: "rule-1",
+  connection_id: "conn-1",
+  organization_id: "org-1",
+  claim_attribute: "groups",
+  claim_value: "admins",
+  granted_role: "admin" as const,
+  precedence: 100,
+  is_active: true,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+};
+
+describe("sso.listJitRules", () => {
+  it("GETs /v1/sso/jit-rules without connection filter", async () => {
+    const { sso, getFn } = makeMocks();
+    getFn.mockResolvedValue({ body: { rules: [WIRE_JIT_RULE] } });
+    await sso.listJitRules();
+    expect(getFn.mock.calls[0]![0]).toBe("/v1/sso/jit-rules");
+    expect(getFn.mock.calls[0]![1]).toBeUndefined();
+  });
+
+  it("passes connection_id as query param", async () => {
+    const { sso, getFn } = makeMocks();
+    getFn.mockResolvedValue({ body: { rules: [] } });
+    await sso.listJitRules("conn-1");
+    const qs = getFn.mock.calls[0]![1] as URLSearchParams;
+    expect(qs.get("connection_id")).toBe("conn-1");
+  });
+
+  it("maps wire rules to camelCase", async () => {
+    const { sso, getFn } = makeMocks();
+    getFn.mockResolvedValue({ body: { rules: [WIRE_JIT_RULE] } });
+    const { rules } = await sso.listJitRules();
+    expect(rules[0]!.connectionId).toBe("conn-1");
+    expect(rules[0]!.claimAttribute).toBe("groups");
+    expect(rules[0]!.grantedRole).toBe("admin");
+    expect(rules[0]!.isActive).toBe(true);
+  });
+
+  it("returns empty array when rules absent", async () => {
+    const { sso, getFn } = makeMocks();
+    getFn.mockResolvedValue({ body: {} });
+    const { rules } = await sso.listJitRules();
+    expect(rules).toEqual([]);
+  });
+});
+
+describe("sso.createJitRule", () => {
+  it("POSTs to /v1/sso/jit-rules with correct body", async () => {
+    const { sso, postFn } = makeMocks();
+    postFn.mockResolvedValue({ body: WIRE_JIT_RULE });
+    await sso.createJitRule({
+      connectionId: "conn-1",
+      claimAttribute: "groups",
+      claimValue: "admins",
+      grantedRole: "admin",
+    });
+    expect(postFn).toHaveBeenCalledWith("/v1/sso/jit-rules", expect.objectContaining({
+      connection_id: "conn-1",
+      claim_attribute: "groups",
+      claim_value: "admins",
+      granted_role: "admin",
+    }));
+  });
+
+  it("includes precedence when provided", async () => {
+    const { sso, postFn } = makeMocks();
+    postFn.mockResolvedValue({ body: WIRE_JIT_RULE });
+    await sso.createJitRule({
+      connectionId: "c", claimAttribute: "a", claimValue: "v",
+      grantedRole: "member", precedence: 50,
+    });
+    const body = postFn.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body["precedence"]).toBe(50);
+  });
+
+  it("omits precedence when not provided", async () => {
+    const { sso, postFn } = makeMocks();
+    postFn.mockResolvedValue({ body: WIRE_JIT_RULE });
+    await sso.createJitRule({ connectionId: "c", claimAttribute: "a", claimValue: "v", grantedRole: "member" });
+    const body = postFn.mock.calls[0]![1] as Record<string, unknown>;
+    expect(Object.keys(body)).not.toContain("precedence");
+  });
+
+  it("returns camelCase rule", async () => {
+    const { sso, postFn } = makeMocks();
+    postFn.mockResolvedValue({ body: WIRE_JIT_RULE });
+    const rule = await sso.createJitRule({ connectionId: "c", claimAttribute: "a", claimValue: "v", grantedRole: "admin" });
+    expect(rule.id).toBe("rule-1");
+    expect(rule.organizationId).toBe("org-1");
+  });
+});
+
+describe("sso.patchJitRule", () => {
+  it("PATCHes /v1/sso/jit-rules/:id", async () => {
+    const { sso, patchFn } = makeMocks();
+    patchFn.mockResolvedValue({ body: WIRE_JIT_RULE });
+    await sso.patchJitRule("rule-1", { isActive: false });
+    expect(patchFn.mock.calls[0]![0]).toBe("/v1/sso/jit-rules/rule-1");
+    const body = patchFn.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body["is_active"]).toBe(false);
+  });
+
+  it("maps all patchable fields to snake_case", async () => {
+    const { sso, patchFn } = makeMocks();
+    patchFn.mockResolvedValue({ body: WIRE_JIT_RULE });
+    await sso.patchJitRule("rule-1", {
+      claimAttribute: "dept",
+      claimValue: "eng",
+      grantedRole: "viewer",
+      precedence: 200,
+      isActive: true,
+    });
+    const body = patchFn.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body["claim_attribute"]).toBe("dept");
+    expect(body["claim_value"]).toBe("eng");
+    expect(body["granted_role"]).toBe("viewer");
+    expect(body["precedence"]).toBe(200);
+    expect(body["is_active"]).toBe(true);
+  });
+
+  it("URL-encodes the id", async () => {
+    const { sso, patchFn } = makeMocks();
+    patchFn.mockResolvedValue({ body: WIRE_JIT_RULE });
+    await sso.patchJitRule("rule/x", { isActive: true });
+    expect(patchFn.mock.calls[0]![0]).toContain("rule%2Fx");
+  });
+});
+
+describe("sso.deleteJitRule", () => {
+  it("DELETEs /v1/sso/jit-rules/:id", async () => {
+    const { sso, deleteFn } = makeMocks();
+    deleteFn.mockResolvedValue(undefined);
+    await sso.deleteJitRule("rule-1");
+    expect(deleteFn).toHaveBeenCalledWith("/v1/sso/jit-rules/rule-1");
+  });
+
+  it("URL-encodes the id", async () => {
+    const { sso, deleteFn } = makeMocks();
+    deleteFn.mockResolvedValue(undefined);
+    await sso.deleteJitRule("rule/x");
+    expect(deleteFn.mock.calls[0]![0]).toContain("rule%2Fx");
+  });
+});

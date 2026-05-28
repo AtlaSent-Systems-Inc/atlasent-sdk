@@ -197,6 +197,24 @@ export function wireToSsoReadiness(w: SsoReadinessWire): SsoReadiness {
 
 // ── Sub-client ────────────────────────────────────────────────────────────────
 
+/** Input for creating a JIT provisioning rule. */
+export interface SsoJitRuleInput {
+  connectionId: string;
+  claimAttribute: string;
+  claimValue: string;
+  grantedRole: SsoRole;
+  precedence?: number;
+}
+
+/** Patchable fields for an existing JIT rule. */
+export interface SsoJitRulePatch {
+  claimAttribute?: string;
+  claimValue?: string;
+  grantedRole?: SsoRole;
+  precedence?: number;
+  isActive?: boolean;
+}
+
 /** Input for creating or updating an SSO connection. */
 export interface SsoConnectionInput {
   name: string;
@@ -255,6 +273,20 @@ export interface SsoSubClient {
 
   /** Get the four-boolean enforcement readiness checklist. */
   getStatus(): Promise<SsoReadiness>;
+
+  // ── JIT provisioning rules ───────────────────────────────────────────────
+
+  /** List JIT provisioning rules, optionally filtered to a single connection. */
+  listJitRules(connectionId?: string): Promise<{ rules: SsoJitRule[] }>;
+
+  /** Create a new JIT provisioning rule. */
+  createJitRule(input: SsoJitRuleInput): Promise<SsoJitRule>;
+
+  /** Update fields on an existing JIT rule. */
+  patchJitRule(id: string, patch: SsoJitRulePatch): Promise<SsoJitRule>;
+
+  /** Delete a JIT provisioning rule. */
+  deleteJitRule(id: string): Promise<void>;
 }
 
 function ssoConnectionInputToWire(input: SsoConnectionInput | Partial<SsoConnectionInput>): Record<string, unknown> {
@@ -328,6 +360,42 @@ export function makeSsoClient(
     async getStatus() {
       const { body } = await getFn<{ readiness: SsoReadinessWire }>("/v1/sso/status");
       return wireToSsoReadiness(body.readiness);
+    },
+
+    async listJitRules(connectionId?: string) {
+      const qs = connectionId ? new URLSearchParams({ connection_id: connectionId }) : undefined;
+      const { body } = await getFn<{ rules: SsoJitRuleWire[] }>("/v1/sso/jit-rules", qs);
+      return { rules: (body.rules ?? []).map(wireToSsoJitRule) };
+    },
+
+    async createJitRule(input: SsoJitRuleInput) {
+      const payload: Record<string, unknown> = {
+        connection_id: input.connectionId,
+        claim_attribute: input.claimAttribute,
+        claim_value: input.claimValue,
+        granted_role: input.grantedRole,
+      };
+      if (input.precedence !== undefined) payload["precedence"] = input.precedence;
+      const { body } = await postFn<SsoJitRuleWire>("/v1/sso/jit-rules", payload);
+      return wireToSsoJitRule(body);
+    },
+
+    async patchJitRule(id: string, patch: SsoJitRulePatch) {
+      const payload: Record<string, unknown> = {};
+      if (patch.claimAttribute !== undefined) payload["claim_attribute"] = patch.claimAttribute;
+      if (patch.claimValue !== undefined)     payload["claim_value"]     = patch.claimValue;
+      if (patch.grantedRole !== undefined)    payload["granted_role"]    = patch.grantedRole;
+      if (patch.precedence !== undefined)     payload["precedence"]      = patch.precedence;
+      if (patch.isActive !== undefined)       payload["is_active"]       = patch.isActive;
+      const { body } = await patchFn<SsoJitRuleWire>(
+        `/v1/sso/jit-rules/${encodeURIComponent(id)}`,
+        payload,
+      );
+      return wireToSsoJitRule(body);
+    },
+
+    async deleteJitRule(id: string) {
+      await deleteFn(`/v1/sso/jit-rules/${encodeURIComponent(id)}`);
     },
   };
 }

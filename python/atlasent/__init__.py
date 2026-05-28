@@ -219,6 +219,8 @@ from .policy_sync import (
 )
 from .replay import EvidenceVerificationResult, verify_evidence_bundle
 from .require_permit import ProtectedAction, classify_command, require_permit
+from .sso_client import SsoClient
+from .access_governance_log import AccessGovernanceLogClient
 from .scim import (
     SCIM_GROUP_SCHEMA,
     SCIM_PATCH_OP_SCHEMA,
@@ -500,6 +502,8 @@ __all__ = [
     "graphql",
     # Phase 3 offline replay client — verify evidence bundles without backend.
     "verify_evidence_bundle",
+    "SsoClient",
+    "AccessGovernanceLogClient",
     "EvidenceVerificationResult",
     # BCCAE V1 — Phase 3 Execution Assurance substrate.
     # Standalone BCCAEClient with bccae:* scopes — not part of the
