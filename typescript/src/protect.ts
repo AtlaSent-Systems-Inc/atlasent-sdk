@@ -260,7 +260,7 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
   if (trustMgr.checkExpiry() === "expired") {
     const snap = trustMgr.getSnapshot();
     throw new BundleVerificationError({
-      bundleReason: "trust_snapshot_expired",
+      reason: "trust_snapshot_expired",
       snapshotValidUntil: snap.valid_until,
       snapshotFetchedAt: snap.issued_at,
     });

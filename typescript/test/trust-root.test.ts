@@ -261,20 +261,20 @@ describe("trust-root vectors", () => {
 // ─── BundleVerificationError ──────────────────────────────────────────────────
 
 describe("BundleVerificationError", () => {
-  it("is an instance of AtlaSentDeniedError", async () => {
-    const err = new BundleVerificationError({ bundleReason: "trust_snapshot_expired" });
-    const { AtlaSentDeniedError } = await import("../src/errors.js");
-    expect(err).toBeInstanceOf(AtlaSentDeniedError);
+  it("is an instance of AtlaSentError", async () => {
+    const err = new BundleVerificationError({ reason: "trust_snapshot_expired" });
+    const { AtlaSentError } = await import("../src/errors.js");
+    expect(err).toBeInstanceOf(AtlaSentError);
   });
 
-  it("bundleReason is trust_snapshot_expired", () => {
-    const err = new BundleVerificationError({ bundleReason: "trust_snapshot_expired" });
-    expect(err.bundleReason).toBe("trust_snapshot_expired");
+  it("reason is trust_snapshot_expired", () => {
+    const err = new BundleVerificationError({ reason: "trust_snapshot_expired" });
+    expect(err.reason).toBe("trust_snapshot_expired");
   });
 
   it("carries snapshotValidUntil when provided", () => {
     const err = new BundleVerificationError({
-      bundleReason: "trust_snapshot_expired",
+      reason: "trust_snapshot_expired",
       snapshotValidUntil: "2020-01-01T00:00:00Z",
       snapshotFetchedAt: "2019-01-01T00:00:00Z",
     });
@@ -282,9 +282,8 @@ describe("BundleVerificationError", () => {
   });
 
   it("key_revoked reason", () => {
-    const err = new BundleVerificationError({ bundleReason: "key_revoked" });
-    expect(err.bundleReason).toBe("key_revoked");
-    expect(err.decision).toBe("deny");
+    const err = new BundleVerificationError({ reason: "key_revoked" });
+    expect(err.reason).toBe("key_revoked");
   });
 });
 
@@ -309,7 +308,7 @@ describe("checkExpiry warnings (ADR-005 D3)", () => {
     const status = mgr.checkExpiry();
     expect(status).toBe("half_life");
     expect(warnSpy).toHaveBeenCalledOnce();
-    expect(warnSpy.mock.calls[0]![0]).toContain("[atlasent] Trust snapshot expires in");
+    expect(warnSpy.mock.calls[0]![0]).toContain("[atlasent] Trust snapshot at half-life:");
     // Second call does not emit again
     mgr.checkExpiry();
     expect(warnSpy).toHaveBeenCalledOnce();

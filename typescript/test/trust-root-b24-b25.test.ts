@@ -64,25 +64,25 @@ const EMPTY_BUNDLE = {
 
 describe("BundleVerificationError", () => {
   it("name is BundleVerificationError", () => {
-    expect(new BundleVerificationError({ bundleReason: "trust_snapshot_expired" }).name).toBe(
+    expect(new BundleVerificationError({ reason: "trust_snapshot_expired" }).name).toBe(
       "BundleVerificationError",
     );
   });
 
   it("message includes reason", () => {
-    const err = new BundleVerificationError({ bundleReason: "key_revoked" });
+    const err = new BundleVerificationError({ reason: "key_revoked" });
     expect(err.message).toContain("key_revoked");
   });
 
   it("carries all init fields", () => {
     const err = new BundleVerificationError({
-      bundleReason: "key_revoked",
+      reason: "key_revoked",
       snapshotValidUntil: "2020-01-01T00:00:00Z",
       snapshotFetchedAt: "2019-01-01T00:00:00Z",
       snapshotSource: "pinned",
       kid: "kid-abc",
     });
-    expect(err.bundleReason).toBe("key_revoked");
+    expect(err.reason).toBe("key_revoked");
     expect(err.snapshotValidUntil).toBe("2020-01-01T00:00:00Z");
     expect(err.snapshotFetchedAt).toBe("2019-01-01T00:00:00Z");
     expect(err.snapshotSource).toBe("pinned");
@@ -90,7 +90,7 @@ describe("BundleVerificationError", () => {
   });
 
   it("is instanceof Error, AtlaSentError, and BundleVerificationError", () => {
-    const err = new BundleVerificationError({ bundleReason: "key_role_mismatch" });
+    const err = new BundleVerificationError({ reason: "key_role_mismatch" });
     expect(err).toBeInstanceOf(Error);
     expect(err).toBeInstanceOf(AtlaSentError);
     expect(err).toBeInstanceOf(BundleVerificationError);
