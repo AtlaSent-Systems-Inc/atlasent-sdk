@@ -102,3 +102,38 @@ export {
   type PricingActionType,
   type PricingActionOptions,
 } from "./pricingActions.js";
+
+export {
+  protectSecurityAction,
+  protectSecurityIncidentEscalate,
+  protectSecurityAccessQuarantine,
+  type SecurityActionType,
+  type SecurityActionOptions,
+} from "./securityActions.js";
+
+export {
+  protectAccessCertAction,
+  protectAccessCertRevoke,
+  type AccessCertActionType,
+  type AccessCertOptions,
+} from "./accessCert.js";
+
+export {
+  protectFinancialCloseAction,
+  protectPeriodCloseCertify,
+  type FinancialCloseActionType,
+  type FinancialCloseOptions,
+} from "./financialClose.js";
+
+export {
+  protectDatabaseAction,
+  protectDatabaseMigration,
+  protectDatabaseSchemaDrop,
+  protectDatabaseTableDelete,
+  type DatabaseMigrationActionType,
+  type DatabaseDestructiveActionType,
+  type DatabaseActionType,
+  type PermitEvidence,
+  type DenialEvidence,
+  type DatabaseActionOptions,
+} from "./databaseActions.js";

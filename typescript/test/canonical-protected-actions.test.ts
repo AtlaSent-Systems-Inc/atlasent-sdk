@@ -38,6 +38,7 @@ import {
 import atlasent, {
   AtlaSentDeniedError,
   configure,
+  configureApprovalRuntime,
   type CloseActionType,
   protectDataExport,
   protectBatchRecordRelease,
@@ -50,6 +51,13 @@ import atlasent, {
   protectCustomerDataDelete,
   protectContractExecution,
   protectPricingRule,
+  protectSecurityIncidentEscalate,
+  protectSecurityAccessQuarantine,
+  protectAccessCertRevoke,
+  protectPeriodCloseCertify,
+  protectDatabaseMigration,
+  protectDatabaseSchemaDrop,
+  protectDatabaseTableDelete,
 } from "../src/index.js";
 import { __resetSharedClientForTests } from "../src/protect.js";
 
@@ -1505,6 +1513,725 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
       });
       expect(permit.permitId).toBe("dec_pricing_discount_approve");
       expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── protectSecurityIncidentEscalate — 4-path contract ───────────────────────────────────
+  describe("protectSecurityIncidentEscalate — security.incident.escalate — deny + allow+ok paths", () => {
+    const incidentOpts = {
+      incidentId: "INC-2026-CRIT-001",
+      severity: "critical" as const,
+      authorizedBy: "soc:lead-alice",
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("security.incident.escalate")),
+      ]);
+      configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectSecurityIncidentEscalate(incidentOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("security.incident.escalate")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectSecurityIncidentEscalate(incidentOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("security.incident.escalate")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+      const permit = await protectSecurityIncidentEscalate(incidentOpts);
+
+      expect(permit.permitId).toBe("dec_security_incident_escalate");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_security_incident_escalate");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("security.incident.escalate")),
+      ]);
+      configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+      try {
+        await protectSecurityIncidentEscalate(incidentOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+
+    it("throws TypeError when incidentId is missing", async () => {
+      configure({ apiKey: "ask_test_security" });
+      const { incidentId: _dropped, ...optsNoId } = incidentOpts;
+      await expect(
+        protectSecurityIncidentEscalate(optsNoId as Parameters<typeof protectSecurityIncidentEscalate>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("throws TypeError when severity is missing", async () => {
+      configure({ apiKey: "ask_test_security" });
+      const { severity: _dropped, ...optsNoSeverity } = incidentOpts;
+      await expect(
+        protectSecurityIncidentEscalate(optsNoSeverity as Parameters<typeof protectSecurityIncidentEscalate>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("security.access.quarantine: deny — mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("security.access.quarantine")),
+      ]);
+      configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectSecurityAccessQuarantine({
+          targetId: "user:bad-actor-99",
+          quarantineReason: "suspected credential compromise",
+          authorizedBy: "soc:lead-alice",
+        });
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it("security.access.quarantine: allow + verify ok returns permit", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("security.access.quarantine")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+      const permit = await protectSecurityAccessQuarantine({
+        targetId: "user:bad-actor-99",
+        quarantineReason: "suspected credential compromise",
+        authorizedBy: "soc:lead-alice",
+      });
+      expect(permit.permitId).toBe("dec_security_access_quarantine");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it("security.access.quarantine: throws TypeError when targetId is missing", async () => {
+      configure({ apiKey: "ask_test_security" });
+      await expect(
+        protectSecurityAccessQuarantine({
+          quarantineReason: "suspected compromise",
+          authorizedBy: "soc:lead",
+        } as Parameters<typeof protectSecurityAccessQuarantine>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("security.access.quarantine: throws TypeError when quarantineReason is missing", async () => {
+      configure({ apiKey: "ask_test_security" });
+      await expect(
+        protectSecurityAccessQuarantine({
+          targetId: "user:target",
+          authorizedBy: "soc:lead",
+        } as Parameters<typeof protectSecurityAccessQuarantine>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+  });
+
+  // ── protectAccessCertRevoke — 4-path contract ───────────────────────────────────────────
+  describe("protectAccessCertRevoke — access.cert.revoke — deny + allow+ok paths", () => {
+    const certOpts = {
+      certId: "cert:2026-Q2-ENG-42",
+      revocationReason: "access no longer required post-project",
+      authorizedBy: "iam:security-admin",
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("access.cert.revoke")),
+      ]);
+      configure({ apiKey: "ask_test_cert", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectAccessCertRevoke(certOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("access.cert.revoke")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_cert", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectAccessCertRevoke(certOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("access.cert.revoke")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_cert", fetch: fetchImpl });
+
+      const permit = await protectAccessCertRevoke(certOpts);
+
+      expect(permit.permitId).toBe("dec_access_cert_revoke");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_access_cert_revoke");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("access.cert.revoke")),
+      ]);
+      configure({ apiKey: "ask_test_cert", fetch: fetchImpl });
+
+      try {
+        await protectAccessCertRevoke(certOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+
+    it("throws TypeError when certId is missing", async () => {
+      configure({ apiKey: "ask_test_cert" });
+      const { certId: _dropped, ...optsNoCert } = certOpts;
+      await expect(
+        protectAccessCertRevoke(optsNoCert as Parameters<typeof protectAccessCertRevoke>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("throws TypeError when revocationReason is missing", async () => {
+      configure({ apiKey: "ask_test_cert" });
+      const { revocationReason: _dropped, ...optsNoReason } = certOpts;
+      await expect(
+        protectAccessCertRevoke(optsNoReason as Parameters<typeof protectAccessCertRevoke>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+  });
+
+  // ── protectPeriodCloseCertify — 4-path contract ──────────────────────────────────────────
+  describe("protectPeriodCloseCertify — period.close.certify — deny + allow+ok paths", () => {
+    const closeOpts = {
+      periodId: "2026-Q1",
+      certifiedBy: "controller:jane",
+      financialController: "fc:bob",
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("period.close.certify")),
+      ]);
+      configure({ apiKey: "ask_test_close", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectPeriodCloseCertify(closeOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("period.close.certify")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_close", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectPeriodCloseCertify(closeOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("period.close.certify")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_close", fetch: fetchImpl });
+
+      const permit = await protectPeriodCloseCertify(closeOpts);
+
+      expect(permit.permitId).toBe("dec_period_close_certify");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_period_close_certify");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("period.close.certify")),
+      ]);
+      configure({ apiKey: "ask_test_close", fetch: fetchImpl });
+
+      try {
+        await protectPeriodCloseCertify(closeOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+
+    it("throws TypeError when periodId is missing", async () => {
+      configure({ apiKey: "ask_test_close" });
+      const { periodId: _dropped, ...optsNoPeriod } = closeOpts;
+      await expect(
+        protectPeriodCloseCertify(optsNoPeriod as Parameters<typeof protectPeriodCloseCertify>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("throws TypeError when certifiedBy is missing", async () => {
+      configure({ apiKey: "ask_test_close" });
+      const { certifiedBy: _dropped, ...optsNoCert } = closeOpts;
+      await expect(
+        protectPeriodCloseCertify(optsNoCert as Parameters<typeof protectPeriodCloseCertify>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("throws TypeError when financialController is missing", async () => {
+      configure({ apiKey: "ask_test_close" });
+      const { financialController: _dropped, ...optsNoFC } = closeOpts;
+      await expect(
+        protectPeriodCloseCertify(optsNoFC as Parameters<typeof protectPeriodCloseCertify>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+  });
+
+  // ── database actions ─────────────────────────────────────────────────────────
+  describe("database actions — evidence callbacks + validation", () => {
+    // Shared HITL wire shapes
+    const HITL_ESCALATION_BASE = {
+      id: "escl_db_001",
+      org_id: "org_1",
+      agent_id: "agent_1",
+      sandbox_run_id: null,
+      status: "pending",
+      escalation_reason: "test",
+      proposed_action: null,
+      risk_score: null,
+      assigned_to_user_id: null,
+      assigned_to_role: "database-admin",
+      resolved_by: null,
+      resolution_note: null,
+      auto_approved_reason: null,
+      resolved_at: null,
+      timeout_at: null,
+      created_at: "2026-05-29T00:00:00Z",
+      quorum_required: "two_thirds",
+      min_approvers: 2,
+      approver_pool_size: 3,
+      escalation_depth: 0,
+      max_escalation_depth: 3,
+      fallback_decision: "reject",
+      governance_advisory_id: null,
+      expired_reason: null,
+      metadata: null,
+    };
+
+    const HITL_APPROVED = {
+      ...HITL_ESCALATION_BASE,
+      status: "approved",
+      resolved_by: "db-admin:alice",
+      resolution_note: "approved for maintenance window",
+      resolved_at: "2026-05-29T02:00:00Z",
+    };
+
+    // (1) Deny path: database.migration.apply → AtlaSentDeniedError, onDenialEvidence called
+    it("deny path: database.migration.apply → AtlaSentDeniedError, onDenialEvidence called", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("database.migration.apply")),
+      ]);
+      configure({ apiKey: "ask_test_db", fetch: fetchImpl });
+
+      const denialSpy = vi.fn();
+      const permitSpy = vi.fn();
+
+      let caught: unknown;
+      try {
+        await protectDatabaseMigration({
+          databaseId: "db:prod-main",
+          authorizedBy: "dba:bob",
+          environment: "production",
+          migrationId: "m-2026-001",
+          migrationChecksum: "sha256:abc123",
+          rollbackPlan: "restore from snapshot snap-001",
+          onDenialEvidence: denialSpy,
+          onPermitEvidence: permitSpy,
+        });
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+
+      // denial evidence callback must have fired
+      expect(denialSpy).toHaveBeenCalledTimes(1);
+      const evidence = denialSpy.mock.calls[0]![0];
+      expect(evidence.action).toBe("database.migration.apply");
+      expect(evidence.databaseId).toBe("db:prod-main");
+      expect(evidence.authorizedBy).toBe("dba:bob");
+      expect(evidence.denialReason).toBeTruthy();
+      expect(evidence.timestamp).toBeTruthy();
+
+      // permit evidence must NOT have fired
+      expect(permitSpy).not.toHaveBeenCalled();
+    });
+
+    // (2) Allow path: database.migration.apply in staging → protect() called, onPermitEvidence called
+    it("allow path: database.migration.apply in staging → protect() path, onPermitEvidence called", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("database.migration.apply")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_db", fetch: fetchImpl });
+
+      const permitSpy = vi.fn();
+      const denialSpy = vi.fn();
+
+      const permit = await protectDatabaseMigration({
+        databaseId: "db:staging",
+        authorizedBy: "dba:alice",
+        environment: "staging",
+        migrationId: "m-2026-002",
+        migrationChecksum: "sha256:def456",
+        onPermitEvidence: permitSpy,
+        onDenialEvidence: denialSpy,
+      });
+
+      expect(permit.permitId).toBe("dec_database_migration_apply");
+      // Only 2 HTTP calls: evaluate + verify (no HITL for staging)
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+      expect(permitSpy).toHaveBeenCalledTimes(1);
+      const evidence = permitSpy.mock.calls[0]![0];
+      expect(evidence.action).toBe("database.migration.apply");
+      expect(evidence.databaseId).toBe("db:staging");
+      expect(evidence.authorizedBy).toBe("dba:alice");
+      expect(evidence.permitToken).toBeTruthy();
+      expect(evidence.timestamp).toBeTruthy();
+
+      expect(denialSpy).not.toHaveBeenCalled();
+    });
+
+    // (3) Allow path: database.schema.drop → escalation created, onPermitEvidence called
+    it("allow path: database.schema.drop → HITL escalation, onPermitEvidence called", async () => {
+      // protect() returns hold → HITL created → approved
+      const fetchImpl = mockFetchSequence([
+        jsonResponse({
+          decision: "hold",
+          permit_token: "dec_hold_schema_drop",
+          reason: "Policy hold — awaiting approval",
+          audit_hash: "ah_hold",
+          timestamp: "2026-05-29T00:00:00Z",
+        }),
+      ]);
+      configure({ apiKey: "ask_test_db", fetch: fetchImpl });
+      configureApprovalRuntime({ apiKey: "ask_test_db", baseUrl: "https://api.atlasent.io" });
+
+      // HITL calls go through globalThis.fetch (after configure overrides protect-fetch)
+      const globalFetchSpy = vi.fn(async (input: string | URL) => {
+        const u = input.toString();
+        if (u.includes("/v1/hitl")) {
+          return jsonResponse({ ...HITL_ESCALATION_BASE });
+        }
+        if (u.includes("/v1/escalations")) {
+          return jsonResponse(HITL_APPROVED);
+        }
+        throw new Error(`Unexpected URL in test: ${u}`);
+      });
+      globalThis.fetch = globalFetchSpy as unknown as typeof globalThis.fetch;
+
+      const escalationHandleSpy = vi.fn();
+      const permitSpy = vi.fn();
+
+      const permit = await protectDatabaseSchemaDrop({
+        databaseId: "db:prod",
+        authorizedBy: "dba:charlie",
+        environment: "production",
+        schemaName: "public",
+        backupVerified: true,
+        recoveryPointId: "snap-20260529",
+        onEscalationCreated: escalationHandleSpy,
+        onPermitEvidence: permitSpy,
+        pollIntervalMs: 10,
+        waitMs: 5_000,
+      } as Parameters<typeof protectDatabaseSchemaDrop>[0] & {
+        pollIntervalMs?: number;
+      });
+
+      expect(permit).toBeDefined();
+
+      // escalation created callback
+      expect(escalationHandleSpy).toHaveBeenCalledTimes(1);
+      const handle = escalationHandleSpy.mock.calls[0]![0];
+      expect(handle.escalationId).toBeTruthy();
+
+      // permit evidence callback
+      expect(permitSpy).toHaveBeenCalledTimes(1);
+      const evidence = permitSpy.mock.calls[0]![0];
+      expect(evidence.action).toBe("database.schema.drop");
+      expect(evidence.databaseId).toBe("db:prod");
+      expect(evidence.authorizedBy).toBe("dba:charlie");
+      expect(evidence.permitToken).toBeTruthy();
+      expect(evidence.timestamp).toBeTruthy();
+    });
+
+    // (3b) Deny path in staging (machineExecutable branch): onDenialEvidence called
+    it("deny path: database.migration.apply in staging → onDenialEvidence called via protect() path", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("database.migration.apply")),
+      ]);
+      configure({ apiKey: "ask_test_db", fetch: fetchImpl });
+
+      const denialSpy = vi.fn();
+
+      let caught: unknown;
+      try {
+        const { protectDatabaseAction } = await import(
+          "../src/verticals/databaseActions.js"
+        );
+        await protectDatabaseAction({
+          action: "database.migration.apply",
+          databaseId: "db:staging-deny",
+          authorizedBy: "dba:test",
+          environment: "staging",
+          migrationId: "m-deny-001",
+          migrationChecksum: "sha256:deny",
+          onDenialEvidence: denialSpy,
+        });
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      expect(denialSpy).toHaveBeenCalledTimes(1);
+      const evidence = denialSpy.mock.calls[0]![0];
+      expect(evidence.action).toBe("database.migration.apply");
+      expect(evidence.denialReason).toBeTruthy();
+    });
+
+    // (3c) TypeError: database.table.delete missing tableName
+    it("TypeError: database.table.delete without tableName", async () => {
+      configure({ apiKey: "ask_test_db" });
+      const { protectDatabaseAction } = await import(
+        "../src/verticals/databaseActions.js"
+      );
+      await expect(
+        protectDatabaseAction({
+          action: "database.table.delete",
+          databaseId: "db:prod",
+          authorizedBy: "dba:test",
+          environment: "production",
+          // tableName deliberately omitted
+          backupVerified: true,
+          recoveryPointId: "snap-001",
+        }),
+      ).rejects.toThrow(TypeError);
+    });
+
+    // (3d) TypeError: database.table.delete with backupVerified: false
+    it("TypeError: database.table.delete with backupVerified: false", async () => {
+      configure({ apiKey: "ask_test_db" });
+      const { protectDatabaseAction } = await import(
+        "../src/verticals/databaseActions.js"
+      );
+      await expect(
+        protectDatabaseAction({
+          action: "database.table.delete",
+          databaseId: "db:prod",
+          authorizedBy: "dba:test",
+          environment: "production",
+          tableName: "sessions",
+          backupVerified: false,
+          recoveryPointId: "snap-001",
+        }),
+      ).rejects.toThrow(TypeError);
+    });
+
+    // (4) TypeError: database.schema.drop without backupVerified: true
+    it("TypeError: database.schema.drop without backupVerified: true", async () => {
+      configure({ apiKey: "ask_test_db" });
+      await expect(
+        protectDatabaseSchemaDrop({
+          databaseId: "db:prod",
+          authorizedBy: "dba:test",
+          environment: "production",
+          schemaName: "public",
+          backupVerified: false as true, // deliberately wrong
+          recoveryPointId: "snap-001",
+        }),
+      ).rejects.toThrow(TypeError);
+    });
+
+    // (5) TypeError: database.migration.apply in production without rollbackPlan
+    it("TypeError: database.migration.apply in production without rollbackPlan", async () => {
+      configure({ apiKey: "ask_test_db" });
+      await expect(
+        protectDatabaseMigration({
+          databaseId: "db:prod",
+          authorizedBy: "dba:test",
+          environment: "production",
+          migrationId: "m-001",
+          migrationChecksum: "sha256:abc",
+          // rollbackPlan deliberately omitted
+        }),
+      ).rejects.toThrow(TypeError);
+    });
+
+    // (6) TypeError: database.table.delete without recoveryPointId
+    it("TypeError: database.table.delete without recoveryPointId", async () => {
+      configure({ apiKey: "ask_test_db" });
+      const { protectDatabaseAction: fn } = await import(
+        "../src/verticals/databaseActions.js"
+      );
+      await expect(
+        fn({
+          action: "database.table.delete",
+          databaseId: "db:prod",
+          authorizedBy: "dba:test",
+          environment: "production",
+          tableName: "users",
+          backupVerified: true,
+          // recoveryPointId deliberately omitted
+        }),
+      ).rejects.toThrow(TypeError);
     });
   });
 

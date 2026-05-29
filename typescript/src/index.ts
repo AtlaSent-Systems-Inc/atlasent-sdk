@@ -75,6 +75,13 @@ import {
   protectCustomerDataDelete,
   protectContractExecution,
   protectPricingRule,
+  protectSecurityIncidentEscalate,
+  protectSecurityAccessQuarantine,
+  protectAccessCertRevoke,
+  protectPeriodCloseCertify,
+  protectDatabaseMigration,
+  protectDatabaseSchemaDrop,
+  protectDatabaseTableDelete,
 } from "./verticals/index.js";
 
 export { AtlaSentClient } from "./client.js";
@@ -787,6 +794,29 @@ export {
   protectPricingRule,
   type PricingActionType,
   type PricingActionOptions,
+  protectSecurityAction,
+  protectSecurityIncidentEscalate,
+  protectSecurityAccessQuarantine,
+  type SecurityActionType,
+  type SecurityActionOptions,
+  protectAccessCertAction,
+  protectAccessCertRevoke,
+  type AccessCertActionType,
+  type AccessCertOptions,
+  protectFinancialCloseAction,
+  protectPeriodCloseCertify,
+  type FinancialCloseActionType,
+  type FinancialCloseOptions,
+  protectDatabaseAction,
+  protectDatabaseMigration,
+  protectDatabaseSchemaDrop,
+  protectDatabaseTableDelete,
+  type DatabaseMigrationActionType,
+  type DatabaseDestructiveActionType,
+  type DatabaseActionType,
+  type PermitEvidence,
+  type DenialEvidence,
+  type DatabaseActionOptions,
 } from "./verticals/index.js";
 
 /**
@@ -827,6 +857,12 @@ const atlasent = {
   dataDeleteGate: protectCustomerDataDelete,
   contractGate: protectContractExecution,
   pricingGate: protectPricingRule,
+  securityGate: protectSecurityIncidentEscalate,
+  accessCertGate: protectAccessCertRevoke,
+  financialCloseGate: protectPeriodCloseCertify,
+  databaseMigrationGate: protectDatabaseMigration,
+  databaseSchemaDropGate: protectDatabaseSchemaDrop,
+  databaseTableDeleteGate: protectDatabaseTableDelete,
 } as const;
 
 export default atlasent;
