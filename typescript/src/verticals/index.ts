@@ -66,3 +66,39 @@ export {
   type InfraActionType,
   type InfraActionOptions,
 } from "./infraActions.js";
+
+export {
+  protectHrAction,
+  protectHrOffboard,
+  protectHrRoleEscalate,
+  type HrActionType,
+  type HrActionOptions,
+} from "./hrActions.js";
+
+export {
+  protectModelGovernance,
+  protectModelPromotion,
+  type ModelGovernanceActionType,
+  type ModelGovernanceOptions,
+} from "./modelGovernance.js";
+
+export {
+  protectCustomerDataDelete,
+  type DataDeleteActionType,
+  type DataDeleteOptions,
+  type GdprLegalBasis,
+} from "./dataDelete.js";
+
+export {
+  protectContractAction,
+  protectContractExecution,
+  type ContractActionType,
+  type ContractActionOptions,
+} from "./contractActions.js";
+
+export {
+  protectPricingAction,
+  protectPricingRule,
+  type PricingActionType,
+  type PricingActionOptions,
+} from "./pricingActions.js";
