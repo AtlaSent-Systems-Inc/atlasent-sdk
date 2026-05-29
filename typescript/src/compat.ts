@@ -31,6 +31,16 @@ export interface V2EvaluateRequest {
   context?: Record<string, unknown>;
   /** Populate `risk_envelope.factors` in the response (Phase C). */
   explain?: boolean;
+  /** Deployment environment where the action executes (e.g. `"production"`). */
+  environment?: string;
+  /** Structured resource descriptor. Prefer over `resource_id` for new callers. */
+  resource?: { type: string; id?: string; attributes?: Record<string, unknown> };
+  /** Snapshot of the resource before the proposed action. Enables state-transition-aware policy evaluation. */
+  current_state?: { description: string; attributes?: Record<string, unknown> };
+  /** Desired resource state after the action. */
+  proposed_state?: { description: string; attributes?: Record<string, unknown> };
+  /** Execution surface binding (CI/CD adapter, DB driver, etc.). */
+  execution_binding?: { kind: string; adapter_version?: string; resource_id?: string; enforcement_point?: string };
 }
 
 /**
@@ -60,7 +70,13 @@ export function normalizeEvaluateRequest(
       actor_id: legacy.agent!,
     };
     if (legacy.context !== undefined) normalized.context = legacy.context;
-    if ((legacy as any).explain !== undefined) normalized.explain = (legacy as any).explain;
+    const l = legacy as any;
+    if (l.explain !== undefined) normalized.explain = l.explain;
+    if (l.environment !== undefined) normalized.environment = l.environment;
+    if (l.resource !== undefined) normalized.resource = l.resource;
+    if (l.current_state !== undefined) normalized.current_state = l.current_state;
+    if (l.proposed_state !== undefined) normalized.proposed_state = l.proposed_state;
+    if (l.execution_binding !== undefined) normalized.execution_binding = l.execution_binding;
     return normalized;
   }
   return input as V2EvaluateRequest;

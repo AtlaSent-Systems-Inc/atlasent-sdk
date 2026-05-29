@@ -974,6 +974,65 @@ describe("X-RateLimit-* header parsing", () => {
     const result = await client.evaluate({ agent: "a", action: "b" });
     expect(result.rateLimit).toBeNull();
   });
+
+  it("forwards state-context fields in request body", async () => {
+    let capturedBody: Record<string, unknown> = {};
+    const client = makeClient(
+      mockFetch((url, init) => {
+        capturedBody = JSON.parse((init?.body as string) ?? "{}");
+        return Promise.resolve(
+          new Response(JSON.stringify(EVALUATE_PERMIT_WIRE), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+    );
+    await client.evaluate({
+      agent: "bot",
+      action: "database.schema.drop",
+      environment: "production",
+      resource: { type: "database", id: "db-123" },
+      current_state: { description: "table exists" },
+      proposed_state: { description: "table dropped" },
+      execution_binding: { kind: "supabase_migration", adapter_version: "1.0" },
+    });
+    expect(capturedBody.environment).toBe("production");
+    expect(capturedBody.resource).toEqual({ type: "database", id: "db-123" });
+    expect(capturedBody.current_state).toEqual({ description: "table exists" });
+    expect(capturedBody.proposed_state).toEqual({ description: "table dropped" });
+    expect(capturedBody.execution_binding).toEqual({ kind: "supabase_migration", adapter_version: "1.0" });
+  });
+
+  it("maps risk_class, authority_basis, escalation_id from response", async () => {
+    const wire = {
+      ...EVALUATE_PERMIT_WIRE,
+      risk_class: "high",
+      authority_basis: {
+        kind: "approval",
+        reference: "esc_abc123",
+        rationale: "HITL fallback",
+      },
+      escalation_id: "esc_abc123",
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluate({ agent: "bot", action: "act" });
+    expect(result.riskClass).toBe("high");
+    expect(result.authorityBasis).toEqual({
+      kind: "approval",
+      reference: "esc_abc123",
+      rationale: "HITL fallback",
+    });
+    expect(result.escalationId).toBe("esc_abc123");
+  });
+
+  it("omits riskClass, authorityBasis, escalationId when absent from response", async () => {
+    const client = makeClient(mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE)));
+    const result = await client.evaluate({ agent: "bot", action: "act" });
+    expect(result.riskClass).toBeUndefined();
+    expect(result.authorityBasis).toBeUndefined();
+    expect(result.escalationId).toBeUndefined();
+  });
 });
 
 describe("keySelf()", () => {

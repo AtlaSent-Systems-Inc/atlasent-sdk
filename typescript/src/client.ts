@@ -353,6 +353,16 @@ interface EvaluateWire {
     hard_blocks: string[];
     factors?: Array<{ factor: string; value: number; weight: number; reason: string }>;
   };
+  // State-context response fields (control-plane v2+).
+  risk_class?: string;
+  authority_basis?: {
+    kind: string;
+    reference?: string;
+    granted_by?: string;
+    rationale?: string;
+    expires_at?: string;
+  };
+  escalation_id?: string;
 }
 
 interface EvaluateBatchWireItem {
@@ -558,6 +568,11 @@ export class AtlaSentClient {
       context: normalized.context ?? {},
     };
     if (normalized.explain !== undefined) body.explain = normalized.explain;
+    if (normalized.environment !== undefined) body.environment = normalized.environment;
+    if (normalized.resource !== undefined) body.resource = normalized.resource;
+    if (normalized.current_state !== undefined) body.current_state = normalized.current_state;
+    if (normalized.proposed_state !== undefined) body.proposed_state = normalized.proposed_state;
+    if (normalized.execution_binding !== undefined) body.execution_binding = normalized.execution_binding;
     const { body: wire, rateLimit } = await this.post<EvaluateWire>(
       "/v1-evaluate",
       body,
@@ -626,6 +641,17 @@ export class AtlaSentClient {
           ...(wire.risk_envelope.factors && { factors: wire.risk_envelope.factors }),
         },
       }),
+      ...(wire.risk_class !== undefined && { riskClass: wire.risk_class }),
+      ...(wire.authority_basis && {
+        authorityBasis: {
+          kind: wire.authority_basis.kind as NonNullable<EvaluateResponse["authorityBasis"]>["kind"],
+          ...(wire.authority_basis.reference !== undefined && { reference: wire.authority_basis.reference }),
+          ...(wire.authority_basis.granted_by !== undefined && { grantedBy: wire.authority_basis.granted_by }),
+          ...(wire.authority_basis.rationale !== undefined && { rationale: wire.authority_basis.rationale }),
+          ...(wire.authority_basis.expires_at !== undefined && { expiresAt: wire.authority_basis.expires_at }),
+        },
+      }),
+      ...(wire.escalation_id !== undefined && { escalationId: wire.escalation_id }),
     };
   }
 
