@@ -278,6 +278,16 @@ export interface EvaluateRequest {
    * to keep response payloads small.
    */
   explain?: boolean;
+  /** Deployment environment where the action executes (e.g. `"production"`). */
+  environment?: string;
+  /** Structured resource descriptor. Prefer over embedding resource info in `context`. */
+  resource?: { type: string; id?: string; attributes?: Record<string, unknown> };
+  /** Snapshot of the resource state before the proposed action. Enables state-transition-aware policy evaluation. */
+  current_state?: { description: string; attributes?: Record<string, unknown> };
+  /** Desired resource state after the action executes. */
+  proposed_state?: { description: string; attributes?: Record<string, unknown> };
+  /** Execution surface binding — identifies the CI/CD adapter, DB driver, or enforcement point. */
+  execution_binding?: { kind: string; adapter_version?: string; resource_id?: string; enforcement_point?: string };
 }
 
 /**
@@ -390,6 +400,30 @@ export interface EvaluateResponse {
    * upgraded from `engineDecision` to `envelopeDecision`.
    */
   riskEnvelope?: EvaluateRiskEnvelope;
+  /**
+   * Resolved risk class from the evaluation engine.
+   * One of `"critical"`, `"high"`, `"medium"`, `"low"`.
+   * Present when the risk envelope assigns a class.
+   */
+  riskClass?: string;
+  /**
+   * WHY this permit was issued — the authority kind and a reference to the
+   * authorizing entity. Present on `allow` decisions when the control plane
+   * attaches explicit authority provenance.
+   */
+  authorityBasis?: {
+    kind: "policy" | "approval" | "emergency" | "maintenance_window" | "delegation" | "quorum";
+    reference?: string;
+    grantedBy?: string;
+    rationale?: string;
+    expiresAt?: string;
+  };
+  /**
+   * ID of the HITL escalation auto-created by the control plane.
+   * Present iff `decision === "hold"`. Poll `GET /v1/escalations/{id}`
+   * for resolution status.
+   */
+  escalationId?: string;
 }
 
 /** Per-factor contribution in a {@link EvaluateRiskEnvelope}. */
