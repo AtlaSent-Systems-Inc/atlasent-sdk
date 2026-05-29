@@ -44,6 +44,7 @@ import atlasent, {
   protectBehaviorEvent,
   protectInfraAction,
   protectDeploymentV2,
+  protectPaymentOperation,
 } from "../src/index.js";
 import { __resetSharedClientForTests } from "../src/protect.js";
 
@@ -602,6 +603,34 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
       expect(permit.permitId).toBe("dec_behavior_event_share");
       expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
+
+    it("health.adherence (high risk) routes through escalation path", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("behavior.event.share")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_behavior", fetch: fetchImpl });
+
+      const permit = await protectBehaviorEvent({
+        ...behaviorOpts,
+        eventCategory: "health.adherence",
+      });
+      expect(permit.permitId).toBe("dec_behavior_event_share");
+    });
+
+    it("general category (medium risk) routes through escalation path", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("behavior.event.share")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_behavior", fetch: fetchImpl });
+
+      const permit = await protectBehaviorEvent({
+        ...behaviorOpts,
+        eventCategory: "general",
+      });
+      expect(permit.permitId).toBe("dec_behavior_event_share");
+    });
   });
 
   // ── protectInfraAction (terminate) — 4-path contract ────────────────────────────────────
@@ -827,6 +856,170 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
           // incidentId deliberately omitted
         }),
       ).rejects.toThrow(TypeError);
+    });
+  });
+
+  // ── protectPaymentOperation — 4-path contract ───────────────────────────────────────────
+  describe("protectPaymentOperation — escalate path (payment.approval.approve)", () => {
+    const approvalOpts = {
+      paymentId: "pay_20260529_001",
+      action: "payment.approval.approve" as const,
+      amount: 125000,
+      currency: "USD",
+      approvedBy: "cfo:alice",
+      vendorId: "vendor:acme",
+      invoiceId: "INV-2026-0042",
+      accountCode: "AP-2000",
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("payment.approval.approve")),
+      ]);
+      configure({ apiKey: "ask_test_payment", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectPaymentOperation(approvalOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("payment.approval.approve")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_payment", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectPaymentOperation(approvalOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("payment.approval.approve")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_payment", fetch: fetchImpl });
+
+      const permit = await protectPaymentOperation(approvalOpts);
+
+      expect(permit.permitId).toBe("dec_payment_approval_approve");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_payment_approval_approve");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("payment.approval.approve")),
+      ]);
+      configure({ apiKey: "ask_test_payment", fetch: fetchImpl });
+
+      try {
+        await protectPaymentOperation(approvalOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+  });
+
+  describe("protectPaymentOperation — protect path (payment.approval.deny)", () => {
+    const denyActionOpts = {
+      paymentId: "pay_20260529_002",
+      action: "payment.approval.deny" as const,
+      deniedBy: "approver:bob",
+      holdReason: "missing purchase order",
+      policyRule: "three-way-match-required",
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("payment.approval.deny")),
+      ]);
+      configure({ apiKey: "ask_test_payment", fetch: fetchImpl });
+
+      let caught: unknown;
+      try {
+        await protectPaymentOperation(denyActionOpts);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+    });
+
+    it("allow + verify ok: returns permit via protect() path", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("payment.approval.deny")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_payment", fetch: fetchImpl });
+
+      const permit = await protectPaymentOperation(denyActionOpts);
+      expect(permit.permitId).toBe("dec_payment_approval_deny");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("protectPaymentOperation — critical-risk execute path", () => {
+    const executeOpts = {
+      paymentId: "pay_20260529_003",
+      action: "payment.execute.approved" as const,
+      executedBy: "payment-system:prod",
+      bankReference: "WIRE-20260529-001",
+      transactionId: "txn_abc123",
+    };
+
+    it("allow + verify ok: quorum escalation path returns permit", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("payment.execute.approved")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_payment", fetch: fetchImpl });
+
+      const permit = await protectPaymentOperation(executeOpts);
+      expect(permit.permitId).toBe("dec_payment_execute_approved");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
   });
 
