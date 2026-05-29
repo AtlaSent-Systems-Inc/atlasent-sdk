@@ -59,6 +59,12 @@ import {
   DEPLOYMENT_PRODUCTION_ACTION,
   PRODUCTION_DEPLOY_ACTION,
 } from "./types.js";
+import {
+  protectPaymentRelease,
+  protectDataExport,
+  protectReconciliationCertify,
+  protectToolCall,
+} from "./verticals/index.js";
 
 export { AtlaSentClient } from "./client.js";
 export {
@@ -714,10 +720,16 @@ export {
   type DeployGateOptions,
   type DeployEnvironment,
   protectCloseAction,
+  protectReconciliationCertify,
   type CloseGovernanceOptions,
   type CloseActionType,
+  type ReconciliationCertifyOptions,
   protectPaymentRelease,
   type PaymentReleaseOptions,
+  VENDOR_PAYMENT_ACTION,
+  protectDataExport,
+  type DataExportOptions,
+  CUSTOMER_DATA_EXPORT_ACTION,
   protectToolCall,
   classifyToolRisk,
   type AgentToolOptions,
@@ -747,6 +759,10 @@ const atlasent = {
   AtlaSentClient,
   AtlaSentError,
   AtlaSentDeniedError,
+  paymentGate: protectPaymentRelease,
+  dataExportGate: protectDataExport,
+  reconciliationGate: protectReconciliationCertify,
+  agentGuard: protectToolCall,
 } as const;
 
 export default atlasent;
