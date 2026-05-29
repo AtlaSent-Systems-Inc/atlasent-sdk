@@ -467,7 +467,7 @@ describe("protectCloseAction()", () => {
     expect(body.quorum_required).toBe("simple_majority");
   });
 
-  it("calls protectOrEscalate for data.export", async () => {
+  it("calls protectOrEscalate for reconciliation.certify", async () => {
     const protectFetch = makeFetchSequence([jsonOk(EVALUATE_HOLD_WIRE)]);
     configure({ apiKey: "ask_test_verticals", fetch: protectFetch as unknown as typeof fetch });
 
@@ -479,13 +479,12 @@ describe("protectCloseAction()", () => {
     }) as unknown as typeof globalThis.fetch;
 
     const result = await protectCloseAction({
-      action: "data.export",
+      action: "reconciliation.certify",
       periodLabel: "2026-Q1",
       closedBy: "controller",
       entityId: "entity_1",
-      pollIntervalMs: 10,
       waitMs: 5_000,
-    } as Parameters<typeof protectCloseAction>[0] & { pollIntervalMs?: number; waitMs?: number });
+    });
 
     expect(result).toBeDefined();
   });

@@ -5,6 +5,8 @@ import type { ApprovalPermit } from "../approvalRuntime.js";
 import type { Permit } from "../protect.js";
 import type { EscalationHandle } from "../approvalRuntime.js";
 
+export const VENDOR_PAYMENT_ACTION = "vendor.payment.release" as const;
+
 export interface PaymentReleaseOptions {
   amount: number;
   currency: string;
@@ -66,7 +68,7 @@ export async function protectPaymentRelease(
   });
 
   const request = {
-    action: "payment.release",
+    action: VENDOR_PAYMENT_ACTION,
     agent: opts.authorizedBy,
     context: flattenActionContext(ctx),
   };

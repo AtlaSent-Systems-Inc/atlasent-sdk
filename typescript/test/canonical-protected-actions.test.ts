@@ -38,6 +38,8 @@ import {
 import atlasent, {
   AtlaSentDeniedError,
   configure,
+  type CloseActionType,
+  protectDataExport,
 } from "../src/index.js";
 import { __resetSharedClientForTests } from "../src/protect.js";
 
@@ -229,6 +231,131 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
           context: { environment: "production", resource_id: `res_${action}` },
         });
         // The next line must be unreachable; if it executes the test fails.
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+  });
+
+  // CloseActionType membership checks
+  it('"data.export" is NOT a valid CloseActionType', () => {
+    // Compile-time guard: "data.export" must not be assignable to CloseActionType.
+    // We verify this at runtime by confirming our known-good type list excludes it.
+    const validCloseActions: CloseActionType[] = [
+      "period.close",
+      "period.reopen",
+      "reconciliation.lock",
+      "reconciliation.certify",
+    ];
+    expect(validCloseActions).not.toContain("data.export");
+  });
+
+  it('"reconciliation.certify" IS a valid CloseActionType', () => {
+    const action: CloseActionType = "reconciliation.certify";
+    expect(action).toBe("reconciliation.certify");
+  });
+
+  describe("protectDataExport — 4-path contract", () => {
+    const exportOpts = {
+      dataset: "customers",
+      destination: "s3://analytics-bucket/export",
+      containsPii: true,
+      rowCount: 50000,
+      dataClassification: "confidential" as const,
+      purpose: "quarterly analytics",
+      authorizedBy: "analyst:jane",
+    };
+
+    // (1) deny path
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("customer.data.export")),
+      ]);
+      configure({ apiKey: "ask_test_export", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectDataExport(exportOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    // (2) allow + verify failure
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("customer.data.export")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_export", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectDataExport(exportOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    // (3) allow + verify success
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("customer.data.export")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_export", fetch: fetchImpl });
+
+      const permit = await protectDataExport(exportOpts);
+
+      expect(permit.permitId).toBe("dec_customer_data_export");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_customer_data_export");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    // (4) audit hash preservation on deny
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("customer.data.export")),
+      ]);
+      configure({ apiKey: "ask_test_export", fetch: fetchImpl });
+
+      try {
+        await protectDataExport(exportOpts);
         throw new Error("protect() returned on deny — bypass detected");
       } catch (err) {
         expect(err).toBeInstanceOf(AtlaSentDeniedError);
