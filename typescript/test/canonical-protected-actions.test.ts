@@ -40,6 +40,10 @@ import atlasent, {
   configure,
   type CloseActionType,
   protectDataExport,
+  protectBatchRecordRelease,
+  protectBehaviorEvent,
+  protectInfraAction,
+  protectDeploymentV2,
 } from "../src/index.js";
 import { __resetSharedClientForTests } from "../src/protect.js";
 
@@ -49,6 +53,10 @@ const CATALOG_ACTIONS = [
   "customer.data.export",
   "reconciliation.certify",
   "model.agent.execute_tool",
+  "manufacturing.batch_record.release",
+  "deployment.production.execute",
+  "behavior.event.share",
+  "aws.ec2.terminate_instance",
 ] as const;
 
 type FetchMock = MockedFunction<typeof fetch>;
@@ -363,6 +371,462 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
         expect(denied.auditHash).toBeTruthy();
         expect(denied.evaluationId).toBeTruthy();
       }
+    });
+  });
+
+  // ── protectBatchRecordRelease — 4-path contract ──────────────────────────────────────────
+  describe("protectBatchRecordRelease — 4-path contract", () => {
+    const batchOpts = {
+      batchId: "BATCH-2026-001",
+      productCode: "PROD-X",
+      lotNumber: "LOT-99",
+      certifiedBy: "qa:jane",
+      qaSignoffBy: "qa:bob",
+      batchRecordComplete: true,
+      deviationCount: 0,
+      regulatoryRegion: "EU",
+    };
+
+    // (1) deny path
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("manufacturing.batch_record.release")),
+      ]);
+      configure({ apiKey: "ask_test_gxp", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectBatchRecordRelease(batchOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    // (2) allow + verify failure
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("manufacturing.batch_record.release")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_gxp", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectBatchRecordRelease(batchOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    // (3) allow + verify success
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("manufacturing.batch_record.release")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_gxp", fetch: fetchImpl });
+
+      const permit = await protectBatchRecordRelease(batchOpts);
+
+      expect(permit.permitId).toBe("dec_manufacturing_batch_record_release");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_manufacturing_batch_record_release");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    // (4) audit hash preservation on deny
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("manufacturing.batch_record.release")),
+      ]);
+      configure({ apiKey: "ask_test_gxp", fetch: fetchImpl });
+
+      try {
+        await protectBatchRecordRelease(batchOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+  });
+
+  // ── protectBehaviorEvent (sensitive category) — 4-path contract ─────────────────────────
+  describe("protectBehaviorEvent — health.mental sensitive category — 4-path contract", () => {
+    const behaviorOpts = {
+      action: "behavior.event.share" as const,
+      subjectId: "subject:abc123",
+      eventCategory: "health.mental" as const,
+      destination: "research-platform://study-42",
+      purpose: "longitudinal depression study",
+      consentVerified: true,
+      dataMinimized: true,
+    };
+
+    // (1) deny path
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("behavior.event.share")),
+      ]);
+      configure({ apiKey: "ask_test_behavior", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectBehaviorEvent(behaviorOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    // (2) allow + verify failure
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("behavior.event.share")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_behavior", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectBehaviorEvent(behaviorOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    // (3) allow + verify success
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("behavior.event.share")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_behavior", fetch: fetchImpl });
+
+      const permit = await protectBehaviorEvent(behaviorOpts);
+
+      expect(permit.permitId).toBe("dec_behavior_event_share");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_behavior_event_share");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    // (4) audit hash preservation on deny
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("behavior.event.share")),
+      ]);
+      configure({ apiKey: "ask_test_behavior", fetch: fetchImpl });
+
+      try {
+        await protectBehaviorEvent(behaviorOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+
+    it("minor subject always escalates with HOLD_HUMAN_REVIEW_REQUIRED reason", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("behavior.event.share")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_behavior", fetch: fetchImpl });
+
+      const permit = await protectBehaviorEvent({
+        ...behaviorOpts,
+        subjectIsMinor: true,
+        eventCategory: "general",
+      });
+
+      expect(permit.permitId).toBe("dec_behavior_event_share");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── protectInfraAction (terminate) — 4-path contract ────────────────────────────────────
+  describe("protectInfraAction — aws.ec2.terminate_instance — 4-path contract", () => {
+    const infraOpts = {
+      action: "aws.ec2.terminate_instance" as const,
+      resourceId: "i-0abc123def456789",
+      authorizedBy: "sre:alice",
+      reason: "decommission after migration",
+      incidentId: "INC-2026-042",
+      region: "us-east-1",
+    };
+
+    // (1) deny path
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("aws.ec2.terminate_instance")),
+      ]);
+      configure({ apiKey: "ask_test_infra", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectInfraAction(infraOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    // (2) allow + verify failure
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("aws.ec2.terminate_instance")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_infra", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectInfraAction(infraOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    // (3) allow + verify success
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("aws.ec2.terminate_instance")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_infra", fetch: fetchImpl });
+
+      const permit = await protectInfraAction(infraOpts);
+
+      expect(permit.permitId).toBe("dec_aws_ec2_terminate_instance");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_aws_ec2_terminate_instance");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    // (4) audit hash preservation on deny
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("aws.ec2.terminate_instance")),
+      ]);
+      configure({ apiKey: "ask_test_infra", fetch: fetchImpl });
+
+      try {
+        await protectInfraAction(infraOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+
+    it("throws TypeError when neither changeTicket nor incidentId is provided", async () => {
+      configure({ apiKey: "ask_test_infra" });
+      const { incidentId: _dropped, ...optsNoTicket } = infraOpts;
+      await expect(protectInfraAction(optsNoTicket)).rejects.toThrow(TypeError);
+    });
+  });
+
+  // ── protectDeploymentV2 — 4-path contract ───────────────────────────────────────────────
+  describe("protectDeploymentV2 — deployment.production.execute — 4-path contract", () => {
+    const deployOpts = {
+      action: "deployment.production.execute" as const,
+      deploymentId: "deploy-2026-0529",
+      buildSha: "abc123def456789",
+      environment: "production" as const,
+      authorizedBy: "deploy-bot",
+      changeTicket: "CHG-2026-099",
+    };
+
+    // (1) deny path
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("deployment.production.execute")),
+      ]);
+      configure({ apiKey: "ask_test_deploy_v2", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectDeploymentV2(deployOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    // (2) allow + verify failure
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("deployment.production.execute")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_deploy_v2", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectDeploymentV2(deployOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    // (3) allow + verify success
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("deployment.production.execute")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_deploy_v2", fetch: fetchImpl });
+
+      const permit = await protectDeploymentV2(deployOpts);
+
+      expect(permit.permitId).toBe("dec_deployment_production_execute");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_deployment_production_execute");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    // (4) audit hash preservation on deny
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("deployment.production.execute")),
+      ]);
+      configure({ apiKey: "ask_test_deploy_v2", fetch: fetchImpl });
+
+      try {
+        await protectDeploymentV2(deployOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+
+    it("throws TypeError for rollback without incidentId", async () => {
+      configure({ apiKey: "ask_test_deploy_v2" });
+      await expect(
+        protectDeploymentV2({
+          action: "deployment.rollback.execute",
+          deploymentId: "deploy-rb-001",
+          buildSha: "rollback-sha",
+          environment: "production",
+          rollbackTarget: "v1.2.3",
+          // incidentId deliberately omitted
+        }),
+      ).rejects.toThrow(TypeError);
     });
   });
 

@@ -30,3 +30,39 @@ export {
   type AgentToolOptions,
   type AgentToolMode,
 } from "./agentTools.js";
+
+export {
+  protectGxpAction,
+  protectBatchRecordRelease,
+  type GxpActionType,
+  type GxpActionOptions,
+  type BatchRecordReleaseOptions,
+  type ClinicalDataAccessOptions,
+  type CAPAOptions,
+} from "./gxpActions.js";
+
+export {
+  protectPaymentOperation,
+  type PaymentOperationActionType,
+  type PaymentOperationOptions,
+} from "./paymentOperations.js";
+
+export {
+  protectDeploymentV2,
+  type DeploymentActionType,
+  type DeploymentV2Options,
+  DEPLOY_V1_ACTION,
+} from "./deploymentActions.js";
+
+export {
+  protectBehaviorEvent,
+  type BehaviorEventCategory,
+  type BehaviorEventOptions,
+  BEHAVIOR_SENSITIVE_CATEGORIES,
+} from "./behaviorEvents.js";
+
+export {
+  protectInfraAction,
+  type InfraActionType,
+  type InfraActionOptions,
+} from "./infraActions.js";
