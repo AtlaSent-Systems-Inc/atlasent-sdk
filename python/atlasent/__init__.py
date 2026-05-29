@@ -279,6 +279,39 @@ from .v2_endpoints import (
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
 
+# Verticals — domain-specific protect() convenience wrappers.
+from .verticals.hr_actions import (
+    protect_hr_action,
+    protect_hr_offboard,
+    protect_hr_role_escalate,
+)
+from .verticals.model_governance import (
+    protect_model_governance,
+    protect_model_promotion,
+)
+from .verticals.data_delete import protect_customer_data_delete
+from .verticals.contract_actions import (
+    protect_contract_action,
+    protect_contract_execution,
+)
+from .verticals.pricing_actions import (
+    protect_pricing_action,
+    protect_pricing_rule,
+)
+from .verticals.security_actions import (
+    protect_security_action,
+    protect_security_incident_escalate,
+    protect_security_access_quarantine,
+)
+from .verticals.access_cert import (
+    protect_access_cert_action,
+    protect_access_cert_revoke,
+)
+from .verticals.financial_close import (
+    protect_financial_close_action,
+    protect_period_close_certify,
+)
+
 #: Canonical Deploy Gate V1 protected action. Mirrors the TypeScript
 #: SDK's ``PRODUCTION_DEPLOY_ACTION``. Use this string (or the constant)
 #: when calling ``protect()``/``evaluate()`` for the production deploy
@@ -524,4 +557,24 @@ __all__ = [
     "TrustRootSnapshot",
     "get_global_trust_root_manager",
     "_set_global_trust_root_manager_for_tests",
+    # Verticals — domain-specific protect() convenience wrappers.
+    # Phase 4: HR, model governance, data delete, contract, pricing.
+    "protect_hr_action",
+    "protect_hr_offboard",
+    "protect_hr_role_escalate",
+    "protect_model_governance",
+    "protect_model_promotion",
+    "protect_customer_data_delete",
+    "protect_contract_action",
+    "protect_contract_execution",
+    "protect_pricing_action",
+    "protect_pricing_rule",
+    # Phase 5: security, access-cert, financial-close.
+    "protect_security_action",
+    "protect_security_incident_escalate",
+    "protect_security_access_quarantine",
+    "protect_access_cert_action",
+    "protect_access_cert_revoke",
+    "protect_financial_close_action",
+    "protect_period_close_certify",
 ]
