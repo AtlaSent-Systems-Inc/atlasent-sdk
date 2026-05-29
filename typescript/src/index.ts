@@ -64,6 +64,12 @@ import {
   protectDataExport,
   protectReconciliationCertify,
   protectToolCall,
+  protectGxpAction,
+  protectBatchRecordRelease,
+  protectPaymentOperation,
+  protectDeploymentV2,
+  protectBehaviorEvent,
+  protectInfraAction,
 } from "./verticals/index.js";
 
 export { AtlaSentClient } from "./client.js";
@@ -734,6 +740,27 @@ export {
   classifyToolRisk,
   type AgentToolOptions,
   type AgentToolMode,
+  protectGxpAction,
+  protectBatchRecordRelease,
+  type GxpActionType,
+  type GxpActionOptions,
+  type BatchRecordReleaseOptions,
+  type ClinicalDataAccessOptions,
+  type CAPAOptions,
+  protectPaymentOperation,
+  type PaymentOperationActionType,
+  type PaymentOperationOptions,
+  protectDeploymentV2,
+  type DeploymentActionType,
+  type DeploymentV2Options,
+  DEPLOY_V1_ACTION,
+  protectBehaviorEvent,
+  type BehaviorEventCategory,
+  type BehaviorEventOptions,
+  BEHAVIOR_SENSITIVE_CATEGORIES,
+  protectInfraAction,
+  type InfraActionType,
+  type InfraActionOptions,
 } from "./verticals/index.js";
 
 /**
@@ -763,6 +790,12 @@ const atlasent = {
   dataExportGate: protectDataExport,
   reconciliationGate: protectReconciliationCertify,
   agentGuard: protectToolCall,
+  gxpGate: protectGxpAction,
+  batchRecordGate: protectBatchRecordRelease,
+  paymentOpsGate: protectPaymentOperation,
+  deployV2Gate: protectDeploymentV2,
+  behaviorEventGate: protectBehaviorEvent,
+  infraGate: protectInfraAction,
 } as const;
 
 export default atlasent;
