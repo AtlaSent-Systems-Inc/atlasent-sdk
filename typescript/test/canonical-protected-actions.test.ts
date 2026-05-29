@@ -45,6 +45,11 @@ import atlasent, {
   protectInfraAction,
   protectDeploymentV2,
   protectPaymentOperation,
+  protectHrOffboard,
+  protectModelPromotion,
+  protectCustomerDataDelete,
+  protectContractExecution,
+  protectPricingRule,
 } from "../src/index.js";
 import { __resetSharedClientForTests } from "../src/protect.js";
 
@@ -1019,6 +1024,486 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
 
       const permit = await protectPaymentOperation(executeOpts);
       expect(permit.permitId).toBe("dec_payment_execute_approved");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── protectHrOffboard — 4-path contract ─────────────────────────────────────────────────
+  describe("protectHrOffboard — hr.employee.offboard — deny + allow+ok paths", () => {
+    const offboardOpts = {
+      employeeId: "emp:alice-42",
+      authorizedBy: "hr:manager-bob",
+      effectiveDate: "2026-06-01",
+      offboardingReason: "voluntary resignation",
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("hr.employee.offboard")),
+      ]);
+      configure({ apiKey: "ask_test_hr", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectHrOffboard(offboardOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("hr.employee.offboard")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_hr", fetch: fetchImpl });
+
+      const permit = await protectHrOffboard(offboardOpts);
+
+      expect(permit.permitId).toBe("dec_hr_employee_offboard");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_hr_employee_offboard");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    it("throws TypeError when effectiveDate is missing", async () => {
+      configure({ apiKey: "ask_test_hr" });
+      const { effectiveDate: _dropped, ...optsNoDate } = offboardOpts;
+      await expect(protectHrOffboard(optsNoDate as Parameters<typeof protectHrOffboard>[0])).rejects.toThrow(TypeError);
+    });
+
+    it("throws TypeError when offboardingReason is missing", async () => {
+      configure({ apiKey: "ask_test_hr" });
+      const { offboardingReason: _dropped, ...optsNoReason } = offboardOpts;
+      await expect(protectHrOffboard(optsNoReason as Parameters<typeof protectHrOffboard>[0])).rejects.toThrow(TypeError);
+    });
+
+    it("hr.access.revoke (machine_executable: true) routes through protect() path", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("hr.access.revoke")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_hr", fetch: fetchImpl });
+
+      const { protectHrAction } = await import("../src/verticals/hrActions.js");
+      const permit = await protectHrAction({
+        action: "hr.access.revoke",
+        employeeId: "emp:alice-42",
+        authorizedBy: "hr:manager-bob",
+      });
+      expect(permit.permitId).toBe("dec_hr_access_revoke");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it("hr.role.escalate (critical risk) routes through escalation with quorum", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("hr.role.escalate")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_hr", fetch: fetchImpl });
+
+      const { protectHrRoleEscalate } = await import("../src/verticals/hrActions.js");
+      const permit = await protectHrRoleEscalate({
+        employeeId: "emp:charlie-99",
+        authorizedBy: "ciso:eve",
+        requestedRole: "admin",
+        businessJustification: "project X requires elevated access",
+      });
+      expect(permit.permitId).toBe("dec_hr_role_escalate");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it("throws TypeError for hr.role.escalate without requestedRole", async () => {
+      configure({ apiKey: "ask_test_hr" });
+      const { protectHrAction } = await import("../src/verticals/hrActions.js");
+      await expect(protectHrAction({
+        action: "hr.role.escalate",
+        employeeId: "emp:test",
+        authorizedBy: "hr:test",
+        businessJustification: "some reason",
+        // requestedRole deliberately omitted
+      })).rejects.toThrow(TypeError);
+    });
+
+    it("throws TypeError for hr.role.escalate without businessJustification", async () => {
+      configure({ apiKey: "ask_test_hr" });
+      const { protectHrAction } = await import("../src/verticals/hrActions.js");
+      await expect(protectHrAction({
+        action: "hr.role.escalate",
+        employeeId: "emp:test",
+        authorizedBy: "hr:test",
+        requestedRole: "admin",
+        // businessJustification deliberately omitted
+      })).rejects.toThrow(TypeError);
+    });
+  });
+
+  // ── protectModelPromotion — 4-path contract ──────────────────────────────────────────────
+  describe("protectModelPromotion — ml.model.promote + retire — deny + allow+ok paths", () => {
+    const promoteOpts = {
+      modelId: "model:fraud-detector-v3",
+      authorizedBy: "ml-lead:carol",
+      reason: "improved F1 score in A/B test",
+      safetyReviewId: "SR-2026-042",
+      alignmentVerified: true,
+      targetEnvironment: "production",
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("ml.model.promote")),
+      ]);
+      configure({ apiKey: "ask_test_model", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectModelPromotion(promoteOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("ml.model.promote")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_model", fetch: fetchImpl });
+
+      const permit = await protectModelPromotion(promoteOpts);
+
+      expect(permit.permitId).toBe("dec_ml_model_promote");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_ml_model_promote");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    it("ml.model.retire (high risk, irreversible) escalates with single_approver", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("ml.model.retire")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_model", fetch: fetchImpl });
+
+      const { protectModelGovernance } = await import("../src/verticals/modelGovernance.js");
+      const permit = await protectModelGovernance({
+        action: "ml.model.retire",
+        modelId: "model:legacy-v1",
+        authorizedBy: "ml-lead:carol",
+        reason: "replaced by v3",
+        serviceImpactAssessed: true,
+      });
+      expect(permit.permitId).toBe("dec_ml_model_retire");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it("ml.model.fine_tune (high risk) escalates with single_approver", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("ml.model.fine_tune")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_model", fetch: fetchImpl });
+
+      const { protectModelGovernance } = await import("../src/verticals/modelGovernance.js");
+      const permit = await protectModelGovernance({
+        action: "ml.model.fine_tune",
+        modelId: "model:fraud-detector-v3",
+        authorizedBy: "ml-lead:carol",
+        reason: "safety alignment tuning",
+        alignmentVerified: true,
+      });
+      expect(permit.permitId).toBe("dec_ml_model_fine_tune");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── protectCustomerDataDelete — 4-path contract ──────────────────────────────────────────
+  describe("protectCustomerDataDelete — customer.data.delete — deny + allow+ok paths", () => {
+    const deleteOpts = {
+      action: "customer.data.delete" as const,
+      dataSubjectId: "user:jane-doe-8821",
+      verifiedBy: "compliance:officer-dan",
+      gdprBasis: "erasure_request" as const,
+      dpaReference: "DPA-2026-EU-0042",
+      dataCategories: ["profile", "purchase_history", "behavioral"],
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("customer.data.delete")),
+      ]);
+      configure({ apiKey: "ask_test_datadelete", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectCustomerDataDelete(deleteOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("customer.data.delete")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_datadelete", fetch: fetchImpl });
+
+      const permit = await protectCustomerDataDelete(deleteOpts);
+
+      expect(permit.permitId).toBe("dec_customer_data_delete");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_customer_data_delete");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("customer.data.delete")),
+      ]);
+      configure({ apiKey: "ask_test_datadelete", fetch: fetchImpl });
+
+      try {
+        await protectCustomerDataDelete(deleteOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+  });
+
+  // ── protectContractExecution — 4-path contract ───────────────────────────────────────────
+  describe("protectContractExecution — contract.execute — deny + allow+ok paths", () => {
+    const contractOpts = {
+      contractId: "contract:saas-vendor-2026-09",
+      authorizedBy: "legal:counsel-diana",
+      counterparty: "AcmeSaaS Corp",
+      legalReviewId: "LR-2026-09-42",
+      estimatedValue: 500000,
+      currency: "USD",
+      effectiveDate: "2026-07-01",
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("contract.execute")),
+      ]);
+      configure({ apiKey: "ask_test_contract", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectContractExecution(contractOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("contract.execute")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_contract", fetch: fetchImpl });
+
+      const permit = await protectContractExecution(contractOpts);
+
+      expect(permit.permitId).toBe("dec_contract_execute");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_contract_execute");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    it("contract.amend (high risk) escalates with single_approver", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("contract.amend")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_contract", fetch: fetchImpl });
+
+      const { protectContractAction } = await import("../src/verticals/contractActions.js");
+      const permit = await protectContractAction({
+        action: "contract.amend",
+        contractId: "contract:saas-vendor-2026-09",
+        authorizedBy: "legal:counsel-diana",
+        counterparty: "AcmeSaaS Corp",
+        amendmentDescription: "Updated SLA terms to 99.9% uptime",
+      });
+      expect(permit.permitId).toBe("dec_contract_amend");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it("throws TypeError for contract.amend without amendmentDescription", async () => {
+      configure({ apiKey: "ask_test_contract" });
+      const { protectContractAction } = await import("../src/verticals/contractActions.js");
+      await expect(protectContractAction({
+        action: "contract.amend",
+        contractId: "contract:test-001",
+        authorizedBy: "legal:test",
+        counterparty: "Test Corp",
+        // amendmentDescription deliberately omitted
+      })).rejects.toThrow(TypeError);
+    });
+  });
+
+  // ── protectPricingRule — 4-path contract ─────────────────────────────────────────────────
+  describe("protectPricingRule — pricing.rule.publish — deny + allow+ok paths", () => {
+    const pricingOptsLargeChange = {
+      ruleId: "rule:summer-sale-2026",
+      authorizedBy: "pricing:manager-eve",
+      priceChangePct: 12,
+      affectedSkus: ["SKU-001", "SKU-002"],
+      effectiveDate: "2026-06-15",
+    };
+
+    const pricingOptsSmallChange = {
+      ruleId: "rule:micro-adjustment-001",
+      authorizedBy: "pricing:analyst-frank",
+      priceChangePct: 2,
+    };
+
+    it("deny (large change >=5%): throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("pricing.rule.publish")),
+      ]);
+      configure({ apiKey: "ask_test_pricing", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectPricingRule(pricingOptsLargeChange);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it("allow + verify ok (large change >=5%): escalation path returns permit", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("pricing.rule.publish")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_pricing", fetch: fetchImpl });
+
+      const permit = await protectPricingRule(pricingOptsLargeChange);
+
+      expect(permit.permitId).toBe("dec_pricing_rule_publish");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_pricing_rule_publish");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it("allow + verify ok (small change <5%): protect() path returns permit", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("pricing.rule.publish")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_pricing", fetch: fetchImpl });
+
+      const permit = await protectPricingRule(pricingOptsSmallChange);
+
+      expect(permit.permitId).toBe("dec_pricing_rule_publish");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it("pricing.discount.approve (large discount >=10%): high risk, escalation path", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("pricing.discount.approve")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_pricing", fetch: fetchImpl });
+
+      const { protectPricingAction } = await import("../src/verticals/pricingActions.js");
+      const permit = await protectPricingAction({
+        action: "pricing.discount.approve",
+        ruleId: "rule:enterprise-discount-2026",
+        authorizedBy: "pricing:manager-eve",
+        discountPercent: 15,
+        customerId: "cust:enterprise-001",
+        discountReason: "strategic partnership",
+      });
+      expect(permit.permitId).toBe("dec_pricing_discount_approve");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it("pricing.discount.approve (small discount <10%): medium risk, protect() path", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("pricing.discount.approve")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_pricing", fetch: fetchImpl });
+
+      const { protectPricingAction } = await import("../src/verticals/pricingActions.js");
+      const permit = await protectPricingAction({
+        action: "pricing.discount.approve",
+        ruleId: "rule:loyalty-discount",
+        authorizedBy: "pricing:analyst-frank",
+        discountPercent: 5,
+        customerId: "cust:loyal-001",
+        discountReason: "loyalty reward",
+      });
+      expect(permit.permitId).toBe("dec_pricing_discount_approve");
       expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
   });

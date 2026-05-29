@@ -70,6 +70,11 @@ import {
   protectDeploymentV2,
   protectBehaviorEvent,
   protectInfraAction,
+  protectHrOffboard,
+  protectModelPromotion,
+  protectCustomerDataDelete,
+  protectContractExecution,
+  protectPricingRule,
 } from "./verticals/index.js";
 
 export { AtlaSentClient } from "./client.js";
@@ -761,6 +766,27 @@ export {
   protectInfraAction,
   type InfraActionType,
   type InfraActionOptions,
+  protectHrAction,
+  protectHrOffboard,
+  protectHrRoleEscalate,
+  type HrActionType,
+  type HrActionOptions,
+  protectModelGovernance,
+  protectModelPromotion,
+  type ModelGovernanceActionType,
+  type ModelGovernanceOptions,
+  protectCustomerDataDelete,
+  type DataDeleteActionType,
+  type DataDeleteOptions,
+  type GdprLegalBasis,
+  protectContractAction,
+  protectContractExecution,
+  type ContractActionType,
+  type ContractActionOptions,
+  protectPricingAction,
+  protectPricingRule,
+  type PricingActionType,
+  type PricingActionOptions,
 } from "./verticals/index.js";
 
 /**
@@ -796,6 +822,11 @@ const atlasent = {
   deployV2Gate: protectDeploymentV2,
   behaviorEventGate: protectBehaviorEvent,
   infraGate: protectInfraAction,
+  hrGate: protectHrOffboard,
+  modelGovernanceGate: protectModelPromotion,
+  dataDeleteGate: protectCustomerDataDelete,
+  contractGate: protectContractExecution,
+  pricingGate: protectPricingRule,
 } as const;
 
 export default atlasent;
