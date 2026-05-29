@@ -6,6 +6,15 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.13.0 (2026-05-29)
+
+### Added
+
+- Added Phase 4+5+6 protected action verticals (HR, model governance, data
+  delete, contract, pricing, security, access-cert, financial-close, database).
+
+---
+
 ## @atlasent/sdk 2.12.0 (2026-05-28)
 
 ### New features

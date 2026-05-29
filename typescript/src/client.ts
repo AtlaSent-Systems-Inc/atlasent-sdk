@@ -190,7 +190,7 @@ import {
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const SDK_VERSION = "2.10.0";
+const SDK_VERSION = "2.13.0";
 
 /**
  * Guard flag: emit the browser-environment warning at most once per

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.14.0 -- 2026-05-29 -- Phase 4+5+6 protected-action verticals
+
+### Added
+
+- Added Phase 4+5+6 protected action verticals (HR, model governance, data
+  delete, contract, pricing, security, access-cert, financial-close, database).
+
+---
+
 ## 2.13.0 -- 2026-05-28 -- Trust-root V1 (vendor snapshot, background refresh, fail-closed expiry)
 
 ### Added
