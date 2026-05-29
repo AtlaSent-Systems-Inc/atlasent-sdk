@@ -50,6 +50,10 @@ import atlasent, {
   protectCustomerDataDelete,
   protectContractExecution,
   protectPricingRule,
+  protectSecurityIncidentEscalate,
+  protectSecurityAccessQuarantine,
+  protectAccessCertRevoke,
+  protectPeriodCloseCertify,
 } from "../src/index.js";
 import { __resetSharedClientForTests } from "../src/protect.js";
 
@@ -1505,6 +1509,421 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
       });
       expect(permit.permitId).toBe("dec_pricing_discount_approve");
       expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── protectSecurityIncidentEscalate — 4-path contract ───────────────────────────────────
+  describe("protectSecurityIncidentEscalate — security.incident.escalate — deny + allow+ok paths", () => {
+    const incidentOpts = {
+      incidentId: "INC-2026-CRIT-001",
+      severity: "critical" as const,
+      authorizedBy: "soc:lead-alice",
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("security.incident.escalate")),
+      ]);
+      configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectSecurityIncidentEscalate(incidentOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("security.incident.escalate")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectSecurityIncidentEscalate(incidentOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("security.incident.escalate")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+      const permit = await protectSecurityIncidentEscalate(incidentOpts);
+
+      expect(permit.permitId).toBe("dec_security_incident_escalate");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_security_incident_escalate");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("security.incident.escalate")),
+      ]);
+      configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+      try {
+        await protectSecurityIncidentEscalate(incidentOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+
+    it("throws TypeError when incidentId is missing", async () => {
+      configure({ apiKey: "ask_test_security" });
+      const { incidentId: _dropped, ...optsNoId } = incidentOpts;
+      await expect(
+        protectSecurityIncidentEscalate(optsNoId as Parameters<typeof protectSecurityIncidentEscalate>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("throws TypeError when severity is missing", async () => {
+      configure({ apiKey: "ask_test_security" });
+      const { severity: _dropped, ...optsNoSeverity } = incidentOpts;
+      await expect(
+        protectSecurityIncidentEscalate(optsNoSeverity as Parameters<typeof protectSecurityIncidentEscalate>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("security.access.quarantine: deny — mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("security.access.quarantine")),
+      ]);
+      configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectSecurityAccessQuarantine({
+          targetId: "user:bad-actor-99",
+          quarantineReason: "suspected credential compromise",
+          authorizedBy: "soc:lead-alice",
+        });
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it("security.access.quarantine: allow + verify ok returns permit", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("security.access.quarantine")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_security", fetch: fetchImpl });
+
+      const permit = await protectSecurityAccessQuarantine({
+        targetId: "user:bad-actor-99",
+        quarantineReason: "suspected credential compromise",
+        authorizedBy: "soc:lead-alice",
+      });
+      expect(permit.permitId).toBe("dec_security_access_quarantine");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it("security.access.quarantine: throws TypeError when targetId is missing", async () => {
+      configure({ apiKey: "ask_test_security" });
+      await expect(
+        protectSecurityAccessQuarantine({
+          quarantineReason: "suspected compromise",
+          authorizedBy: "soc:lead",
+        } as Parameters<typeof protectSecurityAccessQuarantine>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("security.access.quarantine: throws TypeError when quarantineReason is missing", async () => {
+      configure({ apiKey: "ask_test_security" });
+      await expect(
+        protectSecurityAccessQuarantine({
+          targetId: "user:target",
+          authorizedBy: "soc:lead",
+        } as Parameters<typeof protectSecurityAccessQuarantine>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+  });
+
+  // ── protectAccessCertRevoke — 4-path contract ───────────────────────────────────────────
+  describe("protectAccessCertRevoke — access.cert.revoke — deny + allow+ok paths", () => {
+    const certOpts = {
+      certId: "cert:2026-Q2-ENG-42",
+      revocationReason: "access no longer required post-project",
+      authorizedBy: "iam:security-admin",
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("access.cert.revoke")),
+      ]);
+      configure({ apiKey: "ask_test_cert", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectAccessCertRevoke(certOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("access.cert.revoke")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_cert", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectAccessCertRevoke(certOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("access.cert.revoke")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_cert", fetch: fetchImpl });
+
+      const permit = await protectAccessCertRevoke(certOpts);
+
+      expect(permit.permitId).toBe("dec_access_cert_revoke");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_access_cert_revoke");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("access.cert.revoke")),
+      ]);
+      configure({ apiKey: "ask_test_cert", fetch: fetchImpl });
+
+      try {
+        await protectAccessCertRevoke(certOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+
+    it("throws TypeError when certId is missing", async () => {
+      configure({ apiKey: "ask_test_cert" });
+      const { certId: _dropped, ...optsNoCert } = certOpts;
+      await expect(
+        protectAccessCertRevoke(optsNoCert as Parameters<typeof protectAccessCertRevoke>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("throws TypeError when revocationReason is missing", async () => {
+      configure({ apiKey: "ask_test_cert" });
+      const { revocationReason: _dropped, ...optsNoReason } = certOpts;
+      await expect(
+        protectAccessCertRevoke(optsNoReason as Parameters<typeof protectAccessCertRevoke>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+  });
+
+  // ── protectPeriodCloseCertify — 4-path contract ──────────────────────────────────────────
+  describe("protectPeriodCloseCertify — period.close.certify — deny + allow+ok paths", () => {
+    const closeOpts = {
+      periodId: "2026-Q1",
+      certifiedBy: "controller:jane",
+      financialController: "fc:bob",
+    };
+
+    it("deny: throws AtlaSentDeniedError, mutation unreachable", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("period.close.certify")),
+      ]);
+      configure({ apiKey: "ask_test_close", fetch: fetchImpl });
+
+      const mutationSpy = vi.fn();
+      let caught: unknown;
+      try {
+        const permit = await protectPeriodCloseCertify(closeOpts);
+        mutationSpy(permit);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(mutationSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(NON_VERIFIED_OUTCOMES)(
+      "allow + verify '%s': throws AtlaSentDeniedError; mutation unreachable",
+      async (verifyOutcome) => {
+        const fetchImpl = mockFetchSequence([
+          jsonResponse(allowEvaluateWire("period.close.certify")),
+          jsonResponse({
+            verified: false,
+            outcome: verifyOutcome,
+            permit_hash: "permit_hash_x",
+            timestamp: "2026-05-19T12:00:01Z",
+          }),
+        ]);
+        configure({ apiKey: "ask_test_close", fetch: fetchImpl });
+
+        const mutationSpy = vi.fn();
+        let caught: unknown;
+        try {
+          const permit = await protectPeriodCloseCertify(closeOpts);
+          mutationSpy(permit);
+        } catch (err) {
+          caught = err;
+        }
+
+        expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = caught as AtlaSentDeniedError;
+        expect(denied.decision).toBe("deny");
+        expect(denied.outcome).toBe(verifyOutcome);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(mutationSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    it("allow + verify ok: returns permit, both endpoints called once", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("period.close.certify")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_close", fetch: fetchImpl });
+
+      const permit = await protectPeriodCloseCertify(closeOpts);
+
+      expect(permit.permitId).toBe("dec_period_close_certify");
+      expect(permit.permitHash).toBe("permit_hash_ok");
+      expect(permit.auditHash).toBe("audit_period_close_certify");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      const [evalUrl] = fetchImpl.mock.calls[0]!;
+      const [verifyUrl] = fetchImpl.mock.calls[1]!;
+      expect(String(evalUrl)).toContain("/v1-evaluate");
+      expect(String(verifyUrl)).toContain("/v1-verify-permit");
+    });
+
+    it("preserves audit hash on deny so caller can correlate", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("period.close.certify")),
+      ]);
+      configure({ apiKey: "ask_test_close", fetch: fetchImpl });
+
+      try {
+        await protectPeriodCloseCertify(closeOpts);
+        throw new Error("protect() returned on deny — bypass detected");
+      } catch (err) {
+        expect(err).toBeInstanceOf(AtlaSentDeniedError);
+        const denied = err as AtlaSentDeniedError;
+        expect(denied.auditHash).toBeTruthy();
+        expect(denied.evaluationId).toBeTruthy();
+      }
+    });
+
+    it("throws TypeError when periodId is missing", async () => {
+      configure({ apiKey: "ask_test_close" });
+      const { periodId: _dropped, ...optsNoPeriod } = closeOpts;
+      await expect(
+        protectPeriodCloseCertify(optsNoPeriod as Parameters<typeof protectPeriodCloseCertify>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("throws TypeError when certifiedBy is missing", async () => {
+      configure({ apiKey: "ask_test_close" });
+      const { certifiedBy: _dropped, ...optsNoCert } = closeOpts;
+      await expect(
+        protectPeriodCloseCertify(optsNoCert as Parameters<typeof protectPeriodCloseCertify>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+
+    it("throws TypeError when financialController is missing", async () => {
+      configure({ apiKey: "ask_test_close" });
+      const { financialController: _dropped, ...optsNoFC } = closeOpts;
+      await expect(
+        protectPeriodCloseCertify(optsNoFC as Parameters<typeof protectPeriodCloseCertify>[0]),
+      ).rejects.toThrow(TypeError);
     });
   });
 

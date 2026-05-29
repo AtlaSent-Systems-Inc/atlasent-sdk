@@ -75,6 +75,10 @@ import {
   protectCustomerDataDelete,
   protectContractExecution,
   protectPricingRule,
+  protectSecurityIncidentEscalate,
+  protectSecurityAccessQuarantine,
+  protectAccessCertRevoke,
+  protectPeriodCloseCertify,
 } from "./verticals/index.js";
 
 export { AtlaSentClient } from "./client.js";
@@ -787,6 +791,19 @@ export {
   protectPricingRule,
   type PricingActionType,
   type PricingActionOptions,
+  protectSecurityAction,
+  protectSecurityIncidentEscalate,
+  protectSecurityAccessQuarantine,
+  type SecurityActionType,
+  type SecurityActionOptions,
+  protectAccessCertAction,
+  protectAccessCertRevoke,
+  type AccessCertActionType,
+  type AccessCertOptions,
+  protectFinancialCloseAction,
+  protectPeriodCloseCertify,
+  type FinancialCloseActionType,
+  type FinancialCloseOptions,
 } from "./verticals/index.js";
 
 /**
@@ -827,6 +844,9 @@ const atlasent = {
   dataDeleteGate: protectCustomerDataDelete,
   contractGate: protectContractExecution,
   pricingGate: protectPricingRule,
+  securityGate: protectSecurityIncidentEscalate,
+  accessCertGate: protectAccessCertRevoke,
+  financialCloseGate: protectPeriodCloseCertify,
 } as const;
 
 export default atlasent;
