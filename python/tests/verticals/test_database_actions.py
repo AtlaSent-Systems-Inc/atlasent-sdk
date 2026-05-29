@@ -351,3 +351,24 @@ class TestDatabaseTableDelete:
         assert ev.action == "database.table.delete"
         assert ev.database_id == "db:prod"
         assert ev.evaluation_id == "eval_table_deny"
+
+    def test_migration_denial_without_callback_reraises(self) -> None:
+        """Denial without on_denial_evidence still re-raises AtlaSentDeniedError."""
+        denied_exc = AtlaSentDeniedError(
+            decision="deny",
+            evaluation_id="eval_no_cb",
+            reason="denied",
+        )
+        with patch(
+            "atlasent.verticals.database_actions.protect",
+            side_effect=denied_exc,
+        ):
+            with pytest.raises(AtlaSentDeniedError):
+                protect_database_migration(
+                    database_id="db:staging",
+                    authorized_by="dba:test",
+                    environment="staging",
+                    migration_id="m-nocb",
+                    migration_checksum="sha256:nocb",
+                    # on_denial_evidence deliberately omitted
+                )

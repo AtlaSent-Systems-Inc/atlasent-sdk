@@ -581,3 +581,17 @@ class TestPricingActions:
         ) as mock_protect:
             protect_pricing_rule("rule-y", "pricing-bot", change_pct=2.0)
         assert mock_protect.call_args.kwargs["action"] == "pricing.rule.publish"
+
+    def test_unknown_action_fails_closed(self) -> None:
+        """Unknown action type falls through to the else branch — fail-closed."""
+        with patch(
+            "atlasent.verticals.pricing_actions.protect", return_value=MagicMock()
+        ) as mock_protect:
+            protect_pricing_action(
+                "pricing.unknown.action",  # type: ignore[arg-type]
+                rule_id="rule-z",
+                authorized_by="pricing-bot",
+            )
+        ctx = mock_protect.call_args.kwargs["context"]
+        assert ctx["machine_executable"] is False
+        assert ctx["risk_level"] == "high"
