@@ -124,3 +124,16 @@ export {
   type FinancialCloseActionType,
   type FinancialCloseOptions,
 } from "./financialClose.js";
+
+export {
+  protectDatabaseAction,
+  protectDatabaseMigration,
+  protectDatabaseSchemaDrop,
+  protectDatabaseTableDelete,
+  type DatabaseMigrationActionType,
+  type DatabaseDestructiveActionType,
+  type DatabaseActionType,
+  type PermitEvidence,
+  type DenialEvidence,
+  type DatabaseActionOptions,
+} from "./databaseActions.js";
