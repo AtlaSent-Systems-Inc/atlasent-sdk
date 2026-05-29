@@ -25,12 +25,28 @@ Phase 5 clusters
 - :mod:`atlasent.verticals.access_cert` — Access certificate revocation.
 - :mod:`atlasent.verticals.financial_close` — Financial period-close
   certification.
+
+Phase 6 clusters
+----------------
+- :mod:`atlasent.verticals.database_actions` — Database migration apply,
+  schema drop, and table delete with evidence callbacks.
 """
 
 from .access_cert import (
     AccessCertActionType,
     protect_access_cert_action,
     protect_access_cert_revoke,
+)
+from .database_actions import (
+    DatabaseActionType,
+    DatabaseDestructiveActionType,
+    DatabaseMigrationActionType,
+    DenialEvidence,
+    PermitEvidence,
+    protect_database_action,
+    protect_database_migration,
+    protect_database_schema_drop,
+    protect_database_table_delete,
 )
 from .contract_actions import (
     ContractActionType,
@@ -107,4 +123,14 @@ __all__ = [
     "FinancialCloseActionType",
     "protect_financial_close_action",
     "protect_period_close_certify",
+    # Database actions
+    "DatabaseActionType",
+    "DatabaseDestructiveActionType",
+    "DatabaseMigrationActionType",
+    "DenialEvidence",
+    "PermitEvidence",
+    "protect_database_action",
+    "protect_database_migration",
+    "protect_database_schema_drop",
+    "protect_database_table_delete",
 ]

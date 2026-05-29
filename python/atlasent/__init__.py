@@ -311,6 +311,12 @@ from .verticals.financial_close import (
     protect_financial_close_action,
     protect_period_close_certify,
 )
+from .verticals.database_actions import (
+    protect_database_action,
+    protect_database_migration,
+    protect_database_schema_drop,
+    protect_database_table_delete,
+)
 
 #: Canonical Deploy Gate V1 protected action. Mirrors the TypeScript
 #: SDK's ``PRODUCTION_DEPLOY_ACTION``. Use this string (or the constant)
@@ -577,4 +583,9 @@ __all__ = [
     "protect_access_cert_revoke",
     "protect_financial_close_action",
     "protect_period_close_certify",
+    # Phase 6: database actions.
+    "protect_database_action",
+    "protect_database_migration",
+    "protect_database_schema_drop",
+    "protect_database_table_delete",
 ]

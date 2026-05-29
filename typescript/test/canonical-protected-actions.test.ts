@@ -38,6 +38,7 @@ import {
 import atlasent, {
   AtlaSentDeniedError,
   configure,
+  configureApprovalRuntime,
   type CloseActionType,
   protectDataExport,
   protectBatchRecordRelease,
@@ -54,6 +55,9 @@ import atlasent, {
   protectSecurityAccessQuarantine,
   protectAccessCertRevoke,
   protectPeriodCloseCertify,
+  protectDatabaseMigration,
+  protectDatabaseSchemaDrop,
+  protectDatabaseTableDelete,
 } from "../src/index.js";
 import { __resetSharedClientForTests } from "../src/protect.js";
 
@@ -1923,6 +1927,310 @@ describe("canonical protected actions — non-bypassable execution rule", () => 
       const { financialController: _dropped, ...optsNoFC } = closeOpts;
       await expect(
         protectPeriodCloseCertify(optsNoFC as Parameters<typeof protectPeriodCloseCertify>[0]),
+      ).rejects.toThrow(TypeError);
+    });
+  });
+
+  // ── database actions ─────────────────────────────────────────────────────────
+  describe("database actions — evidence callbacks + validation", () => {
+    // Shared HITL wire shapes
+    const HITL_ESCALATION_BASE = {
+      id: "escl_db_001",
+      org_id: "org_1",
+      agent_id: "agent_1",
+      sandbox_run_id: null,
+      status: "pending",
+      escalation_reason: "test",
+      proposed_action: null,
+      risk_score: null,
+      assigned_to_user_id: null,
+      assigned_to_role: "database-admin",
+      resolved_by: null,
+      resolution_note: null,
+      auto_approved_reason: null,
+      resolved_at: null,
+      timeout_at: null,
+      created_at: "2026-05-29T00:00:00Z",
+      quorum_required: "two_thirds",
+      min_approvers: 2,
+      approver_pool_size: 3,
+      escalation_depth: 0,
+      max_escalation_depth: 3,
+      fallback_decision: "reject",
+      governance_advisory_id: null,
+      expired_reason: null,
+      metadata: null,
+    };
+
+    const HITL_APPROVED = {
+      ...HITL_ESCALATION_BASE,
+      status: "approved",
+      resolved_by: "db-admin:alice",
+      resolution_note: "approved for maintenance window",
+      resolved_at: "2026-05-29T02:00:00Z",
+    };
+
+    // (1) Deny path: database.migration.apply → AtlaSentDeniedError, onDenialEvidence called
+    it("deny path: database.migration.apply → AtlaSentDeniedError, onDenialEvidence called", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("database.migration.apply")),
+      ]);
+      configure({ apiKey: "ask_test_db", fetch: fetchImpl });
+
+      const denialSpy = vi.fn();
+      const permitSpy = vi.fn();
+
+      let caught: unknown;
+      try {
+        await protectDatabaseMigration({
+          databaseId: "db:prod-main",
+          authorizedBy: "dba:bob",
+          environment: "production",
+          migrationId: "m-2026-001",
+          migrationChecksum: "sha256:abc123",
+          rollbackPlan: "restore from snapshot snap-001",
+          onDenialEvidence: denialSpy,
+          onPermitEvidence: permitSpy,
+        });
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      const denied = caught as AtlaSentDeniedError;
+      expect(denied.decision).toBe("deny");
+      expect(denied.reason).toMatch(/policy denied/);
+
+      // denial evidence callback must have fired
+      expect(denialSpy).toHaveBeenCalledTimes(1);
+      const evidence = denialSpy.mock.calls[0]![0];
+      expect(evidence.action).toBe("database.migration.apply");
+      expect(evidence.databaseId).toBe("db:prod-main");
+      expect(evidence.authorizedBy).toBe("dba:bob");
+      expect(evidence.denialReason).toBeTruthy();
+      expect(evidence.timestamp).toBeTruthy();
+
+      // permit evidence must NOT have fired
+      expect(permitSpy).not.toHaveBeenCalled();
+    });
+
+    // (2) Allow path: database.migration.apply in staging → protect() called, onPermitEvidence called
+    it("allow path: database.migration.apply in staging → protect() path, onPermitEvidence called", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(allowEvaluateWire("database.migration.apply")),
+        jsonResponse(VERIFY_OK_WIRE),
+      ]);
+      configure({ apiKey: "ask_test_db", fetch: fetchImpl });
+
+      const permitSpy = vi.fn();
+      const denialSpy = vi.fn();
+
+      const permit = await protectDatabaseMigration({
+        databaseId: "db:staging",
+        authorizedBy: "dba:alice",
+        environment: "staging",
+        migrationId: "m-2026-002",
+        migrationChecksum: "sha256:def456",
+        onPermitEvidence: permitSpy,
+        onDenialEvidence: denialSpy,
+      });
+
+      expect(permit.permitId).toBe("dec_database_migration_apply");
+      // Only 2 HTTP calls: evaluate + verify (no HITL for staging)
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+      expect(permitSpy).toHaveBeenCalledTimes(1);
+      const evidence = permitSpy.mock.calls[0]![0];
+      expect(evidence.action).toBe("database.migration.apply");
+      expect(evidence.databaseId).toBe("db:staging");
+      expect(evidence.authorizedBy).toBe("dba:alice");
+      expect(evidence.permitToken).toBeTruthy();
+      expect(evidence.timestamp).toBeTruthy();
+
+      expect(denialSpy).not.toHaveBeenCalled();
+    });
+
+    // (3) Allow path: database.schema.drop → escalation created, onPermitEvidence called
+    it("allow path: database.schema.drop → HITL escalation, onPermitEvidence called", async () => {
+      // protect() returns hold → HITL created → approved
+      const fetchImpl = mockFetchSequence([
+        jsonResponse({
+          decision: "hold",
+          permit_token: "dec_hold_schema_drop",
+          reason: "Policy hold — awaiting approval",
+          audit_hash: "ah_hold",
+          timestamp: "2026-05-29T00:00:00Z",
+        }),
+      ]);
+      configure({ apiKey: "ask_test_db", fetch: fetchImpl });
+      configureApprovalRuntime({ apiKey: "ask_test_db", baseUrl: "https://api.atlasent.io" });
+
+      // HITL calls go through globalThis.fetch (after configure overrides protect-fetch)
+      const globalFetchSpy = vi.fn(async (input: string | URL) => {
+        const u = input.toString();
+        if (u.includes("/v1/hitl")) {
+          return jsonResponse({ ...HITL_ESCALATION_BASE });
+        }
+        if (u.includes("/v1/escalations")) {
+          return jsonResponse(HITL_APPROVED);
+        }
+        throw new Error(`Unexpected URL in test: ${u}`);
+      });
+      globalThis.fetch = globalFetchSpy as unknown as typeof globalThis.fetch;
+
+      const escalationHandleSpy = vi.fn();
+      const permitSpy = vi.fn();
+
+      const permit = await protectDatabaseSchemaDrop({
+        databaseId: "db:prod",
+        authorizedBy: "dba:charlie",
+        environment: "production",
+        schemaName: "public",
+        backupVerified: true,
+        recoveryPointId: "snap-20260529",
+        onEscalationCreated: escalationHandleSpy,
+        onPermitEvidence: permitSpy,
+        pollIntervalMs: 10,
+        waitMs: 5_000,
+      } as Parameters<typeof protectDatabaseSchemaDrop>[0] & {
+        pollIntervalMs?: number;
+      });
+
+      expect(permit).toBeDefined();
+
+      // escalation created callback
+      expect(escalationHandleSpy).toHaveBeenCalledTimes(1);
+      const handle = escalationHandleSpy.mock.calls[0]![0];
+      expect(handle.escalationId).toBeTruthy();
+
+      // permit evidence callback
+      expect(permitSpy).toHaveBeenCalledTimes(1);
+      const evidence = permitSpy.mock.calls[0]![0];
+      expect(evidence.action).toBe("database.schema.drop");
+      expect(evidence.databaseId).toBe("db:prod");
+      expect(evidence.authorizedBy).toBe("dba:charlie");
+      expect(evidence.permitToken).toBeTruthy();
+      expect(evidence.timestamp).toBeTruthy();
+    });
+
+    // (3b) Deny path in staging (machineExecutable branch): onDenialEvidence called
+    it("deny path: database.migration.apply in staging → onDenialEvidence called via protect() path", async () => {
+      const fetchImpl = mockFetchSequence([
+        jsonResponse(denyEvaluateWire("database.migration.apply")),
+      ]);
+      configure({ apiKey: "ask_test_db", fetch: fetchImpl });
+
+      const denialSpy = vi.fn();
+
+      let caught: unknown;
+      try {
+        const { protectDatabaseAction } = await import(
+          "../src/verticals/databaseActions.js"
+        );
+        await protectDatabaseAction({
+          action: "database.migration.apply",
+          databaseId: "db:staging-deny",
+          authorizedBy: "dba:test",
+          environment: "staging",
+          migrationId: "m-deny-001",
+          migrationChecksum: "sha256:deny",
+          onDenialEvidence: denialSpy,
+        });
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(AtlaSentDeniedError);
+      expect(denialSpy).toHaveBeenCalledTimes(1);
+      const evidence = denialSpy.mock.calls[0]![0];
+      expect(evidence.action).toBe("database.migration.apply");
+      expect(evidence.denialReason).toBeTruthy();
+    });
+
+    // (3c) TypeError: database.table.delete missing tableName
+    it("TypeError: database.table.delete without tableName", async () => {
+      configure({ apiKey: "ask_test_db" });
+      const { protectDatabaseAction } = await import(
+        "../src/verticals/databaseActions.js"
+      );
+      await expect(
+        protectDatabaseAction({
+          action: "database.table.delete",
+          databaseId: "db:prod",
+          authorizedBy: "dba:test",
+          environment: "production",
+          // tableName deliberately omitted
+          backupVerified: true,
+          recoveryPointId: "snap-001",
+        }),
+      ).rejects.toThrow(TypeError);
+    });
+
+    // (3d) TypeError: database.table.delete with backupVerified: false
+    it("TypeError: database.table.delete with backupVerified: false", async () => {
+      configure({ apiKey: "ask_test_db" });
+      const { protectDatabaseAction } = await import(
+        "../src/verticals/databaseActions.js"
+      );
+      await expect(
+        protectDatabaseAction({
+          action: "database.table.delete",
+          databaseId: "db:prod",
+          authorizedBy: "dba:test",
+          environment: "production",
+          tableName: "sessions",
+          backupVerified: false,
+          recoveryPointId: "snap-001",
+        }),
+      ).rejects.toThrow(TypeError);
+    });
+
+    // (4) TypeError: database.schema.drop without backupVerified: true
+    it("TypeError: database.schema.drop without backupVerified: true", async () => {
+      configure({ apiKey: "ask_test_db" });
+      await expect(
+        protectDatabaseSchemaDrop({
+          databaseId: "db:prod",
+          authorizedBy: "dba:test",
+          environment: "production",
+          schemaName: "public",
+          backupVerified: false as true, // deliberately wrong
+          recoveryPointId: "snap-001",
+        }),
+      ).rejects.toThrow(TypeError);
+    });
+
+    // (5) TypeError: database.migration.apply in production without rollbackPlan
+    it("TypeError: database.migration.apply in production without rollbackPlan", async () => {
+      configure({ apiKey: "ask_test_db" });
+      await expect(
+        protectDatabaseMigration({
+          databaseId: "db:prod",
+          authorizedBy: "dba:test",
+          environment: "production",
+          migrationId: "m-001",
+          migrationChecksum: "sha256:abc",
+          // rollbackPlan deliberately omitted
+        }),
+      ).rejects.toThrow(TypeError);
+    });
+
+    // (6) TypeError: database.table.delete without recoveryPointId
+    it("TypeError: database.table.delete without recoveryPointId", async () => {
+      configure({ apiKey: "ask_test_db" });
+      const { protectDatabaseAction: fn } = await import(
+        "../src/verticals/databaseActions.js"
+      );
+      await expect(
+        fn({
+          action: "database.table.delete",
+          databaseId: "db:prod",
+          authorizedBy: "dba:test",
+          environment: "production",
+          tableName: "users",
+          backupVerified: true,
+          // recoveryPointId deliberately omitted
+        }),
       ).rejects.toThrow(TypeError);
     });
   });
