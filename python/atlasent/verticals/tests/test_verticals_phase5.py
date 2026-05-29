@@ -25,7 +25,6 @@ from atlasent.verticals.security_actions import (
     protect_security_incident_escalate,
 )
 
-
 # ---------------------------------------------------------------------------
 # Security actions
 # ---------------------------------------------------------------------------
@@ -37,7 +36,9 @@ class TestSecurityActions:
     def test_protect_security_incident_escalate_happy_path(self) -> None:
         """security.incident.escalate sets correct critical context."""
         mock_permit = MagicMock()
-        with patch("atlasent.verticals.security_actions.protect", return_value=mock_permit) as mock_protect:
+        with patch(
+            "atlasent.verticals.security_actions.protect", return_value=mock_permit
+        ) as mock_protect:
             result = protect_security_incident_escalate(
                 incident_id="inc-001",
                 severity="critical",
@@ -51,13 +52,21 @@ class TestSecurityActions:
         assert call_kwargs["context"]["fail_closed"] is True
         assert call_kwargs["context"]["incident_id"] == "inc-001"
         assert call_kwargs["context"]["severity"] == "critical"
-        assert call_kwargs["context"]["hitl_escalation"]["assigned_to_role"] == "security-approver"
-        assert call_kwargs["context"]["hitl_escalation"]["quorum_required"] == "simple_majority"
+        assert (
+            call_kwargs["context"]["hitl_escalation"]["assigned_to_role"]
+            == "security-approver"
+        )
+        assert (
+            call_kwargs["context"]["hitl_escalation"]["quorum_required"]
+            == "simple_majority"
+        )
         assert result is mock_permit
 
     def test_protect_security_incident_escalate_1h_wait(self) -> None:
         """Default wait_ms for security incidents is 1 hour (3600000 ms)."""
-        with patch("atlasent.verticals.security_actions.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.security_actions.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_security_incident_escalate(
                 incident_id="inc-002",
                 severity="high",
@@ -100,7 +109,9 @@ class TestSecurityActions:
     def test_protect_security_incident_all_valid_severities(self) -> None:
         """All valid severity values are accepted."""
         for sev in ("low", "medium", "high", "critical"):
-            with patch("atlasent.verticals.security_actions.protect", return_value=MagicMock()):
+            with patch(
+                "atlasent.verticals.security_actions.protect", return_value=MagicMock()
+            ):
                 protect_security_incident_escalate(
                     incident_id=f"inc-{sev}",
                     severity=sev,  # type: ignore[arg-type]
@@ -110,7 +121,9 @@ class TestSecurityActions:
     def test_protect_security_access_quarantine_happy_path(self) -> None:
         """security.access.quarantine sets correct context."""
         mock_permit = MagicMock()
-        with patch("atlasent.verticals.security_actions.protect", return_value=mock_permit) as mock_protect:
+        with patch(
+            "atlasent.verticals.security_actions.protect", return_value=mock_permit
+        ) as mock_protect:
             result = protect_security_access_quarantine(
                 target_id="user-suspect",
                 quarantine_reason="Anomalous data exfiltration detected",
@@ -120,7 +133,10 @@ class TestSecurityActions:
         assert call_kwargs["action"] == "security.access.quarantine"
         assert call_kwargs["context"]["machine_executable"] is False
         assert call_kwargs["context"]["target_id"] == "user-suspect"
-        assert call_kwargs["context"]["quarantine_reason"] == "Anomalous data exfiltration detected"
+        assert (
+            call_kwargs["context"]["quarantine_reason"]
+            == "Anomalous data exfiltration detected"
+        )
         assert result is mock_permit
 
     def test_protect_security_quarantine_missing_target_id(self) -> None:
@@ -145,7 +161,9 @@ class TestSecurityActions:
 
     def test_protect_security_action_generic_incident(self) -> None:
         """protect_security_action routes security.incident.escalate correctly."""
-        with patch("atlasent.verticals.security_actions.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.security_actions.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_security_action(
                 "security.incident.escalate",
                 actor_id="inc-999",
@@ -157,7 +175,9 @@ class TestSecurityActions:
 
     def test_protect_security_action_custom_role(self) -> None:
         """Custom assigned_to_role overrides the default."""
-        with patch("atlasent.verticals.security_actions.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.security_actions.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_security_incident_escalate(
                 incident_id="inc-custom",
                 severity="low",
@@ -179,7 +199,9 @@ class TestAccessCert:
     def test_protect_access_cert_revoke_happy_path(self) -> None:
         """access.cert.revoke sets correct context."""
         mock_permit = MagicMock()
-        with patch("atlasent.verticals.access_cert.protect", return_value=mock_permit) as mock_protect:
+        with patch(
+            "atlasent.verticals.access_cert.protect", return_value=mock_permit
+        ) as mock_protect:
             result = protect_access_cert_revoke(
                 cert_id="cert-abc",
                 authorized_by="security-bot",
@@ -192,13 +214,21 @@ class TestAccessCert:
         assert call_kwargs["context"]["risk_level"] == "high"
         assert call_kwargs["context"]["cert_id"] == "cert-abc"
         assert call_kwargs["context"]["revocation_reason"] == "Certificate compromise"
-        assert call_kwargs["context"]["hitl_escalation"]["assigned_to_role"] == "security-approver"
-        assert call_kwargs["context"]["hitl_escalation"]["quorum_required"] == "single_approver"
+        assert (
+            call_kwargs["context"]["hitl_escalation"]["assigned_to_role"]
+            == "security-approver"
+        )
+        assert (
+            call_kwargs["context"]["hitl_escalation"]["quorum_required"]
+            == "single_approver"
+        )
         assert result is mock_permit
 
     def test_protect_access_cert_revoke_24h_wait(self) -> None:
         """Default wait_ms for cert revocation is 24 hours (86400000 ms)."""
-        with patch("atlasent.verticals.access_cert.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.access_cert.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_access_cert_revoke(
                 cert_id="cert-wait",
                 authorized_by="security-bot",
@@ -209,7 +239,9 @@ class TestAccessCert:
 
     def test_protect_access_cert_action_generic(self) -> None:
         """protect_access_cert_action with action=access.cert.revoke works."""
-        with patch("atlasent.verticals.access_cert.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.access_cert.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_access_cert_action(
                 "access.cert.revoke",
                 cert_id="cert-xyz",
@@ -220,13 +252,17 @@ class TestAccessCert:
 
     def test_protect_access_cert_machine_executable_false(self) -> None:
         """access.cert.revoke should always be machine_executable=False."""
-        with patch("atlasent.verticals.access_cert.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.access_cert.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_access_cert_revoke("cert-me", "security-bot", "Routine rotation")
         assert mock_protect.call_args.kwargs["context"]["machine_executable"] is False
 
     def test_protect_access_cert_custom_role(self) -> None:
         """Custom assigned_to_role overrides security-approver default."""
-        with patch("atlasent.verticals.access_cert.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.access_cert.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_access_cert_revoke(
                 cert_id="cert-custom",
                 authorized_by="security-bot",
@@ -238,7 +274,9 @@ class TestAccessCert:
 
     def test_protect_access_cert_convenience_delegates(self) -> None:
         """protect_access_cert_revoke delegates to protect_access_cert_action."""
-        with patch("atlasent.verticals.access_cert.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.access_cert.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_access_cert_revoke("cert-delegate", "security-bot", "Expired key")
         assert mock_protect.called
 
@@ -254,7 +292,9 @@ class TestFinancialClose:
     def test_protect_period_close_certify_happy_path(self) -> None:
         """period.close.certify sets correct critical context."""
         mock_permit = MagicMock()
-        with patch("atlasent.verticals.financial_close.protect", return_value=mock_permit) as mock_protect:
+        with patch(
+            "atlasent.verticals.financial_close.protect", return_value=mock_permit
+        ) as mock_protect:
             result = protect_period_close_certify(
                 period_id="2026-Q1",
                 authorized_by="cfo-agent",
@@ -269,14 +309,24 @@ class TestFinancialClose:
         assert call_kwargs["context"]["fail_closed"] is True
         assert call_kwargs["context"]["period_id"] == "2026-Q1"
         assert call_kwargs["context"]["certified_by"] == "cfo@example.com"
-        assert call_kwargs["context"]["financial_controller"] == "controller@example.com"
-        assert call_kwargs["context"]["hitl_escalation"]["assigned_to_role"] == "financial-controller"
-        assert call_kwargs["context"]["hitl_escalation"]["quorum_required"] == "simple_majority"
+        assert (
+            call_kwargs["context"]["financial_controller"] == "controller@example.com"
+        )
+        assert (
+            call_kwargs["context"]["hitl_escalation"]["assigned_to_role"]
+            == "financial-controller"
+        )
+        assert (
+            call_kwargs["context"]["hitl_escalation"]["quorum_required"]
+            == "simple_majority"
+        )
         assert result is mock_permit
 
     def test_protect_period_close_certify_48h_wait(self) -> None:
         """Default wait_ms for period close is 48 hours (172800000 ms)."""
-        with patch("atlasent.verticals.financial_close.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.financial_close.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_period_close_certify(
                 period_id="2026-Q2",
                 authorized_by="cfo-agent",
@@ -288,7 +338,9 @@ class TestFinancialClose:
 
     def test_protect_financial_close_action_generic(self) -> None:
         """protect_financial_close_action with action=period.close.certify works."""
-        with patch("atlasent.verticals.financial_close.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.financial_close.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_financial_close_action(
                 "period.close.certify",
                 period_id="2026-Q3",
@@ -300,7 +352,9 @@ class TestFinancialClose:
 
     def test_protect_financial_close_machine_executable_false(self) -> None:
         """period.close.certify should always be machine_executable=False."""
-        with patch("atlasent.verticals.financial_close.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.financial_close.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_period_close_certify(
                 "2026-Q4",
                 "cfo-agent",
@@ -311,7 +365,9 @@ class TestFinancialClose:
 
     def test_protect_financial_close_custom_role(self) -> None:
         """Custom assigned_to_role overrides financial-controller default."""
-        with patch("atlasent.verticals.financial_close.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.financial_close.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_period_close_certify(
                 "2027-Q1",
                 "cfo-agent",
@@ -324,7 +380,9 @@ class TestFinancialClose:
 
     def test_protect_financial_close_convenience_delegates(self) -> None:
         """protect_period_close_certify delegates to protect_financial_close_action."""
-        with patch("atlasent.verticals.financial_close.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.financial_close.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_period_close_certify(
                 "2027-Q2",
                 "cfo-agent",
@@ -335,7 +393,9 @@ class TestFinancialClose:
 
     def test_protect_financial_close_fail_closed(self) -> None:
         """period.close.certify should always have fail_closed=True."""
-        with patch("atlasent.verticals.financial_close.protect", return_value=MagicMock()) as mock_protect:
+        with patch(
+            "atlasent.verticals.financial_close.protect", return_value=MagicMock()
+        ) as mock_protect:
             protect_period_close_certify(
                 "2027-Q3",
                 "cfo-agent",

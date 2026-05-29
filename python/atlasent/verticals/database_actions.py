@@ -10,8 +10,9 @@ direct protect() path.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, Union
+from typing import Any, Literal
 
 from atlasent.authorize import protect
 from atlasent.exceptions import AtlaSentDeniedError
@@ -22,7 +23,7 @@ DatabaseDestructiveActionType = Literal[
     "database.schema.drop",
     "database.table.delete",
 ]
-DatabaseActionType = Union[DatabaseMigrationActionType, DatabaseDestructiveActionType]
+DatabaseActionType = DatabaseMigrationActionType | DatabaseDestructiveActionType
 
 
 @dataclass
@@ -104,11 +105,13 @@ def protect_database_action(
             )
         if not kwargs.get("migration_checksum"):
             raise ValueError(
-                "Database action 'database.migration.apply' requires 'migration_checksum'"
+                "Database action 'database.migration.apply' requires"
+                " 'migration_checksum'"
             )
         if environment == "production" and not kwargs.get("rollback_plan"):
             raise ValueError(
-                "Database action 'database.migration.apply' in production requires 'rollback_plan'"
+                "Database action 'database.migration.apply' in production"
+                " requires 'rollback_plan'"
             )
 
     if action == "database.schema.drop":
@@ -118,7 +121,8 @@ def protect_database_action(
             )
         if not kwargs.get("backup_verified"):
             raise ValueError(
-                "Database action 'database.schema.drop' requires 'backup_verified: True'"
+                "Database action 'database.schema.drop' requires"
+                " 'backup_verified: True'"
             )
         if not kwargs.get("recovery_point_id"):
             raise ValueError(
@@ -132,7 +136,8 @@ def protect_database_action(
             )
         if not kwargs.get("backup_verified"):
             raise ValueError(
-                "Database action 'database.table.delete' requires 'backup_verified: True'"
+                "Database action 'database.table.delete' requires"
+                " 'backup_verified: True'"
             )
         if not kwargs.get("recovery_point_id"):
             raise ValueError(

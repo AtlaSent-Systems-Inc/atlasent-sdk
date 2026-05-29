@@ -61,9 +61,7 @@ def protect_hr_action(
 
     if action == "hr.role.escalate":
         if not kwargs.get("requested_role"):
-            raise ValueError(
-                "HR action 'hr.role.escalate' requires 'requested_role'"
-            )
+            raise ValueError("HR action 'hr.role.escalate' requires 'requested_role'")
         if not kwargs.get("business_justification"):
             raise ValueError(
                 "HR action 'hr.role.escalate' requires 'business_justification'"

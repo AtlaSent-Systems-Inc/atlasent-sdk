@@ -11,7 +11,7 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -81,7 +81,7 @@ class TestDatabaseMigration:
         assert ev.timestamp  # non-empty ISO timestamp
 
     def test_migration_production_machine_executable_false(self) -> None:
-        """Migration in production sets machine_executable=False with HITL escalation."""
+        """Migration in production sets machine_executable=False with HITL."""
         mock_permit = MagicMock()
         with patch(
             "atlasent.verticals.database_actions.protect",
@@ -323,7 +323,7 @@ class TestDatabaseTableDelete:
             )
 
     def test_table_delete_denial_calls_on_denial_evidence(self) -> None:
-        """AtlaSentDeniedError from table delete is re-raised and on_denial_evidence called."""
+        """Table delete denial re-raises and calls on_denial_evidence."""
         denied_exc = AtlaSentDeniedError(
             decision="deny",
             evaluation_id="eval_table_deny",

@@ -37,6 +37,16 @@ from .access_cert import (
     protect_access_cert_action,
     protect_access_cert_revoke,
 )
+from .contract_actions import (
+    ContractActionType,
+    protect_contract_action,
+    protect_contract_execution,
+)
+from .data_delete import (
+    DataDeleteActionType,
+    GdprLegalBasis,
+    protect_customer_data_delete,
+)
 from .database_actions import (
     DatabaseActionType,
     DatabaseDestructiveActionType,
@@ -47,16 +57,6 @@ from .database_actions import (
     protect_database_migration,
     protect_database_schema_drop,
     protect_database_table_delete,
-)
-from .contract_actions import (
-    ContractActionType,
-    protect_contract_action,
-    protect_contract_execution,
-)
-from .data_delete import (
-    DataDeleteActionType,
-    GdprLegalBasis,
-    protect_customer_data_delete,
 )
 from .financial_close import (
     FinancialCloseActionType,

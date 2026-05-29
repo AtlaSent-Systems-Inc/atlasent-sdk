@@ -17,8 +17,10 @@ PricingActionType = Literal[
 ]
 
 # Thresholds
-_RULE_PUBLISH_AUTO_THRESHOLD = 5.0   # change_pct < 5 → machine_executable
-_DISCOUNT_MEDIUM_THRESHOLD = 10.0    # discount_pct < 10 → medium risk + machine_executable
+_RULE_PUBLISH_AUTO_THRESHOLD = 5.0  # change_pct < 5 → machine_executable
+_DISCOUNT_MEDIUM_THRESHOLD = (
+    10.0  # discount_pct < 10 → medium risk + machine_executable
+)
 
 
 def protect_pricing_action(
