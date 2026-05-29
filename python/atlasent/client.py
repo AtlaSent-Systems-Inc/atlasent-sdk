@@ -263,6 +263,11 @@ class AtlaSentClient:
         amount: float | None = None,
         approval: ApprovalReference | dict[str, Any] | None = None,
         require_approval: bool | None = None,
+        environment: str | None = None,
+        resource: dict[str, Any] | None = None,
+        current_state: dict[str, Any] | None = None,
+        proposed_state: dict[str, Any] | None = None,
+        execution_binding: dict[str, Any] | None = None,
     ) -> EvaluateResult:
         ctx = context or {}
         if isinstance(approval, dict):
@@ -285,6 +290,11 @@ class AtlaSentClient:
             amount=amount,
             approval=approval,
             require_approval=require_approval,
+            environment=environment,
+            resource=resource,
+            current_state=current_state,
+            proposed_state=proposed_state,
+            execution_binding=execution_binding,
         )
         logger.debug("evaluate action=%r actor=%r", action_type, actor_id)
         data, rate_limit, request_id = self._post(

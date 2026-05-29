@@ -104,6 +104,32 @@
         }
       }
     },
+    "risk_class": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "Resolved risk class from the evaluation. Present when the risk envelope assigns a class."
+    },
+    "authority_basis": {
+      "type": "object",
+      "description": "Why this permit was issued — the authority kind and a reference to the authorizing entity.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["policy", "approval", "emergency", "maintenance_window", "delegation", "quorum"],
+          "description": "Authority class that authorized the action."
+        },
+        "reference": { "type": "string", "description": "ID of the authorizing entity (policy id, approval id, override id, escalation id, etc.)." },
+        "granted_by": { "type": "string", "description": "Actor id who explicitly granted the authority." },
+        "rationale": { "type": "string", "description": "Human-readable explanation for the authority grant." },
+        "expires_at": { "type": "string", "description": "ISO 8601 timestamp at which the authority itself expires (if bounded)." }
+      }
+    },
+    "escalation_id": {
+      "type": "string",
+      "description": "Present iff decision == 'hold'. ID of the HITL escalation auto-created by the control plane. Poll GET /v1/escalations/{id} for resolution."
+    },
     "permit": {
       "type": "object",
       "description": "Wire-format PermitV2 body. Returned alongside `permit_token` when the legacy v1 surface is upgraded to V2. The `approval` sub-block is the cryptographic linkage to the approval artifact verified at evaluate time.",
