@@ -1008,3 +1008,14 @@ export {
   type AccessGovernanceLogQuery,
   type AccessGovernanceLogSubClient,
 } from "./access-governance-log.js";
+
+// ── Delta VQP — AI re-derivation audit (service-role server-side client) ────────────────────────────────
+export {
+  VQPClient,
+  type VqpVerdict,
+  type VQPClientOptions,
+  type VQPGenerateInput,
+  type VQPGenerateResponse,
+  type VQPVerifyInput,
+  type VQPVerifyResponse,
+} from "./vqp.js";
