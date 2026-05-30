@@ -276,6 +276,45 @@ from .v2_endpoints import (
     evaluate_many,
     graphql,
 )
+from .verticals.access_cert import (
+    protect_access_cert_action,
+    protect_access_cert_revoke,
+)
+from .verticals.contract_actions import (
+    protect_contract_action,
+    protect_contract_execution,
+)
+from .verticals.data_delete import protect_customer_data_delete
+from .verticals.database_actions import (
+    protect_database_action,
+    protect_database_migration,
+    protect_database_schema_drop,
+    protect_database_table_delete,
+)
+from .verticals.financial_close import (
+    protect_financial_close_action,
+    protect_period_close_certify,
+)
+
+# Verticals — domain-specific protect() convenience wrappers.
+from .verticals.hr_actions import (
+    protect_hr_action,
+    protect_hr_offboard,
+    protect_hr_role_escalate,
+)
+from .verticals.model_governance import (
+    protect_model_governance,
+    protect_model_promotion,
+)
+from .verticals.pricing_actions import (
+    protect_pricing_action,
+    protect_pricing_rule,
+)
+from .verticals.security_actions import (
+    protect_security_access_quarantine,
+    protect_security_action,
+    protect_security_incident_escalate,
+)
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
 
@@ -345,6 +384,7 @@ __all__ = [
     "BundleVerificationError",
     "PermissionDeniedError",
     "PermitOutcome",
+    "BundleVerificationError",
     "ConfigurationError",
     "RateLimitError",
     "StreamTimeoutError",
@@ -516,11 +556,36 @@ __all__ = [
     "list_evidence_exports",
     "get_evidence_export",
     "create_evidence_export",
-    # Trust root helpers (Wave C parity).
+    # Trust-root V1 (bootstrap + snapshot management).
     "TrustRootKey",
     "TrustRootManager",
     "TrustRootRevocationEntry",
     "TrustRootSnapshot",
     "get_global_trust_root_manager",
     "_set_global_trust_root_manager_for_tests",
+    # Verticals — domain-specific protect() convenience wrappers.
+    # Phase 4: HR, model governance, data delete, contract, pricing.
+    "protect_hr_action",
+    "protect_hr_offboard",
+    "protect_hr_role_escalate",
+    "protect_model_governance",
+    "protect_model_promotion",
+    "protect_customer_data_delete",
+    "protect_contract_action",
+    "protect_contract_execution",
+    "protect_pricing_action",
+    "protect_pricing_rule",
+    # Phase 5: security, access-cert, financial-close.
+    "protect_security_action",
+    "protect_security_incident_escalate",
+    "protect_security_access_quarantine",
+    "protect_access_cert_action",
+    "protect_access_cert_revoke",
+    "protect_financial_close_action",
+    "protect_period_close_certify",
+    # Phase 6: database actions.
+    "protect_database_action",
+    "protect_database_migration",
+    "protect_database_schema_drop",
+    "protect_database_table_delete",
 ]

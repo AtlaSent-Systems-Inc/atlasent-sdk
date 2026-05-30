@@ -20,6 +20,8 @@
 import { readFile } from "node:fs/promises";
 import { webcrypto } from "node:crypto";
 import type { TrustRootSnapshot } from "./trustRoot.js";
+import { getGlobalTrustRootManager } from "./trustRoot.js";
+import { BundleVerificationError } from "./errors.js";
 
 const GENESIS_HASH = "0".repeat(64);
 
@@ -225,14 +227,11 @@ export async function verifyAuditBundle(
     const now = Date.now();
     const validUntil = new Date(snap.valid_until).getTime();
     if (now > validUntil && !trustRootOpts.allowExpiredSnapshot) {
-      return {
-        chainIntegrityOk: false,
-        signatureValid: false,
-        headHashMatches: false,
-        tamperedEventIds: [],
+      throw new BundleVerificationError({
         reason: "trust_snapshot_expired",
-        verified: false,
-      };
+        snapshotValidUntil: snap.valid_until,
+        snapshotFetchedAt: snap.issued_at,
+      });
     }
   }
 
@@ -288,29 +287,24 @@ export async function verifyAuditBundle(
     const snap = trustRootOpts.trustRoot;
     const kid = typeof bundle.signing_key_id === "string" ? bundle.signing_key_id : null;
     if (kid !== null) {
-      // Check revocation
       const isRevoked = snap.revoked_keys.some((r) => r.kid === kid);
       if (isRevoked) {
-        return {
-          chainIntegrityOk,
-          signatureValid: false,
-          headHashMatches,
-          tamperedEventIds: tamperedIds,
+        throw new BundleVerificationError({
           reason: "key_revoked",
-          verified: false,
-        };
+          snapshotValidUntil: snap.valid_until,
+          snapshotFetchedAt: snap.issued_at,
+          kid,
+        });
       }
       // Check role: audit bundles must be signed by R3_audit
       const keyEntry = snap.keys.find((k) => k.kid === kid);
       if (keyEntry && keyEntry.role !== "R3_audit") {
-        return {
-          chainIntegrityOk,
-          signatureValid: false,
-          headHashMatches,
-          tamperedEventIds: tamperedIds,
+        throw new BundleVerificationError({
           reason: "key_role_mismatch",
-          verified: false,
-        };
+          snapshotValidUntil: snap.valid_until,
+          snapshotFetchedAt: snap.issued_at,
+          kid,
+        });
       }
     }
   }
@@ -340,6 +334,11 @@ export async function verifyAuditBundle(
  * but `signatureValid` will be false with an explanatory `reason` —
  * callers that want a complete offline check MUST supply the trust
  * set.
+ *
+ * When `trustRoot` is not supplied, the global trust-root manager's
+ * current snapshot is used automatically (B2.3 bootstrap wire-in).
+ * Pass `allowExpiredSnapshot: true` to disable fail-closed expiry
+ * for air-gap environments.
  */
 export async function verifyBundle(
   pathOrBundle: string | AuditBundle,
@@ -358,11 +357,13 @@ export async function verifyBundle(
     bundle = pathOrBundle;
   }
   const keys = await resolveKeys(options);
-  const verifyOptions = {
-    ...(options?.trustRoot !== undefined ? { trustRoot: options.trustRoot } : {}),
-    ...(options?.allowExpiredSnapshot !== undefined
-      ? { allowExpiredSnapshot: options.allowExpiredSnapshot }
-      : {}),
-  };
-  return verifyAuditBundle(bundle, keys, verifyOptions);
+  // Auto-inject the global trust-root snapshot when none is explicitly provided.
+  const effectiveTrustRoot =
+    options?.trustRoot ?? getGlobalTrustRootManager().getSnapshot();
+  return verifyAuditBundle(bundle, keys, {
+    trustRoot: effectiveTrustRoot,
+    ...(options?.allowExpiredSnapshot !== undefined && {
+      allowExpiredSnapshot: options.allowExpiredSnapshot,
+    }),
+  });
 }

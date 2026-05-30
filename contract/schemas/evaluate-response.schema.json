@@ -59,7 +59,7 @@
     "risk_score": { "type": "number" },
     "risk_envelope": {
       "type": "object",
-      "description": "Risk envelope summary. Always present on responses from engine version wire-v1@1.0.0+. Provides the weighted risk score, the pre/post-promotion decisions, and (when explain=true) a per-factor breakdown. The envelope enforces most-restrictive-wins: it can raise severity but structurally cannot soften a deny.",
+      "description": "Risk envelope summary. Always present on responses from engine version wire-v1@1.0.0+. The envelope enforces most-restrictive-wins: it can raise severity but structurally cannot soften a deny.",
       "required": ["weighted_score", "engine_decision", "envelope_decision", "promoted", "hard_blocks"],
       "additionalProperties": false,
       "properties": {
@@ -104,40 +104,82 @@
         }
       }
     },
+    "risk_class": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "Resolved risk class from the evaluation. Present when the risk envelope assigns a class."
+    },
+    "authority_basis": {
+      "type": "object",
+      "description": "Why this permit was issued — the authority kind and a reference to the authorizing entity.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["policy", "approval", "emergency", "maintenance_window", "delegation", "quorum"],
+          "description": "Authority class that authorized the action."
+        },
+        "reference": { "type": "string" },
+        "granted_by": { "type": "string" },
+        "rationale": { "type": "string" },
+        "expires_at": { "type": "string" }
+      }
+    },
+    "escalation_id": {
+      "type": "string",
+      "description": "Present iff decision == 'hold'. ID of the HITL escalation auto-created by the control plane. Poll GET /v1/escalations/{id} for resolution."
+    },
     "permit": {
       "type": "object",
-      "description": "Wire-format PermitV2 body. Returned alongside `permit_token` when the legacy v1 surface is upgraded to V2. The `approval` sub-block is the cryptographic linkage to the approval artifact verified at evaluate time.",
+      "description": "Wire-format PermitV2 body. Returned alongside `permit_token` when the legacy v1 surface is upgraded to V2.",
       "additionalProperties": true,
       "properties": {
         "approval": {
           "type": "object",
-          "description": "Permit ↔ approval-artifact binding. Present iff /v1-evaluate verified an approval_artifact.v1 for this issuance. /v1-verify-permit re-surfaces this on consume so executors can prove which signed approval authorized the action.",
+          "description": "Permit ↔ approval-artifact binding. Present iff /v1-evaluate verified an approval_artifact.v1 for this issuance.",
           "additionalProperties": false,
           "required": ["approval_id", "artifact_hash", "reviewer_id", "issuer_id", "kid"],
           "properties": {
-            "approval_id": {
-              "type": "string",
-              "description": "approval_artifact.approval_id from the verified artifact."
-            },
-            "artifact_hash": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{64}$",
-              "description": "SHA-256 over the artifact's canonical signing payload (i.e. the artifact with the `signature` field stripped). Lets a stored permit row prove which artifact authorized it without retaining the full artifact body."
-            },
-            "reviewer_id": {
-              "type": "string",
-              "description": "reviewer.principal_id from the verified artifact."
-            },
-            "issuer_id": {
-              "type": "string",
-              "description": "issuer.issuer_id from the verified artifact."
-            },
-            "kid": {
-              "type": "string",
-              "description": "issuer.kid used to verify the signature (key id, for rotation)."
-            }
+            "approval_id": { "type": "string" },
+            "artifact_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "reviewer_id": { "type": "string" },
+            "issuer_id": { "type": "string" },
+            "kid": { "type": "string" }
           }
         }
+      }
+    },
+    "authorized_trajectory": {
+      "type": "object",
+      "description": "The authorized execution trajectory returned when the evaluation engine approved a proposed_trajectory. May differ from what was proposed. Present only on allow decisions. Execution MUST follow this trajectory; call POST /v1/trajectory-verify at each step.",
+      "required": ["trajectory_id", "steps", "expires_at"],
+      "additionalProperties": false,
+      "properties": {
+        "trajectory_id": { "type": "string", "format": "uuid" },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["step", "required"],
+            "additionalProperties": false,
+            "properties": {
+              "step": { "type": "string" },
+              "description": { "type": "string" },
+              "required": { "type": "boolean" },
+              "time_limit_seconds": { "type": "integer", "minimum": 1 },
+              "authorized_by": { "type": "string" },
+              "constraints": { "type": "object", "additionalProperties": true },
+              "expected_intermediate_state": { "type": "object", "additionalProperties": true }
+            }
+          }
+        },
+        "description": { "type": "string" },
+        "forbidden_states": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "expires_at": { "type": "string" }
       }
     }
   }

@@ -187,6 +187,16 @@ class EvaluateRequest(BaseModel):
     # per-factor breakdown of the weighted risk score. Absent (False)
     # by default to keep response payloads small.
     explain: bool | None = Field(default=None)
+    # Deployment environment (e.g. 'production', 'staging').
+    environment: str | None = Field(default=None)
+    # Structured resource descriptor — preferred over flat resource_id for
+    # new callers. Mutually exclusive; control plane accepts both.
+    resource: dict[str, Any] | None = Field(default=None)
+    # State-transition context. Enables policy rules that reason about what
+    # changes (current → proposed) and where execution binds.
+    current_state: dict[str, Any] | None = Field(default=None)
+    proposed_state: dict[str, Any] | None = Field(default=None)
+    execution_binding: dict[str, Any] | None = Field(default=None)
     # Kept for backward-compat with code that constructs the request
     # directly. Excluded from wire serialization — the server reads the
     # API key from the Authorization header, never from the body.
@@ -311,6 +321,12 @@ class EvaluateResult(BaseModel):
     # Risk envelope — present on responses from engine version wire-v1@1.0.0+.
     # None on legacy server responses that predate Phase C.
     risk_envelope: EvaluateRiskEnvelope | None = None
+    # Resolved risk class from the evaluation (critical / high / medium / low).
+    risk_class: str | None = None
+    # WHY this was allowed — kind + reference (policy, quorum, emergency, etc.).
+    authority_basis: dict[str, Any] | None = None
+    # Present iff decision == 'hold'. ID of the auto-created HITL escalation.
+    escalation_id: str | None = None
 
     # Legacy fields. Populated by the model_validator (from canonical
     # `decision` / `permit_token` / `denial`) so existing readers like

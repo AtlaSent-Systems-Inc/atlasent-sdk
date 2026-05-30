@@ -66,6 +66,89 @@
     "require_approval": {
       "type": "boolean",
       "description": "Caller assertion that this action requires verified human approval, even when the action_type heuristic does not match. Echoed onto /v1-verify-permit so the consumer can hard-deny when the permit's persisted `approval` block is missing."
+    },
+    "environment": {
+      "type": "string",
+      "description": "Deployment environment where the action executes (e.g. 'production', 'staging'). Bound into the permit and used for enforcement-posture lookups."
+    },
+    "resource": {
+      "type": "object",
+      "description": "Structured resource descriptor. Mutually exclusive with `resource_id` (prefer this form for new callers).",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "description": "Resource class (e.g. 'database', 'deployment', 'file')." },
+        "id": { "type": "string", "description": "Instance identifier within the resource class." },
+        "attributes": { "type": "object", "additionalProperties": true, "description": "Arbitrary metadata about the resource." }
+      }
+    },
+    "current_state": {
+      "type": "object",
+      "description": "Snapshot of the resource before the proposed action executes. Enables policy rules that reason about state transitions.",
+      "required": ["description"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "attributes": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "proposed_state": {
+      "type": "object",
+      "description": "Desired state of the resource after the action executes.",
+      "required": ["description"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "attributes": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "execution_binding": {
+      "type": "object",
+      "description": "Identifies the execution surface where the action will run (CI/CD adapter, DB driver, etc.). Bound into the permit for verifier-side binding checks.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "description": "Execution surface type (e.g. 'github_actions', 'supabase_migration', 'k8s_job')." },
+        "adapter_version": { "type": "string" },
+        "resource_id": { "type": "string" },
+        "enforcement_point": { "type": "string" }
+      }
+    },
+    "desired_state": {
+      "type": "object",
+      "description": "The desired end-state the actor wants the resource to reach. Enables trajectory-aware authorization when combined with proposed_trajectory.",
+      "required": ["description"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "attributes": { "type": "object", "additionalProperties": true },
+        "fingerprint": { "type": "string", "description": "Deterministic hash of the desired state (e.g. expected schema fingerprint after migration)." }
+      }
+    },
+    "proposed_trajectory": {
+      "type": "object",
+      "description": "Actor-proposed execution trajectory from current_state to desired_state. The evaluation engine may return an authorized_trajectory that differs (adding checkpoints, restricting steps, etc.).",
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "type": "array",
+          "description": "Ordered list of execution steps.",
+          "items": {
+            "type": "object",
+            "required": ["step", "required"],
+            "additionalProperties": false,
+            "properties": {
+              "step": { "type": "string", "minLength": 1, "description": "Step identifier." },
+              "description": { "type": "string" },
+              "required": { "type": "boolean", "description": "When true, skipping this step is a deviation." },
+              "time_limit_seconds": { "type": "integer", "minimum": 1 },
+              "authorized_by": { "type": "string" },
+              "constraints": { "type": "object", "additionalProperties": true }
+            }
+          }
+        },
+        "description": { "type": "string" }
+      }
     }
   }
 }

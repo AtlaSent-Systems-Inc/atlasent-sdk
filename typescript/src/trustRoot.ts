@@ -7,8 +7,9 @@
  * Refresh failure is silent — falls back to the in-memory snapshot.
  *
  * Snapshot expiry (valid_until) is fail-closed per ADR-005 D3:
- * checkExpiry() returns "expired" when expired (unless
- * allowExpiredSnapshot=true is passed to verifyAuditBundle).
+ * checkExpiry() emits a one-time console.warn at half-life, and again
+ * on expiry. verifyAuditBundle throws BundleVerificationError when
+ * expired (unless allowExpiredSnapshot=true is passed).
  */
 
 import { readFileSync } from "node:fs";
@@ -61,7 +62,7 @@ const REFRESH_INTERVAL_MS_DEFAULT = 4 * 60 * 60 * 1000; // 4 hours
 const REFRESH_INTERVAL_MS_FLOOR = 5 * 60 * 1000; // 5 minutes
 const KEYS_BASE_URL = "https://keys.atlasent.io/.well-known";
 
-// Half-life warning: emitted once per process when >50% of validity window elapsed
+// Half-life and expiry warnings: emitted once per process (ADR-005 D3).
 let _halfLifeWarningEmitted = false;
 let _expiredWarningEmitted = false;
 
@@ -107,6 +108,9 @@ export class TrustRootManager {
   /**
    * Check whether the snapshot is expired, emit one-time warnings at
    * half-life and expiry.  Returns "ok" | "half_life" | "expired".
+   *
+   * Emits console.warn once per process at half-life (ADR-005 D3).
+   * Emits console.warn once per process on expiry.
    */
   checkExpiry(): "ok" | "half_life" | "expired" {
     const snap = this._snapshot;
@@ -134,7 +138,7 @@ export class TrustRootManager {
         const daysLeft = Math.floor((validUntil - now) / (24 * 60 * 60 * 1000));
         // eslint-disable-next-line no-console
         console.warn(
-          `[atlasent] Trust snapshot expires in ${daysLeft} day(s) (valid_until: ${snap.valid_until}). ` +
+          `[atlasent] Trust snapshot at half-life: expires in ${daysLeft} day(s) (valid_until: ${snap.valid_until}). ` +
             "Plan an SDK update.",
         );
       }

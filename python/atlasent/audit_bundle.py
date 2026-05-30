@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from atlasent.exceptions import BundleVerificationError
+
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
@@ -91,7 +93,7 @@ class BundleVerificationResult:
         return self.chain_integrity_ok and self.signature_valid
 
 
-# ─── Canonicalization ────────────────────────────────────────────────
+# ─── Canonicalization ──────────────────────────────────────────────────────
 
 
 def canonical_json(value: Any) -> str:
@@ -133,7 +135,7 @@ def _sha256_hex(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
 
-# ─── Envelope reconstruction ─────────────────────────────────────────
+# ─── Envelope reconstruction ───────────────────────────────────────────────────
 
 
 def signed_bytes_for(bundle: dict) -> bytes:
@@ -158,7 +160,7 @@ def signed_bytes_for(bundle: dict) -> bytes:
     )
 
 
-# ─── Chain verification ──────────────────────────────────────────────
+# ─── Chain verification ──────────────────────────────────────────────────────
 
 
 def _verify_chain(events: list[dict]) -> tuple[bool, list[str]]:
@@ -188,7 +190,7 @@ def _verify_chain(events: list[dict]) -> tuple[bool, list[str]]:
     return adjacency_ok, tampered
 
 
-# ─── Signature verification ──────────────────────────────────────────
+# ─── Signature verification ────────────────────────────────────────────────────
 
 
 def _b64url_decode(s: str) -> bytes:
@@ -222,6 +224,10 @@ def verify_audit_bundle(
     If ``trust_root`` is provided, the snapshot expiry is checked first
     (fail-closed per ADR-005 D3), then revocation and role are checked
     after a successful signature verification.
+
+    Raises :class:`BundleVerificationError` (not returns a falsy result)
+    when the snapshot is expired, a key is revoked, or the key has the
+    wrong role. Pass ``allow_expired_snapshot=True`` for air-gap use.
     """
 
     # ── ADR-005 D3: fail-closed snapshot expiry check ─────────────────
@@ -233,11 +239,10 @@ def verify_audit_bundle(
             trust_root.valid_until.replace("Z", "+00:00")
         )
         if now > valid_until and not allow_expired_snapshot:
-            return BundleVerificationResult(
-                chain_integrity_ok=False,
-                signature_valid=False,
-                head_hash_matches=False,
-                reason="trust_snapshot_expired",
+            raise BundleVerificationError(
+                bundle_reason="trust_snapshot_expired",
+                snapshot_valid_until=trust_root.valid_until,
+                snapshot_fetched_at=trust_root.issued_at,
             )
 
     events = bundle.get("events") or []
@@ -298,7 +303,7 @@ def verify_audit_bundle(
         except (ValueError, TypeError) as err:
             reason = f"signature check failed: {err}"
 
-    # ── ADR-005: revocation and role checks (after signature) ─────────
+    # ── ADR-005: revocation and role checks (after signature) ───────────
     if signature_valid and trust_root is not None:
         kid = (
             bundle.get("signing_key_id")
@@ -308,21 +313,19 @@ def verify_audit_bundle(
         if kid is not None:
             is_revoked = any(r.kid == kid for r in trust_root.revoked_keys)
             if is_revoked:
-                return BundleVerificationResult(
-                    chain_integrity_ok=chain_integrity_ok,
-                    signature_valid=False,
-                    head_hash_matches=head_hash_matches,
-                    tampered_event_ids=tampered,
-                    reason="key_revoked",
+                raise BundleVerificationError(
+                    bundle_reason="key_revoked",
+                    snapshot_valid_until=trust_root.valid_until,
+                    snapshot_fetched_at=trust_root.issued_at,
+                    kid=kid,
                 )
             key_entry = next((k for k in trust_root.keys if k.kid == kid), None)
             if key_entry is not None and key_entry.role != "R3_audit":
-                return BundleVerificationResult(
-                    chain_integrity_ok=chain_integrity_ok,
-                    signature_valid=False,
-                    head_hash_matches=head_hash_matches,
-                    tampered_event_ids=tampered,
-                    reason="key_role_mismatch",
+                raise BundleVerificationError(
+                    bundle_reason="key_role_mismatch",
+                    snapshot_valid_until=trust_root.valid_until,
+                    snapshot_fetched_at=trust_root.issued_at,
+                    kid=kid,
                 )
 
     if not chain_integrity_ok and reason is None:
@@ -358,7 +361,13 @@ def verify_bundle(
     supply the trust set.
 
     ``trust_root`` enables ADR-005 D3 expiry + revocation + role checks.
+    When omitted, the global trust-root manager's current snapshot is
+    used automatically (B2.3 bootstrap wire-in).
     ``allow_expired_snapshot`` opts out of fail-closed expiry (air-gap use).
+
+    Raises :class:`BundleVerificationError` on snapshot expiry, key
+    revocation, or key role mismatch (unless ``allow_expired_snapshot``
+    is set for the expiry case).
     """
 
     data = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -368,6 +377,14 @@ def verify_bundle(
         data = data["bundle"]
 
     keys = _load_keys(public_keys_pem)
+    effective_trust_root = trust_root
+    if effective_trust_root is None:
+        from atlasent.trust_root import get_global_trust_root_manager  # noqa: PLC0415
+
+        effective_trust_root = get_global_trust_root_manager().get_snapshot()
     return verify_audit_bundle(
-        data, keys, trust_root=trust_root, allow_expired_snapshot=allow_expired_snapshot
+        data,
+        keys,
+        trust_root=effective_trust_root,
+        allow_expired_snapshot=allow_expired_snapshot,
     )

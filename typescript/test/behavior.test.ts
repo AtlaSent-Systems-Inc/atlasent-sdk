@@ -9,6 +9,7 @@ import {
   StateEventCache,
   redactStateSnapshot,
   type BehaviorEvent,
+  type EmotionalVector,
   type StateSnapshot,
 } from "../src/behavior.js";
 
@@ -65,6 +66,29 @@ describe("redactStateSnapshot", () => {
     const summary = redactStateSnapshot(SAMPLE_SNAPSHOT);
     const json = JSON.stringify(summary);
     expect(json).not.toContain("private free-form text");
+  });
+
+  it("passes emotional_vector through when set on the snapshot", () => {
+    const vec: EmotionalVector = { valence: 0.2, arousal: 0.8, dominance: 0.3 };
+    const snapshot: StateSnapshot = { ...SAMPLE_SNAPSHOT, emotional_vector: vec };
+    const summary = redactStateSnapshot(snapshot);
+    expect(summary.emotional_vector).toEqual(vec);
+  });
+
+  it("omits emotional_vector from summary when not set on snapshot", () => {
+    const summary = redactStateSnapshot(SAMPLE_SNAPSHOT);
+    expect(summary).not.toHaveProperty("emotional_vector");
+  });
+
+  it("emotional_vector contains only bounded numeric dimensions", () => {
+    const vec: EmotionalVector = { valence: 0.1, arousal: 0.9, dominance: 0.5 };
+    const snapshot: StateSnapshot = { ...SAMPLE_SNAPSHOT, emotional_vector: vec };
+    const summary = redactStateSnapshot(snapshot);
+    const serialised = JSON.stringify(summary.emotional_vector);
+    expect(serialised).toContain("valence");
+    expect(serialised).toContain("arousal");
+    expect(serialised).toContain("dominance");
+    expect(serialised).not.toContain("note");
   });
 });
 
@@ -241,5 +265,13 @@ describe("StateEventCache", () => {
     cache.add(redactStateSnapshot(SAMPLE_SNAPSHOT));
     cache.clear();
     expect(cache.recent()).toEqual([]);
+  });
+
+  it("preserves emotional_vector through cache round-trip", () => {
+    const vec: EmotionalVector = { valence: 0.6, arousal: 0.4, dominance: 0.7 };
+    const cache = new StateEventCache(5);
+    cache.add(redactStateSnapshot({ ...SAMPLE_SNAPSHOT, emotional_vector: vec }));
+    const entry = cache.recent()[0]!;
+    expect(entry.emotional_vector).toEqual(vec);
   });
 });

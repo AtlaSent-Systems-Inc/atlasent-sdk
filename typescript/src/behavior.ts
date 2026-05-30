@@ -18,7 +18,10 @@
  * const consent = new ConsentManager({ userId: "u_123" });
  * const ledger = new InMemoryBehaviorLedger();
  *
- * const snapshot: StateSnapshot = { ... };
+ * const snapshot: StateSnapshot = {
+ *   ...
+ *   emotional_vector: { valence: 0.2, arousal: 0.8, dominance: 0.3 },
+ * };
  * const summary = redactStateSnapshot(snapshot);
  *
  * if (consent.canEmit("ledgers-me", "behavior.health.mental")) {
@@ -87,6 +90,26 @@ export type BodyState =
 export type ReadinessLevel = "low" | "medium" | "high";
 
 /**
+ * Dimensional emotional coordinates in PAD space, each bounded 0..1.
+ *
+ * - `valence`:   negative (0) → positive (1) affect
+ * - `arousal`:   calm (0) → activated (1)
+ * - `dominance`: submissive (0) → in-control (1)
+ *
+ * All dimensions are bounded floats with no free-form text, so the
+ * vector is safe to include in a {@link StateEventSummary} that
+ * crosses an app boundary.
+ */
+export interface EmotionalVector {
+  /** 0..1 — negative → positive affect */
+  valence: number;
+  /** 0..1 — calm → activated */
+  arousal: number;
+  /** 0..1 — submissive → in-control */
+  dominance: number;
+}
+
+/**
  * A single moment captured before/after a regulation session.
  *
  * This is the **on-device** shape with all raw fields. It is never
@@ -113,6 +136,8 @@ export interface StateSnapshot {
   created_at: string;
   /** Optional free-form note. NEVER part of the redacted summary. */
   note?: string;
+  /** Optional PAD-space coordinates. Bounded floats — safe to redact through. */
+  emotional_vector?: EmotionalVector;
 }
 
 /**
@@ -127,6 +152,8 @@ export interface StateEventSummary {
   body_state: BodyState;
   cognitive_load: number;
   readiness_level: ReadinessLevel;
+  /** PAD-space coordinates, when the caller supplied them. */
+  emotional_vector?: EmotionalVector;
 }
 
 /**
@@ -277,9 +304,10 @@ export class ConsentManager {
 /**
  * Project a {@link StateSnapshot} down to the redacted
  * {@link StateEventSummary} shape. Drops `id`, `user_id`,
- * `created_at`, `confidence_score`, and any `note` field. The
- * remaining fields are bounded numeric ranges or closed enums and
- * carry no free-form text.
+ * `created_at`, `confidence_score`, and any `note` field.
+ *
+ * `emotional_vector`, when present, is passed through unchanged —
+ * it contains only bounded floats and is safe to cross an app boundary.
  */
 export function redactStateSnapshot(s: StateSnapshot): StateEventSummary {
   return {
@@ -290,6 +318,9 @@ export function redactStateSnapshot(s: StateSnapshot): StateEventSummary {
     body_state: s.body_state,
     cognitive_load: s.cognitive_load,
     readiness_level: s.readiness_level,
+    ...(s.emotional_vector !== undefined
+      ? { emotional_vector: s.emotional_vector }
+      : {}),
   };
 }
 

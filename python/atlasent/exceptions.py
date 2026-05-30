@@ -234,7 +234,7 @@ class AtlaSentDeniedError(AtlaSentDenied):
         # store it on this subclass for now.
         self.request_id = request_id
 
-    # ── Outcome discriminators ────────────────────────────────────────
+    # ── Outcome discriminators ──────────────────────────────────
     # Convenience predicates that mirror the operator runbook's matrix.
     # Callers can branch directly on the outcome strings; these are
     # sugar so the common cases are explicit at the call site.
@@ -263,6 +263,13 @@ class AtlaSentDeniedError(AtlaSentDenied):
         """
         return self.outcome == "permit_not_found"
 
+    @property
+    def is_signing_key_revoked(self) -> bool:
+        """``True`` when the permit's signing key KID appears in the
+        trust-root revocation list (ADR-005 D3 R2/R3 key rotation).
+        """
+        return self.outcome == "permit_signing_key_revoked"
+
 
 BundleVerificationReason = Literal[
     "trust_snapshot_expired",
@@ -287,6 +294,7 @@ class BundleVerificationError(AtlaSentDeniedError):
         snapshot_fetched_at: ``issued_at`` of the snapshot (proxy for fetch time).
         snapshot_source: Whether the snapshot came from the pinned vendor file
             or a live refresh.
+        kid: Which key id was revoked or role-mismatched, when applicable.
     """
 
     def __init__(
@@ -297,16 +305,18 @@ class BundleVerificationError(AtlaSentDeniedError):
         snapshot_valid_until: str | None = None,
         snapshot_fetched_at: str | None = None,
         snapshot_source: Literal["pinned", "live"] | None = None,
+        kid: str | None = None,
     ) -> None:
         super().__init__(
             decision="deny",
             evaluation_id=evaluation_id,
-            reason=f"Bundle verification failed: {bundle_reason}",
+            reason=bundle_reason,
         )
         self.bundle_reason = bundle_reason
         self.snapshot_valid_until = snapshot_valid_until
         self.snapshot_fetched_at = snapshot_fetched_at
         self.snapshot_source = snapshot_source
+        self.kid = kid
 
 
 class StreamTimeoutError(AtlaSentError):
@@ -382,3 +392,6 @@ class RateLimitError(AtlaSentError):
             code="rate_limited",
             request_id=request_id,
         )
+
+
+# ── Bundle verification error (ADR-005 D3 fail-closed expiry / revocation) ───
