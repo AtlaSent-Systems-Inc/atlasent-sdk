@@ -113,6 +113,42 @@
         "resource_id": { "type": "string" },
         "enforcement_point": { "type": "string" }
       }
+    },
+    "desired_state": {
+      "type": "object",
+      "description": "The desired end-state the actor wants the resource to reach. Enables trajectory-aware authorization when combined with proposed_trajectory.",
+      "required": ["description"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "attributes": { "type": "object", "additionalProperties": true },
+        "fingerprint": { "type": "string", "description": "Deterministic hash of the desired state (e.g. expected schema fingerprint after migration)." }
+      }
+    },
+    "proposed_trajectory": {
+      "type": "object",
+      "description": "Actor-proposed execution trajectory from current_state to desired_state. The evaluation engine may return an authorized_trajectory that differs (adding checkpoints, restricting steps, etc.).",
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "type": "array",
+          "description": "Ordered list of execution steps.",
+          "items": {
+            "type": "object",
+            "required": ["step", "required"],
+            "additionalProperties": false,
+            "properties": {
+              "step": { "type": "string", "minLength": 1, "description": "Step identifier." },
+              "description": { "type": "string" },
+              "required": { "type": "boolean", "description": "When true, skipping this step is a deviation." },
+              "time_limit_seconds": { "type": "integer", "minimum": 1 },
+              "authorized_by": { "type": "string" },
+              "constraints": { "type": "object", "additionalProperties": true }
+            }
+          }
+        },
+        "description": { "type": "string" }
+      }
     }
   }
 }
