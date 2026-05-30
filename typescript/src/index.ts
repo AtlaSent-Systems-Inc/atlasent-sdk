@@ -661,6 +661,22 @@ export {
   type V2Transport,
 } from "./v2.js";
 
+// ── Runtime v2 — four-plane lifecycle ─────────────────────────────────────────
+export {
+  RuntimeV2Client,
+  type AuditChainFilters,
+  type AuditChainPage,
+  type AuthorizationDecision,
+  type AuthorityRecord,
+  type ChainIntegrityReport,
+  type ComplianceExport,
+  type ExecutionReceipt,
+  type PostExecutionResult,
+  type RuntimeAuditEntry,
+  type VerificationFailure,
+  type VerificationResult,
+} from "./runtime_v2.js";
+
 // ── Approval / Override Runtime ────────────────────────────────────────────────────────────────────────────────────
 export {
   configureApprovalRuntime,
