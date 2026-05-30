@@ -31,13 +31,48 @@ Rationale:
 
 This resolves the former WS1 "package home" open question in favor of Option 1.
 
+## Scope clarification: two distinct rule systems (added post-WS1)
+
+Investigation during WS4 surfaced a premise this plan originally got wrong. There
+are **two separate rule representations** in the platform, not one:
+
+1. **Authoring / storage rule-row model** — `policy_rules` / `rule_conditions` /
+   `rule_obligations` tables, the console policy builders, and (as of WS1) the
+   canonical `@atlasent/types` policy types. Operators are long-form
+   (`equals`, `greater_than`), conditions are a flat `conditions[]` with
+   `condition_group` AND/OR grouping. **This is what the plan unifies.**
+
+2. **Runtime rule-engine DSL** — `packages/sdk/src/rules.ts` (kept byte-identical
+   to `supabase/functions/_shared/rules.ts` via `rules-sync` CI). This is the
+   zero-dependency evaluator that every `/v1-evaluate` call runs. Its language is
+   `{templates:[{decision, deny_code, when:{all|any:[{field, eq|gt|gte|lt|…}]}}]}`
+   with nestable `all`/`any` combinators. The **21 policy packs author their
+   `templates[].rule` in this DSL**, and the seed path stores it verbatim into
+   `constraint_bundles.rules`.
+
+These are intentionally different layers: the rule-row model is for *authoring and
+storage*; the engine DSL is the *runtime evaluation language*. The packs belong to
+system (2), **not** system (1). Converting them to the canonical operator
+vocabulary would require rewriting the production rule engine — out of scope and
+high-risk.
+
+**Decision (settled):** keep the engine DSL separate. The plan unifies the
+authoring/storage model (WS1–WS3) and documents the relationship between the two
+systems rather than collapsing them. WS4 is re-scoped accordingly (see below).
+
 ## Goal
 
-Today the same "constraint" concept exists in four incompatible shapes across the
-SDK, the console, and the API policy packs. This plan unifies them on a **single
-source of truth: the console/API rule-row format** (the shape that is actually
-stored in the database and evaluated server-side), and brings the SDK contract
-schema and the JSON policy packs into conformance with it.
+Today the same "constraint" concept is expressed in several incompatible shapes
+across the SDK, the console, and the API. This plan unifies the **authoring /
+storage rule-row model** on a **single source of truth: the console/API rule-row
+format** (the shape stored in `policy_rules` / `rule_conditions`), and brings the
+SDK contract schema into conformance with it.
+
+Note: the **API policy packs** are a *different* system — they author in the
+runtime rule-engine DSL (`rules.ts`), not the rule-row model — and are explicitly
+**out of scope** for conversion. See "two distinct rule systems" above. The packs
+column in the table below is retained only to show where the engine DSL sits
+relative to the rule-row model; it is **not** a conversion target.
 
 ## Why the rule-row format is canonical
 
@@ -54,9 +89,13 @@ weaker (only `allow`/`deny`, no deny codes, no approvals, nested
 `agent`/`action`/`context` matchers), so collapsing *toward* it would lose
 information. We align everything *to* the rule-row format instead.
 
-## Current state (the four shapes)
+## Current state (the shapes)
 
-| Aspect | SDK contract (`atlasent-sdk/contract/schemas/policy.schema.json`) | API JSON packs (`atlasent-api/packages/packs/src/packs/*`) | Console UI (`conditions_json`) | Console types (`atlasent-console/packages/types/src/policy.ts`) |
+Three of the columns below are the rule-row model in different states of
+divergence (the unification targets). The **packs** column is the separate runtime
+engine DSL, shown for contrast only — *not* a conversion target.
+
+| Aspect | SDK contract (`atlasent-sdk/contract/schemas/policy.schema.json`) | API packs — engine DSL *(separate system, not converted)* | Console UI (`conditions_json`) | Console types (`atlasent-console/packages/types/src/policy.ts`) |
 |---|---|---|---|---|
 | Rule container | `rules[].match` | `rules.templates[].when` | `conditions_json[]` | `conditions[]` (`RuleCondition`) |
 | Field key | nested `agent`/`action`/`context.<f>` | `field` | `field` | `field_path` |
@@ -236,14 +275,23 @@ rather than cut over in place:
   malformed trailing JSON (duplicated closing braces / stray `lt ` `gte ` keys at
   lines ~99–107). Must be repaired as part of this work regardless.
 
-### 4. API / policy packs
-- Convert all 21 packs in `atlasent-api/packages/packs/src/packs/*` from
-  `rules.templates[].when` + inline `eq` to canonical `conditions[]` +
-  `deny_code`/`require_approvals` (already first-class there — easy lift).
-- Add a build-time validator asserting every pack conforms to
-  `policy-rule.schema.json`.
-- Ensure `v1-policy-rules` / `v1-rules-validate` edge functions accept the
-  canonical shape (they already store close to it).
+### 4. API / policy packs — **RE-SCOPED** (do NOT convert packs)
+Original premise (convert packs from inline `eq` to canonical `conditions[]`) was
+**wrong** — see "two distinct rule systems" above. The packs author in the runtime
+rule-engine DSL (`rules.ts`), not the rule-row model. Converting them would mean
+rewriting the production evaluate path. Re-scoped to documentation + guard rails:
+- **Do not** change pack `templates[].rule` shapes or the `rules.ts` DSL.
+- Author a **mapping document** describing how the two systems relate: the engine
+  DSL operators (`eq/gt/gte/lt/in/…`, `when.all`/`when.any`) vs. the canonical
+  rule-row operators (`equals/greater_than/…`, `conditions[]` + `condition_group`),
+  and which surfaces use which. Cross-link the canonical shorthand table (the
+  engine DSL's `eq/gt` are *coincidentally* the same tokens as the UI shorthand,
+  but they live in a different system — call this out to prevent confusion).
+- Note the boundary in `packages/packs` and near `rules.ts` so future work does
+  not try to "align" the engine DSL onto the rule-row vocabulary without an
+  explicit engine-rewrite decision.
+- The `policy-rule.schema.json` from WS1 validates the **rule-row** model only; it
+  is explicitly **not** applied to pack files.
 
 ### 5. Compatibility & rollout
 - Ship `migratePolicyV0toV1()` in the SDK; run it over `contract/vectors`.
@@ -253,8 +301,8 @@ rather than cut over in place:
 
 ## Sequencing
 
-1. WS1 canonical types in `atlasent-api/packages/types` + JSON Schema + fixtures.
-2. WS4 packs conversion (smallest, proves the schema).
+1. WS1 canonical types in `atlasent-api/packages/types` + JSON Schema + fixtures. **(done — PR atlasent-api#1036)**
+2. WS4 **re-scoped** to a two-systems mapping doc (no pack conversion).
 3. WS3 SDK re-points contract schema, re-exports API types, adds builder/validator + codemod.
 4. WS2 console re-exports API types + serialization helper; ConstraintBuilder enters V1 dual-accept.
 5. WS5 dual-accept window → ConstraintBuilder V2 read-only → V3 removal; drop legacy schema.
