@@ -37,10 +37,6 @@ Phase 7 clusters
   authorization with HITL escalation and optional Slack notification.
 """
 
-from .deploy_gate import (
-    protect_deploy,
-    protect_production_deploy,
-)
 from .access_cert import (
     AccessCertActionType,
     protect_access_cert_action,
@@ -66,6 +62,10 @@ from .database_actions import (
     protect_database_migration,
     protect_database_schema_drop,
     protect_database_table_delete,
+)
+from .deploy_gate import (
+    protect_deploy,
+    protect_production_deploy,
 )
 from .financial_close import (
     FinancialCloseActionType,
