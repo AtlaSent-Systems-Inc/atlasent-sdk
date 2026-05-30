@@ -252,6 +252,20 @@ from .trust_root import (
     _set_global_trust_root_manager_for_tests,
     get_global_trust_root_manager,
 )
+from .runtime_v2 import (
+    AuditChainPage,
+    AuthorizationDecision,
+    AuthorityRecord,
+    ChainIntegrityReport,
+    ComplianceExport,
+    ExecutionReceipt,
+    PostExecutionResult,
+    RuntimeAuditEntry,
+    RuntimeV2Client,
+    VerificationFailure,
+    VerificationResult,
+    runtime,
+)
 from .v2_endpoints import (
     BATCH_PATH as V2_BATCH_PATH,
 )
