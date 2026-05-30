@@ -194,7 +194,7 @@ jobs:
             "${TARBALL}"
 
       - name: Upload signature bundle as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: npm-tarball-cosign-bundle-${{ needs.resolve.outputs.package_name }}
           path: ${{ needs.resolve.outputs.package_dir }}/${{ env.TARBALL }}.bundle

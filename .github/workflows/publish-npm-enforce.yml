@@ -123,7 +123,7 @@ jobs:
             "${TARBALL}"
 
       - name: Upload signature bundle as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: npm-tarball-cosign-bundle-enforce
           path: typescript/packages/enforce/${{ env.TARBALL }}.bundle
