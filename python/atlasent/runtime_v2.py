@@ -184,10 +184,21 @@ def _parse_authority(data: dict[str, Any]) -> AuthorityRecord:
         key_id=str(data.get("key_id", "")),
         status=str(data.get("status", "")),
         created_at=str(data.get("created_at", "")),
-        extra={k: v for k, v in data.items() if k not in {
-            "authority_id", "org_id", "name", "action_classes",
-            "public_key", "key_id", "status", "created_at",
-        }},
+        extra={
+            k: v
+            for k, v in data.items()
+            if k
+            not in {
+                "authority_id",
+                "org_id",
+                "name",
+                "action_classes",
+                "public_key",
+                "key_id",
+                "status",
+                "created_at",
+            }
+        },
     )
 
 
@@ -334,11 +345,13 @@ class RuntimeV2Client:
         import json as _json
 
         url = f"{self._c._base_url}{_org_path(org_id, 'permits', permit_id)}"  # noqa: SLF001
-        body = _json.dumps({
-            "revoked_by": revoked_by,
-            "reason": reason,
-            "propagates_to_children": propagates_to_children,
-        }).encode()
+        body = _json.dumps(
+            {
+                "revoked_by": revoked_by,
+                "reason": reason,
+                "propagates_to_children": propagates_to_children,
+            }
+        ).encode()
         resp = self._c._client.request(  # noqa: SLF001
             "DELETE",
             url,
@@ -361,17 +374,13 @@ class RuntimeV2Client:
         data, _, _ = self._c._get(path, params=params)  # noqa: SLF001
         return [_parse_authority(a) for a in data.get("authorities", [])]
 
-    def create_authority(
-        self, org_id: str, record: dict[str, Any]
-    ) -> AuthorityRecord:
+    def create_authority(self, org_id: str, record: dict[str, Any]) -> AuthorityRecord:
         """``POST /v2/orgs/:org_id/authorities``."""
         path = _org_path(org_id, "authorities")
         data, _, _ = self._c._post(path, record)  # noqa: SLF001
         return _parse_authority(data.get("authority", data))
 
-    def get_authority(
-        self, org_id: str, authority_id: str
-    ) -> AuthorityRecord | None:
+    def get_authority(self, org_id: str, authority_id: str) -> AuthorityRecord | None:
         """``GET /v2/orgs/:org_id/authorities/:authority_id``."""
         path = _org_path(org_id, "authorities", authority_id)
         data, _, _ = self._c._get(path)  # noqa: SLF001
@@ -392,9 +401,7 @@ class RuntimeV2Client:
         )
         return _parse_authority(data.get("authority", data))
 
-    def revoke_authority(
-        self, org_id: str, authority_id: str, reason: str
-    ) -> None:
+    def revoke_authority(self, org_id: str, authority_id: str, reason: str) -> None:
         """``POST /v2/orgs/:org_id/authorities/:authority_id/revoke``."""
         path = _org_path(org_id, "authorities", authority_id, "revoke")
         self._c._post(path, {"reason": reason})  # noqa: SLF001
@@ -406,9 +413,7 @@ class RuntimeV2Client:
         path = _org_path(org_id, "evidence")
         self._c._post(path, pkg)  # noqa: SLF001
 
-    def get_evidence(
-        self, org_id: str, evidence_id: str
-    ) -> dict[str, Any] | None:
+    def get_evidence(self, org_id: str, evidence_id: str) -> dict[str, Any] | None:
         """``GET /v2/orgs/:org_id/evidence/:evidence_id``."""
         path = _org_path(org_id, "evidence", evidence_id)
         data, _, _ = self._c._get(path)  # noqa: SLF001

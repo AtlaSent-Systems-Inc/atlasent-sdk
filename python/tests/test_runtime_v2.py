@@ -56,7 +56,11 @@ def _mock_post(body: Any, *, status: int = 200) -> MagicMock:
 def test_authorize_permitted():
     permit = {"permit_id": PERMIT_ID, "status": "ACTIVE"}
     client = _client()
-    with patch.object(client._client, "post", return_value=_mock_post({"status": "PERMITTED", "permit": permit})):
+    with patch.object(
+        client._client,
+        "post",
+        return_value=_mock_post({"status": "PERMITTED", "permit": permit}),
+    ):
         rv2 = RuntimeV2Client(client)
         result = rv2.authorize(ORG, {"transition": {"from": "idle", "to": "running"}})
     assert isinstance(result, AuthorizationDecision)
@@ -66,11 +70,17 @@ def test_authorize_permitted():
 
 def test_authorize_denied():
     client = _client()
-    with patch.object(client._client, "post", return_value=_mock_post({
-        "status": "DENIED",
-        "reasons": ["policy X denied"],
-        "policy_ids": ["pol_abc"],
-    })):
+    with patch.object(
+        client._client,
+        "post",
+        return_value=_mock_post(
+            {
+                "status": "DENIED",
+                "reasons": ["policy X denied"],
+                "policy_ids": ["pol_abc"],
+            }
+        ),
+    ):
         rv2 = RuntimeV2Client(client)
         result = rv2.authorize(ORG, {})
     assert result.status == "DENIED"
@@ -80,11 +90,17 @@ def test_authorize_denied():
 
 def test_authorize_pending():
     client = _client()
-    with patch.object(client._client, "post", return_value=_mock_post({
-        "status": "PENDING_APPROVAL",
-        "permit": {"permit_id": PERMIT_ID},
-        "required_approvers": ["did:key:approver1"],
-    })):
+    with patch.object(
+        client._client,
+        "post",
+        return_value=_mock_post(
+            {
+                "status": "PENDING_APPROVAL",
+                "permit": {"permit_id": PERMIT_ID},
+                "required_approvers": ["did:key:approver1"],
+            }
+        ),
+    ):
         rv2 = RuntimeV2Client(client)
         result = rv2.authorize(ORG, {})
     assert result.status == "PENDING_APPROVAL"
@@ -97,7 +113,9 @@ def test_authorize_pending():
 def test_get_permit_found():
     permit = {"permit_id": PERMIT_ID, "status": "ACTIVE"}
     client = _client()
-    with patch.object(client._client, "get", return_value=_mock_get({"permit": permit})):
+    with patch.object(
+        client._client, "get", return_value=_mock_get({"permit": permit})
+    ):
         rv2 = RuntimeV2Client(client)
         result = rv2.get_permit(ORG, PERMIT_ID)
     assert result == permit
@@ -150,7 +168,11 @@ def test_consume_failed_state_mismatch():
 
 def test_approve_returns_status():
     client = _client()
-    with patch.object(client._client, "post", return_value=_mock_post({"approved": True, "status": "ACTIVE"})):
+    with patch.object(
+        client._client,
+        "post",
+        return_value=_mock_post({"approved": True, "status": "ACTIVE"}),
+    ):
         rv2 = RuntimeV2Client(client)
         result = rv2.approve(ORG, PERMIT_ID, "did:key:z6Mk", "sig_abc", comment="lgtm")
     assert result["approved"] is True
@@ -189,9 +211,20 @@ def test_complete_verified():
 
 
 def test_list_authorities():
-    auth = {"authority_id": AUTHORITY_ID, "org_id": ORG, "name": "Root", "action_classes": ["DEPLOY"], "public_key": "pk", "key_id": "kid", "status": "ACTIVE", "created_at": "2026-01-01T00:00:00Z"}
+    auth = {
+        "authority_id": AUTHORITY_ID,
+        "org_id": ORG,
+        "name": "Root",
+        "action_classes": ["DEPLOY"],
+        "public_key": "pk",
+        "key_id": "kid",
+        "status": "ACTIVE",
+        "created_at": "2026-01-01T00:00:00Z",
+    }
     client = _client()
-    with patch.object(client._client, "get", return_value=_mock_get({"authorities": [auth]})):
+    with patch.object(
+        client._client, "get", return_value=_mock_get({"authorities": [auth]})
+    ):
         rv2 = RuntimeV2Client(client)
         result = rv2.list_authorities(ORG)
     assert len(result) == 1
@@ -199,9 +232,20 @@ def test_list_authorities():
 
 
 def test_get_authority_found():
-    auth = {"authority_id": AUTHORITY_ID, "org_id": ORG, "name": "Root", "action_classes": [], "public_key": "pk", "key_id": "kid", "status": "ACTIVE", "created_at": "2026-01-01T00:00:00Z"}
+    auth = {
+        "authority_id": AUTHORITY_ID,
+        "org_id": ORG,
+        "name": "Root",
+        "action_classes": [],
+        "public_key": "pk",
+        "key_id": "kid",
+        "status": "ACTIVE",
+        "created_at": "2026-01-01T00:00:00Z",
+    }
     client = _client()
-    with patch.object(client._client, "get", return_value=_mock_get({"authority": auth})):
+    with patch.object(
+        client._client, "get", return_value=_mock_get({"authority": auth})
+    ):
         rv2 = RuntimeV2Client(client)
         result = rv2.get_authority(ORG, AUTHORITY_ID)
     assert result is not None
@@ -210,7 +254,9 @@ def test_get_authority_found():
 
 def test_get_authority_not_found():
     client = _client()
-    with patch.object(client._client, "get", return_value=_mock_get({"authority": None})):
+    with patch.object(
+        client._client, "get", return_value=_mock_get({"authority": None})
+    ):
         rv2 = RuntimeV2Client(client)
         result = rv2.get_authority(ORG, AUTHORITY_ID)
     assert result is None
@@ -242,7 +288,9 @@ def test_query_audit_chain():
     body = {"entries": [entry], "total": 1, "page": 1, "page_size": 100}
     with patch.object(client._client, "get", return_value=_mock_get(body)):
         rv2 = RuntimeV2Client(client)
-        result = rv2.query_audit_chain(ORG, "2026-05-01T00:00:00Z", "2026-05-31T00:00:00Z")
+        result = rv2.query_audit_chain(
+            ORG, "2026-05-01T00:00:00Z", "2026-05-31T00:00:00Z"
+        )
     assert isinstance(result, AuditChainPage)
     assert result.total == 1
     assert isinstance(result.entries[0], RuntimeAuditEntry)
@@ -285,7 +333,9 @@ def test_export_compliance():
     client = _client()
     with patch.object(client._client, "post", return_value=_mock_post(body)):
         rv2 = RuntimeV2Client(client)
-        result = rv2.export_compliance(ORG, "2026-05-01T00:00:00Z", "2026-05-31T00:00:00Z")
+        result = rv2.export_compliance(
+            ORG, "2026-05-01T00:00:00Z", "2026-05-31T00:00:00Z"
+        )
     assert isinstance(result, ComplianceExport)
     assert result.entry_count == 42
     assert result.format == "JSON"
@@ -311,18 +361,24 @@ def test_revoke_permit_with_propagation():
     mock_resp.json = MagicMock(return_value={})
     with patch.object(client._client, "request", return_value=mock_resp) as mock_req:
         rv2 = RuntimeV2Client(client)
-        rv2.revoke_permit(ORG, PERMIT_ID, "did:key:revoker", "expired", propagates_to_children=True)
+        rv2.revoke_permit(
+            ORG, PERMIT_ID, "did:key:revoker", "expired", propagates_to_children=True
+        )
     import json
+
     body = json.loads(mock_req.call_args.kwargs.get("content", b"{}"))
     assert body["propagates_to_children"] is True
 
 
 def test_revoke_permit_error():
     from atlasent.exceptions import AtlaSentError
+
     client = _client()
     mock_resp = MagicMock()
     mock_resp.status_code = 404
-    mock_resp.json = MagicMock(return_value={"error": {"code": "not_found", "message": "permit not found"}})
+    mock_resp.json = MagicMock(
+        return_value={"error": {"code": "not_found", "message": "permit not found"}}
+    )
     with patch.object(client._client, "request", return_value=mock_resp):
         rv2 = RuntimeV2Client(client)
         with pytest.raises(AtlaSentError):
@@ -333,19 +389,49 @@ def test_revoke_permit_error():
 
 
 def test_create_authority():
-    auth = {"authority_id": AUTHORITY_ID, "org_id": ORG, "name": "New", "action_classes": ["DEPLOY"], "public_key": "pk", "key_id": "kid", "status": "ACTIVE", "created_at": "2026-01-01T00:00:00Z"}
+    auth = {
+        "authority_id": AUTHORITY_ID,
+        "org_id": ORG,
+        "name": "New",
+        "action_classes": ["DEPLOY"],
+        "public_key": "pk",
+        "key_id": "kid",
+        "status": "ACTIVE",
+        "created_at": "2026-01-01T00:00:00Z",
+    }
     client = _client()
-    with patch.object(client._client, "post", return_value=_mock_post({"authority": auth})):
+    with patch.object(
+        client._client, "post", return_value=_mock_post({"authority": auth})
+    ):
         rv2 = RuntimeV2Client(client)
-        result = rv2.create_authority(ORG, {"name": "New", "action_classes": ["DEPLOY"], "public_key": "pk", "key_id": "kid"})
+        result = rv2.create_authority(
+            ORG,
+            {
+                "name": "New",
+                "action_classes": ["DEPLOY"],
+                "public_key": "pk",
+                "key_id": "kid",
+            },
+        )
     assert result.authority_id == AUTHORITY_ID
     assert result.name == "New"
 
 
 def test_rotate_authority():
-    auth = {"authority_id": AUTHORITY_ID, "org_id": ORG, "name": "Root", "action_classes": [], "public_key": "new_pk", "key_id": "new_kid", "status": "ACTIVE", "created_at": "2026-01-01T00:00:00Z"}
+    auth = {
+        "authority_id": AUTHORITY_ID,
+        "org_id": ORG,
+        "name": "Root",
+        "action_classes": [],
+        "public_key": "new_pk",
+        "key_id": "new_kid",
+        "status": "ACTIVE",
+        "created_at": "2026-01-01T00:00:00Z",
+    }
     client = _client()
-    with patch.object(client._client, "post", return_value=_mock_post({"authority": auth})):
+    with patch.object(
+        client._client, "post", return_value=_mock_post({"authority": auth})
+    ):
         rv2 = RuntimeV2Client(client)
         result = rv2.rotate_authority(ORG, AUTHORITY_ID, "new_pk", "new_kid")
     assert result.public_key == "new_pk"
@@ -363,7 +449,13 @@ def test_revoke_authority():
 
 
 def test_submit_evidence():
-    pkg = {"evidence_id": EVIDENCE_ID, "permit_id": PERMIT_ID, "org_id": ORG, "observations": [], "collected_at": "2026-05-30T07:00:00Z"}
+    pkg = {
+        "evidence_id": EVIDENCE_ID,
+        "permit_id": PERMIT_ID,
+        "org_id": ORG,
+        "observations": [],
+        "collected_at": "2026-05-30T07:00:00Z",
+    }
     client = _client()
     with patch.object(client._client, "post", return_value=_mock_post({})):
         rv2 = RuntimeV2Client(client)
@@ -376,8 +468,13 @@ def test_query_audit_chain_with_filters():
     with patch.object(client._client, "get", return_value=_mock_get(body)):
         rv2 = RuntimeV2Client(client)
         result = rv2.query_audit_chain(
-            ORG, "2026-05-01T00:00:00Z", "2026-05-31T00:00:00Z",
-            page=1, page_size=50, action_class="DEPLOY", principal_did="did:key:x"
+            ORG,
+            "2026-05-01T00:00:00Z",
+            "2026-05-31T00:00:00Z",
+            page=1,
+            page_size=50,
+            action_class="DEPLOY",
+            principal_did="did:key:x",
         )
     assert result.total == 0
     assert result.page_size == 50
