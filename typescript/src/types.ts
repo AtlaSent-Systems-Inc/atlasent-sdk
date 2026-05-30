@@ -82,7 +82,7 @@ export const PRODUCTION_DEPLOY_ACTION = "production.deploy" as const;
  */
 export const DEPLOYMENT_PRODUCTION_ACTION = "deployment.production" as const;
 
-// ── Deploy Gate V1 context types ──────────────────────────────────────────────
+// ── Deploy Gate V1 context types ──────────────────────────────────────────────────────
 
 /**
  * Permit claim for `production.deploy` evaluations (Rule 3).
@@ -288,6 +288,20 @@ export interface EvaluateRequest {
   proposed_state?: { description: string; attributes?: Record<string, unknown> };
   /** Execution surface binding — identifies the CI/CD adapter, DB driver, or enforcement point. */
   execution_binding?: { kind: string; adapter_version?: string; resource_id?: string; enforcement_point?: string };
+  /** The desired end-state the actor wants the resource to reach. Enables trajectory-aware authorization. */
+  desired_state?: { description: string; attributes?: Record<string, unknown>; fingerprint?: string };
+  /** Actor-proposed execution path from current_state to desired_state. The engine returns an authorized_trajectory that may differ. */
+  proposed_trajectory?: {
+    steps: Array<{
+      step: string;
+      description?: string;
+      required: boolean;
+      time_limit_seconds?: number;
+      authorized_by?: string;
+      constraints?: Record<string, unknown>;
+    }>;
+    description?: string;
+  };
 }
 
 /**
@@ -424,6 +438,28 @@ export interface EvaluateResponse {
    * for resolution status.
    */
   escalationId?: string;
+  /**
+   * Authorized execution trajectory returned when the engine approved a
+   * `proposed_trajectory`. Present only on `allow` decisions.
+   * May differ from what was proposed — the engine may add checkpoints,
+   * restrict steps, or tighten time limits. Follow this trajectory exactly;
+   * call `POST /v1/trajectory-verify` at each step to confirm on_trajectory.
+   */
+  authorized_trajectory?: {
+    trajectory_id: string;
+    steps: Array<{
+      step: string;
+      description?: string;
+      required: boolean;
+      time_limit_seconds?: number;
+      authorized_by?: string;
+      constraints?: Record<string, unknown>;
+      expected_intermediate_state?: { description: string; attributes?: Record<string, unknown>; fingerprint?: string };
+    }>;
+    description?: string;
+    forbidden_states?: Array<{ description: string; attributes?: Record<string, unknown>; fingerprint?: string }>;
+    expires_at: string;
+  };
 }
 
 /** Per-factor contribution in a {@link EvaluateRiskEnvelope}. */
@@ -516,12 +552,7 @@ export interface VerifyPermitResponse {
  * key the client was constructed with. Returned by `GET /v1/api-key-self`.
  *
  * Never includes the raw key or its hash — introspection is intentionally
- * read-only and safe to surface in operator dashboards. Useful for:
- *   - "which key am I?" debugging
- *   - IP_NOT_ALLOWED failures — `clientIp` is the IP the server observed
- *   - proactive expiry warnings — `expiresAt` is the server-stored expiry
- *     (`null` means the key does not auto-expire)
- *   - verifying scopes before attempting a scope-gated action
+ * read-only and safe to surface in operator dashboards.
  */
 export interface ApiKeySelfResponse {
   /** Server-side UUID of the api_keys row for this key. */
@@ -553,25 +584,17 @@ export interface ApiKeySelfResponse {
 /**
  * Result of {@link AtlaSentClient.listAuditEvents}. Extends the raw
  * wire page with a camelCase `rateLimit` alongside the snake_case
- * wire fields — the wire shape (`events`, `total`, `next_cursor`) is
- * untouched so callers that pass it to the offline verifier get
- * byte-identical behaviour.
+ * wire fields.
  */
 export interface AuditEventsResult extends AuditEventsPage {
-  /**
-   * Per-key rate-limit state for this request's response, parsed from
-   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
-   */
   rateLimit: RateLimitState | null;
 }
 
 /**
- * Filter accepted by {@link AtlaSentClient.createAuditExport}. Fields
- * are snake_case to match the server's `POST /v1-audit/exports`
- * request body; an empty object requests a full-org bundle.
+ * Filter accepted by {@link AtlaSentClient.createAuditExport}.
  */
 export interface AuditExportRequest {
-  /** Comma-joined list of event types to include (e.g. `"evaluate.allow,policy.updated"`). */
+  /** Comma-joined list of event types to include. */
   types?: string;
   /** Filter to a single actor. */
   actor_id?: string;
@@ -582,18 +605,9 @@ export interface AuditExportRequest {
 }
 
 /**
- * Result of {@link AtlaSentClient.createAuditExport}. Extends the
- * signed bundle shape with a camelCase `rateLimit`. The signed
- * envelope fields (`export_id`, `org_id`, `chain_head_hash`,
- * `event_count`, `signed_at`, `events`, `signature`) are preserved
- * byte-for-byte so the object can be handed straight to
- * `verifyAuditBundle(bundle, keys)`.
+ * Result of {@link AtlaSentClient.createAuditExport}.
  */
 export interface AuditExportResult extends AuditExport {
-  /**
-   * Per-key rate-limit state for this request's response, parsed from
-   * `X-RateLimit-*` headers. `null` when the server didn't emit them.
-   */
   rateLimit: RateLimitState | null;
 }
 
@@ -633,7 +647,7 @@ export interface AtlaSentClientOptions {
   trustSnapshotRefreshMs?: number;
 }
 
-// ── Permit lifecycle (canonical REST shapes) ──────────────────────────────────
+// ── Permit lifecycle (canonical REST shapes) ───────────────────────────────────────────
 
 /** Permit lifecycle status. */
 export type PermitStatus =
@@ -645,11 +659,7 @@ export type PermitStatus =
 
 /**
  * Wire shape of a Permit row, returned by {@link AtlaSentClient.getPermit}
- * and {@link AtlaSentClient.listPermits}. Mirrors the openapi `Permit`
- * schema.
- *
- * Revocation fields (`revoked_at`, `revoked_by`, `revoke_reason`) are
- * populated only when `status === 'revoked'`; null otherwise.
+ * and {@link AtlaSentClient.listPermits}.
  */
 export interface PermitRecord {
   id: string;
@@ -675,22 +685,16 @@ export interface ListPermitsRequest {
   status?: PermitStatus;
   actorId?: string;
   actionType?: string;
-  /** ISO-8601 lower bound on `created_at`. */
   from?: string;
-  /** ISO-8601 upper bound on `created_at`. */
   to?: string;
-  /** Page size. Server max is 500; default 50. */
   limit?: number;
-  /** Pass `nextCursor` from a prior response to page forward. */
   cursor?: string;
 }
 
 /** Response from {@link AtlaSentClient.listPermits}. */
 export interface ListPermitsResponse {
   permits: PermitRecord[];
-  /** Total matching rows ignoring `limit`/`cursor`. */
   total: number;
-  /** Pass on next call as `cursor`. Absent when no more rows. */
   nextCursor?: string;
   rateLimit: RateLimitState | null;
 }
@@ -703,45 +707,23 @@ export interface GetPermitResponse {
 
 /**
  * Response from {@link AtlaSentClient.checkPermitValid}.
- *
- * Lightweight validity snapshot returned by
- * `GET /v1/permits/{permitId}/valid`. Designed for guard heartbeat
- * polling — returns only the fields needed to determine whether to
- * abort a running permit mid-execution (via {@link PermitRevoked}).
  */
 export interface PermitValidResponse {
-  /** True iff the permit is currently valid (active). */
   valid: boolean;
-  /**
-   * Current lifecycle status of the permit.
-   * - `"active"` — permit is valid and in-flight.
-   * - `"expired"` — TTL elapsed before revocation or consumption.
-   * - `"revoked"` — administratively revoked (see `revocation_id`).
-   * - `"consumed"` — single-use permit already consumed.
-   */
   status: "active" | "expired" | "revoked" | "consumed";
-  /** ISO-8601 timestamp when the permit was revoked. Populated only when `status === "revoked"`. */
   revoked_at?: string;
-  /** Opaque identifier of the revocation record. Populated only when `status === "revoked"`. */
   revocation_id?: string;
 }
 
-// ── Canonical revoke / verify (REST) ──────────────────────────────────────────
+// ── Canonical revoke / verify (REST) ──────────────────────────────────────────────────
 
 /** Input for {@link AtlaSentClient.revokePermitById}. */
 export interface RevokePermitByIdInput {
-  /** Operator-supplied free-text reason. Recorded on the permit row,
-   *  written to the audit trail, and surfaced (truncated) on later
-   *  verify responses. Optional but strongly encouraged. */
   reason?: string;
 }
 
 /**
  * Response from {@link AtlaSentClient.revokePermitById}.
- *
- * Returns the updated {@link PermitRecord} with `status === 'revoked'`
- * and the populated `revoked_at` / `revoked_by` / `revoke_reason`
- * fields.
  */
 export interface RevokePermitByIdResponse {
   permit: PermitRecord;
@@ -750,23 +732,12 @@ export interface RevokePermitByIdResponse {
 
 /**
  * Response from {@link AtlaSentClient.verifyPermitById}.
- *
- * Returns the canonical verification envelope (`valid`,
- * `verification_type`, `reason`, `verified_at`, `evidence`) plus the
- * legacy {@link PermitRecord} fields preserved at the top level for
- * backward compatibility. The envelope shape matches the unified
- * verify response in atlasent-api PR #352.
  */
 export interface VerifyPermitByIdResponse {
-  /** `true` iff the permit verified — i.e. unconsumed, unexpired, and signature OK. */
   valid: boolean;
-  /** Always `'permit'` on this surface. */
   verification_type: "permit";
-  /** Operator-readable explanation when `valid` is `false`; `null` on success. */
   reason: string | null;
-  /** Server clock at the moment verification ran. */
   verified_at: string;
-  /** Type-specific evidence — same fields as the openapi PermitVerifyEvidence schema. */
   evidence: {
     permit_id: string;
     status: PermitStatus;
@@ -776,18 +747,15 @@ export interface VerifyPermitByIdResponse {
     payload_hash?: string | null;
     decision_id?: string | null;
   };
-  /** Legacy: full permit row preserved at the top level. */
   permit: PermitRecord;
   rateLimit: RateLimitState | null;
 }
 
-// ── Revoke permit ─────────────────────────────────────────────────────────────
+// ── Revoke permit ─────────────────────────────────────────────────────────────────────────
 
 /** Input for {@link AtlaSentClient.revokePermit}. */
 export interface RevokePermitRequest {
-  /** The permit ID returned by a prior evaluate() call. */
   permitId: string;
-  /** Optional human-readable reason stored in the audit log. */
   reason?: string;
 }
 
@@ -795,310 +763,115 @@ export interface RevokePermitRequest {
  * Result of {@link AtlaSentClient.revokePermit}.
  *
  * @deprecated Use {@link RevokePermitByIdResponse} via
- * {@link AtlaSentClient.revokePermitById} — the canonical REST surface
- * (`POST /v1/permits/{id}/revoke`) returns the full updated
- * {@link PermitRecord} with `revoked_at`/`revoked_by`/`revoke_reason`
- * populated, instead of the legacy `{revoked, permitId}` envelope.
+ * {@link AtlaSentClient.revokePermitById}.
  * Will be removed in `@atlasent/sdk@3`.
  */
 export interface RevokePermitResponse {
-  /** `true` when the permit was found and successfully revoked. */
   revoked: boolean;
-  /** Echo of the revoked permit's ID. */
   permitId: string;
-  /** ISO-8601 timestamp of when the revocation was recorded. `undefined` when not returned by the server. */
   revokedAt?: string | undefined;
-  /** Audit hash for the revocation event. `undefined` when not returned by the server. */
   auditHash?: string | undefined;
-  /** Per-key rate-limit state. `null` when the server didn't emit headers. */
   rateLimit: RateLimitState | null;
 }
 
-// ── Constraint trace (preflight) ──────────────────────────────────────────────
+// ── Constraint trace (preflight) ────────────────────────────────────────────────────────
 
-/**
- * One stage of a single policy's constraint evaluation.
- *
- * Mirrors `ConstraintTraceStage` in
- * `atlasent-api/packages/types/src/index.ts`. Emitted by the rule
- * engine when the request URL carries `?include=constraint_trace`.
- *
- * Forward-compat: extra engine-side keys are tolerated; readers
- * should not assume this is a closed shape.
- */
 export interface ConstraintTraceStage {
-  /** Engine stage name (e.g. `"role_check"`, `"context"`). */
   readonly stage: string;
-  /** Optional rule identifier; absent for wrapper stages. */
   readonly rule?: string;
-  /** True iff this stage's predicate fired. */
   readonly matched: boolean;
-  /** Optional human-readable note from the engine. */
   readonly detail?: string;
-  /** Zero-based position within the policy's `stages` array. */
   readonly order: number;
-  /** Forward-compat: tolerate unknown engine-side keys without crashing. */
   readonly [key: string]: unknown;
 }
 
-/**
- * Per-policy block of a constraint trace.
- *
- * Mirrors `ConstraintTracePolicy` in
- * `atlasent-api/packages/types/src/index.ts`. The handler iterates
- * active policies in order until first non-allow; the policy that
- * produced the outer decision has `decision !== "allow"`.
- */
 export interface ConstraintTracePolicy {
-  /** Stable identifier of the evaluated policy. */
   readonly policy_id: string;
-  /** Policy-level decision (`"allow"|"deny"|"hold"|"escalate"`). */
   readonly decision: string;
-  /** Engine-side fingerprint of the bundle row. */
   readonly fingerprint: string;
-  /**
-   * Optional engine-computed risk score from a `risk` rule clause.
-   * Distinct from the heuristic risk score on the outer envelope.
-   */
   readonly risk_score?: number;
-  /** Ordered stages produced while evaluating this policy. */
   readonly stages: ReadonlyArray<ConstraintTraceStage>;
-  /** Forward-compat: tolerate unknown engine-side keys. */
   readonly [key: string]: unknown;
 }
 
-/**
- * Top-level constraint trace returned by
- * `/v1-evaluate?include=constraint_trace`.
- *
- * Mirrors `ConstraintTraceResponse` in
- * `atlasent-api/packages/types/src/index.ts`. Present iff the
- * caller requested the trace; the SDK's preflight helper always
- * requests it.
- */
 export interface ConstraintTrace {
-  /** Per-policy blocks in evaluation order. */
   readonly rules_evaluated: ReadonlyArray<ConstraintTracePolicy>;
-  /**
-   * Policy id whose evaluation produced the outer decision. Equals
-   * the outer `matched_policy_id` on non-allow paths; `undefined` on
-   * a clean allow (all policies passed).
-   */
   readonly matching_policy_id?: string;
-  /** Forward-compat: tolerate unknown engine-side keys. */
   readonly [key: string]: unknown;
 }
 
-/**
- * Result of {@link AtlaSentClient.evaluatePreflight}.
- *
- * Wraps the regular {@link EvaluateResponse} plus the
- * {@link ConstraintTrace} returned when the request URL carries
- * `?include=constraint_trace`. The whole point of preflight is to
- * surface which stages / policies WOULD fire BEFORE pushing the
- * request onto an approval queue, so workflows can reject trivially
- * defective requests at submission time and only forward viable
- * requests to a human reviewer.
- *
- * `constraintTrace` is `null` on responses from older atlasent-api
- * deployments that do not echo the trace — forward-compatible
- * degradation.
- */
 export interface EvaluatePreflightResponse {
-  /** The regular evaluate response (decision, permitId, ...). */
   readonly evaluation: EvaluateResponse;
-  /**
-   * The constraint trace, or `null` when the server omitted it
-   * (older atlasent-api version).
-   */
   readonly constraintTrace: ConstraintTrace | null;
 }
 
-// ── Streaming evaluate ────────────────────────────────────────────────────────
+// ── Streaming evaluate ─────────────────────────────────────────────────────────────────────
 
-/**
- * Options for {@link AtlaSentClient.protectStream}.
- *
- * All fields are optional; defaults are used when omitted.
- */
 export interface StreamOptions {
-  /**
-   * Optional abort signal to cancel the stream from the caller side.
-   */
   signal?: AbortSignal;
-  /**
-   * Per-event timeout in milliseconds: if no SSE event arrives within
-   * this window the stream throws {@link StreamTimeoutError}.
-   * Defaults to 30 000 ms (30 s). Pass `0` to disable.
-   */
   timeoutMs?: number;
-  /**
-   * Maximum reconnection attempts on network drop before the stream
-   * gives up and throws. Defaults to 3.
-   */
   maxRetries?: number;
 }
 
-/** A policy decision emitted mid-stream. */
 export interface StreamDecisionEvent {
   type: "decision";
-  /**
-   * Policy decision — canonical 4-value lowercase vocabulary:
-   * `"allow"`, `"deny"`, `"hold"`, or `"escalate"`.
-   *
-   * Previously emitted `"ALLOW"` / `"DENY"` (uppercase, 2-value);
-   * now unified with `decision_canonical`.
-   *
-   * @deprecated Read `decision_canonical` instead for forward-compatible
-   * branching. Both fields now carry the same value. Will be
-   * removed/changed in `@atlasent/sdk@3`.
-   */
   decision: Decision;
-  /**
-   * Canonical 4-value decision, byte-identical to the wire.
-   * One of `"allow"`, `"deny"`, `"hold"`, `"escalate"`.
-   */
   decision_canonical: DecisionCanonical;
-  /** Opaque permit identifier for a final allow. Pass to verifyPermit. */
   permitId: string;
-  /** Human-readable explanation from the policy engine. */
   reason: string;
-  /** Audit hash bound to this decision. */
   auditHash: string;
-  /** ISO-8601 timestamp of the decision. */
   timestamp: string;
-  /** When true the stream will emit done and close after this event. */
   isFinal: boolean;
 }
 
-/** An intermediate progress hint emitted before the final decision. */
 export interface StreamProgressEvent {
   type: "progress";
-  /** Human-readable stage name (e.g. "policy_loading", "context_enrichment"). */
   stage: string;
-  /** Additional server-defined fields — forward-compat, do not rely on shape. */
   [key: string]: unknown;
 }
 
-/** Union of all events yielded by {@link AtlaSentClient.protectStream}. */
 export type StreamEvent = StreamDecisionEvent | StreamProgressEvent;
 
-// ── Batch evaluate ────────────────────────────────────────────────────────────
+// ── Batch evaluate ────────────────────────────────────────────────────────────────────────────
 
-/**
- * A single item in a {@link AtlaSentClient.evaluateBatch} call.
- * Same shape as {@link EvaluateRequest}.
- */
 export interface BatchEvalItem {
-  /** Identifier of the calling agent. */
   agent: string;
-  /** The action being authorized. */
   action: string;
-  /** Arbitrary policy context. */
   context?: Record<string, unknown>;
 }
 
-/**
- * Per-item result in an {@link EvaluateBatchResponse}.
- *
- * Success items carry `decision`, `decisionId`, `permitToken`, `auditHash`,
- * and `timestamp`. Error items (when the per-item RPC layer failed) carry
- * only `index`, `error`, and optionally `message`.
- */
 export interface EvaluateBatchResultItem {
-  /** 0-based position matching the input order. */
   index: number;
-  /**
-   * Policy decision for this item. Present on success items.
-   * `"allow"`, `"deny"`, `"hold"`, or `"escalate"`.
-   */
   decision?: DecisionCanonical;
-  /** Server-assigned permit / decision identifier. */
   decisionId?: string;
-  /** Opaque permit token (allow decisions only). Pass to verifyPermit(). */
   permitToken?: string | null;
-  /** Machine-readable denial / hold reason. */
   reason?: string;
-  /** Hash-chained audit-trail entry. */
   auditHash?: string;
-  /** ISO-8601 decision timestamp. */
   timestamp?: string;
-  /** Error code when the item itself failed at the RPC layer. */
   error?: string;
-  /** Human-readable detail when `error` is set. */
   message?: string;
 }
 
-/**
- * Response from {@link AtlaSentClient.evaluateBatch}.
- *
- * - `items` is in the same order as the input `requests` array.
- * - `partial: true` means at least one item errored at the RPC layer
- *   (not a policy deny — those are surfaced via `decision: "deny"` on
- *   the item). Check `item.error` on items without a `decision`.
- * - `replayed: true` means the response was served from the idempotency
- *   cache (a prior call with the same `batchId` completed within 24 h).
- */
 export interface BatchEvalResponse {
-  /** Server-assigned (or caller-supplied) batch identifier. */
   batchId: string;
-  /** Per-item results, in input order. */
   items: EvaluateBatchResultItem[];
-  /** `true` when at least one item failed at the RPC layer. */
   partial: boolean;
-  /** `true` when served from the idempotency cache. */
   replayed?: boolean;
-  /** Rate-limit state from the batch response headers. */
   rateLimit: RateLimitState | null;
 }
 
-// ── Decisions stream ──────────────────────────────────────────────────────────
+// ── Decisions stream ──────────────────────────────────────────────────────────────────────
 
-/**
- * Options for {@link AtlaSentClient.subscribeDecisions}.
- */
 export interface SubscribeDecisionsOptions {
-  /**
-   * Filter to specific event types (e.g. `["evaluate.allow", "evaluate.deny"]`).
-   * Omit to receive all types.
-   */
   types?: string[];
-  /** Filter to a specific actor ID. */
   actorId?: string;
-  /**
-   * Resume from a prior event. Pass the `id` of the last received event.
-   * The server replays everything after that sequence position, then
-   * transitions to live polling.
-   */
   lastEventId?: string;
-  /**
-   * Maximum session duration in seconds. The server emits `session_end`
-   * and closes after this window; the caller should reconnect with the
-   * last received `lastEventId`. Defaults to 1800 (30 min), max 3600 (1 h).
-   */
   maxSeconds?: number;
-  /** Abort signal to cancel the stream. */
   signal?: AbortSignal;
 }
 
-/**
- * A single event from {@link AtlaSentClient.subscribeDecisions}.
- *
- * The `type` field maps to the audit-event type emitted by the server
- * (e.g. `"evaluate.allow"`, `"evaluate.deny"`, `"permit.verified"`).
- * `"heartbeat"` is a synthetic type emitted by the SDK — not a server
- * event — indicating the server sent a keepalive ping.
- * `"session_end"` signals the server-side max-seconds limit was reached;
- * reconnect with `lastEventId` to continue.
- */
 export interface DecisionStreamEvent {
-  /** Stable server-assigned ID. Pass as `lastEventId` to resume. */
   id?: string;
-  /**
-   * Audit-event type, e.g. `"evaluate.allow"`, `"evaluate.deny"`,
-   * `"evaluate.hold"`, `"permit.verified"`, `"permit.revoked"`,
-   * `"heartbeat"`, `"session_end"`.
-   */
   type: string;
   decision?: DecisionCanonical;
   actorId?: string;
@@ -1108,4 +881,113 @@ export interface DecisionStreamEvent {
   hash?: string;
   previousHash?: string;
   occurredAt?: string;
+}
+
+// ── Trajectory authorization ────────────────────────────────────────────────────────────
+
+/** Verified snapshot of resource state. */
+export interface StateSnapshot {
+  description: string;
+  attributes?: Record<string, unknown>;
+  /** Deterministic hash of the state (e.g. schema fingerprint, content hash). */
+  fingerprint?: string;
+  recorded_at?: string;
+}
+
+/** Step in an execution trajectory. */
+export interface TrajectoryStep {
+  step: string;
+  description?: string;
+  required: boolean;
+  time_limit_seconds?: number;
+  authorized_by?: string;
+  constraints?: Record<string, unknown>;
+  expected_intermediate_state?: StateSnapshot;
+}
+
+/** Actor-submitted trajectory proposal. */
+export interface ProposedTrajectory {
+  steps: TrajectoryStep[];
+  description?: string;
+}
+
+/** Evaluation-engine-returned authorized trajectory. May differ from the proposed trajectory. */
+export interface AuthorizedTrajectory extends ProposedTrajectory {
+  trajectory_id: string;
+  forbidden_states?: StateSnapshot[];
+  expires_at: string;
+}
+
+/** Input to POST /v1/trajectory-verify. */
+export interface TrajectoryVerifyRequest {
+  permit_token: string;
+  current_step: string;
+  current_state?: StateSnapshot;
+  completed_steps?: string[];
+  execution_context?: Record<string, unknown>;
+}
+
+/** Response from POST /v1/trajectory-verify. */
+export interface TrajectoryVerifyResponse {
+  on_trajectory: boolean;
+  trajectory_position?: number;
+  trajectory_complete: boolean;
+  deviation?: TrajectoryDeviationEvent;
+  verified_at: string;
+}
+
+/** Deviation type for trajectory deviation events. */
+export type TrajectoryDeviationType =
+  | "step_not_on_trajectory"
+  | "step_out_of_sequence"
+  | "forbidden_state_reached"
+  | "required_step_skipped"
+  | "time_limit_exceeded"
+  | "constraint_violation"
+  | "trajectory_expired";
+
+/** Emitted when execution departs from the authorized trajectory. */
+export interface TrajectoryDeviationEvent {
+  deviation_type: TrajectoryDeviationType;
+  trajectory_id: string;
+  permit_id: string;
+  step?: string;
+  actual_state?: StateSnapshot;
+  expected_state?: StateSnapshot;
+  reason: string;
+  detected_at: string;
+}
+
+/** Evidence artifact: authorized trajectory vs. actual execution trace. */
+export interface ComplianceComparisonArtifact {
+  version: "compliance_comparison.v1";
+  artifact_id: string;
+  authorized_transition: {
+    permit_id: string;
+    desired_state: StateSnapshot;
+    trajectory: AuthorizedTrajectory;
+    spec_signature?: string;
+  };
+  execution_trace: {
+    executed_steps: Array<{
+      step: string;
+      started_at: string;
+      completed_at?: string;
+      outcome: "success" | "failure" | "skipped";
+      state_after?: StateSnapshot;
+    }>;
+    final_state: StateSnapshot;
+    trace_signature?: string;
+  };
+  fidelity: {
+    compliant: boolean;
+    /** Score in [0, 1] measuring closeness of actual to authorized trajectory. */
+    fidelity_score: number;
+    missing_required_steps: string[];
+    unexpected_steps: string[];
+    forbidden_states_reached: StateSnapshot[];
+    deviation_events: TrajectoryDeviationEvent[];
+  };
+  artifact_hash: string;
+  generated_at: string;
 }
