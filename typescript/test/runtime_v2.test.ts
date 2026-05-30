@@ -238,6 +238,93 @@ describe("exportCompliance", () => {
   });
 });
 
+// ── revokePermit ─────────────────────────────────────────────────────────────
+
+describe("revokePermit", () => {
+  it("sends DELETE with revocation body", async () => {
+    let method = "";
+    let body = "";
+    const f = async (_url: string | Request | URL, init?: RequestInit) => {
+      method = (init?.method as string) ?? "";
+      body = (init?.body as string) ?? "";
+      return new Response(null, { status: 200 });
+    };
+    const rt = new RuntimeV2Client(transport(f as typeof fetch));
+    await rt.revokePermit(ORG, PERMIT_ID, "did:key:revoker", "expired");
+    expect(method).toBe("DELETE");
+    expect(JSON.parse(body)).toMatchObject({ revoked_by: "did:key:revoker", reason: "expired" });
+  });
+
+  it("propagates_to_children flag is forwarded", async () => {
+    let body = "";
+    const f = async (_url: string | Request | URL, init?: RequestInit) => {
+      body = (init?.body as string) ?? "";
+      return new Response(null, { status: 200 });
+    };
+    const rt = new RuntimeV2Client(transport(f as typeof fetch));
+    await rt.revokePermit(ORG, PERMIT_ID, "did:key:r", "reason", true);
+    expect(JSON.parse(body).propagates_to_children).toBe(true);
+  });
+});
+
+// ── createAuthority / rotateAuthority / revokeAuthority ───────────────────────
+
+describe("createAuthority", () => {
+  it("returns created authority", async () => {
+    const auth = { authority_id: AUTHORITY_ID, org_id: ORG, name: "New", action_classes: ["DEPLOY"], public_key: "pk", key_id: "kid", status: "ACTIVE", created_at: "2026-01-01T00:00:00Z" };
+    const f = async () => jsonResp({ authority: auth });
+    const rt = new RuntimeV2Client(transport(f));
+    const result = await rt.createAuthority(ORG, { name: "New" });
+    expect(result.authority_id).toBe(AUTHORITY_ID);
+  });
+});
+
+describe("rotateAuthority", () => {
+  it("returns updated authority with new key", async () => {
+    const auth = { authority_id: AUTHORITY_ID, org_id: ORG, name: "Root", action_classes: [], public_key: "new_pk", key_id: "new_kid", status: "ACTIVE", created_at: "2026-01-01T00:00:00Z" };
+    const f = async () => jsonResp({ authority: auth });
+    const rt = new RuntimeV2Client(transport(f));
+    const result = await rt.rotateAuthority(ORG, AUTHORITY_ID, "new_pk", "new_kid");
+    expect(result.public_key).toBe("new_pk");
+  });
+});
+
+describe("revokeAuthority", () => {
+  it("resolves without throwing", async () => {
+    const f = async () => jsonResp({});
+    const rt = new RuntimeV2Client(transport(f));
+    await expect(rt.revokeAuthority(ORG, AUTHORITY_ID, "compromised")).resolves.toBeUndefined();
+  });
+});
+
+// ── submitEvidence ────────────────────────────────────────────────────────────
+
+describe("submitEvidence", () => {
+  it("resolves without throwing", async () => {
+    const f = async () => jsonResp({}, 201);
+    const rt = new RuntimeV2Client(transport(f));
+    await expect(rt.submitEvidence(ORG, { evidence_id: EVIDENCE_ID })).resolves.toBeUndefined();
+  });
+});
+
+// ── queryAuditChain with filters ──────────────────────────────────────────────
+
+describe("queryAuditChain with filters", () => {
+  it("includes filter params in request URL", async () => {
+    let calledUrl = "";
+    const f = async (url: string | Request | URL) => {
+      calledUrl = url.toString();
+      return jsonResp({ entries: [], total: 0, page: 1, page_size: 50 });
+    };
+    const rt = new RuntimeV2Client(transport(f as typeof fetch));
+    await rt.queryAuditChain(ORG, "2026-05-01T00:00:00Z", "2026-05-31T00:00:00Z", {
+      page: 1, page_size: 50, action_class: "DEPLOY",
+    });
+    expect(calledUrl).toContain("action_class=DEPLOY");
+    expect(calledUrl).toContain("page_size=50");
+  });
+});
+
 // ── error handling ────────────────────────────────────────────────────────────
 
 describe("error handling", () => {

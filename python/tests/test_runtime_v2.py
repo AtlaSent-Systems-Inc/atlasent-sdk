@@ -291,6 +291,98 @@ def test_export_compliance():
     assert result.format == "JSON"
 
 
+# ── revoke_permit ─────────────────────────────────────────────────────────────
+
+
+def test_revoke_permit_success():
+    client = _client()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json = MagicMock(return_value={})
+    with patch.object(client._client, "request", return_value=mock_resp):
+        rv2 = RuntimeV2Client(client)
+        rv2.revoke_permit(ORG, PERMIT_ID, "did:key:revoker", "policy violation")
+
+
+def test_revoke_permit_with_propagation():
+    client = _client()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json = MagicMock(return_value={})
+    with patch.object(client._client, "request", return_value=mock_resp) as mock_req:
+        rv2 = RuntimeV2Client(client)
+        rv2.revoke_permit(ORG, PERMIT_ID, "did:key:revoker", "expired", propagates_to_children=True)
+    import json
+    body = json.loads(mock_req.call_args.kwargs.get("content", b"{}"))
+    assert body["propagates_to_children"] is True
+
+
+def test_revoke_permit_error():
+    from atlasent.exceptions import AtlaSentError
+    client = _client()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 404
+    mock_resp.json = MagicMock(return_value={"error": {"code": "not_found", "message": "permit not found"}})
+    with patch.object(client._client, "request", return_value=mock_resp):
+        rv2 = RuntimeV2Client(client)
+        with pytest.raises(AtlaSentError):
+            rv2.revoke_permit(ORG, "bad-id", "did:key:r", "reason")
+
+
+# ── create_authority / rotate_authority / revoke_authority ────────────────────
+
+
+def test_create_authority():
+    auth = {"authority_id": AUTHORITY_ID, "org_id": ORG, "name": "New", "action_classes": ["DEPLOY"], "public_key": "pk", "key_id": "kid", "status": "ACTIVE", "created_at": "2026-01-01T00:00:00Z"}
+    client = _client()
+    with patch.object(client._client, "post", return_value=_mock_post({"authority": auth})):
+        rv2 = RuntimeV2Client(client)
+        result = rv2.create_authority(ORG, {"name": "New", "action_classes": ["DEPLOY"], "public_key": "pk", "key_id": "kid"})
+    assert result.authority_id == AUTHORITY_ID
+    assert result.name == "New"
+
+
+def test_rotate_authority():
+    auth = {"authority_id": AUTHORITY_ID, "org_id": ORG, "name": "Root", "action_classes": [], "public_key": "new_pk", "key_id": "new_kid", "status": "ACTIVE", "created_at": "2026-01-01T00:00:00Z"}
+    client = _client()
+    with patch.object(client._client, "post", return_value=_mock_post({"authority": auth})):
+        rv2 = RuntimeV2Client(client)
+        result = rv2.rotate_authority(ORG, AUTHORITY_ID, "new_pk", "new_kid")
+    assert result.public_key == "new_pk"
+    assert result.key_id == "new_kid"
+
+
+def test_revoke_authority():
+    client = _client()
+    with patch.object(client._client, "post", return_value=_mock_post({})):
+        rv2 = RuntimeV2Client(client)
+        rv2.revoke_authority(ORG, AUTHORITY_ID, "key compromised")
+
+
+# ── submit_evidence ───────────────────────────────────────────────────────────
+
+
+def test_submit_evidence():
+    pkg = {"evidence_id": EVIDENCE_ID, "permit_id": PERMIT_ID, "org_id": ORG, "observations": [], "collected_at": "2026-05-30T07:00:00Z"}
+    client = _client()
+    with patch.object(client._client, "post", return_value=_mock_post({})):
+        rv2 = RuntimeV2Client(client)
+        rv2.submit_evidence(ORG, pkg)  # should not raise
+
+
+def test_query_audit_chain_with_filters():
+    client = _client()
+    body = {"entries": [], "total": 0, "page": 1, "page_size": 50}
+    with patch.object(client._client, "get", return_value=_mock_get(body)):
+        rv2 = RuntimeV2Client(client)
+        result = rv2.query_audit_chain(
+            ORG, "2026-05-01T00:00:00Z", "2026-05-31T00:00:00Z",
+            page=1, page_size=50, action_class="DEPLOY", principal_did="did:key:x"
+        )
+    assert result.total == 0
+    assert result.page_size == 50
+
+
 # ── factory ───────────────────────────────────────────────────────────────────
 
 
