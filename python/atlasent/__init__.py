@@ -221,6 +221,20 @@ from .policy_sync import (
 )
 from .replay import EvidenceVerificationResult, verify_evidence_bundle
 from .require_permit import ProtectedAction, classify_command, require_permit
+from .runtime_v2 import (
+    AuditChainPage,
+    AuthorityRecord,
+    AuthorizationDecision,
+    ChainIntegrityReport,
+    ComplianceExport,
+    ExecutionReceipt,
+    PostExecutionResult,
+    RuntimeAuditEntry,
+    RuntimeV2Client,
+    VerificationFailure,
+    VerificationResult,
+    runtime,
+)
 from .scim import (
     SCIM_GROUP_SCHEMA,
     SCIM_PATCH_OP_SCHEMA,
@@ -251,20 +265,6 @@ from .trust_root import (
     TrustRootSnapshot,
     _set_global_trust_root_manager_for_tests,
     get_global_trust_root_manager,
-)
-from .runtime_v2 import (
-    AuditChainPage,
-    AuthorizationDecision,
-    AuthorityRecord,
-    ChainIntegrityReport,
-    ComplianceExport,
-    ExecutionReceipt,
-    PostExecutionResult,
-    RuntimeAuditEntry,
-    RuntimeV2Client,
-    VerificationFailure,
-    VerificationResult,
-    runtime,
 )
 from .v2_endpoints import (
     BATCH_PATH as V2_BATCH_PATH,
@@ -602,4 +602,17 @@ __all__ = [
     "protect_database_migration",
     "protect_database_schema_drop",
     "protect_database_table_delete",
+    # Runtime v2 — four-plane authorized-state-change lifecycle.
+    "RuntimeV2Client",
+    "runtime",
+    "AuthorizationDecision",
+    "AuthorityRecord",
+    "AuditChainPage",
+    "ChainIntegrityReport",
+    "ComplianceExport",
+    "ExecutionReceipt",
+    "PostExecutionResult",
+    "RuntimeAuditEntry",
+    "VerificationFailure",
+    "VerificationResult",
 ]
