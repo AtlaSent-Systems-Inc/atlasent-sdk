@@ -107,7 +107,14 @@ export async function verifyTrajectoryStep(
     );
   }
 
-  const result = await response.json();
+  type VerifyResult = {
+    on_trajectory: boolean;
+    trajectory_position?: number;
+    trajectory_complete: boolean;
+    deviation?: TrajectoryDeviationEvent;
+    verified_at: string;
+  };
+  const result = (await response.json()) as VerifyResult;
 
   if ((options.throwOnDeviation ?? true) && result.on_trajectory === false) {
     throw new TrajectoryDeviationError(
@@ -131,8 +138,8 @@ export async function verifyTrajectoryStep(
  */
 export class TrajectoryDeviationError extends Error {
   readonly deviation: unknown;
-  readonly trajectoryId?: string;
-  readonly permitId?: string;
+  readonly trajectoryId: string | undefined;
+  readonly permitId: string | undefined;
 
   constructor(
     message: string,
