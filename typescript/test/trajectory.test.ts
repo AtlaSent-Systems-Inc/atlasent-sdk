@@ -37,8 +37,8 @@ const DEVIATION_EVENT = {
 describe("buildTrajectoryRequest()", () => {
   it("returns a copy of the input request", () => {
     const req = {
-      action_type: "run_step",
-      actor_id: "agent:test",
+      action: "run_step",
+      agent: "agent:test",
       context: { environment: "staging" },
     };
     const result = buildTrajectoryRequest(req);
