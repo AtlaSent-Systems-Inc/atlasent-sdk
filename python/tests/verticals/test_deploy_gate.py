@@ -192,6 +192,39 @@ class TestProtectDeploy:
         assert ctx["repository"] == "myorg/payment-service"
         assert ctx["sha"] == "deadbeef1234"
 
+    def test_kwargs_forwarded_to_context(self) -> None:
+        """Extra **kwargs are merged into the context dict verbatim."""
+        with patch(
+            "atlasent.verticals.deploy_gate.protect",
+            return_value=MagicMock(),
+        ) as mock_protect:
+            protect_deploy(
+                actor="github:alice",
+                change_ticket="CHG-1234",
+                build_url="https://ci.example.com/build/42",
+            )
+
+        ctx = mock_protect.call_args.kwargs["context"]
+        assert ctx["change_ticket"] == "CHG-1234"
+        assert ctx["build_url"] == "https://ci.example.com/build/42"
+
+    def test_kwargs_do_not_override_fixed_fields(self) -> None:
+        """Caller-supplied kwargs cannot override machine_executable or risk_level."""
+        with patch(
+            "atlasent.verticals.deploy_gate.protect",
+            return_value=MagicMock(),
+        ) as mock_protect:
+            protect_deploy(
+                actor="github:alice",
+                machine_executable=True,  # attempt to override; should be shadowed
+                risk_level="low",
+            )
+
+        ctx = mock_protect.call_args.kwargs["context"]
+        # Fixed fields set after **kwargs spread — they win
+        assert ctx["machine_executable"] is False
+        assert ctx["risk_level"] == "critical"
+
 
 class TestProtectProductionDeploy:
     """Tests for protect_production_deploy convenience wrapper."""

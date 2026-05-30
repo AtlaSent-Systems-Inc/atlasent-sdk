@@ -92,7 +92,9 @@ def protect_deploy(
         :class:`~atlasent.exceptions.AtlaSentError`: On transport /
             auth / server failure (fail-closed).
     """
+    # kwargs spread first so fixed security fields always win on collision.
     context: dict[str, Any] = {
+        **kwargs,
         "machine_executable": _MACHINE_EXECUTABLE,
         "risk_level": _RISK_LEVEL,
         "fail_closed": _FAIL_CLOSED,
