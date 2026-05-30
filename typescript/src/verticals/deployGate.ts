@@ -22,6 +22,9 @@ export interface DeployGateOptions {
   onEscalationCreated?: (handle: EscalationHandle) => void;
   apiKey?: string;
   baseUrl?: string;
+  /** Slack Incoming Webhook URL. When set, an informational message is posted
+   *  when the gate returns deny or escalate. Best-effort; never throws. */
+  notifySlackWebhook?: string;
 }
 
 function resolveEnvActor(): string | undefined {
@@ -94,15 +97,46 @@ export async function protectDeploy(
     context: flattenActionContext(ctx),
   };
 
-  if (opts.requireApproval || isProduction) {
-    return protectOrEscalate(request, {
-      escalationReason: `Production deployment of ${opts.service} requires human approval`,
-      assignedToRole: opts.assignedToRole ?? "release-manager",
-      waitMs: opts.waitMs ?? 30 * 60 * 1000,
-      ...(opts.onEscalationCreated !== undefined ? { onEscalationCreated: opts.onEscalationCreated } : {}),
-      ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
-      ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
-    });
+  const notifyDenied = async (reason: string): Promise<void> => {
+    if (!opts.notifySlackWebhook) return;
+    try {
+      await fetch(opts.notifySlackWebhook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `:no_entry: AtlaSent Deploy Gate DENIED: ${request.action} (${environment})`,
+          blocks: [
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: `*:no_entry: AtlaSent Deploy Gate DENIED*\n*Action:* \`${request.action}\`\n*Service:* ${opts.service}\n*Environment:* ${environment}\n*Actor:* ${actorId}\n*Reason:* ${reason}`,
+              },
+            },
+          ],
+        }),
+      });
+    } catch {
+      // notification errors are always swallowed
+    }
+  };
+
+  try {
+    if (opts.requireApproval || isProduction) {
+      return await protectOrEscalate(request, {
+        escalationReason: `Production deployment of ${opts.service} requires human approval`,
+        assignedToRole: opts.assignedToRole ?? "release-manager",
+        waitMs: opts.waitMs ?? 30 * 60 * 1000,
+        ...(opts.onEscalationCreated !== undefined ? { onEscalationCreated: opts.onEscalationCreated } : {}),
+        ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
+        ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
+      });
+    }
+    return await protect(request);
+  } catch (err: unknown) {
+    const reason =
+      err instanceof Error ? err.message : "authorization denied";
+    await notifyDenied(reason);
+    throw err;
   }
-  return protect(request);
 }
