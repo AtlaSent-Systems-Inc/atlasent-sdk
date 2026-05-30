@@ -94,7 +94,7 @@ class TestProtectDeploy:
         assert ctx["environment"] == "staging"
 
     def test_context_hitl_escalation(self) -> None:
-        """protect_deploy sets hitl_escalation with deploy-approver role and 600_000ms wait."""
+        """protect_deploy sets hitl_escalation with deploy-approver role."""
         with patch(
             "atlasent.verticals.deploy_gate.protect",
             return_value=MagicMock(),
@@ -275,7 +275,7 @@ class TestNotifySlackWebhook:
     """Tests for Slack notification behaviour on denial."""
 
     def test_slack_post_attempted_when_protect_raises(self) -> None:
-        """When notify_slack_webhook is set and protect raises, Slack POST is attempted."""
+        """When notify_slack_webhook is set and protect raises, Slack POST attempted."""
         exc = RuntimeError("policy denied")
 
         with patch(
