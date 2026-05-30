@@ -82,14 +82,22 @@ runtime rule-engine DSL (`rules.ts`), not the rule-row model — and are explici
 column in the table below is retained only to show where the engine DSL sits
 relative to the rule-row model; it is **not** a conversion target.
 
-## Why the rule-row format is canonical
+## Why the rule-row format is the canonical *target*
 
-It is the richest and the one that already backs production storage/evaluation:
+It is the richest representation and the intended convergence target:
 
 - 5-value `effect` (`allow | deny | hold | escalate | require_approval`)
 - `deny_code` + `deny_reason` for explainability
 - `require_approvals` / obligations
 - layered-policy columns (`policy_layer`, `tags`, `overrides_policy_id`, …)
+
+**Important correction (post-WS2):** the rule-row model is the canonical *target*,
+**not** the currently-active runtime representation everywhere. In particular the
+console persists and evaluates **shorthand `conditions_json`** (`{field, op,
+value}`) via its own edge evaluator — that shorthand is the current V1 runtime
+contract. The canonical `RuleCondition` (`field_path`/`operator`/`value_json`)
+becomes the active representation only after the post-V1 convergence (§5) proves
+runtime parity. Until then, do not assume rule-row == what's stored/evaluated.
 - mirrors the DB tables `policy_rules`, `rule_conditions`, `rule_obligations`
 
 The SDK contract schema (`contract/schemas/policy.schema.json`) is strictly
@@ -231,31 +239,60 @@ The SDK's nested `match.agent/action/context` collapses to flat
 - **Do not** create a new standalone shared package yet — defer until post-V1
   runtime convergence per the architecture decision.
 
-### 2. Console (consumer)
-- **Stop owning the types.** Replace the definitions in
-  `packages/types/src/policy.ts` with re-exports of the API-owned types. Console
-  no longer defines `ConditionOperator`/`RuleEffect`/etc. independently.
-- Normalize the builders onto the canonical operator set, expanding the UI
-  shorthand (`eq/gt/gte/lt/lte`) to long-form before persistence:
-  - `src/pages/PolicyBuilderPage.tsx` — shorthand stays as UI labels only; the
-    shared mapping table expands them on serialize.
-  - `src/pages/ConstraintBuilder.tsx` — enters the **deprecation path** (see
-    below), not a straight migration.
-  - `src/components/policy/TemplateEditorModal.tsx` — free-text
-    `hold_conditions`/`deny_conditions` → structured canonical conditions.
-- Single serialization helper: `toCanonicalRule()` / `fromCanonicalRule()` (using
-  the shared shorthand⇄canonical table) used by all builders +
-  `src/hooks/usePolicyBundles.ts` + `src/lib/api/rpc-client.ts`.
+### 2. Console (consumer) — **DONE, scoped to types + bridge**
+Investigation (WS2) corrected the premise here. The console does **not** store the
+rule-row model: both `PolicyBuilderPage` and `ConstraintBuilder` persist
+**shorthand** `conditions_json` (`{ field, op, value }`, ops `eq`/`gt`/`notIn`/…),
+and the console's own edge evaluator (`supabase/functions/_shared/evaluator.ts`)
+reads that shorthand at runtime. **Shorthand `conditions_json` is the current V1
+runtime contract.** The rule-row `RuleCondition` (`field_path`/`operator`/
+`value_json`) is **not** the active runtime representation — it is the target
+post-V1 representation.
 
-#### ConstraintBuilder deprecation path
-The legacy `src/pages/ConstraintBuilder.tsx` is retired over three releases
-rather than cut over in place:
+What WS2 actually did (no runtime behavior change):
+- Aligned the console's own `ConditionOperator` to the canonical long-form set
+  (`packages/types/src/policy.ts`): added `greater_than_or_equal`,
+  `less_than_or_equal`, `prefix`; exported `CANONICAL_CONDITION_OPERATORS`. Kept
+  `not_contains`/`not_exists` (still referenced by a live pack template), marked
+  explicitly non-canonical.
+- Added `src/lib/policy/conditionOperators.ts` — `toCanonicalOperator` /
+  `toShorthandOperator` / `toCanonicalConditionView`, **tested bridges only**.
+  These translate between shorthand and canonical for diff/lint/round-trip
+  tooling. They are **not** wired into persistence — builders still write
+  shorthand `conditions_json`, unchanged.
+- Console keeps its own `@atlasent/types` package for now (drift-watched); the
+  re-export consolidation with API-owned types is deferred to post-V1.
 
-| Phase | Behavior |
-|---|---|
-| **V1 — dual-accept** | ConstraintBuilder stays editable. On save it emits canonical long-form rules (via `toCanonicalRule()`). API/console accept both legacy and canonical shapes. A deprecation banner points users to PolicyBuilder. |
-| **V2 — read-only** | ConstraintBuilder becomes view-only: existing rules render, but no new edits/creates. Users are routed to PolicyBuilder for changes. Legacy-shape writes are rejected; reads still tolerate legacy. |
-| **V3 — removal** | The page, its routes, and legacy-only code paths are deleted. By this point all stored rules have been migrated to canonical via the codemod, so legacy read tolerance can also be dropped. |
+Both builders stay active. `ConstraintBuilder` is **not** legacy-format — it is a
+separate UX over the same V1 wire format as `PolicyBuilder`. There is no
+deprecation in this pass (a banner asserting otherwise was added and then
+reverted once the code proved both builders emit the same format).
+
+### 5. Post-V1 convergence (replaces the former WS5 "deprecation")
+Migrating the console onto the canonical rule-row representation is a **post-V1**
+effort gated on proven runtime parity — not an in-product deprecation. Strict
+ordering, each step landing before the next:
+
+1. **Lock the contract.** Treat shorthand `conditions_json` as the current V1
+   runtime contract and document it as such. The canonical `RuleCondition` is the
+   *target* representation, explicitly not yet active at runtime.
+2. **Evaluator dual-accept.** Teach the console edge evaluator
+   (`_shared/evaluator.ts`) to accept **both** shorthand and canonical conditions,
+   normalizing internally. No builder changes yet.
+3. **Prove semantic parity.** Add tests that run the same rule in both shapes
+   through the evaluator and assert identical decisions across the operator
+   matrix (including edge cases: presence ops, numeric coercion, set ops). The
+   `toCanonicalRule()`/`fromCanonicalRule()` bridges are validated here.
+4. **Migrate builders one at a time.** Only after parity is green, switch a single
+   builder to persist canonical, soak it, then the next. Both builders remain
+   functional throughout.
+5. **Deprecate shorthand last.** Shorthand `conditions_json` is deprecated only
+   after every writer emits canonical and runtime parity has held in production.
+   Removal of the shorthand path is the final step, not the first.
+
+Do **not** change production evaluator behavior or what the builders persist
+ahead of step 2's parity proof. The risk being avoided: writing a canonical shape
+the live evaluator cannot read, which would silently break evaluation.
 
 ### 3. SDK — **RE-SCOPED** (documentation only; no SDK code change)
 Original premise (SDK re-exports the rule-row types, re-points
@@ -315,8 +352,8 @@ rewriting the production evaluate path. Re-scoped to documentation + guard rails
 1. WS1 canonical types in `atlasent-api/packages/types` + JSON Schema + fixtures. **(done — PR atlasent-api#1036)**
 2. WS4 **re-scoped** to the three-model mapping doc, no pack conversion. **(done — PR atlasent-api#1036, sdk#337)**
 3. WS3 **re-scoped** to documenting the SDK policy document as the third model; no SDK code change. **(done — same doc)**
-4. WS2 console re-exports API types + serialization helper; ConstraintBuilder enters V1 dual-accept. **(next)**
-5. WS5 dual-accept window → ConstraintBuilder V2 read-only → V3 removal; drop legacy schema.
+4. WS2 console aligns its `ConditionOperator` + adds tested shorthand⇄canonical bridges; no behavior change. **(done — PR console#594)**
+5. WS5 **replaced** by the post-V1 convergence plan (evaluator dual-accept → parity tests → builders migrate one at a time → shorthand deprecated last). **(plan only; no V1 code)**
 
 ## Resolved decisions
 
