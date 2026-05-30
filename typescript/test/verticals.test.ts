@@ -697,6 +697,69 @@ describe("protectDeploy()", () => {
     const body = JSON.parse(((hitlCall as unknown as [string, RequestInit])[1]).body as string);
     expect(body.assigned_to_role).toBe("release-manager");
   });
+
+  it("calls notifySlackWebhook when set and deploy is denied", async () => {
+    const denyFetch = makeFetchSequence([
+      jsonOk({ permitted: false, reason: "unauthorized actor", audit_hash: "ah_deny", timestamp: "2026-01-01T00:00:00Z" }),
+    ]);
+    configure({ apiKey: "ask_test_verticals", fetch: denyFetch as unknown as typeof fetch });
+
+    const webhookUrl = "https://hooks.slack.com/services/test-webhook";
+    const slackFetch = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
+    globalThis.fetch = slackFetch as unknown as typeof globalThis.fetch;
+
+    await expect(
+      protectDeploy({
+        service: "api-server",
+        environment: "staging",
+        actorId: "ci-bot",
+        notifySlackWebhook: webhookUrl,
+      }),
+    ).rejects.toThrow();
+
+    expect(slackFetch).toHaveBeenCalledOnce();
+    const [calledUrl, calledInit] = slackFetch.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toBe(webhookUrl);
+    const payload = JSON.parse(calledInit.body as string);
+    expect(payload.text).toContain("DENIED");
+  });
+
+  it("swallows notifySlackWebhook fetch errors and re-throws original deny", async () => {
+    const denyFetch = makeFetchSequence([
+      jsonOk({ permitted: false, reason: "unauthorized actor", audit_hash: "ah_deny", timestamp: "2026-01-01T00:00:00Z" }),
+    ]);
+    configure({ apiKey: "ask_test_verticals", fetch: denyFetch as unknown as typeof fetch });
+
+    const webhookUrl = "https://hooks.slack.com/services/test-webhook";
+    const slackFetch = vi.fn().mockRejectedValue(new Error("slack network error"));
+    globalThis.fetch = slackFetch as unknown as typeof globalThis.fetch;
+
+    // original denial error re-thrown, not the Slack network error
+    await expect(
+      protectDeploy({
+        service: "api-server",
+        environment: "staging",
+        actorId: "ci-bot",
+        notifySlackWebhook: webhookUrl,
+      }),
+    ).rejects.not.toThrow("slack network error");
+  });
+
+  it("does not call globalThis.fetch when notifySlackWebhook is unset and deploy is denied", async () => {
+    const denyFetch = makeFetchSequence([
+      jsonOk({ permitted: false, reason: "unauthorized actor", audit_hash: "ah_deny", timestamp: "2026-01-01T00:00:00Z" }),
+    ]);
+    configure({ apiKey: "ask_test_verticals", fetch: denyFetch as unknown as typeof fetch });
+
+    const slackFetch = vi.fn();
+    globalThis.fetch = slackFetch as unknown as typeof globalThis.fetch;
+
+    await expect(
+      protectDeploy({ service: "api-server", environment: "staging", actorId: "ci-bot" }),
+    ).rejects.toThrow();
+
+    expect(slackFetch).not.toHaveBeenCalled();
+  });
 });
 
 // ── protectToolCall ────────────────────────────────────────────────────────────
