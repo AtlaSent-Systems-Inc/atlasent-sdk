@@ -31,10 +31,10 @@ Rationale:
 
 This resolves the former WS1 "package home" open question in favor of Option 1.
 
-## Scope clarification: two distinct rule systems (added post-WS1)
+## Scope clarification: three distinct rule representations (added post-WS1)
 
-Investigation during WS4 surfaced a premise this plan originally got wrong. There
-are **two separate rule representations** in the platform, not one:
+Investigation during WS4 and WS3 surfaced a premise this plan originally got
+wrong. There are **three separate rule representations** in the platform, not one:
 
 1. **Authoring / storage rule-row model** — `policy_rules` / `rule_conditions` /
    `rule_obligations` tables, the console policy builders, and (as of WS1) the
@@ -50,15 +50,23 @@ are **two separate rule representations** in the platform, not one:
    `templates[].rule` in this DSL**, and the seed path stores it verbatim into
    `constraint_bundles.rules`.
 
-These are intentionally different layers: the rule-row model is for *authoring and
-storage*; the engine DSL is the *runtime evaluation language*. The packs belong to
-system (2), **not** system (1). Converting them to the canonical operator
-vocabulary would require rewriting the production rule engine — out of scope and
-high-risk.
+3. **SDK policy document** — `atlasent-sdk/contract/schemas/policy.schema.json`, a
+   `match`-DSL *document* format (`rules[].match` nesting `agent`/`action`/
+   `context.<key>` matchers) used **only** to lint SDK-shipped example
+   policies/fixtures via `policy_lint.py`. Per SDK doctrine the SDKs never parse
+   policies at runtime; this is an author-side example format, not a wire type
+   (so `drift.py` does not govern it).
 
-**Decision (settled):** keep the engine DSL separate. The plan unifies the
-authoring/storage model (WS1–WS3) and documents the relationship between the two
-systems rather than collapsing them. WS4 is re-scoped accordingly (see below).
+These are intentionally different layers: the rule-row model is for *authoring and
+storage*; the engine DSL is the *runtime evaluation language*; the SDK document is
+an *author-side example/fixture* format. Packs belong to system (2); the SDK
+schema is system (3). Neither can be converted to the rule-row vocabulary without
+rewriting the production engine (2) or violating SDK doctrine (3).
+
+**Decision (settled):** keep systems (2) and (3) separate. The plan unifies only
+the rule-row model (WS1–WS2) and documents the relationship among all three in
+`atlasent-api/docs/TWO_RULE_SYSTEMS.md`. WS3 and WS4 are re-scoped to
+documentation accordingly (see below).
 
 ## Goal
 
@@ -249,31 +257,34 @@ rather than cut over in place:
 | **V2 — read-only** | ConstraintBuilder becomes view-only: existing rules render, but no new edits/creates. Users are routed to PolicyBuilder for changes. Legacy-shape writes are rejected; reads still tolerate legacy. |
 | **V3 — removal** | The page, its routes, and legacy-only code paths are deleted. By this point all stored rules have been migrated to canonical via the codemod, so legacy read tolerance can also be dropped. |
 
-### 3. SDK
-- **Contract-first (hard requirement).** `atlasent-sdk/CLAUDE.md` mandates that
-  any change to `/v1-evaluate` / `/v1-verify-permit` wire shapes "must go through
-  `contract/schemas/` before SDK code changes", and `contract/tools/drift.py`
-  blocks CI on drift. So the canonical schema change lands in
-  `contract/schemas/` **first**, and the drift detector must be updated/extended
-  to validate against the new rule-row shape.
-- Also honor the `rules.ts` byte-identical invariant: `packages/sdk/src/rules.ts`
-  must stay identical to the API `_shared/rules.ts` (enforced by `rules-sync`
-  CI) — any operator-vocabulary change has to be applied to both copies in
-  lockstep.
-- Re-point `contract/schemas/policy.schema.json` at (or regenerate it from) the
-  API-owned `policy-rule.schema.json`. Keep the old nested-`match` schema as
-  `policy.legacy.schema.json` + a `migratePolicyV0toV1()` codemod.
-- **Re-export, never redefine.** SDK policy types re-export from
-  `atlasent-api/packages/types` (honoring the CLAUDE.md invariant); the SDK adds
-  no independent definitions.
-- Add a **builder + validator** (new capability — the SDK currently has none):
-  `buildRule()`, `validatePolicy()` in `typescript/src/` and the Python
-  equivalent in `python/atlasent/`.
-- Update `ConstraintTrace`/`buildWhyTrace` (`typescript/src/evidenceEngine.ts`)
-  to surface canonical `field_path`/`operator`/`deny_code`.
-- Fix the schema file itself: `contract/schemas/policy.schema.json` currently has
-  malformed trailing JSON (duplicated closing braces / stray `lt ` `gte ` keys at
-  lines ~99–107). Must be repaired as part of this work regardless.
+### 3. SDK — **RE-SCOPED** (documentation only; no SDK code change)
+Original premise (SDK re-exports the rule-row types, re-points
+`policy.schema.json` at the canonical shape, adds a builder/validator + V0→V1
+codemod, repairs malformed JSON) was **wrong on every count** — investigation
+during WS3 found:
+- **No malformed JSON.** `contract/schemas/policy.schema.json` parses cleanly; the
+  lines flagged earlier were valid `oneOf` matcher structures. Nothing to repair.
+- **The SDK has no rule-row surface.** It does not depend on `@atlasent/types` and
+  defines none of `field_path` / `condition_group` / `RuleEffect` /
+  `RuleCondition`. Its only `Constraint*` types are `ConstraintTrace*`, which are
+  *decision-trace output*, not authoring inputs. There is nothing to "re-export".
+- **`policy.schema.json` is a third representation**, not the rule-row model and
+  not the engine DSL: a `match`-DSL policy *document* (`rules[].match` nesting
+  `agent`/`action`/`context.<key>` matchers) used **only** to lint SDK-shipped
+  example policies/fixtures via `contract/tools/policy_lint.py`. It is **not** a
+  wire type, so `drift.py` does not govern it; re-pointing it would silently
+  change every shipped fixture.
+- **SDK doctrine forbids the rest.** "SDKs never parse policies directly" and "do
+  not invent new bundle formats in the SDK without a `contract/` proposal first."
+  A builder/validator/codemod would invert both.
+
+Re-scoped deliverable: document the SDK policy-document model as the **third**
+representation alongside the engine DSL and the rule-row model (folded into the
+same `atlasent-api/docs/TWO_RULE_SYSTEMS.md` doc, now a three-model reference).
+**No SDK code, schema, or type change.** The `rules.ts` byte-identical and
+contract-first invariants are therefore untouched. If a first-class SDK
+policy-authoring API is ever wanted, it begins as a `contract/` proposal — not as
+a re-point of the example-lint schema.
 
 ### 4. API / policy packs — **RE-SCOPED** (do NOT convert packs)
 Original premise (convert packs from inline `eq` to canonical `conditions[]`) was
@@ -302,9 +313,9 @@ rewriting the production evaluate path. Re-scoped to documentation + guard rails
 ## Sequencing
 
 1. WS1 canonical types in `atlasent-api/packages/types` + JSON Schema + fixtures. **(done — PR atlasent-api#1036)**
-2. WS4 **re-scoped** to a two-systems mapping doc (no pack conversion).
-3. WS3 SDK re-points contract schema, re-exports API types, adds builder/validator + codemod.
-4. WS2 console re-exports API types + serialization helper; ConstraintBuilder enters V1 dual-accept.
+2. WS4 **re-scoped** to the three-model mapping doc, no pack conversion. **(done — PR atlasent-api#1036, sdk#337)**
+3. WS3 **re-scoped** to documenting the SDK policy document as the third model; no SDK code change. **(done — same doc)**
+4. WS2 console re-exports API types + serialization helper; ConstraintBuilder enters V1 dual-accept. **(next)**
 5. WS5 dual-accept window → ConstraintBuilder V2 read-only → V3 removal; drop legacy schema.
 
 ## Resolved decisions
