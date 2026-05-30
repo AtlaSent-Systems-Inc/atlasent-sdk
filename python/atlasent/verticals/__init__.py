@@ -30,6 +30,11 @@ Phase 6 clusters
 ----------------
 - :mod:`atlasent.verticals.database_actions` — Database migration apply,
   schema drop, and table delete with evidence callbacks.
+
+Phase 7 clusters
+----------------
+- :mod:`atlasent.verticals.deploy_gate` — Production deployment
+  authorization with HITL escalation and optional Slack notification.
 """
 
 from .access_cert import (
@@ -57,6 +62,10 @@ from .database_actions import (
     protect_database_migration,
     protect_database_schema_drop,
     protect_database_table_delete,
+)
+from .deploy_gate import (
+    protect_deploy,
+    protect_production_deploy,
 )
 from .financial_close import (
     FinancialCloseActionType,
@@ -88,6 +97,9 @@ from .security_actions import (
 )
 
 __all__ = [
+    # Deploy gate
+    "protect_deploy",
+    "protect_production_deploy",
     # HR actions
     "HrActionType",
     "protect_hr_action",
