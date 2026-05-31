@@ -56,6 +56,16 @@ combinators with no canonical (A) equivalent — is tracked in
 It is to be investigated and either documented as intentional layering or
 converged **post-V1**. No V1 action.
 
+The A↔C divergence is the **primary convergence issue to track after V1
+stabilization** — it is the most important outcome of this investigation.
+
+### Architectural objective
+
+> The existence of multiple runtime dialects is currently accepted. The
+> architectural objective is not immediate dialect elimination, but convergence
+> toward a single API-owned canonical representation after V1 runtime
+> stabilization.
+
 ## Architecture decision (settled)
 
 **Policy types move under API ownership.** `atlasent-api/packages/types` becomes
