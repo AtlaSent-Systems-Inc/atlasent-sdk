@@ -1,6 +1,60 @@
 # Constraint Schema Alignment Plan — SDK ↔ Console ↔ API
 
-Status: **proposal / for review** · Owner: TBD · Date: 2026-05-30
+Status: **proposal / for review** · Owner: TBD · Date: 2026-05-31
+
+## V1 decision — accept multiple bounded dialects (settled 2026-05-31)
+
+For V1 we **accept multiple runtime condition dialects** across the platform, as
+long as each is **documented and bounded**. We do **not** force convergence across
+all dialects during V1. Specifically:
+
+- **Canonical vocabulary alignment is COMPLETE.** The canonical target remains
+  `atlasent-api/packages/types/schemas/policy-rule.schema.json`, with the long-form
+  operator set: `equals, not_equals, greater_than, greater_than_or_equal,
+  less_than, less_than_or_equal, in, not_in, contains, regex, exists, prefix`. The
+  console `RuleCondition` mirror (`atlasent-console/packages/types/src/policy.ts`)
+  is aligned to this set (WS2).
+- **Runtime / evaluator representation convergence is POST-V1.** The runtime
+  dialects (below) are intentionally not unified onto the canonical vocabulary for
+  V1. Convergence follows the gated ordering in §5 (post-V1).
+- **No evaluator rewrites during V1 stabilization.** The console edge evaluator
+  (`_shared/evaluator.ts`) and the API runtime engine (`rules.ts` /
+  `_shared/rules.ts`, `rules-sync` byte-identical) are frozen for V1.
+- **No public SDK contract breaking changes during V1.** The SDK policy-document
+  contract (`contract/schemas/policy.schema.json`) and the SDK wire types are not
+  re-pointed or broken during V1.
+
+### Runtime dialect map (V1)
+
+Six condition surfaces exist across the platform. They map to the three model
+layers documented below; this table is the authoritative bounded inventory. Only
+the canonical row is a V1 convergence target — the rest are accepted as-is for V1.
+
+| # | Dialect / surface | Location | Shape & operator vocabulary | Role | V1 status |
+|---|---|---|---|---|---|
+| **A** | **API canonical policy-rule schema** | `atlasent-api/packages/types/schemas/policy-rule.schema.json` (+ `@atlasent/types`) | flat `conditions[]` of `{condition_group, field_path, operator, value_json}`; long-form ops `equals/not_equals/greater_than/greater_than_or_equal/less_than/less_than_or_equal/in/not_in/contains/regex/exists/prefix` | **Canonical** authoring/storage source of truth | ✅ canonical target (settled) |
+| **B** | **Console `RuleCondition` mirror** | `atlasent-console/packages/types/src/policy.ts` | `{field_path, operator, value_json}`; same long-form set **+** back-compat `not_contains`/`not_exists` (flagged non-canonical) | Console-side mirror of A | ✅ aligned to A (WS2) |
+| **C** | **API SDK runtime engine dialect** | `atlasent-api/packages/sdk/src/rules.ts` (≡ `_shared/rules.ts`, `rules-sync`) | `templates[].when{all\|any\|none\|not}` of operator-keyed objects; ops `eq/neq/gt/gte/lt/lte/in/nin/contains/startswith/endswith/regex/exists/has_any/has_all/subset_of` + logical combinators; decision `decision`+`deny_code` | Runtime evaluation language for `/v1-evaluate`; the 21 packs author here | ⚠️ frozen — **A↔C gap → atlasent-api#1042** |
+| **D** | **Standalone SDK public policy document** | `atlasent-sdk/contract/schemas/policy.schema.json` | `rules[].match` nesting `agent`/`action`/`context.<key>` matchers (stringMatcher/valueMatcher); `effect: allow/deny` | Author-side example/fixture lint format (SDKs never parse policies at runtime) | ⚠️ frozen — no breaking change in V1 |
+| **E** | **Console runtime evaluator shorthand** | `atlasent-console/.../_shared/evaluator.ts` (+ persisted `conditions_json`) | `{field, op, value, valueField}` in `ifAll`/`ifAny`; shorthand ops `eq/neq/gt/gte/lt/lte/in/notIn/missing/present/before/after/withinSeconds` | **Active V1 runtime contract** for console-authored policies | ⚠️ frozen — convergence post-V1 (§5) |
+| **F** | **Console guard/CLI string DSL** | `atlasent-console/packages/sdk/src/policy/condition.ts` | string-expression DSL (`"content_length > 200"`, `"repo_visibility == public"`) + boolean flags (`secret_detected`, `branch_protected`, …); `PolicyRule { action_types[] }` | Local guard/CLI pre-checks (the `atlasent` package) | ⚠️ frozen — bounded local form, not a wire/storage type |
+
+Layer mapping: **A** + **B** are the *rule-row authoring/storage model* (two
+instances of the same model). **C** is the *runtime rule-engine DSL*. **D** is the
+*SDK policy-document example format*. **E** is the *console's own edge runtime*
+representation (the active V1 contract for console policies). **F** is a
+*local-only guard/CLI* expression form. See the three-model framing in the next
+section and `atlasent-api/docs/TWO_RULE_SYSTEMS.md`.
+
+### Tracking
+
+The **A↔C gap** — the canonical schema (A) and the API SDK runtime engine (C) use
+different operator vocabularies/representations, and C carries operators
+(`startswith`/`endswith`/`has_any`/`has_all`/`subset_of`) and nestable logical
+combinators with no canonical (A) equivalent — is tracked in
+**[atlasent-api#1042](https://github.com/AtlaSent-Systems-Inc/atlasent-api/issues/1042)**.
+It is to be investigated and either documented as intentional layering or
+converged **post-V1**. No V1 action.
 
 ## Architecture decision (settled)
 
