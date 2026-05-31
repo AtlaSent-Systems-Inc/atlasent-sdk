@@ -31,6 +31,8 @@
  *   actor: { id: "user:alice", type: "human", roles: ["deploy_engineer"] },
  *   environment: { name: "production", region: "us-east-1" },
  *   resource: { type: "service", id: "api-gateway", sensitivity: "restricted" },
+ *   org_id: "org_acme",
+ *   environment_id: "env_prod_us_east",
  * });
  *
  * const permit = await atlasent.protect({
@@ -71,6 +73,12 @@ export interface ActorContext {
   ip?: string;
   /** Session or OAuth token ID for replay-detection rules. */
   session_id?: string;
+  /**
+   * Organization this actor belongs to. Populated from
+   * `BuildActionContextInput.org_id` when the actor has no explicit org_id.
+   * Used by cross-tenant policy checks and usage metering.
+   */
+  org_id?: string;
 }
 
 /**
@@ -173,6 +181,21 @@ export interface ActionContext {
   action_meta?: ActionMetaContext;
   history?: HistoricalContext;
 
+  /**
+   * Organization ID — scopes the evaluation to this org's policies and
+   * usage meters. Propagated from `BuildActionContextInput.org_id` and
+   * also set on `actor.org_id` when the actor has no explicit org.
+   */
+  org_id?: string;
+
+  /**
+   * ID of the registered `org_environments` row.
+   * Future billing dimension: usage will be metered per environment tier.
+   * Optional and additive — existing call sites that pass `environment.name`
+   * continue to work without providing this field.
+   */
+  environment_id?: string;
+
   // ── Flat shorthands for backward compat ───────────────────────────
   // These alias the most common nested fields so existing Record<string, unknown>
   // usage continues to work without refactoring. Both the flat and nested
@@ -198,6 +221,19 @@ export interface BuildActionContextInput {
   environment?: EnvironmentContext | string;
   action_meta?: ActionMetaContext;
   history?: HistoricalContext;
+  /**
+   * Organization ID — scopes the evaluation to this org's policies and
+   * usage meters. Propagated to `actor.org_id` when the actor has no
+   * explicit org_id, and also set as a top-level `org_id` on the context
+   * so policy rules can reference it at `context.org_id`.
+   */
+  org_id?: string;
+  /**
+   * ID of the registered `org_environments` row (future billing dimension).
+   * Passed through to the flat context as `environment_id`. Optional —
+   * callers that pass only `environment.name` continue to work unchanged.
+   */
+  environment_id?: string;
   /** Arbitrary additional fields to pass through to the policy engine. */
   extra?: Record<string, unknown>;
 }
@@ -209,6 +245,8 @@ export interface BuildActionContextInput {
  * - Populates flat shorthands (`resource_type`, `resource_id`,
  *   `environment_name`) from the nested sub-schemas so both the nested and
  *   flat forms are present in the output.
+ * - Propagates `org_id` to `actor.org_id` when the actor has no explicit org.
+ * - Propagates `environment_id` as a top-level context field for billing.
  * - Never throws — validation is a separate step via `validateActionContext()`.
  *
  * ```ts
@@ -216,6 +254,8 @@ export interface BuildActionContextInput {
  *   actor: { id: "agent:deploy-bot", type: "agent" },
  *   environment: "production",
  *   resource: { type: "service", id: "checkout-api" },
+ *   org_id: "org_acme",
+ *   environment_id: "env_prod_us_east",
  * });
  * ```
  */
@@ -227,12 +267,20 @@ export function buildActionContext(
       ? { name: input.environment }
       : input.environment;
 
+  // Propagate org_id to actor when actor has no explicit org_id.
+  const actor: ActorContext =
+    input.org_id !== undefined && !input.actor.org_id
+      ? { ...input.actor, org_id: input.org_id }
+      : input.actor;
+
   const ctx: ActionContext = {
-    actor: input.actor,
+    actor,
     ...(input.resource !== undefined && { resource: input.resource }),
     ...(env !== undefined && { environment: env }),
     ...(input.action_meta !== undefined && { action_meta: input.action_meta }),
     ...(input.history !== undefined && { history: input.history }),
+    ...(input.org_id !== undefined && { org_id: input.org_id }),
+    ...(input.environment_id !== undefined && { environment_id: input.environment_id }),
     ...(input.extra ?? {}),
   };
 
@@ -596,7 +644,8 @@ export function redactContext(
  *
  * The output merges:
  * 1. All top-level scalar fields from `ActionContext` (including flat
- *    shorthands like `environment_name`).
+ *    shorthands like `environment_name`, and billing dimensions like
+ *    `org_id` and `environment_id`).
  * 2. Nested sub-schemas (`actor`, `resource`, `environment`, etc.) preserved
  *    as nested objects so policy rules written against either the nested or
  *    flat form work correctly.
