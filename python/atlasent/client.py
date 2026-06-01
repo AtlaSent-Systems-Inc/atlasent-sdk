@@ -26,6 +26,7 @@ from .exceptions import (
     AtlaSentDenied,
     AtlaSentDeniedError,
     AtlaSentError,
+    BundleVerificationError,
     PermissionDeniedError,
     RateLimitError,
     _normalize_permit_outcome,
@@ -456,6 +457,27 @@ class AtlaSentClient:
         action: str,
         context: dict[str, Any] | None = None,
     ) -> Permit:
+        """Authorize an action end-to-end — the fail-closed execution primitive.
+
+        Mirrors the TypeScript SDK's ``atlasent.protect()``. On allow, returns
+        a verified :class:`Permit`. On policy denial, permit verification
+        failure, or server unavailability raises :class:`AtlaSentDeniedError`.
+        On transport / auth / rate-limit errors raises :class:`AtlaSentError`.
+
+        ADR-005 D3: The trust snapshot expiry is checked before ``evaluate()``.
+        When the snapshot is expired this raises :class:`BundleVerificationError`
+        (a subclass of :class:`AtlaSentDeniedError`) unless the global manager
+        was constructed with ``allow_expired_snapshot=True``.
+
+        P1-5: ``execution_hash`` is computed over the canonical evaluate payload
+        and sent on the ``/v1-verify-permit`` call so the server can validate
+        the payload was not tampered with between evaluate and verify.
+
+        ``verify_unavailable``: if the verify step raises a 5xx
+        :class:`AtlaSentError`, the action is denied with
+        ``outcome="verify_unavailable"`` rather than propagating the raw server
+        error — callers get a typed denial they can branch on.
+        """
         if not _ACTION_TYPE_RE.match(action):
             raise AtlaSentError(
                 (
@@ -465,6 +487,21 @@ class AtlaSentClient:
                 ),
                 code="bad_request",
             )
+
+        # ADR-005 D3: fail-closed on expired trust snapshot.
+        # checkExpiry() also emits the one-time half-life warning when
+        # >50% of the validity window has elapsed — mirrors TS protect.ts.
+        from .trust_root import get_global_trust_root_manager  # noqa: PLC0415
+
+        trust_mgr = get_global_trust_root_manager()
+        if trust_mgr.check_expiry() == "expired":
+            snap = trust_mgr.get_snapshot()
+            raise BundleVerificationError(
+                bundle_reason="trust_snapshot_expired",
+                snapshot_valid_until=snap.valid_until,
+                snapshot_fetched_at=snap.issued_at,
+            )
+
         ctx = context or {}
         try:
             eval_result = self.evaluate(action, agent, ctx)
@@ -498,16 +535,31 @@ class AtlaSentClient:
         }
         _execution_hash = _compute_execution_hash(_eval_payload)
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            verify_result = self.verify(
-                eval_result.permit_token,
-                action,
-                agent,
-                ctx,
-                environment=_ctx_env,
-                execution_hash=_execution_hash,
-            )
+        # verify_unavailable: if the verify step returns 5xx, surface a typed
+        # denial rather than propagating a raw AtlaSentError — fail-closed.
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                verify_result = self.verify(
+                    eval_result.permit_token,
+                    action,
+                    agent,
+                    ctx,
+                    environment=_ctx_env,
+                    execution_hash=_execution_hash,
+                )
+        except AtlaSentError as verify_err:
+            if (
+                verify_err.status_code is not None and verify_err.status_code >= 500
+            ) or verify_err.code in ("server_error", "timeout", "network"):
+                raise AtlaSentDeniedError(
+                    decision="deny",
+                    evaluation_id=eval_result.permit_token,
+                    reason=f"Permit verification unavailable: {verify_err.message}",
+                    audit_hash=eval_result.audit_hash,
+                    outcome="verify_unavailable",
+                ) from verify_err
+            raise
 
         if not verify_result.valid:
             raise AtlaSentDeniedError(
@@ -605,7 +657,7 @@ class AtlaSentClient:
             raw=eval_result.model_dump(by_alias=True),
         )
 
-    # ── lifecycle ────────────────────────────────────────────────
+    # ── lifecycle ────────────────────────────────────────────
 
     def close(self) -> None:
         self._client.close()
@@ -975,7 +1027,7 @@ class AtlaSentClient:
             rate_limit=rate_limit,
         )
 
-    # ── Decision replay (ADR-015 Phase C parity runtime) ────────────────
+    # ── Decision replay (ADR-015 Phase C parity runtime) ────────────────────
     #
     # Sync mirror of AsyncAtlaSentClient.replay(). Side-effect-free
     # server-side: replaying does not write to the audit chain or mint

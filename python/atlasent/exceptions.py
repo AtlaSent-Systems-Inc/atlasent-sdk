@@ -44,6 +44,7 @@ PermitOutcome = Literal[
     "permit_revoked",
     "permit_not_found",
     "permit_signing_key_revoked",
+    "verify_unavailable",
 ]
 """Reason an already-issued permit failed verification.
 
@@ -53,6 +54,21 @@ distinguish replay (``permit_consumed``) from revocation
 parsing :attr:`AtlaSentDeniedError.reason`. The set is defined by
 ``contract/vectors/permit_outcomes.json``; any new outcome MUST be
 added there first.
+
+Values:
+    permit_consumed: The permit was already consumed by a prior verify
+        (v1 single-use replay protection).
+    permit_expired: The permit's TTL passed before verification.
+    permit_revoked: The permit was explicitly revoked (D3 endpoint).
+    permit_not_found: The permit id wasn't recognized server-side
+        (typo, cross-tenant lookup, or pre-issuance race).
+    permit_signing_key_revoked: The permit's signing key KID appears in
+        the trust-root revocation list (ADR-005 D3 R2/R3 key rotation).
+    verify_unavailable: The verification endpoint returned a 5xx error
+        (server unavailable, overloaded, or network partition). Fail-
+        closed: the action MUST NOT proceed when this outcome is set.
+        Surface as a distinct outcome so callers can distinguish
+        infra failures from policy denials without parsing error codes.
 
 See ``docs/REVOCATION_RUNBOOK.md`` (atlasent meta) for the operator-
 facing matrix this discriminator drives.
@@ -65,6 +81,7 @@ _KNOWN_PERMIT_OUTCOMES: frozenset[str] = frozenset(
         "permit_revoked",
         "permit_not_found",
         "permit_signing_key_revoked",
+        "verify_unavailable",
     }
 )
 
@@ -206,7 +223,9 @@ class AtlaSentDeniedError(AtlaSentDenied):
             policy evaluation), the discriminator that distinguishes
             replay (``"permit_consumed"``), expiry
             (``"permit_expired"``), revocation (``"permit_revoked"``),
-            and missing-record (``"permit_not_found"``). ``None`` for
+            missing-record (``"permit_not_found"``), signing-key
+            revocation (``"permit_signing_key_revoked"``), and server
+            unavailability (``"verify_unavailable"``). ``None`` for
             evaluate-time denials. See :data:`PermitOutcome`.
     """
 
@@ -269,6 +288,17 @@ class AtlaSentDeniedError(AtlaSentDenied):
         trust-root revocation list (ADR-005 D3 R2/R3 key rotation).
         """
         return self.outcome == "permit_signing_key_revoked"
+
+    @property
+    def is_verify_unavailable(self) -> bool:
+        """``True`` when the verification endpoint returned a 5xx error.
+
+        The action MUST NOT proceed — fail-closed. Callers should
+        treat this the same as any other denial but may choose to
+        surface a distinct user-facing message (e.g. "authorization
+        service temporarily unavailable") or trigger an alerting path.
+        """
+        return self.outcome == "verify_unavailable"
 
 
 BundleVerificationReason = Literal[
