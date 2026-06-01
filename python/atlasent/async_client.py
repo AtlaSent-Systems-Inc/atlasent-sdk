@@ -158,7 +158,7 @@ class AsyncAtlaSentClient:
             timeout=self._timeout,
         )
 
-    # ── public API ─────────────────────────────────────────────────────────
+    # ── public API ───────────────────────────────────────────────────────────────────
 
     async def evaluate(
         self,
@@ -438,10 +438,11 @@ class AsyncAtlaSentClient:
         # ADR-005 D3: fail-closed if trust snapshot has expired
         expiry = get_global_trust_root_manager().check_expiry()
         if expiry == "expired":
+            snap = get_global_trust_root_manager().get_snapshot()
             raise BundleVerificationError(
                 bundle_reason="trust_snapshot_expired",
-                message="Trust snapshot has expired; action blocked (fail-closed). "
-                        "Pass allowExpiredSnapshot=True to opt out for air-gap environments.",
+                snapshot_valid_until=snap.valid_until,
+                snapshot_fetched_at=snap.issued_at,
             )
         ctx = context or {}
         try:
@@ -490,12 +491,20 @@ class AsyncAtlaSentClient:
                     environment=_ctx_env,
                     execution_hash=_execution_hash,
                 )
-        except AtlaSentError as exc:
-            if exc.status_code is not None and exc.status_code >= 500 or getattr(exc, "code", None) in ("server_error", "timeout", "network"):
+        except AtlaSentError as verify_err:
+            if (
+                verify_err.status_code is not None
+                and verify_err.status_code >= 500
+            ) or verify_err.code in ("server_error", "timeout", "network"):
                 raise AtlaSentDeniedError(
+                    decision="deny",
+                    evaluation_id=eval_result.permit_token,
+                    reason=(
+                        f"Permit verification unavailable: {verify_err.message}"
+                    ),
+                    audit_hash=eval_result.audit_hash,
                     outcome="verify_unavailable",
-                    message=f"Permit verification endpoint unavailable ({exc}); action blocked (fail-closed).",
-                ) from exc
+                ) from verify_err
             raise
 
         if not verify_result.valid:
@@ -732,7 +741,7 @@ class AsyncAtlaSentClient:
             raw=eval_result.model_dump(by_alias=True),
         )
 
-    # ── lifecycle ─────────────────────────────────────────────────────────
+    # ── lifecycle ───────────────────────────────────────────────────────────────────────
 
     async def close(self) -> None:
         """Close the underlying HTTP client and release resources."""
@@ -826,7 +835,7 @@ class AsyncAtlaSentClient:
         result.rate_limit = rate_limit
         return result
 
-    # ── Canonical REST surface (parity with sync client) ──────────────────────
+    # ── Canonical REST surface (parity with sync client) ────────────────────────────
 
     async def get_permit(self, permit_id: str) -> GetPermitResult:
         """Get a single permit's full lifecycle state
@@ -1167,7 +1176,7 @@ class AsyncAtlaSentClient:
             rate_limit=rate_limit,
         )
 
-    # ── Decision replay (ADR-015 §Replay, parity v2) ──────────────────────────────────────
+    # ── Decision replay (ADR-015 §Replay, parity v2) ─────────────────────────────────────
 
     async def replay(self, *, evaluation_id: str) -> ReplayResponse:
         path = f"/v1/decisions/{quote(evaluation_id, safe='')}/replay"
@@ -1215,7 +1224,7 @@ class AsyncAtlaSentClient:
             rate_limit=rate_limit,
         )
 
-    # ── SCIM 2.0 (async) ───────────────────────────────────────────────
+    # ── SCIM 2.0 (async) ───────────────────────────────────────────────────────────────────
 
     async def async_scim_list_users(
         self,
@@ -1369,7 +1378,7 @@ class AsyncAtlaSentClient:
             "DELETE", f"/v1/scim/v2/{_scim_enc(org_id)}/Groups/{_scim_enc(group_id)}"
         )
 
-    # ── SIEM (async) ──────────────────────────────────────────────────────
+    # ── SIEM (async) ──────────────────────────────────────────────────────────────────────
 
     async def async_get_siem_config(self, org_id: str) -> dict[str, Any]:
         """``GET /v1/orgs/{orgId}/siem-config`` — fetch current SIEM config (async)."""
@@ -1447,7 +1456,7 @@ class AsyncAtlaSentClient:
             "POST", f"/v1/orgs/{_siem_enc(org_id)}/siem-exports/test", {}
         )
 
-    # ── Evidence exports (async) ──────────────────────────────────────────────
+    # ── Evidence exports (async) ───────────────────────────────────────────────────────────
 
     async def async_list_evidence_exports(
         self,
@@ -1524,7 +1533,7 @@ class AsyncAtlaSentClient:
             "POST", f"/v1/orgs/{_ev_enc(org_id)}/evidence-exports", body
         )
 
-    # ── internals ─────────────────────────────────────────────────────────
+    # ── internals ───────────────────────────────────────────────────────────────────────────
 
     async def _post(
         self,
@@ -1749,7 +1758,7 @@ class AsyncAtlaSentClient:
             ) from exc
 
 
-# ── SSE parser ─────────────────────────────────────────────────────────────────────
+# ── SSE parser ───────────────────────────────────────────────────────────────────────────────────
 
 
 async def _parse_sse(
