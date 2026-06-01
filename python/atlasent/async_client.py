@@ -158,7 +158,7 @@ class AsyncAtlaSentClient:
             timeout=self._timeout,
         )
 
-    # ── public API ───────────────────────────────────────────────────────────────────
+    # ── public API ────────────────────────────────────────────────────────────────────────────
 
     async def evaluate(
         self,
@@ -741,7 +741,7 @@ class AsyncAtlaSentClient:
             raw=eval_result.model_dump(by_alias=True),
         )
 
-    # ── lifecycle ───────────────────────────────────────────────────────────────────────
+    # ── lifecycle ─────────────────────────────────────────────────────────────────────────────────────
 
     async def close(self) -> None:
         """Close the underlying HTTP client and release resources."""
@@ -835,7 +835,7 @@ class AsyncAtlaSentClient:
         result.rate_limit = rate_limit
         return result
 
-    # ── Canonical REST surface (parity with sync client) ────────────────────────────
+    # ── Canonical REST surface (parity with sync client) ───────────────────────────────────────
 
     async def get_permit(self, permit_id: str) -> GetPermitResult:
         """Get a single permit's full lifecycle state
@@ -1176,7 +1176,7 @@ class AsyncAtlaSentClient:
             rate_limit=rate_limit,
         )
 
-    # ── Decision replay (ADR-015 §Replay, parity v2) ─────────────────────────────────────
+    # ── Decision replay (ADR-015 §Replay, parity v2) ──────────────────────────────────────
 
     async def replay(self, *, evaluation_id: str) -> ReplayResponse:
         path = f"/v1/decisions/{quote(evaluation_id, safe='')}/replay"
@@ -1224,7 +1224,7 @@ class AsyncAtlaSentClient:
             rate_limit=rate_limit,
         )
 
-    # ── SCIM 2.0 (async) ───────────────────────────────────────────────────────────────────
+    # ── SCIM 2.0 (async) ──────────────────────────────────────────────────────────────────────
 
     async def async_scim_list_users(
         self,
@@ -1378,7 +1378,7 @@ class AsyncAtlaSentClient:
             "DELETE", f"/v1/scim/v2/{_scim_enc(org_id)}/Groups/{_scim_enc(group_id)}"
         )
 
-    # ── SIEM (async) ──────────────────────────────────────────────────────────────────────
+    # ── SIEM (async) ─────────────────────────────────────────────────────────────────────────
 
     async def async_get_siem_config(self, org_id: str) -> dict[str, Any]:
         """``GET /v1/orgs/{orgId}/siem-config`` — fetch current SIEM config (async)."""
@@ -1456,7 +1456,7 @@ class AsyncAtlaSentClient:
             "POST", f"/v1/orgs/{_siem_enc(org_id)}/siem-exports/test", {}
         )
 
-    # ── Evidence exports (async) ───────────────────────────────────────────────────────────
+    # ── Evidence exports (async) ─────────────────────────────────────────────────────────────
 
     async def async_list_evidence_exports(
         self,
@@ -1533,7 +1533,7 @@ class AsyncAtlaSentClient:
             "POST", f"/v1/orgs/{_ev_enc(org_id)}/evidence-exports", body
         )
 
-    # ── internals ───────────────────────────────────────────────────────────────────────────
+    # ── internals ─────────────────────────────────────────────────────────────────────────────
 
     async def _post(
         self,
@@ -1758,7 +1758,7 @@ class AsyncAtlaSentClient:
             ) from exc
 
 
-# ── SSE parser ───────────────────────────────────────────────────────────────────────────────────
+# ── SSE parser ──────────────────────────────────────────────────────────────────────────
 
 
 async def _parse_sse(
