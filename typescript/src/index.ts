@@ -307,6 +307,18 @@ export {
   soc2ControlCoverageForDecision,
 } from "./evidenceEngine.js";
 
+// ── Context Envelope ──────────────────────────────────────────────────────────────────────────────────────
+export {
+  CONTEXT_NAMESPACES,
+} from "./contextEnvelope.js";
+export type {
+  ContextEnvelope,
+  ContextNamespaceEntry,
+  ContextNamespaceKey,
+  ContextSignal,
+  RecordContextEnvelopeInput,
+} from "./contextEnvelope.js";
+
 // ── V1 Proof bundle ──────────────────────────────────────────────────────────────────────────────────────
 export type {
   GovernanceEvent,
