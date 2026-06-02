@@ -120,7 +120,9 @@ export {
 export {
   requirePermit,
   classifyCommand,
+  CanonicalProtectedActionType,
   type ProtectedAction,
+  type CanonicalProtectedActionType,
 } from "./requirePermit.js";
 export { withPermit } from "./withPermit.js";
 export type {
@@ -283,6 +285,27 @@ export type {
   QuorumProof,
   QuorumRoleRequirement,
 } from "./approvalQuorum.js";
+
+// ── Evidence engine ──────────────────────────────────────────────────────────────────────────────────────
+export type {
+  WhyStage,
+  WhyPolicyEvaluation,
+  WhyTrace,
+  DecisionReceiptAlgorithm,
+  DecisionReceiptPayload,
+  DecisionReceipt,
+  ComplianceControlCoverage,
+  ActionEvidenceBundle,
+} from "./evidenceEngine.js";
+export {
+  buildWhyTrace,
+  computeContextHash,
+  buildDecisionReceiptPayload,
+  signDecisionReceiptHmac,
+  verifyDecisionReceiptHmac,
+  computeBundleHash,
+  soc2ControlCoverageForDecision,
+} from "./evidenceEngine.js";
 
 // ── V1 Proof bundle ──────────────────────────────────────────────────────────────────────────────────────
 export type {
