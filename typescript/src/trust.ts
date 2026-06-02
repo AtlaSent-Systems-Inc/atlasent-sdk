@@ -100,7 +100,9 @@ export async function bootstrapTrust(
   ttlMs: number = DEFAULT_TRUST_TTL_MS,
   fetchImpl: typeof fetch = globalThis.fetch,
 ): Promise<TrustSnapshot> {
-  const url = `${baseUrl.replace(/\/+$/, "")}/.well-known/atlasent-keys.json`;
+  let base = baseUrl;
+  while (base.endsWith("/")) base = base.slice(0, -1);
+  const url = `${base}/.well-known/atlasent-keys.json`;
 
   try {
     const controller = new AbortController();

@@ -9,7 +9,7 @@
  *   - isKidRevoked(): presence in list, absence, empty list.
  */
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   bootstrapTrust,
   DEFAULT_TRUST_TTL_MS,
