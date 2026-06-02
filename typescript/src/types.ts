@@ -678,6 +678,8 @@ export interface PermitRecord {
   signature?: string;
   payload_hash?: string | null;
   decision_id?: string | null;
+  /** SHA-256 hex of the CDO that produced this permit. P1 provisional. */
+  cdo_hash?: string | null;
 }
 
 /** Optional filters for {@link AtlaSentClient.listPermits}. */
