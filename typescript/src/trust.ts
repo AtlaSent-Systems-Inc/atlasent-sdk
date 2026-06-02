@@ -68,31 +68,44 @@ export interface TrustSnapshot {
 /** Default snapshot TTL: 24 hours in milliseconds. */
 export const DEFAULT_TRUST_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** Wire shape returned by ${baseUrl}/.well-known/atlasent-keys.json */
-interface TrustKeysWire {
+/** Wire shape of GET /.well-known/atlasent-verifier-keys.json */
+interface VerifierKeysWire {
   keys?: unknown[];
-  revoked_kids?: string[];
+}
+
+/** Wire shape of GET /.well-known/atlasent-revocations.json */
+interface RevocationsWire {
   revoked_keys?: Array<{ kid: string; [k: string]: unknown }>;
+}
+
+/** Wire shape of GET /.well-known/atlasent-trust-root.json */
+interface TrustRootWire {
   valid_until?: string;
   issued_at?: string;
 }
 
 /**
- * Fetch a fresh TrustSnapshot from the AtlaSent keys endpoint.
+ * Fetch a fresh TrustSnapshot from the AtlaSent trust-root documents.
  *
- * Calls `${baseUrl}/.well-known/atlasent-keys.json` with a 10-second
- * timeout.  On any failure (network error, non-2xx, malformed response)
- * the function returns the `pinnedSnapshot` if provided, or re-throws
- * the underlying error when no fallback is available.
+ * Fetches three documents from `${baseUrl}/.well-known/` in parallel:
+ *   - `atlasent-verifier-keys.json`  — active verification keys
+ *   - `atlasent-revocations.json`    — revoked KIDs
+ *   - `atlasent-trust-root.json`     — validity window (valid_until, issued_at)
  *
- * The `expires_at` field is derived from the server's `valid_until` field
- * when present; otherwise it is set to `fetched_at + ttlMs`.
+ * Uses a 10-second timeout across all three fetches.  On any failure
+ * (network error, non-2xx, malformed response) the function returns the
+ * `pinnedSnapshot` if provided, or re-throws the underlying error when no
+ * fallback is available.
  *
- * @param baseUrl       Root URL of the AtlaSent API (no trailing slash).
+ * The `expires_at` field is derived from the trust-root document's
+ * `valid_until` field when present; otherwise it is set to
+ * `fetched_at + ttlMs`.
+ *
+ * @param baseUrl        Root URL of the AtlaSent keys host (no trailing slash).
  * @param pinnedSnapshot Optional pre-loaded snapshot to use as fallback.
- * @param ttlMs         TTL for the snapshot in ms (default: 24 hours).
- * @param fetchImpl     Custom fetch implementation (for tests/environments
- *                      without a global fetch).
+ * @param ttlMs          TTL for the snapshot in ms (default: 24 hours).
+ * @param fetchImpl      Custom fetch implementation (for tests/environments
+ *                       without a global fetch).
  */
 export async function bootstrapTrust(
   baseUrl: string,
@@ -102,30 +115,43 @@ export async function bootstrapTrust(
 ): Promise<TrustSnapshot> {
   let base = baseUrl;
   while (base.endsWith("/")) base = base.slice(0, -1);
-  const url = `${base}/.well-known/atlasent-keys.json`;
+  const wk = `${base}/.well-known`;
 
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10_000);
 
-    let response: Response;
+    let keysRes: Response, revocRes: Response, indexRes: Response;
     try {
-      response = await fetchImpl(url, { signal: controller.signal });
+      [keysRes, revocRes] = await Promise.all([
+        fetchImpl(`${wk}/atlasent-verifier-keys.json`, { signal: controller.signal }),
+        fetchImpl(`${wk}/atlasent-revocations.json`, { signal: controller.signal }),
+      ]);
+      indexRes = await fetchImpl(`${wk}/atlasent-trust-root.json`, { signal: controller.signal });
     } finally {
       clearTimeout(timer);
     }
 
-    if (!response.ok) {
+    if (!keysRes.ok || !revocRes.ok || !indexRes.ok) {
       if (pinnedSnapshot !== undefined) return pinnedSnapshot;
+      const failedStatus = !keysRes.ok
+        ? keysRes.status
+        : !revocRes.ok
+          ? revocRes.status
+          : indexRes.status;
       throw new Error(
-        `bootstrapTrust: server returned HTTP ${response.status} from ${url}`,
+        `bootstrapTrust: server returned HTTP ${failedStatus} from ${wk}`,
       );
     }
 
-    const wire = (await response.json()) as TrustKeysWire;
+    const [keysWire, revocWire, indexWire] = await Promise.all([
+      keysRes.json() as Promise<VerifierKeysWire>,
+      revocRes.json() as Promise<RevocationsWire>,
+      indexRes.json() as Promise<TrustRootWire>,
+    ]);
 
     // Coerce keys to JWK[]: accept any array entry that has a `kid` string.
-    const rawKeys: unknown[] = Array.isArray(wire.keys) ? wire.keys : [];
+    const rawKeys: unknown[] = Array.isArray(keysWire.keys) ? keysWire.keys : [];
     const keys: JWK[] = rawKeys.filter(
       (k): k is JWK =>
         k !== null &&
@@ -134,25 +160,22 @@ export async function bootstrapTrust(
         typeof (k as Record<string, unknown>).kty === "string",
     ) as JWK[];
 
-    // Revoked KIDs: may come as a flat `revoked_kids` array or as the
-    // TrustRootSnapshot-style `revoked_keys` array of objects.
-    const revokedKids: string[] = Array.isArray(wire.revoked_kids)
-      ? wire.revoked_kids.filter((k): k is string => typeof k === "string")
-      : Array.isArray(wire.revoked_keys)
-        ? wire.revoked_keys
-            .filter(
-              (r): r is { kid: string } =>
-                r !== null &&
-                typeof r === "object" &&
-                typeof (r as Record<string, unknown>).kid === "string",
-            )
-            .map((r) => r.kid)
-        : [];
+    // Revoked KIDs from the dedicated revocations document.
+    const revokedKids: string[] = Array.isArray(revocWire.revoked_keys)
+      ? revocWire.revoked_keys
+          .filter(
+            (r): r is { kid: string } =>
+              r !== null &&
+              typeof r === "object" &&
+              typeof (r as Record<string, unknown>).kid === "string",
+          )
+          .map((r) => r.kid)
+      : [];
 
     const fetchedAt = Date.now();
     const expiresAt =
-      typeof wire.valid_until === "string" && wire.valid_until.length > 0
-        ? new Date(wire.valid_until).getTime()
+      typeof indexWire.valid_until === "string" && indexWire.valid_until.length > 0
+        ? new Date(indexWire.valid_until).getTime()
         : fetchedAt + ttlMs;
 
     return {

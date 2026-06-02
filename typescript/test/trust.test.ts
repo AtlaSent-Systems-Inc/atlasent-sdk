@@ -32,6 +32,7 @@ function freshSnapshot(overrides: Partial<TrustSnapshot> = {}): TrustSnapshot {
   };
 }
 
+/** Returns the same body for every URL call (for tests that only need one of the three docs). */
 function mockFetch(
   status: number,
   body: unknown,
@@ -50,19 +51,55 @@ function mockFetch(
   ) as unknown as typeof fetch;
 }
 
+/**
+ * Returns different bodies per URL suffix — for tests that need the full
+ * three-document shape (verifier-keys / revocations / trust-root).
+ */
+function mockFetchMulti(
+  urlMap: Record<string, { status: number; body: unknown }>,
+  fallback: { status: number; body: unknown } = { status: 200, body: {} },
+): typeof fetch {
+  return vi.fn((url: unknown) => {
+    const urlStr = url as string;
+    for (const [suffix, cfg] of Object.entries(urlMap)) {
+      if (urlStr.endsWith(suffix)) {
+        return Promise.resolve(
+          new Response(JSON.stringify(cfg.body), {
+            status: cfg.status,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify(fallback.body), {
+        status: fallback.status,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  }) as unknown as typeof fetch;
+}
+
 // ─── bootstrapTrust ────────────────────────────────────────────────────────────
 
 describe("bootstrapTrust", () => {
   it("returns a TrustSnapshot on a successful fetch", async () => {
-    const wireBody = {
-      keys: [{ kid: "key-1", kty: "OKP", crv: "Ed25519", alg: "EdDSA", x: "abc" }],
-      revoked_kids: ["old-key"],
-    };
+    const fetchMock = mockFetchMulti({
+      "atlasent-verifier-keys.json": {
+        status: 200,
+        body: { keys: [{ kid: "key-1", kty: "OKP", crv: "Ed25519", alg: "EdDSA", x: "abc" }] },
+      },
+      "atlasent-revocations.json": {
+        status: 200,
+        body: { revoked_keys: [{ kid: "old-key", revoked_at: "2026-01-01T00:00:00Z" }] },
+      },
+      "atlasent-trust-root.json": { status: 200, body: {} },
+    });
     const snap = await bootstrapTrust(
       "https://api.atlasent.io",
       undefined,
       DEFAULT_TRUST_TTL_MS,
-      mockFetch(200, wireBody),
+      fetchMock,
     );
 
     expect(snap.keys).toHaveLength(1);
@@ -73,18 +110,32 @@ describe("bootstrapTrust", () => {
     expect(snap.expires_at).toBeGreaterThan(snap.fetched_at);
   });
 
-  it("fetches from /.well-known/atlasent-keys.json relative to baseUrl", async () => {
-    const fetchMock = mockFetch(200, { keys: [], revoked_kids: [] });
+  it("fetches from /.well-known/atlasent-verifier-keys.json relative to baseUrl", async () => {
+    const fetchMock = mockFetch(200, {});
     await bootstrapTrust("https://api.atlasent.io", undefined, DEFAULT_TRUST_TTL_MS, fetchMock);
-    const calledUrl = (fetchMock as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
-    expect(calledUrl).toBe("https://api.atlasent.io/.well-known/atlasent-keys.json");
+    const calledUrls = (fetchMock as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0] as string,
+    );
+    expect(calledUrls).toContain(
+      "https://api.atlasent.io/.well-known/atlasent-verifier-keys.json",
+    );
+    expect(calledUrls).toContain(
+      "https://api.atlasent.io/.well-known/atlasent-revocations.json",
+    );
+    expect(calledUrls).toContain(
+      "https://api.atlasent.io/.well-known/atlasent-trust-root.json",
+    );
   });
 
   it("strips trailing slashes from baseUrl before appending the path", async () => {
-    const fetchMock = mockFetch(200, { keys: [], revoked_kids: [] });
+    const fetchMock = mockFetch(200, {});
     await bootstrapTrust("https://api.atlasent.io///", undefined, DEFAULT_TRUST_TTL_MS, fetchMock);
-    const calledUrl = (fetchMock as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
-    expect(calledUrl).toBe("https://api.atlasent.io/.well-known/atlasent-keys.json");
+    const calledUrls = (fetchMock as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0] as string,
+    );
+    expect(calledUrls).toContain(
+      "https://api.atlasent.io/.well-known/atlasent-verifier-keys.json",
+    );
   });
 
   it("derives expires_at from server valid_until when present", async () => {
@@ -114,19 +165,25 @@ describe("bootstrapTrust", () => {
     expect(snap.expires_at).toBeLessThanOrEqual(after + DEFAULT_TRUST_TTL_MS);
   });
 
-  it("accepts revoked_keys (object array) as fallback for revoked_kids", async () => {
-    const wireBody = {
-      keys: [],
-      revoked_keys: [
-        { kid: "bad-key-1", revoked_at: "2026-01-01T00:00:00Z" },
-        { kid: "bad-key-2", revoked_at: "2026-01-02T00:00:00Z" },
-      ],
-    };
+  it("reads revoked_keys from the revocations document", async () => {
+    const fetchMock = mockFetchMulti({
+      "atlasent-verifier-keys.json": { status: 200, body: { keys: [] } },
+      "atlasent-revocations.json": {
+        status: 200,
+        body: {
+          revoked_keys: [
+            { kid: "bad-key-1", revoked_at: "2026-01-01T00:00:00Z" },
+            { kid: "bad-key-2", revoked_at: "2026-01-02T00:00:00Z" },
+          ],
+        },
+      },
+      "atlasent-trust-root.json": { status: 200, body: {} },
+    });
     const snap = await bootstrapTrust(
       "https://api.atlasent.io",
       undefined,
       DEFAULT_TRUST_TTL_MS,
-      mockFetch(200, wireBody),
+      fetchMock,
     );
     expect(snap.revoked_kids).toContain("bad-key-1");
     expect(snap.revoked_kids).toContain("bad-key-2");
@@ -211,13 +268,17 @@ describe("bootstrapTrust", () => {
     expect(snap.expires_at).toBeLessThanOrEqual(after + customTtl);
   });
 
-  it("handles empty revoked_kids array in response", async () => {
-    const wireBody = { keys: [], revoked_kids: [] };
+  it("handles empty revoked_keys array in the revocations document", async () => {
+    const fetchMock = mockFetchMulti({
+      "atlasent-verifier-keys.json": { status: 200, body: { keys: [] } },
+      "atlasent-revocations.json": { status: 200, body: { revoked_keys: [] } },
+      "atlasent-trust-root.json": { status: 200, body: {} },
+    });
     const snap = await bootstrapTrust(
       "https://api.atlasent.io",
       undefined,
       DEFAULT_TRUST_TTL_MS,
-      mockFetch(200, wireBody),
+      fetchMock,
     );
     expect(snap.revoked_kids).toEqual([]);
   });
