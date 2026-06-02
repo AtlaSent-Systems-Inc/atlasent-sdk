@@ -350,6 +350,14 @@ export {
   getGlobalTrustRootManager,
   __setGlobalTrustRootManagerForTests,
 } from "./trustRoot.js";
+export {
+  bootstrapTrust,
+  isKidRevoked,
+  isTrustSnapshotExpired,
+  DEFAULT_TRUST_TTL_MS,
+  type JWK,
+  type TrustSnapshot,
+} from "./trust.js";
 
 // ── Economic Governance & Liability Attribution ─────────────────────────────────────────────────────────────
 export {
