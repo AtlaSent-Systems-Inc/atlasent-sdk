@@ -169,7 +169,7 @@ describe("withOtel — keySelf", () => {
       fakeClient({
         keySelf: async () => ({
           keyId: "k1",
-          organizationId: "org-1",
+          orgId: "org-1",
           environment: "live",
           scopes: ["evaluate"],
           allowedCidrs: null,
@@ -273,7 +273,7 @@ describe("withOtel — options", () => {
       fakeClient({
         keySelf: async () => ({
           keyId: "k",
-          organizationId: "o",
+          orgId: "o",
           environment: "test",
           scopes: [],
           allowedCidrs: null,

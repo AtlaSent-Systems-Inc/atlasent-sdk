@@ -681,7 +681,7 @@ class ApiKeySelfResult(BaseModel):
 
     Attributes:
         key_id: Server-side UUID of the ``api_keys`` row for this key.
-        organization_id: Organization the key belongs to.
+        org_id: Organization the key belongs to.
         environment: ``"live"`` / ``"test"`` (or any future environment
             label the server introduces).
         scopes: Granted scopes (e.g. ``["evaluate", "audit.read"]``).
@@ -696,7 +696,7 @@ class ApiKeySelfResult(BaseModel):
     """
 
     key_id: str
-    organization_id: str
+    org_id: str
     environment: str
     scopes: list[str] = Field(default_factory=list)
     allowed_cidrs: list[str] | None = None

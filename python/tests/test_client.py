@@ -989,7 +989,7 @@ class TestRateLimitHeaders:
 
 KEY_SELF_PAYLOAD = {
     "key_id": "550e8400-e29b-41d4-a716-446655440000",
-    "organization_id": "123e4567-e89b-12d3-a456-426614174000",
+    "org_id": "123e4567-e89b-12d3-a456-426614174000",
     "environment": "live",
     "scopes": ["evaluate", "audit.read"],
     "allowed_cidrs": ["10.0.0.0/8"],
@@ -1006,7 +1006,7 @@ class TestKeySelf:
         result = client.key_self()
         assert isinstance(result, ApiKeySelfResult)
         assert result.key_id == KEY_SELF_PAYLOAD["key_id"]
-        assert result.organization_id == KEY_SELF_PAYLOAD["organization_id"]
+        assert result.org_id == KEY_SELF_PAYLOAD["org_id"]
         assert result.environment == "live"
         assert result.scopes == ["evaluate", "audit.read"]
         assert result.allowed_cidrs == ["10.0.0.0/8"]
@@ -1045,7 +1045,7 @@ class TestKeySelf:
     def test_defaults_optional_fields(self, client, mocker):
         minimal = {
             "key_id": "k",
-            "organization_id": "o",
+            "org_id": "o",
             "environment": "test",
             "rate_limit_per_minute": 60,
         }
@@ -1061,7 +1061,7 @@ class TestKeySelf:
         resp = _mock_resp(
             mocker,
             json_data={
-                "organization_id": "o",
+                "org_id": "o",
                 "environment": "live",
                 "rate_limit_per_minute": 60,
             },

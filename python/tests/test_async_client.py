@@ -592,7 +592,7 @@ class TestAsyncRequestIdOnExceptions:
 
 KEY_SELF_PAYLOAD = {
     "key_id": "550e8400-e29b-41d4-a716-446655440000",
-    "organization_id": "123e4567-e89b-12d3-a456-426614174000",
+    "org_id": "123e4567-e89b-12d3-a456-426614174000",
     "environment": "live",
     "scopes": ["evaluate", "audit.read"],
     "allowed_cidrs": ["10.0.0.0/8"],
@@ -632,7 +632,7 @@ class TestAsyncKeySelf:
         assert "/v1-api-key-self" in get_mock.call_args[0][0]
 
     @pytest.mark.asyncio
-    async def test_bad_response_on_missing_organization_id(self, async_client, mocker):
+    async def test_bad_response_on_missing_org_id(self, async_client, mocker):
         mocker.patch.object(
             async_client._client,
             "get",
