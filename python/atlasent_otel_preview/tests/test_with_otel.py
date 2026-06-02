@@ -69,7 +69,7 @@ class FakeVerifyResult:
 @dataclass
 class FakeKeySelfResult:
     key_id: str = "k1"
-    organization_id: str = "org-1"
+    org_id: str = "org-1"
     environment: str = "live"
 
 
