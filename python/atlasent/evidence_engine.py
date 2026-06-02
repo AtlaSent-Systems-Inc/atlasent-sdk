@@ -13,9 +13,8 @@ Primary types:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal
-
 
 # ── Why Trace ─────────────────────────────────────────────────────────────────
 

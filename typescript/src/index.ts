@@ -122,7 +122,6 @@ export {
   classifyCommand,
   CanonicalProtectedActionType,
   type ProtectedAction,
-  type CanonicalProtectedActionType,
 } from "./requirePermit.js";
 export { withPermit } from "./withPermit.js";
 export type {
@@ -1070,3 +1069,31 @@ export {
   type VQPVerifyInput,
   type VQPVerifyResponse,
 } from "./vqp.js";
+
+// ── Action Dependencies ───────────────────────────────────────────────────────
+export type {
+  ActionDependency,
+  ActionDependencyResponse,
+  CreateActionDependencyRequest,
+  DependencyLink,
+  DependencyRequirement,
+  DependencyStatus,
+  ListActionDependenciesResponse,
+} from "./actionDependencies.js";
+
+// ── Engine Versions ───────────────────────────────────────────────────────────
+export type {
+  EngineVersionRecord,
+  EngineVersionResponse,
+  EngineVersionStatus,
+  ListEngineVersionsResponse,
+  RegisterEngineVersionRequest,
+} from "./engineVersions.js";
+
+// ── State Snapshots ───────────────────────────────────────────────────────────
+export type {
+  SnapshotSourceKind,
+  StateSnapshot,
+  StateSnapshotInput,
+  StateSnapshotRef,
+} from "./snapshots.js";
