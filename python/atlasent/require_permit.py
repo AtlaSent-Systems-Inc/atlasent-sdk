@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Literal, TypeVar
 
 from .authorize import protect
@@ -30,6 +31,43 @@ from .authorize import protect
 T = TypeVar("T")
 
 Environment = Literal["development", "staging", "production"]
+
+
+class CanonicalProtectedActionType(str, Enum):
+    """Catalog of built-in protected action types.
+
+    Mirrors ``CanonicalProtectedActionType`` in the OpenAPI spec and the
+    TypeScript SDK. Use these constants as ``action_type`` values in
+    :class:`ProtectedAction` instead of bare strings::
+
+        action = ProtectedAction(
+            action_type=CanonicalProtectedActionType.DATABASE_TABLE_DELETE,
+            actor_id="agent:data-pipeline",
+            resource_id="prod-db.users",
+            environment="production",
+            context={"reason": "GDPR erasure"},
+        )
+    """
+
+    PRODUCTION_DEPLOY = "production.deploy"
+    HR_EMPLOYEE_OFFBOARD = "hr.employee.offboard"
+    HR_ACCESS_REVOKE = "hr.access.revoke"
+    HR_ROLE_ESCALATE = "hr.role.escalate"
+    ML_MODEL_PROMOTE = "ml.model.promote"
+    ML_MODEL_RETIRE = "ml.model.retire"
+    ML_MODEL_FINE_TUNE = "ml.model.fine_tune"
+    CUSTOMER_DATA_DELETE = "customer.data.delete"
+    CONTRACT_EXECUTE = "contract.execute"
+    CONTRACT_AMEND = "contract.amend"
+    PRICING_RULE_PUBLISH = "pricing.rule.publish"
+    PRICING_DISCOUNT_APPROVE = "pricing.discount.approve"
+    SECURITY_INCIDENT_ESCALATE = "security.incident.escalate"
+    SECURITY_ACCESS_QUARANTINE = "security.access.quarantine"
+    ACCESS_CERT_REVOKE = "access.cert.revoke"
+    PERIOD_CLOSE_CERTIFY = "period.close.certify"
+    DATABASE_MIGRATION_APPLY = "database.migration.apply"
+    DATABASE_SCHEMA_DROP = "database.schema.drop"
+    DATABASE_TABLE_DELETE = "database.table.delete"
 
 
 @dataclass(frozen=True)

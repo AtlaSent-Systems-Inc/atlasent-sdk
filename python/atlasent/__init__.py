@@ -219,8 +219,29 @@ from .policy_sync import (
     format_policy_sync_diff,
     is_policy_sync_terminal,
 )
+from .context_envelope import (
+    CONTEXT_NAMESPACES,
+    ContextEnvelope,
+    ContextNamespaceEntry,
+    ContextSignal,
+    RecordContextEnvelopeInput,
+)
+from .evidence_engine import (
+    ActionEvidenceBundle,
+    ComplianceControlCoverage,
+    DecisionReceipt,
+    DecisionReceiptPayload,
+    WhyPolicyEvaluation,
+    WhyStage,
+    WhyTrace,
+)
 from .replay import EvidenceVerificationResult, verify_evidence_bundle
-from .require_permit import ProtectedAction, classify_command, require_permit
+from .require_permit import (
+    CanonicalProtectedActionType,
+    ProtectedAction,
+    classify_command,
+    require_permit,
+)
 from .runtime_v2 import (
     AuditChainPage,
     AuthorityRecord,
@@ -370,6 +391,19 @@ __all__ = [
     "require_permit",
     "classify_command",
     "ProtectedAction",
+    "CanonicalProtectedActionType",
+    "WhyTrace",
+    "WhyPolicyEvaluation",
+    "WhyStage",
+    "DecisionReceipt",
+    "DecisionReceiptPayload",
+    "ActionEvidenceBundle",
+    "ComplianceControlCoverage",
+    "ContextEnvelope",
+    "ContextSignal",
+    "ContextNamespaceEntry",
+    "RecordContextEnvelopeInput",
+    "CONTEXT_NAMESPACES",
     "authorize",
     "evaluate",
     "verify",
