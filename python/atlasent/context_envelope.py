@@ -54,7 +54,10 @@ class ContextSignal:
     """One signal attached to a context envelope."""
 
     namespace: str
-    """Dotted path under the ``signals`` namespace (e.g. ``"signals.actor_anomaly"``)."""
+    """Dotted path under the ``signals`` namespace.
+
+    Example: ``"signals.actor_anomaly"``.
+    """
 
     source: str
     """Named source that produced this signal."""

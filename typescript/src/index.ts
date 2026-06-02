@@ -122,7 +122,6 @@ export {
   classifyCommand,
   CanonicalProtectedActionType,
   type ProtectedAction,
-  type CanonicalProtectedActionType,
 } from "./requirePermit.js";
 export { withPermit } from "./withPermit.js";
 export type {
