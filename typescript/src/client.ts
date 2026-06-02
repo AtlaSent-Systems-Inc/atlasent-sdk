@@ -402,7 +402,7 @@ function deployGateEvidence(input: {
 /** Raw JSON shape received from `GET /v1-api-key-self`. */
 interface ApiKeySelfWire {
   key_id: string;
-  organization_id: string;
+  org_id: string;
   environment: string;
   scopes?: string[];
   allowed_cidrs?: string[] | null;
@@ -1354,17 +1354,17 @@ export class AtlaSentClient {
 
     if (
       typeof wire.key_id !== "string" ||
-      typeof wire.organization_id !== "string"
+      typeof wire.org_id !== "string"
     ) {
       throw new AtlaSentError(
-        "Malformed response from /v1-api-key-self: missing `key_id` or `organization_id`",
+        "Malformed response from /v1-api-key-self: missing `key_id` or `org_id`",
         { code: "bad_response" },
       );
     }
 
     return {
       keyId: wire.key_id,
-      organizationId: wire.organization_id,
+      orgId: wire.org_id,
       environment: wire.environment,
       scopes: wire.scopes ?? [],
       allowedCidrs: wire.allowed_cidrs ?? null,

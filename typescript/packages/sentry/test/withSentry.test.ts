@@ -210,7 +210,7 @@ describe("withSentry — keySelf", () => {
       fakeClient({
         keySelf: async () => ({
           keyId: "k1",
-          organizationId: "org-1",
+          orgId: "org-1",
           environment: "live",
           scopes: [],
           allowedCidrs: null,

@@ -1038,7 +1038,7 @@ describe("X-RateLimit-* header parsing", () => {
 describe("keySelf()", () => {
   const KEY_SELF_WIRE = {
     key_id: "550e8400-e29b-41d4-a716-446655440000",
-    organization_id: "123e4567-e89b-12d3-a456-426614174000",
+    org_id: "123e4567-e89b-12d3-a456-426614174000",
     environment: "live",
     scopes: ["evaluate", "audit.read"],
     allowed_cidrs: ["10.0.0.0/8"],
@@ -1062,7 +1062,7 @@ describe("keySelf()", () => {
 
     expect(result).toEqual({
       keyId: "550e8400-e29b-41d4-a716-446655440000",
-      organizationId: "123e4567-e89b-12d3-a456-426614174000",
+      orgId: "123e4567-e89b-12d3-a456-426614174000",
       environment: "live",
       scopes: ["evaluate", "audit.read"],
       allowedCidrs: ["10.0.0.0/8"],
@@ -1100,7 +1100,7 @@ describe("keySelf()", () => {
     const fetchImpl = mockFetch(() =>
       jsonResponse({
         key_id: "k",
-        organization_id: "o",
+        org_id: "o",
         environment: "test",
         rate_limit_per_minute: 60,
         // allowed_cidrs, client_ip, expires_at, scopes all omitted

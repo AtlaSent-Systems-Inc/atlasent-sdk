@@ -558,7 +558,7 @@ export interface ApiKeySelfResponse {
   /** Server-side UUID of the api_keys row for this key. */
   keyId: string;
   /** Organization the key belongs to. */
-  organizationId: string;
+  orgId: string;
   /** "live" or "test" (or any future environment label the server introduces). */
   environment: string;
   /** Granted scopes — e.g. ["evaluate", "audit.read"]. */
