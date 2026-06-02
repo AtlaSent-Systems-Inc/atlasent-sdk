@@ -625,8 +625,7 @@ class AtlaSentClient:
             data.get("org_id"), str
         ):
             raise AtlaSentError(
-                "Malformed /v1-api-key-self response: missing "
-                "`key_id` or `org_id`",
+                "Malformed /v1-api-key-self response: missing " "`key_id` or `org_id`",
                 code="bad_response",
                 request_id=request_id,
                 response_body=data,
