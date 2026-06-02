@@ -29,6 +29,43 @@
 import { protect } from "./protect.js";
 
 /**
+ * Catalog of built-in protected action types, mirroring `CanonicalProtectedActionType`
+ * in the OpenAPI spec. Use these constants as `action_type` values in
+ * {@link requirePermit} calls instead of bare strings.
+ *
+ * ```ts
+ * await requirePermit(
+ *   { action_type: CanonicalProtectedActionType.DATABASE_TABLE_DELETE, ... },
+ *   () => db.raw("DELETE FROM users"),
+ * );
+ * ```
+ */
+export const CanonicalProtectedActionType = {
+  PRODUCTION_DEPLOY: "production.deploy",
+  HR_EMPLOYEE_OFFBOARD: "hr.employee.offboard",
+  HR_ACCESS_REVOKE: "hr.access.revoke",
+  HR_ROLE_ESCALATE: "hr.role.escalate",
+  ML_MODEL_PROMOTE: "ml.model.promote",
+  ML_MODEL_RETIRE: "ml.model.retire",
+  ML_MODEL_FINE_TUNE: "ml.model.fine_tune",
+  CUSTOMER_DATA_DELETE: "customer.data.delete",
+  CONTRACT_EXECUTE: "contract.execute",
+  CONTRACT_AMEND: "contract.amend",
+  PRICING_RULE_PUBLISH: "pricing.rule.publish",
+  PRICING_DISCOUNT_APPROVE: "pricing.discount.approve",
+  SECURITY_INCIDENT_ESCALATE: "security.incident.escalate",
+  SECURITY_ACCESS_QUARANTINE: "security.access.quarantine",
+  ACCESS_CERT_REVOKE: "access.cert.revoke",
+  PERIOD_CLOSE_CERTIFY: "period.close.certify",
+  DATABASE_MIGRATION_APPLY: "database.migration.apply",
+  DATABASE_SCHEMA_DROP: "database.schema.drop",
+  DATABASE_TABLE_DELETE: "database.table.delete",
+} as const;
+
+export type CanonicalProtectedActionType =
+  (typeof CanonicalProtectedActionType)[keyof typeof CanonicalProtectedActionType];
+
+/**
  * Describes a potentially dangerous action to be authorized before
  * the executor runs. Passed as the first argument to {@link requirePermit}.
  */
