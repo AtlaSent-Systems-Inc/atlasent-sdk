@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/schemas/action-dependency",
+  "title": "ActionDependency",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "organization_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "parent_action_class_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "child_action_class_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "requires": {
+      "type": "string",
+      "enum": ["permit", "allow_decision"]
+    },
+    "temporal_window_seconds": {
+      "oneOf": [
+        { "type": "integer" },
+        { "type": "null" }
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "id",
+    "organization_id",
+    "parent_action_class_id",
+    "child_action_class_id",
+    "requires",
+    "created_at"
+  ],
+  "additionalProperties": false
+}

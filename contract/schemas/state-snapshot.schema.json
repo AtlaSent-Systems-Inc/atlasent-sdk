@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/schemas/state-snapshot-ref",
+  "title": "StateSnapshotRef",
+  "type": "object",
+  "properties": {
+    "snapshot_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "canonical_hash": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "null" }
+      ]
+    }
+  },
+  "required": ["snapshot_id"],
+  "additionalProperties": false
+}
