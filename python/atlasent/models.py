@@ -1231,7 +1231,9 @@ class LicenseStatus(BaseModel):
     seat_limit: int | None = None
     rate_limit: RateLimitState | None = None
 
-    model_config = ConfigDict(extra="allow", populate_by_name=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        extra="allow", populate_by_name=True, arbitrary_types_allowed=True
+    )
 
 
 class LicenseVerifyResult(BaseModel):
@@ -1261,4 +1263,6 @@ class LicenseVerifyResult(BaseModel):
     error: str | None = None
     rate_limit: RateLimitState | None = None
 
-    model_config = ConfigDict(extra="allow", populate_by_name=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        extra="allow", populate_by_name=True, arbitrary_types_allowed=True
+    )

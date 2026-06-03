@@ -2341,3 +2341,103 @@ describe("replayDecision()", () => {
     );
   });
 });
+
+describe("getLicense", () => {
+  const LICENSE_WIRE = {
+    status: "active",
+    org_slug: "acme",
+    posture: "self_hosted",
+    expires_at: "2027-01-01T00:00:00Z",
+    features: ["gxp", "sso"],
+    eval_limit: 10_000,
+    seat_limit: 50,
+  };
+
+  it("returns license status on success", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(LICENSE_WIRE));
+    const client = makeClient(fetchImpl);
+    const result = await client.getLicense();
+    expect(result.status).toBe("active");
+    expect(result.org_slug).toBe("acme");
+    expect(result.features).toEqual(["gxp", "sso"]);
+    expect(result.rateLimit).toBeNull();
+  });
+
+  it("hits GET /v1/license", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(LICENSE_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.getLicense();
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toContain("/v1/license");
+    expect((init as RequestInit).method).toBeUndefined();
+  });
+
+  it("surfaces rate limit headers", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse(LICENSE_WIRE, {
+        headers: {
+          "Content-Type": "application/json",
+          "X-RateLimit-Limit": "100",
+          "X-RateLimit-Remaining": "99",
+          "X-RateLimit-Reset": "1714070000",
+        },
+      }),
+    );
+    const client = makeClient(fetchImpl);
+    const result = await client.getLicense();
+    expect(result.rateLimit).toEqual({
+      limit: 100,
+      remaining: 99,
+      resetAt: new Date(1_714_070_000 * 1000),
+    });
+  });
+});
+
+describe("verifyLicense", () => {
+  const VERIFY_VALID_WIRE = {
+    valid: true,
+    org_slug: "acme",
+    expires_at: "2027-01-01T00:00:00Z",
+  };
+
+  const VERIFY_INVALID_WIRE = {
+    valid: false,
+    error: "SIGNATURE_INVALID",
+  };
+
+  it("returns valid:true on a good blob", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(VERIFY_VALID_WIRE));
+    const client = makeClient(fetchImpl);
+    const result = await client.verifyLicense("signed-blob-abc");
+    expect(result.valid).toBe(true);
+    expect(result.org_slug).toBe("acme");
+    expect(result.rateLimit).toBeNull();
+  });
+
+  it("returns valid:false without throwing", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(VERIFY_INVALID_WIRE));
+    const client = makeClient(fetchImpl);
+    const result = await client.verifyLicense("bad-blob");
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe("SIGNATURE_INVALID");
+  });
+
+  it("throws bad_request when blob is empty", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(VERIFY_VALID_WIRE));
+    const client = makeClient(fetchImpl);
+    await expect(client.verifyLicense("")).rejects.toMatchObject({
+      code: "bad_request",
+    });
+  });
+
+  it("posts blob to /v1/license/verify", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(VERIFY_VALID_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.verifyLicense("my-signed-blob");
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toContain("/v1/license/verify");
+    expect((init as RequestInit).method).toBe("POST");
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.blob).toBe("my-signed-blob");
+  });
+});

@@ -366,6 +366,25 @@ components:
           description: "Multi-actor quorum completion proofs. Each entry proves a prior actor consumed a permit for a specific action_type. Verified via permit_uses + execution_evaluations gates; fail-closed."
           items:
             $ref: "#/components/schemas/CompletionProof"
+        state_snapshot:
+          type: object
+          description: "State snapshot provided at evaluation time. Required when the action class has requires_state_snapshot=true; omitting it produces a SNAPSHOT_REQUIRED deny."
+          additionalProperties: true
+          properties:
+            source:
+              type: string
+              description: "Source system identifier (e.g. 'github-actions', 'k8s-cluster')."
+            source_kind:
+              type: string
+              enum: [trusted, untrusted]
+              description: "Classification of the snapshot source."
+            complete:
+              type: boolean
+              description: "Whether the snapshot is complete."
+            payload:
+              type: object
+              additionalProperties: true
+              description: "Arbitrary snapshot payload."
     CompletionProof:
       title: CompletionProof
       description: "Proof that a specific actor consumed a specific permit for a specific action_type. Used to satisfy multi-actor quorum dependencies."
