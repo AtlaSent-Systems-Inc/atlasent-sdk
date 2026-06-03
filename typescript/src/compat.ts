@@ -41,6 +41,17 @@ export interface V2EvaluateRequest {
   proposed_state?: { description: string; attributes?: Record<string, unknown> };
   /** Execution surface binding (CI/CD adapter, DB driver, etc.). */
   execution_binding?: { kind: string; adapter_version?: string; resource_id?: string; enforcement_point?: string };
+  /**
+   * State snapshot of the system at evaluation time. Required when the action
+   * class has `requires_state_snapshot = true`. Omitting causes a
+   * `SNAPSHOT_REQUIRED` deny on affected action classes.
+   */
+  state_snapshot?: {
+    source?: string;
+    source_kind?: 'trusted' | 'untrusted';
+    complete?: boolean;
+    payload?: Record<string, unknown>;
+  };
 }
 
 /**
@@ -77,6 +88,7 @@ export function normalizeEvaluateRequest(
     if (l.current_state !== undefined) normalized.current_state = l.current_state;
     if (l.proposed_state !== undefined) normalized.proposed_state = l.proposed_state;
     if (l.execution_binding !== undefined) normalized.execution_binding = l.execution_binding;
+    if (l.state_snapshot !== undefined) normalized.state_snapshot = l.state_snapshot;
     return normalized;
   }
   return input as V2EvaluateRequest;

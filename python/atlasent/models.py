@@ -226,6 +226,12 @@ class EvaluateRequest(BaseModel):
     # whose completed action this evaluation depends on. Absent → no proofs
     # submitted (no behavioral change for non-quorum dependencies).
     completion_proofs: list[CompletionProof] | None = Field(default=None)
+    # State snapshot of the system at evaluation time. Required when the action
+    # class has requires_state_snapshot=True. Omitting this field on a required
+    # action class causes the server to return a SNAPSHOT_REQUIRED deny.
+    # Recovery: add state_snapshot to every evaluate call for the affected
+    # action_type with observable system state at evaluation time.
+    state_snapshot: dict[str, Any] | None = Field(default=None)
     # Kept for backward-compat with code that constructs the request
     # directly. Excluded from wire serialization — the server reads the
     # API key from the Authorization header, never from the body.

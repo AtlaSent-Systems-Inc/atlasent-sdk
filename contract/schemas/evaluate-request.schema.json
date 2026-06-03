@@ -154,6 +154,31 @@
       "type": "array",
       "description": "Multi-actor quorum completion proofs. Each entry asserts that a specific actor consumed a specific permit for a specific action_type. The runtime verifies both the permit_uses consumed-gate and an execution_evaluations actor/action binding gate before counting the proof toward quorum.",
       "items": { "$ref": "completion-proof.schema.json" }
+    },
+    "state_snapshot": {
+      "type": "object",
+      "description": "State snapshot of the system at evaluation time. Required when the action class has requires_state_snapshot=true (enforced by migration 20260603000019). Omitting this field on a required action class causes the server to return decision=deny with deny_code=SNAPSHOT_REQUIRED. Recovery: add state_snapshot to every evaluate call for the affected action_type.",
+      "additionalProperties": true,
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Source system identifier (e.g. 'github-actions', 'k8s-cluster')."
+        },
+        "source_kind": {
+          "type": "string",
+          "enum": ["trusted", "untrusted"],
+          "description": "Classification of the source. 'trusted' for verified systems, 'untrusted' for caller-provided snapshots."
+        },
+        "complete": {
+          "type": "boolean",
+          "description": "Whether the snapshot is complete. false when only a partial view is available."
+        },
+        "payload": {
+          "type": "object",
+          "description": "Arbitrary snapshot payload — observable state of the system at evaluation time.",
+          "additionalProperties": true
+        }
+      }
     }
   }
 }
