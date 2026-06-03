@@ -158,7 +158,10 @@ class CompletionProof(BaseModel):
     Proofs that fail either gate are silently dropped (fail-closed).
     """
 
-    action_type: str = Field(..., description="action_type (slug) completed by the prior actor.")
+    action_type: str = Field(
+        ...,
+        description="action_type (slug) completed by the prior actor.",
+    )
     actor_id: str = Field(..., description="The actor who completed the action.")
     permit_id: str = Field(
         ...,
