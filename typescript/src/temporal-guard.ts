@@ -175,19 +175,19 @@ export class TemporalGuard {
         if (aborted) return;
         try {
           const result = await this.client.verifyPermit({
-            permit_token: permitToken,
-            action_type: this.opts.actionType,
+            permitId: permitToken,
+            action: this.opts.actionType,
           });
           revalidationCount++;
-          if (!result.valid) {
+          if (!result.verified) {
             aborted = true;
             abortError = new TemporalGuardError(
               'PERMIT_REVOKED',
-              `Permit revoked during execution of ${this.opts.actionType}: ${result.verify_error_code ?? result.outcome}`,
-              { outcome: result.outcome, verify_error_code: result.verify_error_code },
+              `Permit revoked during execution of ${this.opts.actionType}: ${result.outcome}`,
+              { outcome: result.outcome },
             );
             if (this.opts.onPermitRevoked) {
-              this.opts.onPermitRevoked(result.verify_error_code ?? result.outcome ?? 'unknown');
+              this.opts.onPermitRevoked(result.outcome ?? 'unknown');
             }
           }
         } catch {
