@@ -28,6 +28,14 @@ Two new types and two new `AtlaSentClient` methods for the
 - `client.verifyLicense(blob)` — calls `POST /v1/license/verify`; returns
   `LicenseVerifyResult & { rateLimit }`. A `valid: false` response is not thrown.
 
+### Documentation
+
+- README: added "Why two calls? (the mental model)" section explaining the evaluate → permit token → verifyPermit → execute invariant and when to use `deployGate()` / `protect()` vs the raw two-step form.
+
+### Internal
+
+- Coverage: added tests for the `doDelete` non-JSON error body path and `pickFetch` globalThis fallback; added `type-coverage.test.ts` to force V8 evaluation of type-only modules. Lines and functions coverage now comfortably above the 95% floor.
+
 ---
 
 ## @atlasent/sdk 2.12.0 (2026-05-28)
