@@ -27,6 +27,15 @@ if (!gate.allowed) {
 
 That's it. `deployGate()` performs the V1 Deploy Gate sequence against `production.deploy`: `evaluate()` calls `POST /v1-evaluate`, receives a permit when allowed, then `verifyPermit()` calls `POST /v1-verify-permit` before your deployment can run. A clean `deny` is returned as a block result — network / server / auth failures are thrown.
 
+## Why two calls? (the mental model)
+
+AtlaSent is **authorize-before-execute**, not after-the-fact logging. The two-step pattern is intentional:
+
+1. **`evaluate()`** asks the policy engine: "should this action run?" Returns a decision and, when allowed, a single-use **permit token** — a cryptographic proof that evaluation happened.
+2. **`verifyPermit()`** consumes the permit server-side *before* the action executes. This is what makes the audit chain tamper-evident: every execution is hash-linked to the evaluation that authorized it, and no permit can be replayed.
+
+**You rarely call them separately.** `deployGate()` wraps both steps for deploy workflows. The Python SDK's `protect()` wraps them for arbitrary actions. Use the raw two-step form only when something external — a human approval, a change-window check — needs to happen *between* evaluate and execute (evaluate → wait → verify → run).
+
 ## Simple V1 surface
 
 ```ts
