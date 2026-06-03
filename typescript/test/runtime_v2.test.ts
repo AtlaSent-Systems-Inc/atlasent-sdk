@@ -341,4 +341,29 @@ describe("error handling", () => {
     const rt = new RuntimeV2Client(transport(f));
     await expect(rt.getAuthority(ORG, "bad-id")).rejects.toThrow("authority not found");
   });
+
+  it("throws AtlaSentError with generic message when DELETE returns non-JSON body", async () => {
+    const f = async () =>
+      new Response("Internal Server Error", {
+        status: 503,
+        headers: { "Content-Type": "text/plain" },
+      });
+    const rt = new RuntimeV2Client(transport(f));
+    await expect(
+      rt.revokePermit(ORG, PERMIT_ID, "admin", "circuit-breaker"),
+    ).rejects.toThrow(`DELETE /v2/orgs/${ORG}/permits/${PERMIT_ID} failed (503)`);
+  });
+
+  it("uses globalThis.fetch when transport.fetch is not set", async () => {
+    const saved = (globalThis as Record<string, unknown>).fetch;
+    (globalThis as Record<string, unknown>).fetch = async () =>
+      jsonResp({ status: "PERMITTED", permit: { permit_id: PERMIT_ID } });
+    try {
+      const rt = new RuntimeV2Client({ baseUrl: BASE_URL, apiKey: API_KEY });
+      const r = await rt.authorize(ORG, { action_type: "test.action", actor_id: "a" });
+      expect(r.status).toBe("PERMITTED");
+    } finally {
+      (globalThis as Record<string, unknown>).fetch = saved;
+    }
+  });
 });
