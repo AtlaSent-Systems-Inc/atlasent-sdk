@@ -199,7 +199,6 @@ from .models import (
     ApiKeySelfResult,
     AuthError,
     AuthorizationResult,
-    CompletionProof as CompletionProof,
     ConstraintTrace,
     ConstraintTracePolicy,
     ConstraintTraceStage,
@@ -226,6 +225,9 @@ from .models import (
     StreamProgressEvent,
     VerifyPermitByIdResult,
     VerifyResult,
+)
+from .models import (
+    CompletionProof as CompletionProof,
 )
 from .policy_sync import (
     PolicyBundleEntry,
