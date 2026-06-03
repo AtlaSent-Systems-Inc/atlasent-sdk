@@ -142,7 +142,7 @@ jobs:
         run: |
           cosign verify-blob \
             --bundle="${TARBALL}.bundle" \
-            --certificate-identity-regexp='https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/.github/workflows/publish-npm.yml@refs/tags/typescript-v.*' \
+            --certificate-identity-regexp='https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/.github/workflows/publish-npm.yml@refs/(tags/typescript-v|heads/main).*' \
             --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
             "${TARBALL}"
 
