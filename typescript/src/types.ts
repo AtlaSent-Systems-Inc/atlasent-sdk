@@ -1021,3 +1021,81 @@ export interface ComplianceComparisonArtifact {
   artifact_hash: string;
   generated_at: string;
 }
+
+// ── License verification (self-hosted / air-gapped) ───────────────────────────
+
+/**
+ * License status for a self-hosted or air-gapped AtlaSent deployment.
+ *
+ * Returned by `GET /v1/license`. Describes the current validity, posture,
+ * features, and optional limits for the license key installed on this instance.
+ *
+ * Callers should check `status === "active"` before relying on `features`.
+ * A `"grace"` status means the license has expired but a grace period
+ * (`grace_until`) has not yet elapsed — enforcement is not yet suspended, but
+ * the license should be renewed immediately.
+ */
+export interface LicenseStatus {
+  /**
+   * Current validity state of the license.
+   *
+   * - `"active"` — license is valid and within its expiry window.
+   * - `"grace"` — license has expired; a grace period (`grace_until`) applies.
+   * - `"expired"` — license has expired and the grace period has elapsed.
+   * - `"revoked"` — license has been explicitly revoked by AtlaSent.
+   */
+  status: "active" | "grace" | "expired" | "revoked";
+  /** Slug of the organization this license was issued to. */
+  org_slug: string;
+  /**
+   * Deployment posture the license was issued for.
+   *
+   * - `"self_hosted"` — customer-managed deployment with network access to the
+   *   AtlaSent license endpoint for periodic renewal checks.
+   * - `"air_gapped"` — fully offline deployment; license verification is
+   *   entirely local (signed blob checked against the embedded public key).
+   */
+  posture: "self_hosted" | "air_gapped";
+  /** ISO 8601 timestamp when the license expires. */
+  expires_at: string;
+  /**
+   * ISO 8601 timestamp when the grace period ends.
+   * Present only when `status === "grace"`.
+   */
+  grace_until?: string;
+  /**
+   * Feature flags enabled by this license (e.g. `"governance"`, `"bvs"`,
+   * `"federation"`). Check presence of a specific feature with
+   * `status.features.includes("feature_name")`.
+   */
+  features: string[];
+  /**
+   * Maximum evaluations per day allowed by this license.
+   * `undefined` means unlimited.
+   */
+  eval_limit?: number;
+  /**
+   * Maximum active seats (API key holders) allowed by this license.
+   * `undefined` means unlimited.
+   */
+  seat_limit?: number;
+}
+
+/**
+ * Result of submitting a license blob to `POST /v1/license/verify`.
+ *
+ * `valid` is the contract field — pin to it. When `valid` is `false`, the
+ * `error` field carries a machine-readable reason code such as
+ * `"SIGNATURE_INVALID"`, `"ORG_MISMATCH"`, `"LICENSE_EXPIRED"`, or
+ * `"LICENSE_REVOKED"`.
+ */
+export interface LicenseVerifyResult {
+  /** `true` when the submitted blob passes all verification checks. */
+  valid: boolean;
+  /** Slug of the organization the submitted license was issued to. Present when `valid` is `true`. */
+  org_slug?: string;
+  /** ISO 8601 expiry of the submitted license. Present when `valid` is `true`. */
+  expires_at?: string;
+  /** Machine-readable error code when `valid` is `false`. */
+  error?: string;
+}

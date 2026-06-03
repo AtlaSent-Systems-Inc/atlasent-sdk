@@ -157,6 +157,8 @@ export type {
   EvaluateRiskEnvelope,
   EvaluateRiskEnvelopeFactor,
   GetPermitResponse,
+  LicenseStatus,
+  LicenseVerifyResult,
   ListPermitsRequest,
   ListPermitsResponse,
   PermitRecord,
