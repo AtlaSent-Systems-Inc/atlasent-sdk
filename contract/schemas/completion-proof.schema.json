@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "completion-proof.schema.json",
+  "title": "CompletionProof",
+  "description": "Proof that a specific actor consumed a specific permit for a specific action_type. Used for multi-actor quorum dependency resolution on POST /v1-evaluate.",
+  "type": "object",
+  "required": ["action_type", "actor_id", "permit_id"],
+  "additionalProperties": false,
+  "properties": {
+    "action_type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The action_type (slug) that was completed by the prior actor."
+    },
+    "actor_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The actor who completed the action."
+    },
+    "permit_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The permit token (or its hash) issued when the action was permitted. The runtime looks this up against permit_uses and execution_evaluations to verify both consumption and actor/action binding."
+    }
+  }
+}

@@ -226,6 +226,9 @@ from .models import (
     VerifyPermitByIdResult,
     VerifyResult,
 )
+from .models import (
+    CompletionProof as CompletionProof,
+)
 from .policy_sync import (
     PolicyBundleEntry,
     PolicySyncDiff,

@@ -150,6 +150,7 @@ export type {
   EvaluateBatchResultItem,
   EvaluatePreflightResponse,
   SubscribeDecisionsOptions,
+  CompletionProof,
   EvaluateRequest,
   EvaluateResponse,
   EvaluateResponsePermit,

@@ -149,6 +149,11 @@
         },
         "description": { "type": "string" }
       }
+    },
+    "completion_proofs": {
+      "type": "array",
+      "description": "Multi-actor quorum completion proofs. Each entry asserts that a specific actor consumed a specific permit for a specific action_type. The runtime verifies both the permit_uses consumed-gate and an execution_evaluations actor/action binding gate before counting the proof toward quorum.",
+      "items": { "$ref": "completion-proof.schema.json" }
     }
   }
 }

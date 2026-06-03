@@ -264,6 +264,26 @@ export interface ConsentClassProjection {
   category_counts: Partial<Record<string, number>>;
 }
 
+/**
+ * Proof that a specific actor consumed a specific permit for a specific
+ * action_type. Pass an array of these as `completion_proofs` on an evaluate
+ * request to satisfy multi-actor quorum dependencies.
+ *
+ * The runtime verifies each proof via two gates (both must pass):
+ * 1. A `permit_uses` row exists for `permit_id` (permit was consumed).
+ * 2. An `execution_evaluations` row is bound to `actor_id` + `action_type`
+ *    for the same permit (actor/action binding — Codex P1 #1148 FIX #3).
+ * Proofs that fail either gate are silently dropped (fail-closed).
+ */
+export interface CompletionProof {
+  /** The action_type (slug) that was completed by the prior actor. */
+  action_type: string;
+  /** The actor who completed the action. */
+  actor_id: string;
+  /** The permit token (or its hash) issued when the action was permitted. */
+  permit_id: string;
+}
+
 /** Input to {@link AtlaSentClient.evaluate}. */
 export interface EvaluateRequest {
   /** Identifier of the calling agent (e.g. "clinical-data-agent"). */
@@ -302,6 +322,14 @@ export interface EvaluateRequest {
     }>;
     description?: string;
   };
+  /**
+   * Multi-actor quorum completion proofs. Supply one entry per prior actor
+   * whose completed action this evaluation depends on. The runtime verifies
+   * each proof (consumed-permit gate + actor/action binding gate) and counts
+   * only valid proofs toward quorum. Absent or empty → no quorum proofs
+   * submitted (no behavioral change for non-quorum dependencies).
+   */
+  completion_proofs?: CompletionProof[];
 }
 
 /**

@@ -360,6 +360,31 @@ components:
                     additionalProperties: true
             description:
               type: string
+        completion_proofs:
+          type: array
+          nullable: true
+          description: "Multi-actor quorum completion proofs. Each entry proves a prior actor consumed a permit for a specific action_type. Verified via permit_uses + execution_evaluations gates; fail-closed."
+          items:
+            $ref: "#/components/schemas/CompletionProof"
+    CompletionProof:
+      title: CompletionProof
+      description: "Proof that a specific actor consumed a specific permit for a specific action_type. Used to satisfy multi-actor quorum dependencies."
+      type: object
+      additionalProperties: false
+      required: [action_type, actor_id, permit_id]
+      properties:
+        action_type:
+          type: string
+          minLength: 1
+          description: "action_type (slug) completed by the prior actor."
+        actor_id:
+          type: string
+          minLength: 1
+          description: "The actor who completed the action."
+        permit_id:
+          type: string
+          minLength: 1
+          description: "Permit token (or hash) issued when the action was permitted."
 
     EvaluateResponse:
       title: EvaluateResponse
