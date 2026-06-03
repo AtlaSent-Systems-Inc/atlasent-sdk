@@ -575,6 +575,7 @@ export class AtlaSentClient {
     if (normalized.current_state !== undefined) body.current_state = normalized.current_state;
     if (normalized.proposed_state !== undefined) body.proposed_state = normalized.proposed_state;
     if (normalized.execution_binding !== undefined) body.execution_binding = normalized.execution_binding;
+    if (normalized.state_snapshot !== undefined) body.state_snapshot = normalized.state_snapshot;
     const { body: wire, rateLimit } = await this.post<EvaluateWire>(
       "/v1-evaluate",
       body,
