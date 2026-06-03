@@ -85,6 +85,7 @@ def with_llamaindex_guard(
     agent: str,
     action: str | None = None,
     extra_context: dict[str, Any] | None = None,
+    state_snapshot: dict[str, Any] | None = None,
     on_deny: str = "throw",
 ) -> Callable[..., Any]:
     """Wrap a sync callable with AtlaSent authorization.
@@ -118,6 +119,7 @@ def with_llamaindex_guard(
                 agent=agent,
                 action=resolved_action,
                 context=ctx,
+                state_snapshot=state_snapshot,
             )
         except AtlaSentDeniedError as exc:
             if on_deny == "tool-result":
@@ -159,6 +161,7 @@ def async_with_llamaindex_guard(
     agent: str,
     action: str | None = None,
     extra_context: dict[str, Any] | None = None,
+    state_snapshot: dict[str, Any] | None = None,
     on_deny: str = "throw",
 ) -> Callable[..., Any]:
     """Wrap an async callable with AtlaSent authorization.
@@ -187,6 +190,7 @@ def async_with_llamaindex_guard(
                 agent=agent,
                 action=resolved_action,
                 context=ctx,
+                state_snapshot=state_snapshot,
             )
         except AtlaSentDeniedError as exc:
             if on_deny == "tool-result":
