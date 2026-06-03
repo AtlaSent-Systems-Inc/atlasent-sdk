@@ -199,6 +199,7 @@ from .models import (
     ApiKeySelfResult,
     AuthError,
     AuthorizationResult,
+    CompletionProof,
     ConstraintTrace,
     ConstraintTracePolicy,
     ConstraintTraceStage,

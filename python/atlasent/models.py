@@ -144,6 +144,28 @@ def _warn_legacy(label: str, mapping: str) -> None:
 # ── Evaluate ──────────────────────────────────────────────────────────
 
 
+class CompletionProof(BaseModel):
+    """Proof that a specific actor consumed a specific permit for a specific
+    action_type.  Pass an array of these as ``completion_proofs`` on an
+    :class:`EvaluateRequest` to satisfy multi-actor quorum dependencies.
+
+    The runtime verifies each proof via two gates (both must pass):
+
+    1. A ``permit_uses`` row exists for ``permit_id`` (permit was consumed).
+    2. An ``execution_evaluations`` row is bound to ``actor_id`` +
+       ``action_type`` for the same permit (actor/action binding).
+
+    Proofs that fail either gate are silently dropped (fail-closed).
+    """
+
+    action_type: str = Field(..., description="The action_type (slug) completed by the prior actor.")
+    actor_id: str = Field(..., description="The actor who completed the action.")
+    permit_id: str = Field(
+        ...,
+        description="The permit token (or its hash) issued when the action was permitted.",
+    )
+
+
 class EvaluateRequest(BaseModel):
     """Payload sent to ``POST /v1-evaluate``.
 
@@ -197,6 +219,10 @@ class EvaluateRequest(BaseModel):
     current_state: dict[str, Any] | None = Field(default=None)
     proposed_state: dict[str, Any] | None = Field(default=None)
     execution_binding: dict[str, Any] | None = Field(default=None)
+    # Multi-actor quorum completion proofs. Supply one entry per prior actor
+    # whose completed action this evaluation depends on. Absent → no proofs
+    # submitted (no behavioral change for non-quorum dependencies).
+    completion_proofs: list[CompletionProof] | None = Field(default=None)
     # Kept for backward-compat with code that constructs the request
     # directly. Excluded from wire serialization — the server reads the
     # API key from the Authorization header, never from the body.
