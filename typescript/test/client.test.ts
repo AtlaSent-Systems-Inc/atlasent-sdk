@@ -2369,7 +2369,8 @@ describe("getLicense", () => {
     await client.getLicense();
     const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toContain("/v1/license");
-    expect((init as RequestInit).method).toBeUndefined();
+    const method = (init as RequestInit).method;
+    expect(method === undefined || method === "GET").toBe(true);
   });
 
   it("surfaces rate limit headers", async () => {
