@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.15.0 -- 2026-06-03 -- state_snapshot field + SNAPSHOT_REQUIRED error handling
+
+### Added
+
+- **`EvaluateRequest.state_snapshot`** (`atlasent.models`) — optional `dict[str, Any]`
+  field for attaching a system state snapshot to evaluate calls. Required when the
+  action class has `requires_state_snapshot=True`. Omitting on a required class
+  returns `decision="deny"` with `deny_code="SNAPSHOT_REQUIRED"`.
+
+  ```python
+  result = client.evaluate(
+      EvaluateRequest(
+          action_type="production.deploy",
+          actor_id="github-actions",
+          state_snapshot={
+              "source":      "github-actions",
+              "source_kind": "trusted",
+              "complete":    True,
+              "payload": {
+                  "commit_sha":   os.environ["GITHUB_SHA"],
+                  "workflow_ref": os.environ.get("GITHUB_WORKFLOW_REF"),
+              },
+          },
+      )
+  )
+
+  if result.decision == "deny" and result.denial and result.denial.code == "SNAPSHOT_REQUIRED":
+      # Add state_snapshot to your evaluate call for this action_type.
+      pass
+  ```
+
+---
+
 ## 2.14.0 -- 2026-06-03 -- License verification (self-hosted / air-gapped)
 
 ### Added

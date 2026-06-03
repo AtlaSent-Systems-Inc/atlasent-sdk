@@ -6,6 +6,56 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.14.0 (2026-06-03)
+
+### New features
+
+#### `state_snapshot` field on `EvaluateRequest`
+
+AtlaSent action classes may now require a state snapshot at evaluation time
+(`requires_state_snapshot = true`). When required, omitting `state_snapshot`
+causes the server to return `decision: "deny"` with `deny_code: "SNAPSHOT_REQUIRED"`.
+
+Add the field to your evaluate calls:
+
+```ts
+const result = await client.evaluate({
+  action_type: "production.deploy",
+  actor_id:    "github-actions",
+  environment: "production",
+  state_snapshot: {
+    source:      "github-actions",
+    source_kind: "trusted",
+    complete:    true,
+    payload: {
+      commit_sha:   process.env.GITHUB_SHA,
+      workflow_ref: process.env.GITHUB_WORKFLOW_REF,
+    },
+  },
+});
+```
+
+**Handling `SNAPSHOT_REQUIRED`:**
+
+```ts
+if (result.decision === "deny" && result.denial?.code === "SNAPSHOT_REQUIRED") {
+  // Add state_snapshot to this evaluate call.
+  // See: https://docs.atlasent.io/error-codes#SNAPSHOT_REQUIRED
+}
+```
+
+The `state_snapshot` payload is recorded in the audit chain alongside the
+permit, giving compliance teams a tamper-evident view of system state at
+authorization time.
+
+**TypeScript types** (`src/types.ts`, `src/compat.ts`):
+- `EvaluateRequest.state_snapshot` — optional; present when the action class
+  enforces snapshot capture.
+- `V2EvaluateRequest.state_snapshot` — same field on the wire-format type;
+  forwarded through `normalizeEvaluateRequest`.
+
+---
+
 ## @atlasent/sdk 2.13.0 (2026-06-03)
 
 ### New features

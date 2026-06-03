@@ -330,6 +330,27 @@ export interface EvaluateRequest {
    * submitted (no behavioral change for non-quorum dependencies).
    */
   completion_proofs?: CompletionProof[];
+  /**
+   * State snapshot of the system at evaluation time. Required when the action
+   * class has `requires_state_snapshot = true` (most classes after migration
+   * 20260603000019). Omitting this field on a required action class causes the
+   * server to return a `SNAPSHOT_REQUIRED` deny.
+   *
+   * Recovery: add `state_snapshot` to every evaluate call for the affected
+   * `action_type`. The payload should describe the observable system state at
+   * the moment of evaluation so the audit chain captures a tamper-evident
+   * snapshot alongside the permit.
+   */
+  state_snapshot?: {
+    /** Source system identifier (e.g. `"github-actions"`, `"k8s-cluster"`). */
+    source?: string;
+    /** Classification of the source: `"trusted"` (verified system) or `"untrusted"` (caller-provided). */
+    source_kind?: 'trusted' | 'untrusted';
+    /** Whether the snapshot is complete. `false` when only a partial view is available. */
+    complete?: boolean;
+    /** Arbitrary snapshot payload — observable state of the system at evaluation time. */
+    payload?: Record<string, unknown>;
+  };
 }
 
 /**
