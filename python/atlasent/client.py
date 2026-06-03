@@ -509,7 +509,9 @@ class AtlaSentClient:
 
         ctx = context or {}
         try:
-            eval_result = self.evaluate(action, agent, ctx, state_snapshot=state_snapshot)
+            eval_result = self.evaluate(
+                action, agent, ctx, state_snapshot=state_snapshot
+            )
         except AtlaSentDenied as exc:
             audit_hash = ""
             if exc.response_body is not None:

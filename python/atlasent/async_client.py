@@ -449,7 +449,9 @@ class AsyncAtlaSentClient:
             )
         ctx = context or {}
         try:
-            eval_result = await self.evaluate(action, agent, ctx, state_snapshot=state_snapshot)
+            eval_result = await self.evaluate(
+                action, agent, ctx, state_snapshot=state_snapshot
+            )
         except AtlaSentDenied as exc:
             audit_hash = ""
             if exc.response_body is not None:
