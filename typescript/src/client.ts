@@ -575,6 +575,7 @@ export class AtlaSentClient {
     if (normalized.current_state !== undefined) body.current_state = normalized.current_state;
     if (normalized.proposed_state !== undefined) body.proposed_state = normalized.proposed_state;
     if (normalized.execution_binding !== undefined) body.execution_binding = normalized.execution_binding;
+    if (normalized.state_snapshot !== undefined) body.state_snapshot = normalized.state_snapshot;
     const { body: wire, rateLimit } = await this.post<EvaluateWire>(
       "/v1-evaluate",
       body,
@@ -1078,7 +1079,14 @@ export class AtlaSentClient {
           ? ((context as Record<string, unknown>).environment_name as string)
           : undefined;
 
-    const evaluation = await this.evaluate({ agent, action, context });
+    const evaluation = await this.evaluate({
+      agent,
+      action,
+      context,
+      ...(input.stateSnapshot !== undefined
+        ? { state_snapshot: input.stateSnapshot }
+        : {}),
+    } as Parameters<typeof this.evaluate>[0]);
     if (evaluation.decision !== "allow") {
       return {
         allowed: false,

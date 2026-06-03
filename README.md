@@ -68,6 +68,7 @@ permit = protect(
     agent="ci-deploy-bot",
     action="production.deploy",
     context={"repo": "atlasent/api", "commit": commit, "environment": "production"},
+    state_snapshot={"source": "github-actions", "complete": True},
 )
 # If protect() returns, /v1-evaluate allowed and /v1-verify-permit verified.
 run_deploy()
@@ -80,6 +81,7 @@ const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
 
 const gate = await client.deployGate({
   context: { repo: "atlasent/api", commit: process.env.GIT_SHA, environment: "production" },
+  stateSnapshot: { source: "github-actions", complete: true },
 });
 
 if (!gate.allowed) {

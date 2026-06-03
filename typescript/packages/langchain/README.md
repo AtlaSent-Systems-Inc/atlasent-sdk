@@ -34,7 +34,10 @@ const guarded = withLangChainGuard(
     execute: async ({ query }) => JSON.stringify(await db.query(query)),
   }],
   atlasent,
-  { agent: "service:analytics-bot" },
+  {
+    agent: "service:analytics-bot",
+    stateSnapshot: { source: "my-service", complete: true },
+  },
 );
 
 const tools = guarded.map((d) =>
@@ -54,6 +57,7 @@ const tools = guarded.map((d) =>
 | `agent`        | `string \| (name, input) => string`               | Required. Agent identifier (e.g. `"service:analytics-bot"`).                                          |
 | `action`       | `string \| (name, input) => string`               | Optional. Action name; defaults to the tool's `name`.                                                 |
 | `extraContext` | `object \| (name, input) => object`               | Optional. Extra context forwarded to AtlaSent on every evaluation.                                    |
+| `stateSnapshot` | `object \| (name, input) => object`              | Required for most action classes. System state at evaluation time. At minimum: `{ source: "...", complete: true }`. Omitting causes `SNAPSHOT_REQUIRED` denies. |
 | `onDeny`       | `"throw"` (default) \| `"tool-result"`            | `"throw"` raises `AtlaSentDeniedError`; `"tool-result"` returns a JSON `DenialResult` for the LLM.    |
 
 When the wrapped tool returns a JSON object string, the guard annotates it

@@ -271,6 +271,7 @@ class AtlaSentClient:
         current_state: dict[str, Any] | None = None,
         proposed_state: dict[str, Any] | None = None,
         execution_binding: dict[str, Any] | None = None,
+        state_snapshot: dict[str, Any] | None = None,
     ) -> EvaluateResult:
         ctx = context or {}
         if isinstance(approval, dict):
@@ -298,6 +299,7 @@ class AtlaSentClient:
             current_state=current_state,
             proposed_state=proposed_state,
             execution_binding=execution_binding,
+            state_snapshot=state_snapshot,
         )
         logger.debug("evaluate action=%r actor=%r", action_type, actor_id)
         data, rate_limit, request_id = self._post(
@@ -458,6 +460,7 @@ class AtlaSentClient:
         agent: str,
         action: str,
         context: dict[str, Any] | None = None,
+        state_snapshot: dict[str, Any] | None = None,
     ) -> Permit:
         """Authorize an action end-to-end — the fail-closed execution primitive.
 
@@ -506,7 +509,9 @@ class AtlaSentClient:
 
         ctx = context or {}
         try:
-            eval_result = self.evaluate(action, agent, ctx)
+            eval_result = self.evaluate(
+                action, agent, ctx, state_snapshot=state_snapshot
+            )
         except AtlaSentDenied as exc:
             audit_hash = ""
             if exc.response_body is not None:
