@@ -1079,7 +1079,14 @@ export class AtlaSentClient {
           ? ((context as Record<string, unknown>).environment_name as string)
           : undefined;
 
-    const evaluation = await this.evaluate({ agent, action, context });
+    const evaluation = await this.evaluate({
+      agent,
+      action,
+      context,
+      ...(input.stateSnapshot !== undefined
+        ? { state_snapshot: input.stateSnapshot }
+        : {}),
+    } as Parameters<typeof this.evaluate>[0]);
     if (evaluation.decision !== "allow") {
       return {
         allowed: false,

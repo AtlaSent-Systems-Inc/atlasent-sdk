@@ -204,6 +204,19 @@ export interface DeployGateRequest {
     | string;
   /** Typed deploy gate context for `production.deploy`. */
   context?: DeployGateContext | Record<string, unknown>;
+  /**
+   * State snapshot of the system at evaluation time. Required by default
+   * for all action classes after migration 20260603000019. Omitting this
+   * field causes the server to return a `SNAPSHOT_REQUIRED` deny.
+   *
+   * At minimum: `{ source: "github-actions", complete: true }`
+   */
+  stateSnapshot?: {
+    source?: string;
+    source_kind?: 'trusted' | 'untrusted';
+    complete?: boolean;
+    payload?: Record<string, unknown>;
+  };
 }
 
 /** Evidence metadata returned by {@link AtlaSentClient.deployGate}. */
