@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.14.0 -- 2026-06-03 -- License verification (self-hosted / air-gapped)
+
+### Added
+
+- **`LicenseStatus`** (`atlasent.models`) — Pydantic model for `GET /v1/license`
+  responses. Fields: `status` (`"active" | "grace" | "expired" | "revoked"`),
+  `org_slug`, `posture` (`"self_hosted" | "air_gapped"`), `expires_at`,
+  optional `grace_until`, `features` list, and optional `eval_limit` /
+  `seat_limit` capacity integers.
+
+- **`LicenseVerifyResult`** (`atlasent.models`) — Pydantic model for
+  `POST /v1/license/verify` responses. Fields: `valid` (bool), optional
+  `org_slug`, optional `expires_at`, optional `error` (machine-readable code).
+
+- **`AtlaSentClient.get_license()`** — calls `GET /v1/license`; returns a
+  fully-validated `LicenseStatus` (with `rate_limit` attached).
+
+- **`AtlaSentClient.verify_license(blob)`** — calls `POST /v1/license/verify`;
+  returns a fully-validated `LicenseVerifyResult`. A `valid=False` result is
+  **not** raised — inspect the returned object.
+
+Both `LicenseStatus` and `LicenseVerifyResult` are re-exported from the
+top-level `atlasent` package.
+
+---
+
 ## 2.13.0 -- 2026-05-28 -- Trust-root V1 (vendor snapshot, background refresh, fail-closed expiry)
 
 ### Added

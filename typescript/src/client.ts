@@ -55,6 +55,8 @@ import type {
   EvaluateRequest,
   EvaluateResponse,
   GetPermitResponse,
+  LicenseStatus,
+  LicenseVerifyResult,
   ListPermitsRequest,
   ListPermitsResponse,
   PermitRecord,
@@ -1775,6 +1777,53 @@ export class AtlaSentClient {
       }
       break;
     }
+  }
+
+  // ── License verification (self-hosted / air-gapped) ──────────────────────
+
+  /**
+   * Retrieve the license status of this self-hosted or air-gapped deployment.
+   *
+   * Calls `GET /v1/license`. Returns the current validity state, expiry,
+   * enabled feature flags, and optional capacity limits for the installed
+   * license key.
+   *
+   * Callers should check `result.status === "active"` before proceeding.
+   * A `"grace"` status means the license has lapsed but a grace window
+   * (`grace_until`) is still open — the deployment continues to function
+   * but the license should be renewed immediately.
+   *
+   * Throws {@link AtlaSentError} on transport / auth failures.
+   */
+  async getLicense(): Promise<LicenseStatus & { rateLimit: RateLimitState | null }> {
+    const { body, rateLimit } = await this.get<LicenseStatus>("/v1/license");
+    return { ...body, rateLimit };
+  }
+
+  /**
+   * Validate a signed license blob against this deployment's installed
+   * public key.
+   *
+   * Calls `POST /v1/license/verify`. Use this when onboarding a new license
+   * key or rotating an expiring one — submit the blob received from AtlaSent
+   * and check `result.valid` before applying the new license.
+   *
+   * A `valid: false` response is **not** thrown — inspect the returned
+   * object. Only transport / server errors throw {@link AtlaSentError}.
+   *
+   * @param blob — The signed license blob string provided by AtlaSent.
+   */
+  async verifyLicense(
+    blob: string,
+  ): Promise<LicenseVerifyResult & { rateLimit: RateLimitState | null }> {
+    if (!blob || typeof blob !== "string") {
+      throw new AtlaSentError("blob is required", { code: "bad_request" });
+    }
+    const { body, rateLimit } = await this.post<LicenseVerifyResult>(
+      "/v1/license/verify",
+      { blob },
+    );
+    return { ...body, rateLimit };
   }
 
   private async post<T>(

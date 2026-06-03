@@ -57,6 +57,8 @@ from .models import (
     EvaluateResult,
     GateResult,
     GetPermitResult,
+    LicenseStatus,
+    LicenseVerifyResult,
     ListPermitsResult,
     Permit,
     PermitRecord,
@@ -684,6 +686,56 @@ class AtlaSentClient:
             )
 
         return ApiKeySelfResult.model_validate({**data, "rate_limit": rate_limit})
+
+    # ── License verification (self-hosted / air-gapped) ──────────────────────
+
+    def get_license(self) -> LicenseStatus:
+        """Retrieve the license status of this self-hosted or air-gapped deployment.
+
+        Calls ``GET /v1/license``. Returns the current validity state, expiry,
+        enabled feature flags, and optional capacity limits for the installed
+        license key.
+
+        Callers should check ``result.status == "active"`` before proceeding.
+        A ``"grace"`` status means the license has lapsed but a grace window
+        (``grace_until``) is still open — the deployment continues to function
+        but the license should be renewed immediately.
+
+        Returns:
+            :class:`LicenseStatus` — license validity and metadata.
+
+        Raises:
+            :class:`AtlaSentError` on transport or authentication failures.
+        """
+        logger.debug("get_license")
+        data, rate_limit, _ = self._get("/v1/license")
+        return LicenseStatus.model_validate({**data, "rate_limit": rate_limit})
+
+    def verify_license(self, blob: str) -> LicenseVerifyResult:
+        """Validate a signed license blob against this deployment's public key.
+
+        Calls ``POST /v1/license/verify``. Use this when onboarding a new
+        license key or rotating an expiring one — submit the blob received from
+        AtlaSent and check ``result.valid`` before applying the new license.
+
+        A ``valid=False`` response is **not** raised — inspect the returned
+        object. Only transport / server errors raise :class:`AtlaSentError`.
+
+        Args:
+            blob: The signed license blob string provided by AtlaSent.
+
+        Returns:
+            :class:`LicenseVerifyResult` — ``valid`` flag plus optional
+            ``org_slug``, ``expires_at``, and ``error`` fields.
+
+        Raises:
+            :class:`AtlaSentError` on transport or authentication failures.
+        """
+        if not blob or not isinstance(blob, str):
+            raise AtlaSentError("blob is required", code="bad_request")
+        logger.debug("verify_license")
+        data, rate_limit, _ = self._post("/v1/license/verify", {"blob": blob})
+        return LicenseVerifyResult.model_validate({**data, "rate_limit": rate_limit})
 
     def revoke_permit(
         self,

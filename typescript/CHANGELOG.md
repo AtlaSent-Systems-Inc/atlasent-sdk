@@ -6,6 +6,30 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.13.0 (2026-06-03)
+
+### New features
+
+#### License verification — self-hosted / air-gapped deployments
+
+Two new types and two new `AtlaSentClient` methods for the
+`GET /v1/license` and `POST /v1/license/verify` endpoints added to
+`atlasent-api` for self-hosted and air-gapped postures.
+
+**New types** (`src/types.ts`):
+- `LicenseStatus` — license validity state (`"active" | "grace" | "expired" | "revoked"`),
+  `org_slug`, `posture`, `expires_at`, optional `grace_until`, `features` array,
+  and optional `eval_limit` / `seat_limit` capacity limits.
+- `LicenseVerifyResult` — `valid` flag plus optional `org_slug`, `expires_at`, and
+  machine-readable `error` code.
+
+**New client methods**:
+- `client.getLicense()` — calls `GET /v1/license`; returns `LicenseStatus & { rateLimit }`.
+- `client.verifyLicense(blob)` — calls `POST /v1/license/verify`; returns
+  `LicenseVerifyResult & { rateLimit }`. A `valid: false` response is not thrown.
+
+---
+
 ## @atlasent/sdk 2.12.0 (2026-05-28)
 
 ### New features

@@ -1179,3 +1179,80 @@ class ReplayResponse(BaseModel):
     model_config = ConfigDict(
         extra="allow", populate_by_name=True, arbitrary_types_allowed=True
     )
+
+
+# ── License verification (self-hosted / air-gapped) ────────────────────────────
+
+
+class LicenseStatus(BaseModel):
+    """License status for a self-hosted or air-gapped AtlaSent deployment.
+
+    Returned by ``GET /v1/license``. Describes the current validity, posture,
+    enabled features, and optional capacity limits for the license key installed
+    on this instance.
+
+    Callers should check :attr:`status` ``== "active"`` before relying on
+    :attr:`features`. A ``"grace"`` status means the license has expired but the
+    grace period (:attr:`grace_until`) has not yet elapsed — enforcement is not
+    yet suspended, but the license must be renewed immediately.
+
+    Mirrors the TypeScript SDK's ``LicenseStatus`` interface.
+
+    Attributes:
+        status: Current validity state — ``"active"``, ``"grace"``,
+            ``"expired"``, or ``"revoked"``.
+        org_slug: Slug of the organization the license was issued to.
+        posture: Deployment posture — ``"self_hosted"`` or ``"air_gapped"``.
+        expires_at: ISO 8601 timestamp when the license expires.
+        grace_until: ISO 8601 timestamp when the grace period ends.
+            Present only when ``status == "grace"``.
+        features: Feature flags enabled by this license
+            (e.g. ``["governance", "bvs", "federation"]``).
+        eval_limit: Maximum evaluations per day; ``None`` means unlimited.
+        seat_limit: Maximum active seats (API key holders); ``None`` means
+            unlimited.
+        rate_limit: Per-key rate-limit state from ``X-RateLimit-*`` headers.
+            ``None`` when the server didn't emit them.
+    """
+
+    status: Literal["active", "grace", "expired", "revoked"]
+    org_slug: str
+    posture: Literal["self_hosted", "air_gapped"]
+    expires_at: str
+    grace_until: str | None = None
+    features: list[str] = Field(default_factory=list)
+    eval_limit: int | None = None
+    seat_limit: int | None = None
+    rate_limit: RateLimitState | None = None
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True, arbitrary_types_allowed=True)
+
+
+class LicenseVerifyResult(BaseModel):
+    """Result of submitting a signed license blob to ``POST /v1/license/verify``.
+
+    ``valid`` is the contract field — pin to it. When ``valid`` is ``False``,
+    :attr:`error` carries a machine-readable reason code such as
+    ``"SIGNATURE_INVALID"``, ``"ORG_MISMATCH"``, ``"LICENSE_EXPIRED"``, or
+    ``"LICENSE_REVOKED"``.
+
+    Mirrors the TypeScript SDK's ``LicenseVerifyResult`` interface.
+
+    Attributes:
+        valid: ``True`` when the submitted blob passes all verification checks.
+        org_slug: Slug of the organization the submitted license was issued to.
+            Present when ``valid`` is ``True``.
+        expires_at: ISO 8601 expiry of the submitted license.
+            Present when ``valid`` is ``True``.
+        error: Machine-readable error code when ``valid`` is ``False``.
+        rate_limit: Per-key rate-limit state from ``X-RateLimit-*`` headers.
+            ``None`` when the server didn't emit them.
+    """
+
+    valid: bool
+    org_slug: str | None = None
+    expires_at: str | None = None
+    error: str | None = None
+    rate_limit: RateLimitState | None = None
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True, arbitrary_types_allowed=True)
