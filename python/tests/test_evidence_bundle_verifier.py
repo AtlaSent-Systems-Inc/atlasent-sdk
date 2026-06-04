@@ -18,7 +18,12 @@ from atlasent.evidence_bundle_verifier import (
     verify_evidence_bundle,
 )
 
-VEC = pathlib.Path(__file__).resolve().parents[2] / "contract" / "vectors" / "evidence-bundles"
+VEC = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "contract"
+    / "vectors"
+    / "evidence-bundles"
+)
 
 
 def load(name: str):
@@ -82,7 +87,9 @@ def test_malformed_inputs_rejected_before_crypto():
 
 
 def test_canonical_json_matches_the_ts_twin():
-    assert canonical_json({"b": 1, "a": {"d": 2, "c": 3}}) == '{"a":{"c":3,"d":2},"b":1}'
+    assert (
+        canonical_json({"b": 1, "a": {"d": 2, "c": 3}}) == '{"a":{"c":3,"d":2},"b":1}'
+    )
     assert canonical_json([3, {"z": True, "a": None}]) == '[3,{"a":null,"z":true}]'
     assert canonical_json(True) == "true"
     assert canonical_json(False) == "false"

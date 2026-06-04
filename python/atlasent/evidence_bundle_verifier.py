@@ -29,8 +29,9 @@ from __future__ import annotations
 
 import base64
 import hashlib
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -78,7 +79,10 @@ def canonical_json(value: Any) -> str:
     if isinstance(value, Sequence):
         return "[" + ",".join(canonical_json(v) for v in value) + "]"
     if isinstance(value, Mapping):
-        items = (f"{canonical_json(str(k))}:{canonical_json(value[k])}" for k in sorted(value))
+        items = (
+            f"{canonical_json(str(k))}:{canonical_json(value[k])}"
+            for k in sorted(value)
+        )
         return "{" + ",".join(items) + "}"
     raise BundleVerificationError(  # pragma: no cover
         REASON_BAD_FORMAT, f"uncanonicalizable type: {type(value).__name__}"
@@ -121,8 +125,12 @@ def _resolve_key(key_set: Mapping[str, Any], key_id: str) -> Ed25519PublicKey:
                 raise BundleVerificationError(
                     REASON_SIGNATURE_INVALID, f"unsupported key alg: {k.get('alg')!r}"
                 )
-            return Ed25519PublicKey.from_public_bytes(base64.b64decode(k["public_key_b64"]))
-    raise BundleVerificationError(REASON_UNKNOWN_KEY_ID, f"key_id not in key set: {key_id!r}")
+            return Ed25519PublicKey.from_public_bytes(
+                base64.b64decode(k["public_key_b64"])
+            )
+    raise BundleVerificationError(
+        REASON_UNKNOWN_KEY_ID, f"key_id not in key set: {key_id!r}"
+    )
 
 
 # ─── Verification ────────────────────────────────────────────────────────────
@@ -142,7 +150,9 @@ def _require(cond: bool, reason: str, message: str) -> None:
         raise BundleVerificationError(reason, message)
 
 
-def verify_evidence_bundle(bundle: Mapping[str, Any], key_set: Mapping[str, Any]) -> VerifyResult:
+def verify_evidence_bundle(
+    bundle: Mapping[str, Any], key_set: Mapping[str, Any]
+) -> VerifyResult:
     """Verify an evidence bundle against a pinned key set.
 
     Raises ``BundleVerificationError`` on any failure; returns ``VerifyResult``
@@ -155,7 +165,9 @@ def verify_evidence_bundle(bundle: Mapping[str, Any], key_set: Mapping[str, Any]
 
     sig = bundle["signature"]
     _require(isinstance(sig, Mapping), REASON_BAD_FORMAT, "signature is not an object")
-    _require(sig.get("alg") == "Ed25519", REASON_BAD_FORMAT, "unsupported signature alg")
+    _require(
+        sig.get("alg") == "Ed25519", REASON_BAD_FORMAT, "unsupported signature alg"
+    )
     for required in ("key_id", "signature_b64"):
         _require(required in sig, REASON_BAD_FORMAT, f"missing signature.{required}")
 
@@ -166,12 +178,18 @@ def verify_evidence_bundle(bundle: Mapping[str, Any], key_set: Mapping[str, Any]
     try:
         pubkey.verify(base64.b64decode(sig["signature_b64"]), digest)
     except (InvalidSignature, ValueError):
-        raise BundleVerificationError(REASON_SIGNATURE_INVALID, "Ed25519 signature did not verify")
+        raise BundleVerificationError(
+            REASON_SIGNATURE_INVALID, "Ed25519 signature did not verify"
+        )
 
     # 2. Chain binding (spec §5.3).
     records = bundle["records"]
     chain = bundle["chain_context"]
-    _require(isinstance(records, Sequence) and len(records) > 0, REASON_BAD_FORMAT, "no records")
+    _require(
+        isinstance(records, Sequence) and len(records) > 0,
+        REASON_BAD_FORMAT,
+        "no records",
+    )
     _require(
         chain.get("entry_count") == len(records),
         REASON_CHAIN_ANCHOR_MISMATCH,
@@ -179,20 +197,35 @@ def verify_evidence_bundle(bundle: Mapping[str, Any], key_set: Mapping[str, Any]
     )
     prev = chain.get("first_prev_hash")
     for i, rec in enumerate(records):
-        _require(record_entry_hash(rec) == rec.get("entry_hash"), REASON_CHAIN_BROKEN,
-                 f"record[{i}].entry_hash does not match recomputed content hash")
-        _require(rec.get("prev_hash") == prev, REASON_CHAIN_BROKEN,
-                 f"record[{i}].prev_hash does not link to the prior entry")
+        _require(
+            record_entry_hash(rec) == rec.get("entry_hash"),
+            REASON_CHAIN_BROKEN,
+            f"record[{i}].entry_hash does not match recomputed content hash",
+        )
+        _require(
+            rec.get("prev_hash") == prev,
+            REASON_CHAIN_BROKEN,
+            f"record[{i}].prev_hash does not link to the prior entry",
+        )
         prev = rec.get("entry_hash")
-    _require(records[0].get("entry_hash") == chain.get("first_entry_hash"),
-             REASON_CHAIN_ANCHOR_MISMATCH, "chain_context.first_entry_hash mismatch")
-    _require(records[-1].get("entry_hash") == chain.get("last_entry_hash"),
-             REASON_CHAIN_ANCHOR_MISMATCH, "chain_context.last_entry_hash mismatch")
+    _require(
+        records[0].get("entry_hash") == chain.get("first_entry_hash"),
+        REASON_CHAIN_ANCHOR_MISMATCH,
+        "chain_context.first_entry_hash mismatch",
+    )
+    _require(
+        records[-1].get("entry_hash") == chain.get("last_entry_hash"),
+        REASON_CHAIN_ANCHOR_MISMATCH,
+        "chain_context.last_entry_hash mismatch",
+    )
 
     # 3. summary_hash = RFC 6962 Merkle root over record entry_hash leaves.
     expected_root = merkle_root_hex([r["entry_hash"] for r in records])
-    _require(expected_root == bundle["summary_hash"], REASON_SUMMARY_HASH_MISMATCH,
-             "recomputed Merkle root does not match summary_hash")
+    _require(
+        expected_root == bundle["summary_hash"],
+        REASON_SUMMARY_HASH_MISMATCH,
+        "recomputed Merkle root does not match summary_hash",
+    )
 
     return VerifyResult(
         ok=True,
