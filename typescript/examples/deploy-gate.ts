@@ -26,14 +26,6 @@ const deployContext = {
   commit: process.env.GIT_SHA ?? "unknown",
   approver: process.env.APPROVER ?? "unknown",
   ci: process.env.GITHUB_RUN_ID ?? process.env.BUILDKITE_BUILD_ID ?? "local",
-  // state_snapshot is required for production.deploy action classes (and all
-  // action classes since the snapshot-enforcement backfill). Omitting it causes
-  // an immediate SNAPSHOT_REQUIRED deny regardless of policy.
-  state_snapshot: {
-    source: process.env.CI ? "github-actions" : "local",
-    complete: true,
-    run_id: process.env.GITHUB_RUN_ID ?? process.env.BUILDKITE_BUILD_ID ?? "local",
-  },
 };
 
 async function main(): Promise<void> {
@@ -43,6 +35,13 @@ async function main(): Promise<void> {
       agent: "ci-deploy-bot",
       action: "production.deploy",
       context: deployContext,
+      // state_snapshot is a top-level body field (not inside context). Required
+      // for all action classes since migration 20260603000019. Omitting it causes
+      // SNAPSHOT_REQUIRED deny before policy evaluation runs.
+      state_snapshot: {
+        source: process.env.CI ? "github-actions" : "local",
+        complete: true,
+      },
     });
   } catch (err) {
     if (err instanceof AtlaSentError) {
