@@ -179,6 +179,49 @@
           "additionalProperties": true
         }
       }
+    },
+    "evaluation_profile": {
+      "type": "string",
+      "enum": ["basic", "standard", "advanced", "enterprise"],
+      "description": "Evaluation profile controlling which algorithm layers run. Defaults to 'standard' when omitted or unrecognised (fail-safe — unknown values fall back to standard, not basic, to avoid accidentally weaker posture). 'basic' = L1/L2/L4/L5/L10/L12 only; 'standard' = + snapshot enforcement, approval artifact, dependency checks; 'advanced' = + quorum, emergency override, authority graph, intent resolution, external signals, BVS baseline; 'enterprise' = all layers including regulated constraints (L12) and latency budget."
+    },
+    "override": {
+      "type": "object",
+      "description": "Emergency override block (v1.1, profile ≥ advanced). Processed only when the evaluation profile is 'advanced' or 'enterprise' AND authority_actor_id holds the 'override:execute' scope. Self-approval (authority_actor_id === actor_id) is always rejected. The override is recorded in the CDO explanation and fires a separate 'override.applied' audit event.",
+      "required": ["version", "authority_actor_id", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "override.v1",
+          "description": "Wire version discriminator. Must be exactly 'override.v1'."
+        },
+        "authority_actor_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actor ID of the operator authorising the override. Must differ from actor_id and hold the 'override:execute' scope."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Non-empty human-readable justification stored verbatim in the CDO audit block."
+        },
+        "time_bound_seconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 3600,
+          "description": "Override TTL in seconds. Clamped server-side to [60, 3600]. Defaults to 900 (15 min) when omitted."
+        },
+        "incident_id": {
+          "type": "string",
+          "description": "Optional incident/change-ticket reference stored in the CDO audit block."
+        },
+        "accepted_blocks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "When present, only the listed hard-block codes are accepted by this override. An override that does not list a block code that the snapshot produces is rejected (OVERRIDE_BLOCK_NOT_ACCEPTED)."
+        }
+      }
     }
   }
 }
