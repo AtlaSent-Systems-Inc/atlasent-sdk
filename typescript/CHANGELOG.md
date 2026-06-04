@@ -6,6 +6,37 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.15.0 (2026-06-04)
+
+### New features
+
+#### `client.submitAssertion()` — F06 External Signal Ingestion
+
+Submit a boolean point-in-time fact from an external connector (GitHub,
+Stripe, Slack, or any custom source) so that policy rules can gate on
+`context.activeAssertions` during evaluate calls.
+
+```ts
+const result = await client.submitAssertion({
+  assertion_type: 'github.ci_passed',
+  source_system:  'github',
+  subject_ref:    `${repo}@${sha}`,
+  actor_id:       'github-actions',
+  action_type:    'production.deploy',
+  trust_level:    'attested',
+  valid_until:    new Date(Date.now() + 24 * 3_600_000).toISOString(),
+});
+// result.assertion_id  — server-assigned UUID
+// result.payload_hash  — SHA-256 deduplication key
+// result.reused        — true when an identical unexpired assertion already existed
+```
+
+Calls `POST /v1/assertions`. Requires API key scope `assertions:write`.
+
+New public types: `AssertionSubmitInput`, `AssertionSubmitResult`.
+
+---
+
 ## @atlasent/sdk 2.14.0 (2026-06-03)
 
 ### New features
