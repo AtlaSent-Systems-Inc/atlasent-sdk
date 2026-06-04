@@ -1,5 +1,50 @@
 # Changelog
 
+## 2.16.0 -- 2026-06-04 -- evaluation_profile + override fields
+
+### Added
+
+- **`EvaluateRequest.evaluation_profile`** — optional
+  `Literal["basic", "standard", "advanced", "enterprise"] | None` field.
+  Pass `"basic"` for pilot integrations that don't supply a state snapshot;
+  snapshot enforcement is skipped while policy, risk envelope, and audit
+  all still run. Unknown values fall back to `"standard"` server-side.
+
+  ```python
+  result = client.evaluate(
+      EvaluateRequest(
+          action_type="production.deploy",
+          actor_id="github-actions",
+          evaluation_profile="basic",   # pilot-safe: no snapshot required
+      )
+  )
+  ```
+
+- **`EvaluateRequest.override`** — optional `dict[str, Any] | None` for
+  emergency overrides of snapshot hard blocks. Only evaluated when
+  `evaluation_profile` is `"advanced"` or `"enterprise"`. The
+  `authority_actor_id` must hold `override:execute` scope and differ from
+  `actor_id`.
+
+  ```python
+  result = client.evaluate(
+      EvaluateRequest(
+          action_type="production.deploy",
+          actor_id="deploy-bot",
+          evaluation_profile="advanced",
+          state_snapshot={"source": "ci", "payload": {"tests_passed": False}},
+          override={
+              "version":            "override.v1",
+              "authority_actor_id": "ops-lead-uuid",
+              "reason":             "Tests failed due to flaky test infra; manually verified",
+              "time_bound_seconds": 900,
+          },
+      )
+  )
+  ```
+
+---
+
 ## 2.15.0 -- 2026-06-03 -- state_snapshot field + SNAPSHOT_REQUIRED error handling
 
 ### Added

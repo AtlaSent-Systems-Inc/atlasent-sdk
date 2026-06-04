@@ -179,6 +179,49 @@
           "additionalProperties": true
         }
       }
+    },
+    "evaluation_profile": {
+      "type": "string",
+      "enum": ["basic", "standard", "advanced", "enterprise"],
+      "description": "Controls which algorithm layers run. 'basic' skips snapshot enforcement (pilot-safe). 'standard' is the default and applies all stable layers. 'advanced'/'enterprise' enable override logic and additional authority checks. Unknown values fall back to 'standard' server-side."
+    },
+    "override": {
+      "type": "object",
+      "description": "Emergency override block. Only evaluated when evaluation_profile is 'advanced' or 'enterprise'. Allows an authorised operator (holding override:execute scope) to accept snapshot hard blocks with explicit justification. The operator must differ from the requester (no self-approval).",
+      "required": ["version", "authority_actor_id", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "override.v1",
+          "description": "Schema version. Must be 'override.v1'."
+        },
+        "authority_actor_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actor ID of the operator authorising this override. Must differ from the requester's actor_id. Must hold override:execute scope on an active API key in the org."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Mandatory human-readable justification. Stored verbatim in the CDO and audit event."
+        },
+        "time_bound_seconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 3600,
+          "description": "Override validity window in seconds. Defaults to 900 (15 min). Capped at 3600 (1 hour)."
+        },
+        "incident_id": {
+          "type": "string",
+          "description": "Incident or change ticket ID. Required when state_snapshot.incident_active is true."
+        },
+        "accepted_blocks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Explicit list of snapshot hard-block codes this override accepts. When present, any block NOT in this list is still a hard deny."
+        }
+      }
     }
   }
 }

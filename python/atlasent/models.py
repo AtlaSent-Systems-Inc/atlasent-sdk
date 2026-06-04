@@ -232,6 +232,19 @@ class EvaluateRequest(BaseModel):
     # Recovery: add state_snapshot to every evaluate call for the affected
     # action_type with observable system state at evaluation time.
     state_snapshot: dict[str, Any] | None = Field(default=None)
+    # Algorithm profile controlling which evaluation layers run.
+    # "basic" skips snapshot enforcement for pilot integrations.
+    # "standard" (default) runs all stable layers.
+    # "advanced"/"enterprise" additionally enable override logic.
+    # Unknown values fall back to "standard" server-side (never "basic").
+    evaluation_profile: (
+        Literal["basic", "standard", "advanced", "enterprise"] | None
+    ) = Field(default=None)
+    # Emergency override block. Only evaluated when evaluation_profile is
+    # "advanced" or "enterprise". Pass a dict with at minimum:
+    #   {"version": "override.v1", "authority_actor_id": "<uuid>", "reason": "<text>"}
+    # The authority actor must hold override:execute scope and differ from actor_id.
+    override: dict[str, Any] | None = Field(default=None)
     # Kept for backward-compat with code that constructs the request
     # directly. Excluded from wire serialization — the server reads the
     # API key from the Authorization header, never from the body.

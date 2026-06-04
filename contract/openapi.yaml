@@ -385,6 +385,36 @@ components:
               type: object
               additionalProperties: true
               description: "Arbitrary snapshot payload."
+        evaluation_profile:
+          type: string
+          enum: [basic, standard, advanced, enterprise]
+          description: "Controls which algorithm layers the server runs. Pass 'basic' to skip snapshot enforcement for pilot integrations. Unknown values fall back to 'standard' server-side."
+        override:
+          type: object
+          description: "Emergency override block. Only evaluated when evaluation_profile is 'advanced' or 'enterprise'. The authority_actor_id must hold override:execute scope."
+          required: [version, authority_actor_id, reason]
+          additionalProperties: false
+          properties:
+            version:
+              type: string
+              description: "Must be 'override.v1'."
+            authority_actor_id:
+              type: string
+              description: "Actor ID of the operator authorising this override. Must differ from actor_id."
+            reason:
+              type: string
+              description: "Mandatory human-readable justification."
+            time_bound_seconds:
+              type: integer
+              description: "Override validity window in seconds. Capped at 3600."
+            incident_id:
+              type: string
+              description: "Incident or change ticket ID."
+            accepted_blocks:
+              type: array
+              items:
+                type: string
+              description: "Explicit list of snapshot hard-block codes this override accepts."
     CompletionProof:
       title: CompletionProof
       description: "Proof that a specific actor consumed a specific permit for a specific action_type. Used to satisfy multi-actor quorum dependencies."
