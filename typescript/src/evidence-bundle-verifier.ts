@@ -13,8 +13,10 @@
  *
  * Pinned canonicalization decisions (v1 reference rules — see the matching
  * notes in the spec and the Python module):
- *   - Canonical JSON = recursively key-sorted, compact, ASCII content.
- *   - entry_hash = sha256_hex(canonical(record without entry_hash/prev_hash)).
+ *   - Canonical JSON = recursively key-sorted, compact; strings use raw UTF-8
+ *     escaping (JSON.stringify == Python json.dumps(ensure_ascii=False)), so
+ *     the two verifiers agree byte-for-byte on non-ASCII content too.
+ *   - entry_hash = audit-chain form: sha256(prev_hash_bytes ‖ canonical(record without entry_hash)).
  *   - summary_hash = RFC 6962 Merkle root over leaves = raw entry_hash bytes.
  */
 
@@ -110,12 +112,19 @@ async function sha256Hex(data: Uint8Array): Promise<string> {
   return hex(await sha256(data));
 }
 
+/**
+ * Audit-chain entry_hash (architecture/specs/audit-chain-canonical-form.md):
+ * sha256_hex(previous_hash_bytes ‖ canonical(record without entry_hash)),
+ * where previous_hash_bytes is the raw 32-byte digest of prev_hash
+ * (genesis = 32 zero bytes). prev_hash stays in the canonical payload.
+ */
 async function recordEntryHash(record: Record<string, unknown>): Promise<string> {
   const content: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(record)) {
-    if (k !== 'entry_hash' && k !== 'prev_hash') content[k] = v;
+    if (k !== 'entry_hash' && k !== 'signature') content[k] = v;
   }
-  return sha256Hex(toBytes(canonicalJson(content)));
+  const prevBytes = fromHex(record.prev_hash as string);
+  return sha256Hex(concat([prevBytes, toBytes(canonicalJson(content))]));
 }
 
 async function merkleRootHex(leafHexes: string[]): Promise<string> {

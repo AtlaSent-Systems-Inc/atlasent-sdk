@@ -1,0 +1,54 @@
+{
+  "$schema": "https://atlasent.io/schemas/evidence-bundle/v1.json",
+  "bundle_id": "0190a1b2-9999-7000-8000-000000000099",
+  "bundle_version": "1",
+  "chain_context": {
+    "chain_id": "org-default",
+    "entry_count": 2,
+    "first_entry_hash": "a6698051580b5fe216193d3d6b57be641bb8c6373f4534429bdc12987da81d21",
+    "first_prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "last_entry_hash": "99a9e35fee2c4be05de71043fcb743713950eb5d843fe537889c3408c2696bea"
+  },
+  "issued_at": "2026-06-04T00:00:00Z",
+  "issued_by": {
+    "issuer_kind": "atlasent-api",
+    "issuer_version": "1.0.0",
+    "org_id": "0190a1b2-aaaa-7000-8000-0000000000aa"
+  },
+  "records": [
+    {
+      "decision": {
+        "action": "customer.export",
+        "actor": "Fr\u00e9d\u00e9ric M\u00fcller / \u5317\u4eac",
+        "note": "caf\u00e9 \u2014 na\u00efve \u2713",
+        "outcome": "deny"
+      },
+      "decision_id": "0190a1b2-00f1-7000-8000-0000000000f1",
+      "entry_hash": "a6698051580b5fe216193d3d6b57be641bb8c6373f4534429bdc12987da81d21",
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "decision": {
+        "action": "vendor.payment.release",
+        "actor": "\u0141ukasz",
+        "currency": "\u20ac",
+        "outcome": "permit"
+      },
+      "decision_id": "0190a1b2-00f2-7000-8000-0000000000f2",
+      "entry_hash": "99a9e35fee2c4be05de71043fcb743713950eb5d843fe537889c3408c2696bea",
+      "prev_hash": "a6698051580b5fe216193d3d6b57be641bb8c6373f4534429bdc12987da81d21"
+    }
+  ],
+  "scope": {
+    "from": "2026-06-01T00:00:00Z",
+    "kind": "decision-window",
+    "to": "2026-06-04T00:00:00Z"
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "key_id": "evidence-issuing-2026-06",
+    "key_set_url": "https://trust.atlasent.io/keys/evidence-bundles.json",
+    "signature_b64": "H6/9PPwQrV+ezeZo2DMxMIERfVWrbKoUTo0z7YNqHw5bK+fPyH33eA1q5LpEPKiJszCWLMMLAA017uBRRYnHCg=="
+  },
+  "summary_hash": "6a0e61579892fc54220907c3a026813d18ea1783e28b5e909689aaf5b6c03b4d"
+}

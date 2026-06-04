@@ -5,7 +5,7 @@
   "chain_context": {
     "chain_id": "org-default",
     "entry_count": 3,
-    "first_entry_hash": "7876255de31174a4d823695900bdb9f7221933e70446939fff15c0b3e7b7aecd",
+    "first_entry_hash": "a7025d068808cdd4e23b8d0eef605bbe34e343fc9e332bd62d2c8d5e85e958fe",
     "first_prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
     "last_entry_hash": "abababababababababababababababababababababababababababababababab"
   },
@@ -23,7 +23,7 @@
         "outcome": "permit"
       },
       "decision_id": "0190a1b2-0001-7000-8000-000000000001",
-      "entry_hash": "7876255de31174a4d823695900bdb9f7221933e70446939fff15c0b3e7b7aecd",
+      "entry_hash": "a7025d068808cdd4e23b8d0eef605bbe34e343fc9e332bd62d2c8d5e85e958fe",
       "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000"
     },
     {
@@ -33,8 +33,8 @@
         "outcome": "deny"
       },
       "decision_id": "0190a1b2-0002-7000-8000-000000000002",
-      "entry_hash": "0559115d7cb4a6ace041090ec19254bcd7ec99e55d0ddabaebd5eac51f42a60a",
-      "prev_hash": "7876255de31174a4d823695900bdb9f7221933e70446939fff15c0b3e7b7aecd"
+      "entry_hash": "3d18012e9b4f64c79e96821a58a132b1da71daeb1d968ad6569952c4075e6aa9",
+      "prev_hash": "a7025d068808cdd4e23b8d0eef605bbe34e343fc9e332bd62d2c8d5e85e958fe"
     },
     {
       "decision": {
@@ -43,8 +43,8 @@
         "outcome": "escalate"
       },
       "decision_id": "0190a1b2-0003-7000-8000-000000000003",
-      "entry_hash": "a4cd15cdff02b7cb5025ad1fa11eafb1c8d6d596c29e48c30178e9c49dc3be1b",
-      "prev_hash": "0559115d7cb4a6ace041090ec19254bcd7ec99e55d0ddabaebd5eac51f42a60a"
+      "entry_hash": "6b219a362abcb8c4b52a39f732af83a1a90f8aaa5d180985d45f68ccda318498",
+      "prev_hash": "3d18012e9b4f64c79e96821a58a132b1da71daeb1d968ad6569952c4075e6aa9"
     }
   ],
   "scope": {
@@ -56,7 +56,7 @@
     "alg": "Ed25519",
     "key_id": "evidence-issuing-2026-06",
     "key_set_url": "https://trust.atlasent.io/keys/evidence-bundles.json",
-    "signature_b64": "2PWDSYG8rXTXyVhvi1za78MPJxew8We7xMF0+U5DknT2KuEM424fqwoVAms8MLFsUUAgTKhvF/gIKWLOH7s3CQ=="
+    "signature_b64": "lHfBZRsQoBfqPOAd0nsVvAB+I753mg6ejMpnZMAm26tpu6ko+v6ncu95AhUdvP9QZXtTb3786EuKbdCzOWLhDA=="
   },
-  "summary_hash": "a89aeaaae414c6c840014e3340aa5f8be972778ac13baad40029b1f2b214052c"
+  "summary_hash": "cac08998e33e1a0f88bc275824f0cf238ae55a18073a9b306032d007e005bfc7"
 }

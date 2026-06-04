@@ -17,10 +17,13 @@ Pinned canonicalization decisions (resolving spec ambiguities for v1 — see
 spec §4.1 / §5.3 notes added alongside this implementation):
 
   * Canonical JSON = recursively key-sorted, compact (no insignificant
-    whitespace), ASCII content. This is the reference rule; full RFC 8785
-    number canonicalization is a documented follow-up — bundles use string /
-    integer / boolean scalars only.
-  * ``entry_hash`` = ``sha256_hex(canonical(record without entry_hash/prev_hash))``.
+    whitespace); strings use raw UTF-8 escaping (matches JavaScript
+    JSON.stringify), so both reference verifiers agree byte-for-byte on
+    non-ASCII content. Full RFC 8785 number canonicalization is a documented
+    follow-up — v1 bundles use string / integer / boolean scalars only.
+  * ``entry_hash`` follows the audit-chain canonical form
+    (architecture/specs/audit-chain-canonical-form.md):
+    ``sha256_hex(previous_hash_bytes || canonical(record without entry_hash))``.
   * ``summary_hash`` = RFC 6962 Merkle root (hex) over leaves = the raw bytes
     of each record's ``entry_hash``.
 """
@@ -65,11 +68,13 @@ def canonical_json(value: Any) -> str:
     if value is False:
         return "false"
     if isinstance(value, str):
-        # json.dumps gives RFC 8259 string escaping; ensure_ascii keeps the
-        # byte stream identical to JSON.stringify for ASCII content.
+        # Raw UTF-8 string escaping (ensure_ascii=False) — byte-identical to
+        # JavaScript JSON.stringify, which emits raw non-ASCII rather than
+        # \uXXXX. This keeps the two reference verifiers in agreement for
+        # non-ASCII content and matches the RFC 8785 JCS intent.
         import json
 
-        return json.dumps(value, ensure_ascii=True)
+        return json.dumps(value, ensure_ascii=False)
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):  # pragma: no cover - bundles avoid floats in v1
@@ -94,9 +99,18 @@ def sha256_hex(data: bytes) -> str:
 
 
 def record_entry_hash(record: Mapping[str, Any]) -> str:
-    """entry_hash = sha256_hex(canonical(record minus entry_hash/prev_hash))."""
-    content = {k: v for k, v in record.items() if k not in ("entry_hash", "prev_hash")}
-    return sha256_hex(canonical_json(content).encode("utf-8"))
+    """Audit-chain ``entry_hash`` over a bundle record.
+
+    Per architecture/specs/audit-chain-canonical-form.md:
+        entry_hash = sha256_hex( previous_hash_bytes || canonical_payload )
+    where ``previous_hash_bytes`` is the raw 32-byte digest of ``prev_hash``
+    (genesis = 32 zero bytes) and ``canonical_payload`` is the canonical
+    serialization of the record with the ``entry_hash`` field removed (and
+    ``signature`` if present). ``prev_hash`` itself stays in the payload.
+    """
+    content = {k: v for k, v in record.items() if k not in ("entry_hash", "signature")}
+    prev_bytes = bytes.fromhex(record["prev_hash"])
+    return sha256_hex(prev_bytes + canonical_json(content).encode("utf-8"))
 
 
 def merkle_root_hex(leaf_hexes: Sequence[str]) -> str:

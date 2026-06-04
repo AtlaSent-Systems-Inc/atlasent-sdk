@@ -49,6 +49,13 @@ def test_valid_bundle_passes():
     assert r.key_id == "evidence-issuing-2026-06"
 
 
+def test_valid_unicode_bundle_passes():
+    # Locks non-ASCII canonicalization parity with the TS verifier.
+    r = verify_evidence_bundle(load("valid-unicode.json"), KEY_SET)
+    assert r.ok is True
+    assert r.record_count == 2
+
+
 @pytest.mark.parametrize(
     "fixture,expected",
     [

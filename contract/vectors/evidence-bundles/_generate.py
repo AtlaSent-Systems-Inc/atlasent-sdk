@@ -167,3 +167,27 @@ entry = copy.deepcopy(base_bundle())
 entry["records"][2]["decision"]["outcome"] = "permit"  # mutate content, keep entry_hash
 entry["signature"]["signature_b64"] = sign(entry)
 write("entry-tampered.json", entry)
+
+# Non-ASCII content fixture — locks canonicalization parity across the two
+# reference verifiers (Codex P2: JS raw-UTF-8 vs Python ensure_ascii).
+u_records, prev = [], "00" * 32
+for r in [
+    {"decision_id": "0190a1b2-00f1-7000-8000-0000000000f1",
+     "decision": {"action": "customer.export", "outcome": "deny",
+                  "actor": "Frédéric Müller / 北京", "note": "café — naïve ✓"}},
+    {"decision_id": "0190a1b2-00f2-7000-8000-0000000000f2",
+     "decision": {"action": "vendor.payment.release", "outcome": "permit",
+                  "actor": "Łukasz", "currency": "€"}},
+]:
+    rec = dict(r); rec["prev_hash"] = prev
+    rec["entry_hash"] = record_entry_hash(rec); u_records.append(rec); prev = rec["entry_hash"]
+ub = copy.deepcopy(valid)
+ub["records"] = u_records
+ub["chain_context"] = {"chain_id": "org-default",
+                       "first_entry_hash": u_records[0]["entry_hash"],
+                       "first_prev_hash": u_records[0]["prev_hash"],
+                       "last_entry_hash": u_records[-1]["entry_hash"],
+                       "entry_count": len(u_records)}
+ub["summary_hash"] = merkle_root_hex([r["entry_hash"] for r in u_records])
+ub["signature"]["signature_b64"] = sign(ub)
+write("valid-unicode.json", ub)

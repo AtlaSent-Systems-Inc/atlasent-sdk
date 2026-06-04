@@ -38,6 +38,12 @@ describe('verifyEvidenceBundle (cross-language fixtures)', () => {
     expect(r.key_id).toBe('evidence-issuing-2026-06');
   });
 
+  it('agrees with the Python verifier on non-ASCII content (raw UTF-8)', async () => {
+    const r = await verifyEvidenceBundle(load('valid-unicode.json'), keySet);
+    expect(r.ok).toBe(true);
+    expect(r.record_count).toBe(2);
+  });
+
   it('rejects each tampered / inconsistent fixture with the right reason', async () => {
     expect(await reason('tampered-signature.json')).toBe('signature_invalid');
     expect(await reason('broken-chain.json')).toBe('chain_broken');
