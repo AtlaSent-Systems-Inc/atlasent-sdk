@@ -48,7 +48,7 @@
         "required": ["decision_id", "entry_hash", "prev_hash"],
         "properties": {
           "decision_id": { "type": "string" },
-          "entry_hash": { "type": "string", "description": "SHA-256 hex of canonical(record without entry_hash/prev_hash)" },
+          "entry_hash": { "type": "string", "description": "audit-chain entry_hash: SHA-256 hex of previous_hash_bytes || canonical(record without entry_hash)" },
           "prev_hash": { "type": "string", "description": "SHA-256 hex; links to the prior record's entry_hash" },
           "decision": { "type": "object" },
           "permit_token_metadata": { "type": "object" },
