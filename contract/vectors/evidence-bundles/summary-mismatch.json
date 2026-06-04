@@ -1,0 +1,62 @@
+{
+  "$schema": "https://atlasent.io/schemas/evidence-bundle/v1.json",
+  "bundle_id": "0190a1b2-9999-7000-8000-000000000099",
+  "bundle_version": "1",
+  "chain_context": {
+    "chain_id": "org-default",
+    "entry_count": 3,
+    "first_entry_hash": "a7025d068808cdd4e23b8d0eef605bbe34e343fc9e332bd62d2c8d5e85e958fe",
+    "first_prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "last_entry_hash": "6b219a362abcb8c4b52a39f732af83a1a90f8aaa5d180985d45f68ccda318498"
+  },
+  "issued_at": "2026-06-04T00:00:00Z",
+  "issued_by": {
+    "issuer_kind": "atlasent-api",
+    "issuer_version": "1.0.0",
+    "org_id": "0190a1b2-aaaa-7000-8000-0000000000aa"
+  },
+  "records": [
+    {
+      "decision": {
+        "action": "production.deploy",
+        "actor": "agent:ci",
+        "outcome": "permit"
+      },
+      "decision_id": "0190a1b2-0001-7000-8000-000000000001",
+      "entry_hash": "a7025d068808cdd4e23b8d0eef605bbe34e343fc9e332bd62d2c8d5e85e958fe",
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "decision": {
+        "action": "vendor.payment.release",
+        "actor": "user:ap",
+        "outcome": "deny"
+      },
+      "decision_id": "0190a1b2-0002-7000-8000-000000000002",
+      "entry_hash": "3d18012e9b4f64c79e96821a58a132b1da71daeb1d968ad6569952c4075e6aa9",
+      "prev_hash": "a7025d068808cdd4e23b8d0eef605bbe34e343fc9e332bd62d2c8d5e85e958fe"
+    },
+    {
+      "decision": {
+        "action": "customer.export",
+        "actor": "user:dpo",
+        "outcome": "escalate"
+      },
+      "decision_id": "0190a1b2-0003-7000-8000-000000000003",
+      "entry_hash": "6b219a362abcb8c4b52a39f732af83a1a90f8aaa5d180985d45f68ccda318498",
+      "prev_hash": "3d18012e9b4f64c79e96821a58a132b1da71daeb1d968ad6569952c4075e6aa9"
+    }
+  ],
+  "scope": {
+    "from": "2026-06-01T00:00:00Z",
+    "kind": "decision-window",
+    "to": "2026-06-04T00:00:00Z"
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "key_id": "evidence-issuing-2026-06",
+    "key_set_url": "https://trust.atlasent.io/keys/evidence-bundles.json",
+    "signature_b64": "8FB9OXXouDuRUu9FrcTnCxKbmZjrA34+4vod54NIKvipaOmf3XKzWUMjKURlSgVV7BM3Hc/eTomSpWmkFAyiBA=="
+  },
+  "summary_hash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+}
