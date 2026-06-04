@@ -237,9 +237,9 @@ class EvaluateRequest(BaseModel):
     # "standard" (default) runs all stable layers.
     # "advanced"/"enterprise" additionally enable override logic.
     # Unknown values fall back to "standard" server-side (never "basic").
-    evaluation_profile: Literal["basic", "standard", "advanced", "enterprise"] | None = Field(
-        default=None
-    )
+    evaluation_profile: (
+        Literal["basic", "standard", "advanced", "enterprise"] | None
+    ) = Field(default=None)
     # Emergency override block. Only evaluated when evaluation_profile is
     # "advanced" or "enterprise". Pass a dict with at minimum:
     #   {"version": "override.v1", "authority_actor_id": "<uuid>", "reason": "<text>"}
