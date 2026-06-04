@@ -118,7 +118,7 @@ async function sha256Hex(data: Uint8Array): Promise<string> {
  * where previous_hash_bytes is the raw 32-byte digest of prev_hash
  * (genesis = 32 zero bytes). prev_hash stays in the canonical payload.
  */
-async function recordEntryHash(record: Record<string, unknown>): Promise<string> {
+export async function recordEntryHash(record: Record<string, unknown>): Promise<string> {
   const content: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(record)) {
     if (k !== 'entry_hash' && k !== 'signature') content[k] = v;
@@ -127,7 +127,7 @@ async function recordEntryHash(record: Record<string, unknown>): Promise<string>
   return sha256Hex(concat([prevBytes, toBytes(canonicalJson(content))]));
 }
 
-async function merkleRootHex(leafHexes: string[]): Promise<string> {
+export async function merkleRootHex(leafHexes: string[]): Promise<string> {
   if (leafHexes.length === 0) return sha256Hex(new Uint8Array());
   let level: Uint8Array[] = [];
   for (const h of leafHexes) {
