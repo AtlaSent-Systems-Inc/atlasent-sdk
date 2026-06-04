@@ -297,6 +297,49 @@ export interface CompletionProof {
   permit_id: string;
 }
 
+/**
+ * Controls which algorithm layers the server runs.
+ *
+ * - `"basic"` — skips snapshot enforcement; intended for pilot integrations
+ *   that call evaluate → permit → verify without supplying a full state
+ *   snapshot. All other layers (policy, risk envelope, audit) still run.
+ * - `"standard"` — default; all stable layers run including snapshot
+ *   enforcement on action classes that require it.
+ * - `"advanced"` / `"enterprise"` — additionally enable emergency override
+ *   logic and extended authority checks.
+ *
+ * Unknown values fall back to `"standard"` server-side (fail-safe — never
+ * downgrades to `"basic"`).
+ */
+export type EvaluationProfile = 'basic' | 'standard' | 'advanced' | 'enterprise';
+
+/** Emergency override for snapshot hard blocks. Profile must be `"advanced"` or `"enterprise"`. */
+export interface EmergencyOverrideV1 {
+  /** Must be `"override.v1"`. */
+  version: 'override.v1';
+  /**
+   * Actor ID of the operator authorising this override. Must differ from
+   * the requester's `actor_id` (no self-approval). Must hold
+   * `override:execute` scope on an active API key in the org.
+   */
+  authority_actor_id: string;
+  /** Mandatory human-readable justification. Stored verbatim in CDO + audit. */
+  reason: string;
+  /**
+   * Override validity window in seconds. Defaults to 900 (15 min).
+   * Capped server-side at 3600 (1 hour).
+   */
+  time_bound_seconds?: number;
+  /** Incident or change ticket ID. Required when `state_snapshot.incident_active` is true. */
+  incident_id?: string;
+  /**
+   * Explicit list of snapshot hard-block codes this override accepts.
+   * Any block NOT in this list is still a hard deny. When absent, all
+   * current blocks are accepted (break-glass mode).
+   */
+  accepted_blocks?: string[];
+}
+
 /** Input to {@link AtlaSentClient.evaluate}. */
 export interface EvaluateRequest {
   /** Identifier of the calling agent (e.g. "clinical-data-agent"). */
@@ -364,6 +407,26 @@ export interface EvaluateRequest {
     /** Arbitrary snapshot payload — observable state of the system at evaluation time. */
     payload?: Record<string, unknown>;
   };
+  /**
+   * Algorithm profile controlling which evaluation layers run.
+   *
+   * Pass `"basic"` for pilot integrations that don't supply a full state
+   * snapshot — snapshot enforcement is skipped while all other layers
+   * (policy, risk envelope, audit) run normally. Omit (or pass
+   * `"standard"`) for default behavior. Unknown values fall back to
+   * `"standard"` server-side.
+   */
+  evaluation_profile?: EvaluationProfile;
+  /**
+   * Emergency override to accept snapshot hard blocks.
+   *
+   * Only evaluated when `evaluation_profile` is `"advanced"` or
+   * `"enterprise"`. The `authority_actor_id` must hold `override:execute`
+   * scope on an active API key in the org and must differ from `actor_id`.
+   * A non-empty `reason` is mandatory. Accepted overrides are recorded in
+   * the CDO and fire an additional `override.applied` audit event.
+   */
+  override?: EmergencyOverrideV1;
 }
 
 /**

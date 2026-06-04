@@ -6,6 +6,57 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.16.0 (2026-06-04)
+
+### New features
+
+#### `evaluation_profile` and `override` on `EvaluateRequest`
+
+Two new optional fields on `EvaluateRequest` that surface the 12-layer
+authorization algorithm controls:
+
+**`evaluation_profile`** (`EvaluationProfile`) — controls which algorithm
+layers run. Pass `"basic"` for pilot integrations that call
+evaluate → permit → verify without supplying a full state snapshot;
+snapshot enforcement is skipped while policy evaluation, risk envelope,
+and audit all still run. Unknown values fall back to `"standard"` server-side.
+
+```ts
+const result = await client.evaluate({
+  action_type:        "production.deploy",
+  actor_id:           "github-actions",
+  environment:        "production",
+  evaluation_profile: "basic",          // pilot-safe: no snapshot required
+});
+```
+
+**`override`** (`EmergencyOverrideV1`) — emergency override to clear snapshot
+hard blocks. Only evaluated when `evaluation_profile` is `"advanced"` or
+`"enterprise"`. The `authority_actor_id` must hold `override:execute` scope
+on an active API key in the org and must differ from `actor_id`.
+
+```ts
+const result = await client.evaluate({
+  action_type:        "production.deploy",
+  actor_id:           "deploy-bot",
+  environment:        "production",
+  evaluation_profile: "advanced",
+  state_snapshot: { source: "ci", payload: { tests_passed: false } },
+  override: {
+    version:             "override.v1",
+    authority_actor_id:  "ops-lead-uuid",
+    reason:              "Tests failed due to flaky test infra; manually verified",
+    time_bound_seconds:  900,
+  },
+});
+```
+
+Both fields are additive — existing callers that omit them are unaffected.
+
+New public types: `EvaluationProfile`, `EmergencyOverrideV1`.
+
+---
+
 ## @atlasent/sdk 2.15.0 (2026-06-04)
 
 ### New features
