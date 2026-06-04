@@ -552,6 +552,47 @@ export interface EvaluateRiskEnvelope {
   factors?: EvaluateRiskEnvelopeFactor[];
 }
 
+/**
+ * A boolean point-in-time fact from an external connector (GitHub, Stripe, Slack).
+ * Surfaced in evaluate response context as `context.externalAssertions[]`
+ * when the evaluated actor has active assertions.
+ *
+ * Policy rule usage:
+ *   `{ "field": "context.activeAssertions", "contains": "ci_passing" }`
+ */
+export interface ExternalAssertionSummary {
+  /** Connector system: 'github' | 'stripe' | 'slack' | custom */
+  source_system: string;
+  /** Assertion category: 'ci_passing' | 'branch_protection' | 'pr_open' | 'subscription_active' | 'channel_member' | 'app_mentioned' */
+  assertion_type: string;
+  /** Boolean fact value */
+  value: boolean;
+  /** Confidence in [0, 1]. 0.9 for HMAC-verified connector events. */
+  confidence: number;
+  /** Trust level: 'trusted' | 'attested' | 'untrusted' */
+  trust_level: string;
+  /** ISO8601 expiry timestamp */
+  valid_until: string;
+}
+
+/**
+ * A scored aggregate signal from an external source (BVS behavioral aggregates, etc).
+ * Surfaced in evaluate response context as `context.externalSignals[]`.
+ *
+ * Policy rule usage:
+ *   `{ "field": "context.signalScores.BVS_AGGREGATE", "gte": 0.7 }`
+ */
+export interface ExternalSignalSummary {
+  /** Signal category: 'BVS_AGGREGATE' | 'CONTEXT_ANOMALY' | custom */
+  signal_type: string;
+  /** System that produced this signal: 'bvs' | 'github' | custom */
+  source_system: string;
+  /** Normalized score in [0, 1]. 0 if no score in payload. */
+  score: number;
+  /** ISO8601 receive timestamp */
+  received_at: string;
+}
+
 /** Input to {@link AtlaSentClient.verifyPermit}. */
 export interface VerifyPermitRequest {
   /** The permit ID returned by a prior evaluate() call. */

@@ -156,6 +156,8 @@ export type {
   EvaluateResponsePermit,
   EvaluateRiskEnvelope,
   EvaluateRiskEnvelopeFactor,
+  ExternalAssertionSummary,
+  ExternalSignalSummary,
   GetPermitResponse,
   LicenseStatus,
   LicenseVerifyResult,
