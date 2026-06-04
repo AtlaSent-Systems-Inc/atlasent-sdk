@@ -126,6 +126,8 @@ export {
 export { withPermit } from "./withPermit.js";
 export type {
   ApiKeySelfResponse,
+  AssertionSubmitInput,
+  AssertionSubmitResult,
   AtlaSentClientOptions,
   BvsSnapshot,
   ConsentClassProjection,

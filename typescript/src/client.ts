@@ -36,6 +36,8 @@ import {
 import { PRODUCTION_DEPLOY_ACTION } from "./types.js";
 import type {
   ApiKeySelfResponse,
+  AssertionSubmitInput,
+  AssertionSubmitResult,
   AtlaSentClientOptions,
   Decision,
   AuditEventsResult,
@@ -192,7 +194,7 @@ import {
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const SDK_VERSION = "2.10.0";
+const SDK_VERSION = "2.15.0";
 
 /**
  * Guard flag: emit the browser-environment warning at most once per
@@ -2802,6 +2804,102 @@ export class AtlaSentClient {
       params,
     );
     return [...(body.evaluations ?? [])];
+  }
+
+  // ── External Signal Ingestion ─────────────────────────────────────────────
+
+  /**
+   * Submit an external assertion to AtlaSent.
+   *
+   * Records a boolean point-in-time fact from an external connector
+   * (GitHub, Stripe, Slack, or any custom source) so that policy rules
+   * can reference it during evaluate calls via `context.activeAssertions`
+   * or `context.externalAssertions`.
+   *
+   * Idempotent: submitting an identical assertion that is still within
+   * its TTL returns the existing record with `reused: true` rather than
+   * creating a duplicate.
+   *
+   * Calls `POST /v1/assertions`.
+   * Requires API key scope `assertions:write`.
+   *
+   * @example
+   * ```ts
+   * const result = await client.submitAssertion({
+   *   assertion_type: 'github.ci_passed',
+   *   source_system:  'github',
+   *   subject_ref:    'myorg/myrepo@abc1234',
+   *   actor_id:       'github-actions',
+   *   action_type:    'production.deploy',
+   *   trust_level:    'attested',
+   *   valid_until:    new Date(Date.now() + 24 * 3_600_000).toISOString(),
+   * });
+   * console.log(result.assertion_id, result.reused);
+   * ```
+   *
+   * @throws {@link AtlaSentError} on `401` (invalid key), `403` (missing scope),
+   *   `422` (malformed input), `429` (rate limited), or transport failures.
+   */
+  async submitAssertion(
+    input: AssertionSubmitInput,
+  ): Promise<AssertionSubmitResult> {
+    if (!input.assertion_type || typeof input.assertion_type !== "string") {
+      throw new AtlaSentError("assertion_type is required", {
+        code: "bad_request",
+      });
+    }
+    if (!input.source_system || typeof input.source_system !== "string") {
+      throw new AtlaSentError("source_system is required", {
+        code: "bad_request",
+      });
+    }
+    if (!input.subject_ref || typeof input.subject_ref !== "string") {
+      throw new AtlaSentError("subject_ref is required", {
+        code: "bad_request",
+      });
+    }
+
+    const wireBody: Record<string, unknown> = {
+      assertion_type: input.assertion_type,
+      source_system: input.source_system,
+      subject_ref: input.subject_ref,
+    };
+    if (input.actor_id !== undefined) wireBody.actor_id = input.actor_id;
+    if (input.action_type !== undefined) wireBody.action_type = input.action_type;
+    if (input.payload !== undefined) wireBody.payload = input.payload;
+    if (input.trust_level !== undefined) wireBody.trust_level = input.trust_level;
+    if (input.valid_until !== undefined) wireBody.valid_until = input.valid_until;
+
+    const { body: wire } = await this.post<{
+      assertion_id?: string;
+      payload_hash?: string;
+      reused?: boolean;
+    }>("/v1/assertions", wireBody);
+
+    if (
+      typeof wire.assertion_id !== "string" ||
+      wire.assertion_id.length === 0
+    ) {
+      throw new AtlaSentError(
+        "Malformed response from /v1/assertions: missing `assertion_id`",
+        { code: "bad_response" },
+      );
+    }
+    if (
+      typeof wire.payload_hash !== "string" ||
+      wire.payload_hash.length === 0
+    ) {
+      throw new AtlaSentError(
+        "Malformed response from /v1/assertions: missing `payload_hash`",
+        { code: "bad_response" },
+      );
+    }
+
+    return {
+      assertion_id: wire.assertion_id,
+      payload_hash: wire.payload_hash,
+      reused: wire.reused ?? false,
+    };
   }
 
   // ── Private adapters for sub-client factories ──────────────────────────────

@@ -593,6 +593,54 @@ export interface ExternalSignalSummary {
   received_at: string;
 }
 
+/**
+ * Input to {@link AtlaSentClient.submitAssertion}.
+ *
+ * Submits a boolean point-in-time external assertion to AtlaSent so that
+ * policy rules can gate on `context.activeAssertions` or
+ * `context.externalAssertions` during evaluate calls.
+ *
+ * Requires API key scope `assertions:write`.
+ */
+export interface AssertionSubmitInput {
+  /** Assertion category, e.g. `'github.pr_approved'`, `'github.ci_passed'`. */
+  assertion_type: string;
+  /** System that produced this assertion: `'github'` | `'stripe'` | `'slack'` | custom. */
+  source_system: string;
+  /** The resource the assertion is about — a PR URL, payment_intent_id, etc. */
+  subject_ref: string;
+  /** Optional: the actor associated with the assertion. */
+  actor_id?: string;
+  /** Optional: action type this assertion is relevant to, e.g. `'production.deploy'`. */
+  action_type?: string;
+  /** Optional: additional connector-specific metadata. */
+  payload?: Record<string, unknown>;
+  /**
+   * Trust level of this assertion.
+   * - `'trusted'`   — HMAC-verified connector event
+   * - `'attested'`  — caller-attested (e.g. CI system asserting its own outcome)
+   * - `'untrusted'` — unverified signal
+   */
+  trust_level?: "trusted" | "attested" | "untrusted";
+  /** Optional ISO 8601 expiry timestamp; defaults to server-configured TTL. */
+  valid_until?: string;
+}
+
+/**
+ * Response from {@link AtlaSentClient.submitAssertion}.
+ */
+export interface AssertionSubmitResult {
+  /** Server-assigned UUID for the persisted assertion. */
+  assertion_id: string;
+  /** SHA-256 hex digest of the canonicalized payload — stable deduplication key. */
+  payload_hash: string;
+  /**
+   * `true` when an identical unexpired assertion already existed and was
+   * returned rather than creating a duplicate.
+   */
+  reused: boolean;
+}
+
 /** Input to {@link AtlaSentClient.verifyPermit}. */
 export interface VerifyPermitRequest {
   /** The permit ID returned by a prior evaluate() call. */
