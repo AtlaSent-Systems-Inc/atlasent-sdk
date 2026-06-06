@@ -1,12 +1,4 @@
-"""CLI entry point for ``atlasent-verify-bundle``.
-
-Usage::
-
-    atlasent-verify-bundle <bundle.json> <keyset.json>
-
-Requires ``atlasent[verify]`` (the ``cryptography`` package).
-Exits 0 on success, 1 if the bundle fails verification, 2 on usage/IO error.
-"""
+"""CLI entry point for ``atlasent-verify-bundle``."""
 from __future__ import annotations
 
 import json
@@ -64,11 +56,12 @@ def main() -> None:
         print(f"FAIL  {exc}", file=sys.stderr)
         sys.exit(1)
 
+    checks = ",".join(result.checks)
     print(
         f"ok    bundle_id={result.bundle_id!r}  "
         f"key_id={result.key_id!r}  "
         f"records={result.record_count}  "
-        f"checks={','.join(result.checks)}"
+        f"checks={checks}",
     )
 
 
