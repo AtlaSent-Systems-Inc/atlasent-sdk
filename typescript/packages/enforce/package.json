@@ -1,6 +1,6 @@
 {
   "name": "@atlasent/enforce",
-  "version": "0.1.0-alpha.0",
+  "version": "1.0.0",
   "description": "AtlaSent Enforce Pack — non-bypassable execution wrapper around the v1 SDK. Forces verify-permit on every gated action; fails closed.",
   "license": "Apache-2.0",
   "type": "module",
@@ -52,7 +52,7 @@
   },
   "publishConfig": {
     "access": "public",
-    "tag": "alpha"
+    "tag": "latest"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

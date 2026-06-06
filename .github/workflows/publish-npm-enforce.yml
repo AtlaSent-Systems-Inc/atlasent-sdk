@@ -1,9 +1,9 @@
 name: Publish @atlasent/enforce to npm
 
 # Triggers only on enforce-v* tags. Tag pattern:
-# enforce-vX.Y.Z (e.g. enforce-v0.1.0-alpha.0). Publishes under the
-# `alpha` dist-tag so `npm install @atlasent/enforce` (no @version)
-# resolves the latest alpha while v0.1.0 GA is in development.
+# enforce-vX.Y.Z (e.g. enforce-v1.0.0). Publishes under the
+# `latest` dist-tag so `npm install @atlasent/enforce` resolves
+# the current GA release.
 #
 # Disjoint from publish-npm.yml (typescript-v*) and
 # publish-npm-v2alpha.yml (typescript-v2-alpha-v*) so a single tag
@@ -135,10 +135,7 @@ jobs:
         # accidentally-included secret is visible before publish.
         run: npm pack --dry-run
 
-      - name: Publish (alpha dist-tag, with provenance)
-        # `--tag alpha` keeps `npm install @atlasent/enforce` (without
-        # an explicit @version) resolving to the latest alpha. The
-        # `latest` dist-tag stays unset until v0.1.0 GA.
-        run: npm publish --access public --tag alpha --provenance
+      - name: Publish (latest dist-tag, with provenance)
+        run: npm publish --access public --tag latest --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
