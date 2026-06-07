@@ -260,7 +260,7 @@ describe("createBehaviorEmitter", () => {
     expect(headers["Content-Type"]).toBe("application/json");
   });
 
-  it("includes X-BVS-Signature, X-BVS-Timestamp, X-BVS-Nonce headers", async () => {
+  it("includes X-Signature, X-Timestamp, X-Nonce headers", async () => {
     fetchMock.mockResolvedValue(makeOkResponse());
 
     const emitter = createBehaviorEmitter({
@@ -273,9 +273,9 @@ describe("createBehaviorEmitter", () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
 
-    expect(headers["X-BVS-Signature"]).toBeDefined();
-    expect(headers["X-BVS-Timestamp"]).toBeDefined();
-    expect(headers["X-BVS-Nonce"]).toBeDefined();
+    expect(headers["X-Signature"]).toBeDefined();
+    expect(headers["X-Timestamp"]).toBeDefined();
+    expect(headers["X-Nonce"]).toBeDefined();
   });
 
   it("signature has sha256= prefix", async () => {
@@ -290,7 +290,7 @@ describe("createBehaviorEmitter", () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
-    expect(headers["X-BVS-Signature"]).toMatch(/^sha256=[0-9a-f]{64}$/);
+    expect(headers["X-Signature"]).toMatch(/^sha256=[0-9a-f]{64}$/);
   });
 
   it("signature is a valid HMAC-SHA256 of timestamp.nonce.body", async () => {
@@ -306,9 +306,9 @@ describe("createBehaviorEmitter", () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
-    const sig = headers["X-BVS-Signature"];
-    const ts = headers["X-BVS-Timestamp"];
-    const nonce = headers["X-BVS-Nonce"];
+    const sig = headers["X-Signature"];
+    const ts = headers["X-Timestamp"];
+    const nonce = headers["X-Nonce"];
     const body = init.body as string;
 
     expect(verifySignature(secret, ts, nonce, body, sig)).toBe(true);
@@ -328,7 +328,7 @@ describe("createBehaviorEmitter", () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
-    const ts = Number(headers["X-BVS-Timestamp"]);
+    const ts = Number(headers["X-Timestamp"]);
     expect(ts).toBeGreaterThanOrEqual(before);
     expect(ts).toBeLessThanOrEqual(after);
   });
@@ -345,7 +345,7 @@ describe("createBehaviorEmitter", () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
-    expect(headers["X-BVS-Nonce"]).toMatch(/^[0-9a-f]{32}$/);
+    expect(headers["X-Nonce"]).toMatch(/^[0-9a-f]{32}$/);
   });
 
   it("body includes source field merged with event", async () => {
@@ -501,6 +501,6 @@ describe("createBehaviorEmitter", () => {
 
     const nonce1 = (fetchMock.mock.calls[0] as [string, RequestInit])[1].headers as Record<string, string>;
     const nonce2 = (fetchMock.mock.calls[1] as [string, RequestInit])[1].headers as Record<string, string>;
-    expect(nonce1["X-BVS-Nonce"]).not.toBe(nonce2["X-BVS-Nonce"]);
+    expect(nonce1["X-Nonce"]).not.toBe(nonce2["X-Nonce"]);
   });
 });

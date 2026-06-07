@@ -39,9 +39,9 @@ export function createBehaviorEmitter(opts: BehaviorEmitOptions): BehaviorEmitte
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        "X-BVS-Signature": sign(opts.hmacSecret, timestamp, nonce, body),
-        "X-BVS-Timestamp": String(timestamp),
-        "X-BVS-Nonce": nonce,
+        "X-Signature": sign(opts.hmacSecret, timestamp, nonce, body),
+        "X-Timestamp": String(timestamp),
+        "X-Nonce": nonce,
       };
       if (opts.serviceToken) {
         headers["Authorization"] = `Bearer ${opts.serviceToken}`;
