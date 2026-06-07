@@ -306,9 +306,9 @@ describe("createBehaviorEmitter", () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
-    const sig = headers["X-Signature"];
-    const ts = headers["X-Timestamp"];
-    const nonce = headers["X-Nonce"];
+    const sig = headers["X-Signature"]!;
+    const ts = headers["X-Timestamp"]!;
+    const nonce = headers["X-Nonce"]!;
     const body = init.body as string;
 
     expect(verifySignature(secret, ts, nonce, body, sig)).toBe(true);

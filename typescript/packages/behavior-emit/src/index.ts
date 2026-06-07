@@ -1,4 +1,5 @@
 export { createBehaviorEmitter, BvsEmitError } from "./client.js";
+export type { BehaviorEmitter } from "./client.js";
 export { assertNoRawText, RawTextLeakError } from "./privacy.js";
 export type {
   BvsSource,
@@ -11,6 +12,5 @@ export type {
   BvsReflectionEvent,
   BvsEvent,
   BehaviorEmitOptions,
-  BehaviorEmitter,
   EmitResult,
 } from "./types.js";
