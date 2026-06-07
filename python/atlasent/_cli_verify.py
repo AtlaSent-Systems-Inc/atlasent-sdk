@@ -1,4 +1,5 @@
 """CLI entry point for ``atlasent-verify-bundle``."""
+
 from __future__ import annotations
 
 import json
