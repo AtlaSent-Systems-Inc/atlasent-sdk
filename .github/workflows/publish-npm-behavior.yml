@@ -59,8 +59,8 @@ jobs:
           fi
 
           if [ "$PKG" = "behavior" ]; then
-            echo "package_dir=typescript/packages/behavior" >> "$GITHUB_OUTPUT"
-            echo "package_name=@atlasent/behavior" >> "$GITHUB_OUTPUT"
+            echo "package_dir=typescript/packages/behavior-emit" >> "$GITHUB_OUTPUT"
+            echo "package_name=@atlasent/behavior-emit" >> "$GITHUB_OUTPUT"
             echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
           elif [ "$PKG" = "sdk" ]; then
             echo "package_dir=typescript" >> "$GITHUB_OUTPUT"
