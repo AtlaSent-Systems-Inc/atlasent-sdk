@@ -123,7 +123,7 @@ describe("AtlaSentClient.listRbacRules", () => {
 
     expect(result.total).toBe(1);
     expect(result.rules).toHaveLength(1);
-    expect(result.rules[0].id).toBe("rule_1");
+    expect(result.rules[0]!.id).toBe("rule_1");
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("/v1/rbac-rules");
     expect(url).toContain("org_id=org_abc");
