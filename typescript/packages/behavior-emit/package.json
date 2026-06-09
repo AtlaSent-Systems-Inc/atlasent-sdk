@@ -2,6 +2,10 @@
   "name": "@atlasent/behavior-emit",
   "version": "1.0.0",
   "description": "Type-safe HMAC-signed BVS event emitter for AtlaSent consumer apps",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
