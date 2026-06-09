@@ -191,6 +191,12 @@ import {
   makeAccessGovernanceLogClient,
   type AccessGovernanceLogSubClient,
 } from "./access-governance-log.js";
+import type {
+  CreateRbacRuleRequest,
+  ListRbacRulesResponse,
+  RbacRule,
+} from "./rbacRules.js";
+import type { GetApprovalSlaResponse } from "./approvalsSla.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -2900,6 +2906,43 @@ export class AtlaSentClient {
       payload_hash: wire.payload_hash,
       reused: wire.reused ?? false,
     };
+  }
+
+  // ── RBAC Rules ────────────────────────────────────────────────────────────
+
+  async listRbacRules(
+    orgId: string,
+    options: { limit?: number; offset?: number } = {},
+  ): Promise<ListRbacRulesResponse> {
+    const params = new URLSearchParams({ org_id: orgId });
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.offset !== undefined) params.set("offset", String(options.offset));
+    const { body } = await this.get<ListRbacRulesResponse>("/v1/rbac-rules", params);
+    return { rules: body.rules ?? [], total: body.total };
+  }
+
+  async createRbacRule(input: CreateRbacRuleRequest): Promise<RbacRule> {
+    const { body } = await this.post<{ rule: RbacRule }>("/v1/rbac-rules", input);
+    return body.rule;
+  }
+
+  async deleteRbacRule(id: string): Promise<void> {
+    await this._delete(`/v1/rbac-rules/${encodeURIComponent(id)}`);
+  }
+
+  // ── Approvals SLA ─────────────────────────────────────────────────────────
+
+  async getApprovalSla(
+    orgId: string,
+    options: { days?: number } = {},
+  ): Promise<GetApprovalSlaResponse> {
+    const params = new URLSearchParams({ org_id: orgId });
+    if (options.days !== undefined) params.set("days", String(options.days));
+    const { body } = await this.get<GetApprovalSlaResponse>(
+      "/v1/approvals/sla",
+      params,
+    );
+    return body;
   }
 
   // ── Private adapters for sub-client factories ──────────────────────────────
