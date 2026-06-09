@@ -194,9 +194,13 @@ jobs:
             "${TARBALL}"
 
       - name: Upload signature bundle as workflow artifact
+        # continue-on-error: artifact upload is best-effort; never block publish
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: npm-tarball-cosign-bundle-${{ needs.resolve.outputs.package_name }}
+          # Use package_dir (no special chars) as the artifact name key;
+          # package_name contains @ and / which are invalid in artifact names.
+          name: npm-tarball-cosign-bundle-${{ needs.resolve.outputs.package_dir }}
           path: ${{ needs.resolve.outputs.package_dir }}/${{ env.TARBALL }}.bundle
           retention-days: 90
 
