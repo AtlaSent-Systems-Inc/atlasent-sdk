@@ -140,6 +140,7 @@ jobs:
             "${TARBALL}"
 
       - name: Verify signature
+        if: github.event_name == 'push'
         run: |
           cosign verify-blob \
             --bundle="${TARBALL}.bundle" \
