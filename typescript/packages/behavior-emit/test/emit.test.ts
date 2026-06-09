@@ -501,6 +501,6 @@ describe("createBehaviorEmitter", () => {
 
     const nonce1 = (fetchMock.mock.calls[0] as [string, RequestInit])[1].headers as Record<string, string>;
     const nonce2 = (fetchMock.mock.calls[1] as [string, RequestInit])[1].headers as Record<string, string>;
-    expect(nonce1["X-Nonce"]).not.toBe(nonce2["X-Nonce"]);
+    expect(nonce1["X-Nonce"]!).not.toBe(nonce2["X-Nonce"]!);
   });
 });
