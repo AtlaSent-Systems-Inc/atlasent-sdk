@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 describe("all type-only modules load without error", () => {
   it.each([
     "../src/actionDependencies.js",
+    "../src/approvalsSla.js",
     "../src/engineVersions.js",
     "../src/financialGovernance.js",
     "../src/governanceGraph.js",
@@ -23,6 +24,7 @@ describe("all type-only modules load without error", () => {
     "../src/overrides.js",
     "../src/policyCertification.js",
     "../src/proof.js",
+    "../src/rbacRules.js",
     "../src/snapshots.js",
     "../src/v1Types.js",
     "../src/verticals/index.js",
