@@ -74,9 +74,6 @@ jobs:
           cache-dependency-path: typescript/package-lock.json
           registry-url: "https://registry.npmjs.org"
 
-      - name: Install dependencies
-        run: npm ci
-
       - name: Verify tag matches package version
         # GITHUB_REF is refs/tags/typescript-v<semver>. Strip the prefix
         # and compare against package.json "version". Refuses to publish
@@ -107,6 +104,22 @@ jobs:
           fi
           echo "Input and package version agree: $PKG_VERSION"
 
+      # ── AtlaSent release gate ────────────────────────────────────────
+      # Gate closed: if the permit is not verified the job exits here and
+      # nothing builds or publishes.
+      - name: AtlaSent release gate
+        uses: atlasent/action@v1
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+        with:
+          action: production.release
+          actor: ${{ github.actor }}
+          environment: production
+          context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'  
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Build
         run: npm run build
 
@@ -121,7 +134,7 @@ jobs:
         # Create the real tarball so cosign can sign it before we publish.
         run: npm pack
 
-      # ── R4: cosign keyless signing ──────────────────────────────────────
+      # ── R4: cosign keyless signing ───────────────────────────────────
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
         with:
