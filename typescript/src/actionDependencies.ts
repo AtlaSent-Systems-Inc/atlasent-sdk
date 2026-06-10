@@ -5,7 +5,7 @@ export type DependencyStatus = "satisfied" | "missing" | "expired" | "invalid";
 
 export interface ActionDependency {
   id: string;
-  organization_id: string;
+  org_id: string;
   parent_action_class_id: string;
   child_action_class_id: string;
   requires: DependencyRequirement;
