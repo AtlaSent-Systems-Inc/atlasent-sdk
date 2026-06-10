@@ -1135,3 +1135,33 @@ export type {
   StateSnapshotInput,
   StateSnapshotRef,
 } from "./snapshots.js";
+
+// ── Dynamic RBAC Rules ────────────────────────────────────────────────────────
+export type {
+  CreateRbacRuleRequest,
+  ListRbacRulesResponse,
+  RbacCondition,
+  RbacConditionType,
+  RbacEffect,
+  RbacEnvironment,
+  RbacEnvironmentCondition,
+  RbacRiskOperator,
+  RbacRiskScoreCondition,
+  RbacRule,
+  RbacRuleResponse,
+  RbacTimeWindowCondition,
+} from "./rbacRules.js";
+
+// ── Approvals SLA ─────────────────────────────────────────────────────────────
+export type {
+  ApprovalSlaStats,
+  GetApprovalSlaResponse,
+} from "./approvalsSla.js";
+
+// ── Enterprise Inquiry (public — no auth required) ────────────────────────────
+export {
+  submitEnterpriseInquiry,
+  type DeploymentPosture,
+  type EnterpriseInquiryRequest,
+  type EnterpriseInquiryResponse,
+} from "./enterpriseInquiry.js";

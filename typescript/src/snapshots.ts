@@ -18,7 +18,7 @@ export interface StateSnapshotRef {
 }
 
 export interface StateSnapshot extends StateSnapshotRef {
-  organization_id: string;
+  org_id: string;
   source: string;
   source_kind: SnapshotSourceKind;
   complete: boolean;

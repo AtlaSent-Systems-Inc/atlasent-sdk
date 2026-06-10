@@ -23,6 +23,8 @@ permit = protect(
         "approver": approver,
         "environment": "production",
     },
+    # Required — see "State snapshots" below.
+    state_snapshot={"source": "github-actions", "complete": True},
 )
 # If we got here, the action is authorized end-to-end.
 # Otherwise protect() raised and the action never ran.
@@ -30,6 +32,34 @@ permit = protect(
 
 Set `ATLASENT_API_KEY` in the environment, or call
 `atlasent.configure(api_key=...)`. That's the whole setup.
+
+## State snapshots (required)
+
+Action classes default to `requires_state_snapshot = true`, so **every**
+`protect()` / `evaluate()` call must include a `state_snapshot`. Omitting it
+returns a `SNAPSHOT_REQUIRED` deny — which `protect()` surfaces as
+`AtlaSentDeniedError` (the action never runs):
+
+```python
+from atlasent import protect, AtlaSentDeniedError
+
+try:
+    permit = protect(
+        agent="deploy-bot",
+        action="production.deploy",
+        context={"environment": "production"},
+        state_snapshot={"source": "github-actions", "complete": True},
+    )
+except AtlaSentDeniedError as exc:
+    # exc.reason names SNAPSHOT_REQUIRED when the snapshot was missing.
+    log.warning("Denied: %s", exc.reason)
+```
+
+The minimum payload is `{"source": "<your-system>", "complete": True}`. Add
+any state your policy evaluates (git SHA, approval count, environment) under
+the snapshot. `state_snapshot` is a **top-level** argument — it is not part of
+`context`. The hosted GitHub Action injects one automatically, so you only
+need to set it on direct SDK / API calls.
 
 ## The protect() contract
 

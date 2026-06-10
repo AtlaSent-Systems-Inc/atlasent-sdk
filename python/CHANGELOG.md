@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+
+- README: the Quickstart `protect()` example now passes the required
+  `state_snapshot`, and a new "State snapshots (required)" section explains
+  that action classes default to `requires_state_snapshot = true` — omitting
+  the snapshot returns a `SNAPSHOT_REQUIRED` deny (surfaced as
+  `AtlaSentDeniedError`). `state_snapshot` is a top-level argument, not part
+  of `context`.
 ## 2.17.0 -- 2026-06-10 -- SMS OTP + Usage Metering clients
 
 ### Added
