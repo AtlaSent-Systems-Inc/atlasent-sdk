@@ -1074,6 +1074,29 @@ export {
   type AccessGovernanceLogSubClient,
 } from "./access-governance-log.js";
 
+// ── SMS OTP ───────────────────────────────────────────────────────────────────
+export {
+  makeSmsOtpClient,
+  type SmsOtpActionContext,
+  type SmsOtpSendRequest,
+  type SmsOtpSendResponse,
+  type SmsOtpSubClient,
+  type SmsOtpVerifyRequest,
+  type SmsOtpVerifyResponse,
+} from "./smsOtp.js";
+
+// ── Usage Metering ────────────────────────────────────────────────────────────
+export {
+  makeUsageMeteringClient,
+  type UsageMeteringListParams,
+  type UsageMeteringListResponse,
+  type UsageMeteringPeriod,
+  type UsageMeteringRecord,
+  type UsageMeteringSubClient,
+  type UsageMeteringSummary,
+  type UsageMeteringSummaryParams,
+} from "./usageMetering.js";
+
 // ── Delta VQP — AI re-derivation audit (service-role server-side client) ────────────────────────────────
 export {
   VQPClient,

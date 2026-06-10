@@ -283,6 +283,7 @@ from .siem import (
     siem_test_delivery,
     upsert_siem_config,
 )
+from .sms_otp import SmsOtpClient
 from .sso_client import SsoClient
 from .trust_root import (
     TrustRootKey,
@@ -292,6 +293,7 @@ from .trust_root import (
     _set_global_trust_root_manager_for_tests,
     get_global_trust_root_manager,
 )
+from .usage_metering import UsageMeteringClient
 from .v2_endpoints import (
     BATCH_PATH as V2_BATCH_PATH,
 )
@@ -373,6 +375,10 @@ __all__ = [
     "configure",
     "protect",
     "with_permit",
+    # SMS OTP step-up authentication.
+    "SmsOtpClient",
+    # Usage metering.
+    "UsageMeteringClient",
     # SCIM helpers + schema constants.
     "SCIM_USER_SCHEMA",
     "SCIM_GROUP_SCHEMA",

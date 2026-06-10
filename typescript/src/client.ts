@@ -191,6 +191,14 @@ import {
   makeAccessGovernanceLogClient,
   type AccessGovernanceLogSubClient,
 } from "./access-governance-log.js";
+import {
+  makeSmsOtpClient,
+  type SmsOtpSubClient,
+} from "./smsOtp.js";
+import {
+  makeUsageMeteringClient,
+  type UsageMeteringSubClient,
+} from "./usageMetering.js";
 import type {
   CreateRbacRuleRequest,
   ListRbacRulesResponse,
@@ -200,7 +208,7 @@ import type { GetApprovalSlaResponse } from "./approvalsSla.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const SDK_VERSION = "2.15.0";
+const SDK_VERSION = "2.17.0";
 
 /**
  * Guard flag: emit the browser-environment warning at most once per
@@ -462,6 +470,10 @@ export class AtlaSentClient {
   readonly sso: SsoSubClient;
   /** Access governance log sub-client. Access as `client.accessGovernanceLog`. */
   readonly accessGovernanceLog: AccessGovernanceLogSubClient;
+  /** SMS OTP step-up authentication sub-client. Access as `client.smsOtp`. */
+  readonly smsOtp: SmsOtpSubClient;
+  /** Usage metering sub-client. Access as `client.usageMetering`. */
+  readonly usageMetering: UsageMeteringSubClient;
   /** Trust-root snapshot manager for this client instance. */
   readonly trustRoot: TrustRootManager;
 
@@ -523,6 +535,13 @@ export class AtlaSentClient {
       (path) => this._delete(path),
     );
     this.accessGovernanceLog = makeAccessGovernanceLogClient(
+      (path, query) => this._get(path, query),
+    );
+    this.smsOtp = makeSmsOtpClient(
+      this.baseUrl,
+      this.fetchImpl,
+    );
+    this.usageMetering = makeUsageMeteringClient(
       (path, query) => this._get(path, query),
     );
     // Wire trust-root manager. Prefer custom options over the global manager
