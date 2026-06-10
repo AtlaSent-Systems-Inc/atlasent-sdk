@@ -458,3 +458,150 @@ class TestAtlaSentDeniedErrorShape:
     def test_default_decision_is_deny(self):
         err = AtlaSentDeniedError(evaluation_id="dec_x")
         assert err.decision == "deny"
+
+    def test_deny_code_is_surfaced_and_in_str(self):
+        err = AtlaSentDeniedError(
+            evaluation_id="dec_x",
+            reason="needs snapshot",
+            deny_code="SNAPSHOT_REQUIRED",
+        )
+        assert err.deny_code == "SNAPSHOT_REQUIRED"
+        assert "SNAPSHOT_REQUIRED" in str(err)
+
+    def test_deny_code_defaults_to_none(self):
+        err = AtlaSentDeniedError(evaluation_id="dec_x")
+        assert err.deny_code is None
+
+
+# ── deny_code surfacing through protect() ────────────────────────
+
+
+# handler.ts emits deny metadata at the TOP LEVEL (deny_code / deny_reason),
+# not nested under `denial`.
+EVALUATE_DENY_TOPLEVEL = {
+    "decision": "deny",
+    "deny_code": "SNAPSHOT_REQUIRED",
+    "deny_reason": "action class requires a state_snapshot in the request body",
+    "request_id": "req_snap",
+}
+
+# Contract/legacy nested shape.
+EVALUATE_DENY_NESTED = {
+    "decision": "deny",
+    "denial": {"reason": "policy denied", "code": "POLICY_DENY"},
+    "request_id": "req_pol",
+}
+
+
+class TestDenyCodeSurfacing:
+    def test_protect_surfaces_top_level_deny_code(self, mocker):
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY_TOPLEVEL),
+        )
+        with pytest.raises(AtlaSentDeniedError) as exc_info:
+            client.protect(
+                agent="bot",
+                action="production.deploy",
+                context={"environment": "production"},
+            )
+        err = exc_info.value
+        assert err.deny_code == "SNAPSHOT_REQUIRED"
+        assert err.reason == (
+            "action class requires a state_snapshot in the request body"
+        )
+
+    def test_protect_surfaces_nested_denial_code(self, mocker):
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY_NESTED),
+        )
+        with pytest.raises(AtlaSentDeniedError) as exc_info:
+            client.protect(agent="bot", action="production.deploy")
+        err = exc_info.value
+        assert err.deny_code == "POLICY_DENY"
+        assert err.reason == "policy denied"
+
+    def test_evaluate_result_deny_code_none_on_allow(self, mocker):
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_PERMIT),
+        )
+        result = client.evaluate("production.deploy", "bot", {})
+        assert result.deny_code is None
+
+    @pytest.mark.asyncio
+    async def test_async_protect_surfaces_top_level_deny_code(self, mocker):
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY_TOPLEVEL),
+        )
+        with pytest.raises(AtlaSentDeniedError) as exc_info:
+            await client.protect(
+                agent="bot",
+                action="production.deploy",
+                context={"environment": "production"},
+            )
+        err = exc_info.value
+        assert err.deny_code == "SNAPSHOT_REQUIRED"
+        assert err.reason == (
+            "action class requires a state_snapshot in the request body"
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_protect_surfaces_nested_denial_code(self, mocker):
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
+        mocker.patch.object(
+            client._client,
+            "post",
+            return_value=_mock_resp(mocker, json_data=EVALUATE_DENY_NESTED),
+        )
+        with pytest.raises(AtlaSentDeniedError) as exc_info:
+            await client.protect(agent="bot", action="production.deploy")
+        assert exc_info.value.deny_code == "POLICY_DENY"
+
+    def test_model_top_level_merges_into_denial(self):
+        from atlasent.models import EvaluateResult
+
+        r = EvaluateResult.model_validate(
+            {
+                "decision": "deny",
+                "deny_code": "SNAPSHOT_REQUIRED",
+                "deny_reason": "needs snapshot",
+            }
+        )
+        assert r.deny_code == "SNAPSHOT_REQUIRED"
+        assert r.reason == "needs snapshot"
+        # Top-level fields are normalized into the nested denial block too.
+        assert r.denial == {"reason": "needs snapshot", "code": "SNAPSHOT_REQUIRED"}
+
+    def test_model_complete_nested_denial_is_preserved(self):
+        from atlasent.models import EvaluateResult
+
+        # denial already carries both reason+code AND top-level reason set:
+        # exercises the "already present" false branches of the merge.
+        r = EvaluateResult.model_validate(
+            {
+                "decision": "deny",
+                "reason": "explicit reason",
+                "denial": {"reason": "nested reason", "code": "POLICY_DENY"},
+            }
+        )
+        assert r.deny_code == "POLICY_DENY"
+        assert r.denial["reason"] == "nested reason"
+        assert r.reason == "explicit reason"
+
+    def test_model_allow_has_no_deny_code(self):
+        from atlasent.models import EvaluateResult
+
+        r = EvaluateResult.model_validate({"decision": "allow", "permit_token": "pt"})
+        assert r.deny_code is None
+        assert r.denial is None

@@ -153,6 +153,9 @@ class AtlaSentDenied(AtlaSentError):
         decision: The decision string returned by the API (e.g. ``"deny"``).
         permit_token: The token associated with this evaluation, if any.
         reason: Human-readable explanation, when provided by the API.
+        deny_code: Stable machine code naming *why* the action was denied
+            (e.g. ``"SNAPSHOT_REQUIRED"``). ``None`` when the server did not
+            return one. Branch on this, not on the human-readable ``reason``.
     """
 
     def __init__(
@@ -161,13 +164,17 @@ class AtlaSentDenied(AtlaSentError):
         *,
         permit_token: str = "",
         reason: str = "",
+        deny_code: str | None = None,
         request_id: str | None = None,
         response_body: dict[str, Any] | None = None,
     ) -> None:
         self.decision = decision
         self.permit_token = permit_token
         self.reason = reason
+        self.deny_code = deny_code
         msg = f"Action denied: {decision}"
+        if deny_code:
+            msg += f" [{deny_code}]"
         if reason:
             msg += f" — {reason}"
         super().__init__(
@@ -217,6 +224,10 @@ class AtlaSentDeniedError(AtlaSentDenied):
             the inherited ``permit_token`` field, named for parity
             with the TypeScript SDK).
         reason: Human-readable explanation from the policy engine.
+        deny_code: Stable machine code naming *why* the action was
+            denied (e.g. ``"SNAPSHOT_REQUIRED"``). ``None`` when the
+            server did not return one. Inherited from
+            :class:`AtlaSentDenied`. Branch on this, not on ``reason``.
         audit_hash: Hash-chained audit-trail entry associated with
             the decision, if present on the server response.
         outcome: When the denial came from permit verification (not
@@ -235,6 +246,7 @@ class AtlaSentDeniedError(AtlaSentDenied):
         decision: AtlaSentDecision = "deny",
         evaluation_id: str,
         reason: str = "",
+        deny_code: str | None = None,
         audit_hash: str = "",
         outcome: PermitOutcome | None = None,
         request_id: str | None = None,
@@ -243,6 +255,7 @@ class AtlaSentDeniedError(AtlaSentDenied):
             decision=decision,
             permit_token=evaluation_id,
             reason=reason,
+            deny_code=deny_code,
         )
         self.evaluation_id = evaluation_id
         self.audit_hash = audit_hash

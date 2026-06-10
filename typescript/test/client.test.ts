@@ -148,6 +148,7 @@ describe("evaluate()", () => {
       permitToken: "dec_alpha",
       reasons: ["Operator authorized under GxP policy"],
       reason: "Operator authorized under GxP policy",
+      deny_code: null,
       auditHash: "hash_alpha",
       timestamp: "2026-04-17T10:00:00Z",
       // Headerless response → no rate-limit state surfaced.
@@ -232,6 +233,35 @@ describe("evaluate()", () => {
     expect(result.decision).toBe("deny");
     expect(result.decision_canonical).toBe("deny");
     expect(result.reason).toBe("policy denied");
+    // Legacy nested `denial.code` shape surfaces as `deny_code`.
+    expect(result.deny_code).toBe("POLICY_DENY");
+  });
+
+  it("surfaces top-level deny_code / deny_reason (canonical handler.ts shape)", async () => {
+    // handler.ts emits deny metadata at the TOP LEVEL, not nested under `denial`.
+    const wire = {
+      decision: "deny",
+      deny_code: "SNAPSHOT_REQUIRED",
+      deny_reason: "action class requires a state_snapshot in the request body",
+      request_id: "req_snap",
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.decision).toBe("deny");
+    expect(result.deny_code).toBe("SNAPSHOT_REQUIRED");
+    expect(result.reason).toBe(
+      "action class requires a state_snapshot in the request body",
+    );
+    expect(result.reasons).toEqual([
+      "action class requires a state_snapshot in the request body",
+    ]);
+  });
+
+  it("sets deny_code to null on an allow decision", async () => {
+    const wire = { decision: "allow", permit_token: "pt_x", request_id: "req_a" };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluate({ agent: "a", action: "b" });
+    expect(result.deny_code).toBeNull();
   });
 
   it("populates decision_canonical='hold' (legacy decision collapses to DENY)", async () => {

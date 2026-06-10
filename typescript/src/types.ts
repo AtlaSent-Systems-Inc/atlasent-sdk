@@ -519,6 +519,15 @@ export interface EvaluateResponse {
    * first element of `reasons` (or an empty string) for backward compat.
    */
   reason: string;
+  /**
+   * Stable machine code naming *why* a non-allow decision was reached
+   * (e.g. `"SNAPSHOT_REQUIRED"`, `"OUTSIDE_CHANGE_WINDOW"`). `null` on
+   * `allow`. Pin dashboards / routing logic to this code, not to the
+   * human-readable `reason` strings — see the deny-codes reference.
+   * Sourced from the wire `deny_code` (top level) with a fallback to the
+   * legacy `denial.code` shape.
+   */
+  deny_code: string | null;
   /** Hash-chained audit-trail entry (21 CFR Part 11 / GxP-ready). */
   auditHash: string;
   /** ISO 8601 timestamp of the decision. */

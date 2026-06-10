@@ -351,6 +351,15 @@ interface EvaluateWire {
   expires_at?: string;
   denial?: { reason?: string; code?: string };
   /**
+   * Canonical top-level deny metadata emitted by handler.ts. The server
+   * returns `deny_code` / `deny_reason` at the top level (NOT nested under
+   * `denial`); the nested `denial` shape above is the contract/legacy form.
+   * Read both so a deny is captured regardless of which shape the deployed
+   * server emits.
+   */
+  deny_code?: string;
+  deny_reason?: string;
+  /**
    * Optional sub-object — present iff the request URL carried
    * `?include=constraint_trace`. Older atlasent-api deployments
    * omit this even when `include` was requested; the preflight
@@ -645,7 +654,8 @@ export class AtlaSentClient {
       );
     }
 
-    const reason = wire.denial?.reason ?? wire.reason ?? "";
+    const reason = wire.deny_reason ?? wire.denial?.reason ?? wire.reason ?? "";
+    const denyCode = wire.deny_code ?? wire.denial?.code ?? null;
     const permitId = permitToken ?? "";
     return {
       decision,
@@ -658,6 +668,7 @@ export class AtlaSentClient {
       permitToken: decision === "allow" ? (permitToken ?? null) : null,
       reasons: reason ? [reason] : [],
       reason,
+      deny_code: decision === "allow" ? null : denyCode,
       auditHash: wire.audit_hash ?? "",
       timestamp: wire.timestamp ?? "",
       rateLimit,
@@ -986,7 +997,8 @@ export class AtlaSentClient {
     }
     const permitToken = wire.permit_token ?? wire.decision_id;
 
-    const reason = wire.denial?.reason ?? wire.reason ?? "";
+    const reason = wire.deny_reason ?? wire.denial?.reason ?? wire.reason ?? "";
+    const denyCode = wire.deny_code ?? wire.denial?.code ?? null;
     const permitId = permitToken ?? "";
     const evaluation: EvaluateResponse = {
       decision,
@@ -999,6 +1011,7 @@ export class AtlaSentClient {
       permitToken: decision === "allow" ? (permitToken ?? null) : null,
       reasons: reason ? [reason] : [],
       reason,
+      deny_code: decision === "allow" ? null : denyCode,
       auditHash: wire.audit_hash ?? "",
       timestamp: wire.timestamp ?? "",
       rateLimit,

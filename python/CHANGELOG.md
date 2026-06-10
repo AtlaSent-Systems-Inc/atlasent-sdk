@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Added
+
+- `EvaluateResult.deny_code` and `AtlaSentDenied.deny_code` /
+  `AtlaSentDeniedError.deny_code` — the stable machine code naming *why* a
+  non-allow decision was reached (e.g. `"SNAPSHOT_REQUIRED"`). `None` on
+  `allow`. Branch on this instead of parsing the human-readable `reason`.
+  The denial's string form now includes the code (`Action denied: deny
+  [SNAPSHOT_REQUIRED] — …`).
+
+### Fixed
+
+- Canonical denials now capture the deny metadata correctly. `handler.ts`
+  emits **top-level** `deny_code` / `deny_reason`, but the client previously
+  read only the nested `denial.{reason,code}` shape — so canonical denials
+  surfaced with an empty `reason` and no code. The client + model now read
+  both shapes and normalize them into `denial`, `reason`, and `deny_code`.
+
 ### Documentation
 
 - README: the Quickstart `protect()` example now passes the required
