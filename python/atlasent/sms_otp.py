@@ -45,10 +45,11 @@ def _post(
     client: AtlaSentClient,
     path: str,
     body: dict[str, Any],
+    session_jwt: str,
 ) -> Any:
     url = f"{client.base_url.rstrip('/')}{path}"
     headers = {
-        "Authorization": f"Bearer {client.api_key}",
+        "Authorization": f"Bearer {session_jwt}",
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
@@ -70,8 +71,13 @@ class SmsOtpClient:
         client = AtlaSentClient(api_key="...")
         otp = SmsOtpClient(client)
 
-        result = otp.send(phone_e164="+15551234567", action_context="break_glass")
-        verification = otp.verify(otp_id=result["otp_id"], code="123456")
+        # Obtain a JWT session token from Supabase Auth before calling.
+        jwt = supabase.auth.get_session().session.access_token
+
+        result = otp.send(phone_e164="+15551234567", action_context="break_glass",
+                          session_jwt=jwt)
+        verification = otp.verify(otp_id=result["otp_id"], code="123456",
+                                  session_jwt=jwt)
     """
 
     def __init__(self, client: AtlaSentClient) -> None:
@@ -82,17 +88,20 @@ class SmsOtpClient:
         *,
         phone_e164: str,
         action_context: SmsOtpActionContext,
+        session_jwt: str,
     ) -> dict[str, Any]:
         """Send an OTP to the given phone number for the specified action context.
 
-        Requires a valid JWT session (not an API key). The OTP is short-lived
-        and single-use.
+        Requires a valid JWT session (not an API key). Obtain the JWT from
+        ``supabase.auth.get_session().session.access_token``.
 
         :param phone_e164: Destination phone number in E.164 format (e.g.
             ``"+15551234567"``).
         :param action_context: The high-privilege action being gated behind
             this OTP. One of ``"break_glass"``, ``"api_key_create"``, or
             ``"governance_hold_approve"``.
+        :param session_jwt: Supabase session JWT for the authenticated user.
+            SMS OTP endpoints reject API keys — a JWT is required.
         :returns: Dict with ``otp_id`` (str) and ``expires_at`` (ISO-8601 str).
         :raises AtlaSentError: On network or auth failure.
         """
@@ -103,6 +112,7 @@ class SmsOtpClient:
                 "phone_e164": phone_e164,
                 "action_context": action_context,
             },
+            session_jwt,
         )
 
     def verify(
@@ -110,6 +120,7 @@ class SmsOtpClient:
         *,
         otp_id: str,
         code: str,
+        session_jwt: str,
     ) -> dict[str, Any]:
         """Verify a code against a pending OTP challenge.
 
@@ -119,6 +130,7 @@ class SmsOtpClient:
 
         :param otp_id: The ``otp_id`` returned by :meth:`send`.
         :param code: The code the user entered from their SMS.
+        :param session_jwt: Supabase session JWT for the authenticated user.
         :returns: Dict with ``valid`` (bool).
         :raises AtlaSentError: On network or auth failure.
         """
@@ -129,4 +141,5 @@ class SmsOtpClient:
                 "otp_id": otp_id,
                 "code": code,
             },
+            session_jwt,
         )

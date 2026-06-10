@@ -532,7 +532,8 @@ export class AtlaSentClient {
       (path, query) => this._get(path, query),
     );
     this.smsOtp = makeSmsOtpClient(
-      (path, body) => this._post(path, body),
+      this.baseUrl,
+      this.fetchImpl,
     );
     this.usageMetering = makeUsageMeteringClient(
       (path, query) => this._get(path, query),
