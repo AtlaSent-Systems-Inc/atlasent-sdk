@@ -8,6 +8,20 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Added
+
+- `EvaluateResponse.deny_code` — the stable machine code naming *why* a
+  non-allow decision was reached (e.g. `"SNAPSHOT_REQUIRED"`). `null` on
+  `allow`. Branch on this instead of parsing the human-readable `reason`.
+
+### Fixed
+
+- Canonical denials now capture the deny metadata correctly. `handler.ts`
+  emits **top-level** `deny_code` / `deny_reason`, but the client previously
+  read only the nested `denial.{reason,code}` shape — so canonical denials
+  surfaced with an empty `reason` and no code. The client now reads both
+  shapes (`deny_code ?? denial.code`, `deny_reason ?? denial.reason ?? reason`).
+
 ### Documentation
 
 - README: the Quickstart `deployGate()` example now passes the required

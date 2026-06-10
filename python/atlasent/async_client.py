@@ -237,11 +237,21 @@ class AsyncAtlaSentClient:
 
         if decision != "allow":
             denial = data.get("denial") if isinstance(data.get("denial"), dict) else {}
-            reason = denial.get("reason") if denial else data.get("reason", "")
+            # Canonical handler.ts emits top-level deny_reason / deny_code;
+            # the contract/legacy shape nests them under `denial`. Read both.
+            reason = (
+                data.get("deny_reason")
+                or (denial.get("reason") if denial else None)
+                or data.get("reason", "")
+            )
+            deny_code = data.get("deny_code") or (
+                denial.get("code") if denial else None
+            )
             raise AtlaSentDenied(
                 decision=decision,
                 permit_token=permit_token_raw or "",
                 reason=reason or "",
+                deny_code=deny_code,
                 request_id=request_id,
                 response_body=data,
             )
@@ -462,6 +472,7 @@ class AsyncAtlaSentClient:
                 decision="deny",
                 evaluation_id=exc.permit_token,
                 reason=exc.reason,
+                deny_code=exc.deny_code,
                 audit_hash=audit_hash,
             ) from None
 

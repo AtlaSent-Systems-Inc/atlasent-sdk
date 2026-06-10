@@ -357,6 +357,11 @@ class EvaluateResult(BaseModel):
     request_id: str = ""
     expires_at: str = ""
     denial: dict[str, Any] | None = None
+    # Stable machine code naming *why* a non-allow decision was reached
+    # (e.g. "SNAPSHOT_REQUIRED"). None on allow. Sourced from the wire
+    # top-level ``deny_code`` with a fallback to the legacy ``denial.code``
+    # shape. Branch on this, not on the human-readable ``reason``.
+    deny_code: str | None = None
     # Mirrors TypeScript SDK's ``reasons: string[]``. For deny/hold/escalate
     # decisions contains the policy engine's explanation(s); for allow often
     # empty. ``reason`` (singular) is the first element and kept for compat.
@@ -411,6 +416,27 @@ class EvaluateResult(BaseModel):
             and out.get("reason")
         ):
             out["denial"] = {"reason": out["reason"]}
+
+        # Canonical handler.ts emits top-level `deny_code` / `deny_reason`;
+        # the contract/legacy shape nests them under `denial`. Read both and
+        # surface `deny_code` + ensure `denial` carries reason and code.
+        _denial = out.get("denial") if isinstance(out.get("denial"), dict) else None
+        _deny_code = out.get("deny_code") or (_denial.get("code") if _denial else None)
+        _deny_reason = out.get("deny_reason") or (
+            _denial.get("reason") if _denial else None
+        )
+        if _deny_code is not None:
+            out["deny_code"] = _deny_code
+        if out.get("decision") not in (None, "allow") and (_deny_reason or _deny_code):
+            merged = dict(_denial or {})
+            if _deny_reason and "reason" not in merged:
+                merged["reason"] = _deny_reason
+            if _deny_code and "code" not in merged:
+                merged["code"] = _deny_code
+            if merged:
+                out["denial"] = merged
+            if not out.get("reason") and _deny_reason:
+                out["reason"] = _deny_reason
 
         # Now mirror canonical → legacy so consumers reading either shape see
         # consistent values.
