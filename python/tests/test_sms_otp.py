@@ -36,9 +36,7 @@ def _fake_response(body: Any) -> MagicMock:
 @contextmanager
 def _mock_urlopen(body: Any):
     resp = _fake_response(body)
-    with patch(
-        "atlasent.sms_otp.urllib_request.urlopen", return_value=resp
-    ) as m:
+    with patch("atlasent.sms_otp.urllib_request.urlopen", return_value=resp) as m:
         yield m
 
 

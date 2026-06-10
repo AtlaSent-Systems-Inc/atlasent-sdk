@@ -160,9 +160,7 @@ class TestListResponse:
         resp.read.return_value = b""
         resp.__enter__ = lambda s: s
         resp.__exit__ = MagicMock(return_value=False)
-        with patch(
-            "atlasent.usage_metering.urllib_request.urlopen", return_value=resp
-        ):
+        with patch("atlasent.usage_metering.urllib_request.urlopen", return_value=resp):
             result = UsageMeteringClient(_fake_client()).list()
         assert result == {}
 
