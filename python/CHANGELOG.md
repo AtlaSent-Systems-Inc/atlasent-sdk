@@ -1,5 +1,44 @@
 # Changelog
 
+## 2.17.0 -- 2026-06-10 -- SMS OTP + Usage Metering clients
+
+### Added
+
+- **`SmsOtpClient`** — new client for SMS OTP step-up authentication.
+  Wraps `POST /v1-sms-otp/send` and `POST /v1-sms-otp/verify`. JWT session
+  auth only (not API key).
+
+  ```python
+  from atlasent.sms_otp import SmsOtpClient
+
+  otp = SmsOtpClient(client)
+  result = otp.send(phone_e164="+15551234567", action_context="break_glass")
+  verification = otp.verify(otp_id=result["otp_id"], code="123456")
+  assert verification["valid"]
+  ```
+
+  Supported `action_context` values: `"break_glass"`, `"api_key_create"`,
+  `"governance_hold_approve"`.
+
+- **`UsageMeteringClient`** — new client for listing billable evaluation
+  records and fetching aggregated usage summaries. Requires scope
+  `usage:read`. Wraps `GET /v1-usage-metering` and
+  `GET /v1-usage-metering/summary`.
+
+  ```python
+  from atlasent.usage_metering import UsageMeteringClient
+
+  metering = UsageMeteringClient(client)
+  page = metering.list(limit=100, decision="allow")
+  summary = metering.summary(period="month")
+  print(summary["total_evaluations"])
+  ```
+
+- Both clients are exported from `atlasent` directly:
+  `from atlasent import SmsOtpClient, UsageMeteringClient`.
+
+---
+
 ## 2.16.0 -- 2026-06-04 -- evaluation_profile + override fields
 
 ### Added

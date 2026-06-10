@@ -6,6 +6,53 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## @atlasent/sdk 2.17.0 (2026-06-10)
+
+### New features
+
+#### `client.smsOtp` — SMS OTP step-up authentication
+
+New sub-client for sending and verifying one-time passcodes for session-level
+operations that require step-up authentication (`break_glass`, `api_key_create`,
+`governance_hold_approve`). JWT session auth only (not API key).
+
+```ts
+const { otp_id, expires_at } = await client.smsOtp.send({
+  phone_e164: "+15551234567",
+  action_context: "break_glass",
+});
+
+const { valid } = await client.smsOtp.verify({ otp_id, code: "123456" });
+```
+
+New types exported: `SmsOtpActionContext`, `SmsOtpSendRequest`,
+`SmsOtpSendResponse`, `SmsOtpVerifyRequest`, `SmsOtpVerifyResponse`,
+`SmsOtpSubClient`.
+
+#### `client.usageMetering` — usage metering
+
+New sub-client for listing billable evaluation records and fetching
+aggregated usage summaries by billing period. Requires scope `usage:read`.
+
+```ts
+// Paginated list of evaluation records
+const { data, next_cursor } = await client.usageMetering.list({
+  limit: 100,
+  decision: "allow",
+});
+
+// Aggregated summary
+const summary = await client.usageMetering.summary({ period: "month" });
+console.log(summary.total_evaluations, summary.billable_allows);
+```
+
+New types exported: `UsageMeteringPeriod`, `UsageMeteringRecord`,
+`UsageMeteringListResponse`, `UsageMeteringListParams`,
+`UsageMeterySummary`, `UsageMeteringSummaryParams`,
+`UsageMeteringSubClient`.
+
+---
+
 ## @atlasent/sdk 2.16.0 (2026-06-04)
 
 ### New features

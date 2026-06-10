@@ -283,6 +283,7 @@ from .siem import (
     siem_test_delivery,
     upsert_siem_config,
 )
+from .sms_otp import SmsOtpClient
 from .sso_client import SsoClient
 from .trust_root import (
     TrustRootKey,
@@ -355,6 +356,7 @@ from .verticals.security_actions import (
     protect_security_action,
     protect_security_incident_escalate,
 )
+from .usage_metering import UsageMeteringClient
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
 
@@ -373,6 +375,10 @@ __all__ = [
     "configure",
     "protect",
     "with_permit",
+    # SMS OTP step-up authentication.
+    "SmsOtpClient",
+    # Usage metering.
+    "UsageMeteringClient",
     # SCIM helpers + schema constants.
     "SCIM_USER_SCHEMA",
     "SCIM_GROUP_SCHEMA",
