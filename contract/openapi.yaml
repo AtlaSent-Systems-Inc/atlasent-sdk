@@ -458,13 +458,19 @@ components:
           description: "ISO 8601 timestamp at which the permit expires. Default TTL: 1 hour."
         denial:
           type: object
-          description: "Populated on non-allow decisions. Contains the policy-engine reason and a stable code."
+          description: "Populated on non-allow decisions. Contains the policy-engine reason and a stable code. NOTE: handler.ts currently emits the deny metadata as top-level deny_code / deny_reason (below); SDKs read both shapes. This nested form is retained for forward/legacy compatibility."
           properties:
             reason:
               type: string
             code:
               type: string
           additionalProperties: true
+        deny_code:
+          type: string
+          description: "Top-level stable machine code naming WHY a non-allow decision was reached (e.g. 'SNAPSHOT_REQUIRED', 'OUTSIDE_CHANGE_WINDOW'). This is what handler.ts actually emits today. Pin routing/alerting to this code, not to deny_reason. Absent on allow."
+        deny_reason:
+          type: string
+          description: "Top-level human-readable explanation accompanying deny_code. May change without notice — do not parse it. Absent on allow."
         mode:
           type: string
           enum: [live, shadow]
