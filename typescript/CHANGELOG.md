@@ -6,6 +6,17 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## Unreleased
+
+### Documentation
+
+- README: the Quickstart `deployGate()` example now passes the required
+  `stateSnapshot`, and a new "State snapshots (required)" section explains
+  that action classes default to `requires_state_snapshot = true` — omitting
+  the snapshot returns a `SNAPSHOT_REQUIRED` deny. `deployGate()` takes
+  camelCase `stateSnapshot`; the raw `evaluate()` takes top-level snake_case
+  `state_snapshot` (not part of `context`).
+
 ## @atlasent/sdk 2.16.0 (2026-06-04)
 
 ### New features

@@ -15,6 +15,7 @@ const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
 
 const gate = await client.deployGate({
   context: { repo: "atlasent/api", commit: process.env.GIT_SHA },
+  stateSnapshot: { source: "github-actions", complete: true }, // required — see below
 });
 
 if (!gate.allowed) {
@@ -26,6 +27,24 @@ if (!gate.allowed) {
 ```
 
 That's it. `deployGate()` performs the V1 Deploy Gate sequence against `production.deploy`: `evaluate()` calls `POST /v1-evaluate`, receives a permit when allowed, then `verifyPermit()` calls `POST /v1-verify-permit` before your deployment can run. A clean `deny` is returned as a block result — network / server / auth failures are thrown.
+
+## State snapshots (required)
+
+Action classes default to `requires_state_snapshot = true`, so **every** evaluate must carry a state snapshot. Omitting it returns a `SNAPSHOT_REQUIRED` deny (the action is blocked, never executed).
+
+- `deployGate()` takes a camelCase `stateSnapshot`: `{ source, complete, ... }`.
+- The raw `evaluate()` method takes the wire-shaped snake_case `state_snapshot` — a **top-level** field, not part of `context`:
+
+```ts
+const result = await client.evaluate({
+  action_type: "production.deploy",
+  actor_id: "agent:ci-bot",
+  context: { environment: "production" },
+  state_snapshot: { source: "github-actions", complete: true },
+});
+```
+
+The minimum payload is `{ source: "<your-system>", complete: true }`. Add any state your policy evaluates (git SHA, approval count, environment) under the snapshot. The hosted GitHub Action injects one automatically, so you only set it on direct SDK / API calls.
 
 ## Why two calls? (the mental model)
 
