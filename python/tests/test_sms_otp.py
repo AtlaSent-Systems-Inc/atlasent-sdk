@@ -14,6 +14,7 @@ from atlasent.sms_otp import SmsOtpClient
 
 BASE_URL = "https://api.atlasent.io"
 API_KEY = "ask_test_sms_otp"
+SESSION_JWT = "jwt-session-token"
 
 
 def _fake_client() -> MagicMock:
@@ -67,7 +68,7 @@ class TestSendPath:
     def test_hits_correct_endpoint(self):
         with _mock_urlopen(SEND_RESPONSE) as m:
             SmsOtpClient(_fake_client()).send(
-                phone_e164="+15551234567", action_context="break_glass"
+                phone_e164="+15551234567", action_context="break_glass", session_jwt=SESSION_JWT
             )
         req = m.call_args[0][0]
         assert req.full_url == f"{BASE_URL}/v1-sms-otp/send"
@@ -76,15 +77,15 @@ class TestSendPath:
     def test_authorization_header(self):
         with _mock_urlopen(SEND_RESPONSE) as m:
             SmsOtpClient(_fake_client()).send(
-                phone_e164="+15551234567", action_context="break_glass"
+                phone_e164="+15551234567", action_context="break_glass", session_jwt=SESSION_JWT
             )
         req = m.call_args[0][0]
-        assert req.get_header("Authorization") == f"Bearer {API_KEY}"
+        assert req.get_header("Authorization") == f"Bearer {SESSION_JWT}"
 
     def test_content_type_header(self):
         with _mock_urlopen(SEND_RESPONSE) as m:
             SmsOtpClient(_fake_client()).send(
-                phone_e164="+15551234567", action_context="break_glass"
+                phone_e164="+15551234567", action_context="break_glass", session_jwt=SESSION_JWT
             )
         req = m.call_args[0][0]
         assert req.get_header("Content-type") == "application/json"
@@ -97,7 +98,7 @@ class TestSendBody:
     def test_sends_phone_e164(self):
         with _mock_urlopen(SEND_RESPONSE) as m:
             SmsOtpClient(_fake_client()).send(
-                phone_e164="+15559876543", action_context="break_glass"
+                phone_e164="+15559876543", action_context="break_glass", session_jwt=SESSION_JWT
             )
         body = json.loads(m.call_args[0][0].data)
         assert body["phone_e164"] == "+15559876543"
@@ -105,7 +106,7 @@ class TestSendBody:
     def test_sends_action_context_break_glass(self):
         with _mock_urlopen(SEND_RESPONSE) as m:
             SmsOtpClient(_fake_client()).send(
-                phone_e164="+15551234567", action_context="break_glass"
+                phone_e164="+15551234567", action_context="break_glass", session_jwt=SESSION_JWT
             )
         body = json.loads(m.call_args[0][0].data)
         assert body["action_context"] == "break_glass"
@@ -113,7 +114,7 @@ class TestSendBody:
     def test_sends_action_context_api_key_create(self):
         with _mock_urlopen(SEND_RESPONSE) as m:
             SmsOtpClient(_fake_client()).send(
-                phone_e164="+15551234567", action_context="api_key_create"
+                phone_e164="+15551234567", action_context="api_key_create", session_jwt=SESSION_JWT
             )
         body = json.loads(m.call_args[0][0].data)
         assert body["action_context"] == "api_key_create"
@@ -121,7 +122,7 @@ class TestSendBody:
     def test_sends_action_context_governance_hold_approve(self):
         with _mock_urlopen(SEND_RESPONSE) as m:
             SmsOtpClient(_fake_client()).send(
-                phone_e164="+15551234567", action_context="governance_hold_approve"
+                phone_e164="+15551234567", action_context="governance_hold_approve", session_jwt=SESSION_JWT
             )
         body = json.loads(m.call_args[0][0].data)
         assert body["action_context"] == "governance_hold_approve"
@@ -134,14 +135,14 @@ class TestSendResponse:
     def test_returns_otp_id(self):
         with _mock_urlopen(SEND_RESPONSE):
             result = SmsOtpClient(_fake_client()).send(
-                phone_e164="+15551234567", action_context="break_glass"
+                phone_e164="+15551234567", action_context="break_glass", session_jwt=SESSION_JWT
             )
         assert result["otp_id"] == "otp_abc123"
 
     def test_returns_expires_at(self):
         with _mock_urlopen(SEND_RESPONSE):
             result = SmsOtpClient(_fake_client()).send(
-                phone_e164="+15551234567", action_context="break_glass"
+                phone_e164="+15551234567", action_context="break_glass", session_jwt=SESSION_JWT
             )
         assert result["expires_at"] == "2026-06-10T12:05:00Z"
 
@@ -152,16 +153,16 @@ class TestSendResponse:
 class TestVerifyPath:
     def test_hits_correct_endpoint(self):
         with _mock_urlopen(VERIFY_RESPONSE_VALID) as m:
-            SmsOtpClient(_fake_client()).verify(otp_id="otp_abc123", code="123456")
+            SmsOtpClient(_fake_client()).verify(otp_id="otp_abc123", code="123456", session_jwt=SESSION_JWT)
         req = m.call_args[0][0]
         assert req.full_url == f"{BASE_URL}/v1-sms-otp/verify"
         assert req.get_method() == "POST"
 
     def test_authorization_header(self):
         with _mock_urlopen(VERIFY_RESPONSE_VALID) as m:
-            SmsOtpClient(_fake_client()).verify(otp_id="otp_abc123", code="123456")
+            SmsOtpClient(_fake_client()).verify(otp_id="otp_abc123", code="123456", session_jwt=SESSION_JWT)
         req = m.call_args[0][0]
-        assert req.get_header("Authorization") == f"Bearer {API_KEY}"
+        assert req.get_header("Authorization") == f"Bearer {SESSION_JWT}"
 
 
 # ── verify — request body ──────────────────────────────────────────────────────
@@ -170,13 +171,13 @@ class TestVerifyPath:
 class TestVerifyBody:
     def test_sends_otp_id(self):
         with _mock_urlopen(VERIFY_RESPONSE_VALID) as m:
-            SmsOtpClient(_fake_client()).verify(otp_id="otp_xyz789", code="000000")
+            SmsOtpClient(_fake_client()).verify(otp_id="otp_xyz789", code="000000", session_jwt=SESSION_JWT)
         body = json.loads(m.call_args[0][0].data)
         assert body["otp_id"] == "otp_xyz789"
 
     def test_sends_code(self):
         with _mock_urlopen(VERIFY_RESPONSE_VALID) as m:
-            SmsOtpClient(_fake_client()).verify(otp_id="otp_abc", code="654321")
+            SmsOtpClient(_fake_client()).verify(otp_id="otp_abc", code="654321", session_jwt=SESSION_JWT)
         body = json.loads(m.call_args[0][0].data)
         assert body["code"] == "654321"
 
@@ -188,14 +189,14 @@ class TestVerifyResponse:
     def test_returns_valid_true(self):
         with _mock_urlopen(VERIFY_RESPONSE_VALID):
             result = SmsOtpClient(_fake_client()).verify(
-                otp_id="otp_abc123", code="123456"
+                otp_id="otp_abc123", code="123456", session_jwt=SESSION_JWT
             )
         assert result["valid"] is True
 
     def test_returns_valid_false(self):
         with _mock_urlopen(VERIFY_RESPONSE_INVALID):
             result = SmsOtpClient(_fake_client()).verify(
-                otp_id="otp_abc123", code="000000"
+                otp_id="otp_abc123", code="000000", session_jwt=SESSION_JWT
             )
         assert result["valid"] is False
 
@@ -211,7 +212,7 @@ class TestErrorHandling:
         ):
             with pytest.raises(AtlaSentError, match="SMS OTP client request"):
                 SmsOtpClient(_fake_client()).send(
-                    phone_e164="+15551234567", action_context="break_glass"
+                    phone_e164="+15551234567", action_context="break_glass", session_jwt=SESSION_JWT
                 )
 
     def test_verify_network_error_raises_atlasent_error(self):
@@ -220,4 +221,4 @@ class TestErrorHandling:
             side_effect=OSError("connection refused"),
         ):
             with pytest.raises(AtlaSentError, match="SMS OTP client request"):
-                SmsOtpClient(_fake_client()).verify(otp_id="otp_x", code="111")
+                SmsOtpClient(_fake_client()).verify(otp_id="otp_x", code="111", session_jwt=SESSION_JWT)
