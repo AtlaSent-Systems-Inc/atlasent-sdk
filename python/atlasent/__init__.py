@@ -293,6 +293,7 @@ from .trust_root import (
     _set_global_trust_root_manager_for_tests,
     get_global_trust_root_manager,
 )
+from .usage_metering import UsageMeteringClient
 from .v2_endpoints import (
     BATCH_PATH as V2_BATCH_PATH,
 )
@@ -356,7 +357,6 @@ from .verticals.security_actions import (
     protect_security_action,
     protect_security_incident_escalate,
 )
-from .usage_metering import UsageMeteringClient
 from .webhook import WebhookVerificationError, assert_webhook, verify_webhook
 from .with_permit import with_permit
 
