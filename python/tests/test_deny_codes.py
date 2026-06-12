@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from atlasent import DenyCode, requires_human_approval
-from atlasent import __all__ as ATLASENT_ALL
+from atlasent import __all__ as atlasent_all
 from atlasent.exceptions import AtlaSentDenied
 
 
@@ -36,8 +36,8 @@ def test_exception_predicate_false_for_other_codes() -> None:
 
 
 def test_exports_are_public() -> None:
-    assert "DenyCode" in ATLASENT_ALL
-    assert "requires_human_approval" in ATLASENT_ALL
+    assert "DenyCode" in atlasent_all
+    assert "requires_human_approval" in atlasent_all
 
 
 def test_known_codes_are_upper_snake() -> None:
