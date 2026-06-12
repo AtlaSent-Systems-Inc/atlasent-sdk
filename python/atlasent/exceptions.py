@@ -183,6 +183,17 @@ class AtlaSentDenied(AtlaSentError):
             response_body=response_body,
         )
 
+    @property
+    def is_human_approval_required(self) -> bool:
+        """True when the denial is ``HUMAN_APPROVAL_REQUIRED``.
+
+        Lets callers route the action into an approval queue instead of
+        treating it as a hard refusal. See :mod:`atlasent.deny_codes`.
+        """
+        from .deny_codes import requires_human_approval
+
+        return requires_human_approval(self.deny_code)
+
 
 class ConfigurationError(AtlaSentError):
     """Raised when the SDK is misconfigured (e.g., missing API key)."""
