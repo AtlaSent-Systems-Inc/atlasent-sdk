@@ -37,16 +37,18 @@ class DenyCode:
     BOUNDARY_VIOLATION: Final = "BOUNDARY_VIOLATION"
     PERMIT_UNBOUND_EXECUTION: Final = "PERMIT_UNBOUND_EXECUTION"
     EXECUTION_PAYLOAD_HASH_REQUIRED: Final = "EXECUTION_PAYLOAD_HASH_REQUIRED"
-    #: A class flagged ``requires_human_approval`` was evaluated without a
-    #: verified human approval artifact. The action needs a human in the loop;
-    #: present an approval artifact and re-evaluate.
-    HUMAN_APPROVAL_REQUIRED: Final = "HUMAN_APPROVAL_REQUIRED"
+    #: Fewer verified human approvals than policy requires. Emitted (among
+    #: other cases) by the per-class human-in-the-loop gate
+    #: (``requires_human_approval=true`` reached without a verified approval).
+    #: A human must approve; route the action to an approval queue and
+    #: re-evaluate. ``retry_advice`` is ``after_human_approval``.
+    INSUFFICIENT_APPROVALS: Final = "INSUFFICIENT_APPROVALS"
 
 
 def requires_human_approval(deny_code: str | None) -> bool:
     """True when ``deny_code`` indicates a human approval is required.
 
-    Recognizes :attr:`DenyCode.HUMAN_APPROVAL_REQUIRED`. Useful to route a
+    Recognizes :attr:`DenyCode.INSUFFICIENT_APPROVALS`. Useful to route a
     denied action into an approval queue rather than treating it as a hard
     refusal::
 
@@ -58,4 +60,4 @@ def requires_human_approval(deny_code: str | None) -> bool:
             else:
                 raise
     """
-    return deny_code == DenyCode.HUMAN_APPROVAL_REQUIRED
+    return deny_code == DenyCode.INSUFFICIENT_APPROVALS

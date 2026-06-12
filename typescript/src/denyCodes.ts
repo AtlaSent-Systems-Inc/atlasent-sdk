@@ -29,11 +29,12 @@ export const DENY_CODES = {
   PERMIT_UNBOUND_EXECUTION: "PERMIT_UNBOUND_EXECUTION",
   EXECUTION_PAYLOAD_HASH_REQUIRED: "EXECUTION_PAYLOAD_HASH_REQUIRED",
   /**
-   * A class flagged `requires_human_approval` was evaluated without a verified
-   * human approval artifact. The action needs a human in the loop; present an
-   * approval artifact and re-evaluate.
+   * Fewer verified human approvals than policy requires — emitted (among other
+   * cases) by the per-class human-in-the-loop gate (`requires_human_approval`
+   * reached without a verified approval). A human must approve; route to an
+   * approval queue and re-evaluate. `retry_advice` is `after_human_approval`.
    */
-  HUMAN_APPROVAL_REQUIRED: "HUMAN_APPROVAL_REQUIRED",
+  INSUFFICIENT_APPROVALS: "INSUFFICIENT_APPROVALS",
 } as const;
 
 /** A documented deny code. The wire `deny_code` may also be any other string. */
@@ -60,5 +61,5 @@ export function isHumanApprovalRequired(
   input: string | null | undefined | { deny_code?: string | null },
 ): boolean {
   const code = typeof input === "string" || input == null ? input : input.deny_code;
-  return code === DENY_CODES.HUMAN_APPROVAL_REQUIRED;
+  return code === DENY_CODES.INSUFFICIENT_APPROVALS;
 }

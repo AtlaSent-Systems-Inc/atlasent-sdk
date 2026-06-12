@@ -185,7 +185,7 @@ class AtlaSentDenied(AtlaSentError):
 
     @property
     def is_human_approval_required(self) -> bool:
-        """True when the denial is ``HUMAN_APPROVAL_REQUIRED``.
+        """True when the denial is ``INSUFFICIENT_APPROVALS``.
 
         Lets callers route the action into an approval queue instead of
         treating it as a hard refusal. See :mod:`atlasent.deny_codes`.

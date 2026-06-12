@@ -14,7 +14,7 @@ follows [semver](https://semver.org/): breaking changes bump the major
   non-allow decision was reached (e.g. `"SNAPSHOT_REQUIRED"`). `null` on
   `allow`. Branch on this instead of parsing the human-readable `reason`.
 - `DENY_CODES` (constant registry of documented deny codes, incl.
-  `HUMAN_APPROVAL_REQUIRED`), the `DenyCode` type, and
+  `INSUFFICIENT_APPROVALS`), the `DenyCode` type, and
   `isHumanApprovalRequired(input)` — accepts a raw code, an evaluate
   response, or an `AtlaSentDeniedError`. Route a denied action into an
   approval queue instead of treating it as a hard refusal. The wire

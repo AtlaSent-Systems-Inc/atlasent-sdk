@@ -11,7 +11,7 @@
   The denial's string form now includes the code (`Action denied: deny
   [SNAPSHOT_REQUIRED] — …`).
 - `atlasent.DenyCode` (constant registry of documented deny codes, incl.
-  `HUMAN_APPROVAL_REQUIRED`) and `atlasent.requires_human_approval(code)`.
+  `INSUFFICIENT_APPROVALS`) and `atlasent.requires_human_approval(code)`.
   Plus `AtlaSentDenied.is_human_approval_required` — route a denied action
   into an approval queue instead of treating it as a hard refusal. The wire
   `deny_code` stays an open string; the registry is convenience, not a
