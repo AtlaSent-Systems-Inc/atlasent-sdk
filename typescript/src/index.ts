@@ -1165,3 +1165,8 @@ export {
   type EnterpriseInquiryRequest,
   type EnterpriseInquiryResponse,
 } from "./enterpriseInquiry.js";
+export {
+  DENY_CODES,
+  isHumanApprovalRequired,
+  type DenyCode,
+} from "./denyCodes.js";

@@ -132,6 +132,7 @@ from .context_envelope import (
     ContextSignal,
     RecordContextEnvelopeInput,
 )
+from .deny_codes import DenyCode, requires_human_approval
 from .evidence_engine import (
     ActionEvidenceBundle,
     ComplianceControlCoverage,
@@ -414,6 +415,8 @@ __all__ = [
     "ContextSignal",
     "ContextNamespaceEntry",
     "RecordContextEnvelopeInput",
+    "DenyCode",
+    "requires_human_approval",
     "CONTEXT_NAMESPACES",
     "authorize",
     "evaluate",
