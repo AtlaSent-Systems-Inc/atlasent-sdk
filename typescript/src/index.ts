@@ -1170,3 +1170,19 @@ export {
   isHumanApprovalRequired,
   type DenyCode,
 } from "./denyCodes.js";
+
+// ── Authorization taxonomy (families / condition types / reason codes) ────────
+export {
+  TAXONOMY_SCHEMA_VERSION,
+  ACTION_CLASS_FAMILIES,
+  CONDITION_TYPES,
+  REASON_CODES,
+  familyForSlug,
+  getReasonCode,
+  isActionClassFamilyId,
+  isConditionTypeId,
+  isReasonCode,
+  type ActionClassFamily,
+  type ConditionType,
+  type ReasonCodeEntry,
+} from "./taxonomy.js";

@@ -85,6 +85,13 @@ target-version = "py310"
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["N818"]
 
+[tool.ruff.lint.per-file-ignores]
+# Generated taxonomy data module: registry entries (deny-code meanings,
+# condition summaries) are single-line dict literals that exceed the 88-char
+# limit. The data is generated from the canonical registry
+# (atlasent/contract/taxonomy/v1), not hand-formatted, so E501 is waived here.
+"atlasent/taxonomy.py" = ["E501"]
+
 [tool.black]
 line-length = 88
 target-version = ["py310"]
