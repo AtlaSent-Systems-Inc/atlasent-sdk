@@ -11,7 +11,7 @@ to enumerate the policy condition types, and to look up reason-code metadata.
 
 from __future__ import annotations
 
-from typing import Final, Optional
+from typing import Final
 
 __all__ = [
     "TAXONOMY_SCHEMA_VERSION",
@@ -114,12 +114,12 @@ _CONDITION_IDS: Final = frozenset(c["condition_id"] for c in CONDITION_TYPES)
 _REASON_CODES: Final = frozenset(r["code"] for r in REASON_CODES)
 
 
-def family_for_slug(slug: str) -> Optional[str]:
+def family_for_slug(slug: str) -> str | None:
     """Roll an action_type slug up to its canonical family id, or None if unmapped."""
     return _SLUG_TO_FAMILY.get(slug)
 
 
-def get_reason_code(code: str) -> Optional[dict]:
+def get_reason_code(code: str) -> dict | None:
     """Look up reason-code metadata, or None if not a known code."""
     for r in REASON_CODES:
         if r["code"] == code:

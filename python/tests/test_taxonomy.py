@@ -1,6 +1,8 @@
 """Tests for the canonical authorization taxonomy module."""
 
-from atlasent import taxonomy as t
+import atlasent
+
+t = atlasent.taxonomy
 
 
 def test_canonical_counts_and_version():
@@ -45,7 +47,5 @@ def test_internal_consistency():
 
 
 def test_exported_from_package():
-    import atlasent
-
     assert atlasent.family_for_slug("production.deploy") == "production.deploy"
     assert "TAXONOMY_SCHEMA_VERSION" in atlasent.__all__

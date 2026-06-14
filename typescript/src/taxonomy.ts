@@ -115,16 +115,16 @@ export const REASON_CODES: readonly ReasonCodeEntry[] = [
   { code: "ESCALATE_REQUIRED", category: "policy", severity: "warn", retryAdvice: "after_human_approval", tier: "safe", decision: "escalate", meaning: "Inconsistent state; a higher-authority reviewer must decide." },
 ];
 
-const FAMILY_IDS: ReadonlySet<string> = new Set(ACTION_CLASS_FAMILIES.map((f) => f.familyId));
-const CONDITION_IDS: ReadonlySet<string> = new Set(CONDITION_TYPES.map((c) => c.conditionId));
-const REASON_CODE_SET: ReadonlySet<string> = new Set(REASON_CODES.map((r) => r.code));
-const SLUG_TO_FAMILY: ReadonlyMap<string, string> = new Map(
-  ACTION_CLASS_FAMILIES.flatMap((f) => f.exampleSlugs.map((s) => [s, f.familyId] as const)),
-);
+// Helpers scan the (tiny, fixed) arrays on demand. No module-level Set/Map:
+// keeping the module free of top-level side effects lets bundlers tree-shake
+// the whole taxonomy out of the core enforcement path when it isn't used.
 
 /** Roll an action_type slug up to its canonical family id, or undefined if unmapped. */
 export function familyForSlug(slug: string): string | undefined {
-  return SLUG_TO_FAMILY.get(slug);
+  for (const f of ACTION_CLASS_FAMILIES) {
+    if (f.exampleSlugs.includes(slug)) return f.familyId;
+  }
+  return undefined;
 }
 
 /** Look up reason-code metadata, or undefined if not a known code. */
@@ -133,13 +133,13 @@ export function getReasonCode(code: string): ReasonCodeEntry | undefined {
 }
 
 export function isActionClassFamilyId(value: string): boolean {
-  return FAMILY_IDS.has(value);
+  return ACTION_CLASS_FAMILIES.some((f) => f.familyId === value);
 }
 
 export function isConditionTypeId(value: string): boolean {
-  return CONDITION_IDS.has(value);
+  return CONDITION_TYPES.some((c) => c.conditionId === value);
 }
 
 export function isReasonCode(value: string): boolean {
-  return REASON_CODE_SET.has(value);
+  return REASON_CODES.some((r) => r.code === value);
 }
