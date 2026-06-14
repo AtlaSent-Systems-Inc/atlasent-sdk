@@ -4,6 +4,13 @@
 
 ### Added
 
+- `atlasent.taxonomy` — the canonical authorization taxonomy:
+  `ACTION_CLASS_FAMILIES` (10), `CONDITION_TYPES` (26), `REASON_CODES` (31,
+  the frozen deny-code set), plus `family_for_slug()` (roll an `action_type`
+  slug up to one of the 10 families), `get_reason_code()`, and
+  `is_action_class_family_id` / `is_condition_type_id` / `is_reason_code`
+  guards. Generated from the canonical registry (`atlasent/contract/taxonomy/v1`).
+
 - `EvaluateResult.deny_code` and `AtlaSentDenied.deny_code` /
   `AtlaSentDeniedError.deny_code` — the stable machine code naming *why* a
   non-allow decision was reached (e.g. `"SNAPSHOT_REQUIRED"`). `None` on

@@ -133,6 +133,17 @@ from .context_envelope import (
     RecordContextEnvelopeInput,
 )
 from .deny_codes import DenyCode, requires_human_approval
+from .taxonomy import (
+    ACTION_CLASS_FAMILIES,
+    CONDITION_TYPES,
+    REASON_CODES,
+    TAXONOMY_SCHEMA_VERSION,
+    family_for_slug,
+    get_reason_code,
+    is_action_class_family_id,
+    is_condition_type_id,
+    is_reason_code,
+)
 from .evidence_engine import (
     ActionEvidenceBundle,
     ComplianceControlCoverage,
@@ -417,6 +428,15 @@ __all__ = [
     "RecordContextEnvelopeInput",
     "DenyCode",
     "requires_human_approval",
+    "ACTION_CLASS_FAMILIES",
+    "CONDITION_TYPES",
+    "REASON_CODES",
+    "TAXONOMY_SCHEMA_VERSION",
+    "family_for_slug",
+    "get_reason_code",
+    "is_action_class_family_id",
+    "is_condition_type_id",
+    "is_reason_code",
     "CONTEXT_NAMESPACES",
     "authorize",
     "evaluate",

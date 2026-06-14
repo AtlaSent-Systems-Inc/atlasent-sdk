@@ -10,6 +10,13 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ### Added
 
+- `taxonomy` module — the canonical authorization taxonomy:
+  `ACTION_CLASS_FAMILIES` (10), `CONDITION_TYPES` (26), `REASON_CODES` (31,
+  the frozen deny-code set), plus `familyForSlug()` (roll an `action_type`
+  slug up to one of the 10 families), `getReasonCode()`, and
+  `isActionClassFamilyId` / `isConditionTypeId` / `isReasonCode` guards.
+  Generated from the canonical registry (`atlasent/contract/taxonomy/v1`).
+
 - `EvaluateResponse.deny_code` — the stable machine code naming *why* a
   non-allow decision was reached (e.g. `"SNAPSHOT_REQUIRED"`). `null` on
   `allow`. Branch on this instead of parsing the human-readable `reason`.
