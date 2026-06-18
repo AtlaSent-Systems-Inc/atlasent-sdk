@@ -15,6 +15,8 @@ Client SDKs for **AtlaSent execution-time authorization infrastructure** — one
 
 Fail-closed by design — no protected action proceeds without an explicit, server-verified permit.
 
+Authorization can be granted by many sources — a human approval, a policy rule, a deployment gate, a risk-engine decision, or a signed external authorization. The SDK doesn't care which: it calls `authorize()` before the action and proceeds only on a server-issued permit. Human approval is one source of authority; the permit is the artifact every source produces.
+
 > AtlaSent is **not** a feature flag platform. A flag controls
 > whether a behavior is enabled; AtlaSent controls whether an action
 > is authorized to execute. See
