@@ -101,7 +101,7 @@ jobs:
       # Gate closed: if the permit is not verified the job exits here and
       # nothing builds or publishes. Same dogfood gate as publish-pypi.yml.
       - name: AtlaSent release gate
-        uses: atlasent/action@v1
+        uses: AtlaSent-Systems-Inc/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
         with:
