@@ -6,6 +6,30 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## 2.18.0
+
+### Added
+
+- `AtlaSentClient.complianceControls({ framework?, from?, to? })` — read the
+  compliance control catalog (`GET /v1-compliance-controls`) resolved to
+  live enforcement status per regulatory clause (`enforced` / `partial` /
+  `not_enforced` / `no_data` / `attested`). Optional `framework` filters to
+  one regime; `from`/`to` bound the evaluation window. Read-only — requires
+  the `compliance:read` scope.
+- `AtlaSentClient.complianceEvidencePack({ framework, from?, to? })` — fetch
+  a signed, self-contained compliance evidence pack for one framework
+  (`GET /v1-compliance-evidence-pack`). `framework` is required. The returned
+  `bundle` is hashable offline against `sha256`, and `signature` /
+  `signingStatus` / `keyId` carry the signing state.
+- New exported result/query types: `ComplianceControlsResponse`,
+  `ComplianceControlsQuery`, `ComplianceEvidencePackResponse`,
+  `ComplianceEvidencePackQuery`, plus `ComplianceControl`,
+  `ComplianceEvidenceControl`, `ComplianceEvidenceBundle`,
+  `ComplianceSummary`, `ComplianceWindow`, and `ComplianceControlStatus`.
+- Contract schemas `compliance-controls.schema.json` and
+  `compliance-evidence-pack.schema.json`; the drift detector now pins both
+  read endpoints.
+
 ## Unreleased
 
 ### Added

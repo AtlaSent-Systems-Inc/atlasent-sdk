@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlasent.io/contract/v1/compliance-evidence-pack.schema.json",
+  "title": "ComplianceEvidencePackResponse",
+  "description": "Wire response returned by GET /v1-compliance-evidence-pack. Produces a signed, self-contained evidence bundle for one regulatory framework. Read-only; requires the `compliance:read` scope. `framework` is REQUIRED; `from` and `to` narrow the window.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "framework",
+    "window",
+    "generated_at",
+    "summary",
+    "sha256",
+    "signature",
+    "signing_status",
+    "key_id",
+    "bundle"
+  ],
+  "properties": {
+    "framework": {
+      "type": "string",
+      "description": "Framework code the evidence pack covers (e.g. 'cfr_part_11'). Always present — the endpoint requires a `framework` query param."
+    },
+    "window": {
+      "type": "object",
+      "description": "Resolved evaluation window the pack was computed over.",
+      "additionalProperties": true,
+      "properties": {
+        "from": { "type": ["string", "null"] },
+        "to": { "type": ["string", "null"] }
+      }
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp at which the server generated the pack."
+    },
+    "summary": {
+      "type": "object",
+      "description": "Roll-up of control statuses across the bundle.",
+      "additionalProperties": true,
+      "required": ["enforced", "partial", "not_enforced", "no_data", "attested", "total"],
+      "properties": {
+        "enforced": { "type": "integer", "minimum": 0 },
+        "partial": { "type": "integer", "minimum": 0 },
+        "not_enforced": { "type": "integer", "minimum": 0 },
+        "no_data": { "type": "integer", "minimum": 0 },
+        "attested": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "description": "SHA-256 hex digest of the canonical `bundle` payload. Recompute over `bundle` to verify integrity offline.",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "signature": {
+      "type": "string",
+      "description": "Detached signature over `sha256` (or the canonical bundle). Empty/unverifiable when `signing_status` != 'signed'."
+    },
+    "signing_status": {
+      "type": "string",
+      "description": "Whether the pack was signed and with what key state (e.g. 'signed', 'unsigned')."
+    },
+    "key_id": {
+      "type": ["string", "null"],
+      "description": "Identifier of the signing key used. null when the pack is unsigned."
+    },
+    "bundle": {
+      "type": "object",
+      "description": "The self-contained, hashable evidence payload. `sha256` is computed over this object.",
+      "additionalProperties": true,
+      "required": ["schema", "framework", "window", "org_id", "summary", "controls"],
+      "properties": {
+        "schema": { "type": "string" },
+        "framework": { "type": "string" },
+        "window": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "from": { "type": ["string", "null"] },
+            "to": { "type": ["string", "null"] }
+          }
+        },
+        "org_id": { "type": "string" },
+        "summary": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["enforced", "partial", "not_enforced", "no_data", "attested", "total"],
+          "properties": {
+            "enforced": { "type": "integer", "minimum": 0 },
+            "partial": { "type": "integer", "minimum": 0 },
+            "not_enforced": { "type": "integer", "minimum": 0 },
+            "no_data": { "type": "integer", "minimum": 0 },
+            "attested": { "type": "integer", "minimum": 0 },
+            "total": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "controls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "clause_id",
+              "framework_code",
+              "section",
+              "title",
+              "requirement",
+              "atlasent_primitive",
+              "status_query",
+              "evidence_source",
+              "status",
+              "metric"
+            ],
+            "properties": {
+              "clause_id": { "type": "string" },
+              "framework_code": { "type": "string" },
+              "section": { "type": "string" },
+              "title": { "type": "string" },
+              "requirement": { "type": "string" },
+              "atlasent_primitive": { "type": "string" },
+              "status_query": { "type": "string" },
+              "evidence_source": { "type": "string" },
+              "status": {
+                "type": "string",
+                "enum": ["enforced", "partial", "not_enforced", "no_data", "attested"]
+              },
+              "metric": {
+                "description": "Raw aggregate the status was derived from. Treat as opaque."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

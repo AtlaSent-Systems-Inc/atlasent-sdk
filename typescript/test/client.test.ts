@@ -1167,6 +1167,195 @@ describe("keySelf()", () => {
   });
 });
 
+describe("complianceControls()", () => {
+  const CONTROLS_WIRE = {
+    framework: "cfr_part_11",
+    window: { from: "2026-05-01T00:00:00Z", to: "2026-06-01T00:00:00Z" },
+    generated_at: "2026-06-19T00:00:00Z",
+    summary: {
+      enforced: 8,
+      partial: 2,
+      not_enforced: 1,
+      no_data: 1,
+      attested: 0,
+      total: 12,
+    },
+    controls: [
+      {
+        clause_id: "11.10(a)",
+        framework_code: "cfr_part_11",
+        section: "11.10",
+        title: "Validation of systems",
+        requirement: "Validation of systems to ensure accuracy.",
+        atlasent_primitive: "execution_evaluations",
+        status_query: "evaluations_present_30d",
+        evidence_source: "execution_evaluations",
+        doc_ref: "https://docs/cfr-11-10a",
+        display_order: 1,
+        status: "enforced",
+        metric: { count: 42 },
+      },
+    ],
+    truncated: false,
+  };
+
+  it("issues a GET to /v1-compliance-controls with query params", async () => {
+    const fetchImpl = mockFetch((url, init) => {
+      expect(url).toMatch(/\/v1-compliance-controls\?/);
+      expect(url).toContain("framework=cfr_part_11");
+      expect(url).toContain("from=2026-05-01");
+      expect(url).toContain("to=2026-06-01");
+      expect(init.method).toBe("GET");
+      expect(init.body).toBeUndefined();
+      return jsonResponse(CONTROLS_WIRE);
+    });
+    const client = makeClient(fetchImpl);
+    const result = await client.complianceControls({
+      framework: "cfr_part_11",
+      from: "2026-05-01",
+      to: "2026-06-01",
+    });
+
+    expect(result.framework).toBe("cfr_part_11");
+    expect(result.window).toEqual({
+      from: "2026-05-01T00:00:00Z",
+      to: "2026-06-01T00:00:00Z",
+    });
+    expect(result.generatedAt).toBe("2026-06-19T00:00:00Z");
+    expect(result.summary.total).toBe(12);
+    expect(result.controls).toHaveLength(1);
+    expect(result.controls[0]?.status).toBe("enforced");
+    expect(result.truncated).toBe(false);
+    expect(result.rateLimit).toBeNull();
+  });
+
+  it("omits query params when called with no args and defaults framework to null", async () => {
+    const fetchImpl = mockFetch((url) => {
+      expect(url).toMatch(/\/v1-compliance-controls$/);
+      return jsonResponse({
+        framework: null,
+        window: { from: null, to: null },
+        generated_at: "2026-06-19T00:00:00Z",
+        summary: {
+          enforced: 0,
+          partial: 0,
+          not_enforced: 0,
+          no_data: 0,
+          attested: 0,
+          total: 0,
+        },
+        controls: [],
+        // truncated omitted → defaults to false
+      });
+    });
+    const client = makeClient(fetchImpl);
+    const result = await client.complianceControls();
+    expect(result.framework).toBeNull();
+    expect(result.window).toEqual({ from: null, to: null });
+    expect(result.truncated).toBe(false);
+  });
+
+  it("throws bad_response when `controls` is missing", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({ generated_at: "2026-06-19T00:00:00Z" }),
+    );
+    const client = makeClient(fetchImpl);
+    await expect(client.complianceControls()).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+});
+
+describe("complianceEvidencePack()", () => {
+  const PACK_WIRE = {
+    framework: "cfr_part_11",
+    window: { from: "2026-05-01T00:00:00Z", to: "2026-06-01T00:00:00Z" },
+    generated_at: "2026-06-19T00:00:00Z",
+    summary: {
+      enforced: 8,
+      partial: 2,
+      not_enforced: 1,
+      no_data: 1,
+      attested: 0,
+      total: 12,
+    },
+    sha256: "a".repeat(64),
+    signature: "ed25519:abc",
+    signing_status: "signed",
+    key_id: "v1",
+    bundle: {
+      schema: "atlasent.compliance.evidence_pack.v1",
+      framework: "cfr_part_11",
+      window: { from: "2026-05-01T00:00:00Z", to: "2026-06-01T00:00:00Z" },
+      org_id: "123e4567-e89b-12d3-a456-426614174000",
+      summary: {
+        enforced: 8,
+        partial: 2,
+        not_enforced: 1,
+        no_data: 1,
+        attested: 0,
+        total: 12,
+      },
+      controls: [],
+    },
+  };
+
+  it("issues a GET to /v1-compliance-evidence-pack and maps the signed bundle", async () => {
+    const fetchImpl = mockFetch((url, init) => {
+      expect(url).toMatch(/\/v1-compliance-evidence-pack\?/);
+      expect(url).toContain("framework=cfr_part_11");
+      expect(init.method).toBe("GET");
+      expect(init.body).toBeUndefined();
+      return jsonResponse(PACK_WIRE);
+    });
+    const client = makeClient(fetchImpl);
+    const result = await client.complianceEvidencePack({
+      framework: "cfr_part_11",
+      from: "2026-05-01",
+      to: "2026-06-01",
+    });
+
+    expect(result.framework).toBe("cfr_part_11");
+    expect(result.generatedAt).toBe("2026-06-19T00:00:00Z");
+    expect(result.sha256).toBe("a".repeat(64));
+    expect(result.signature).toBe("ed25519:abc");
+    expect(result.signingStatus).toBe("signed");
+    expect(result.keyId).toBe("v1");
+    expect(result.bundle.schema).toBe("atlasent.compliance.evidence_pack.v1");
+    expect(result.bundle.org_id).toBe("123e4567-e89b-12d3-a456-426614174000");
+    expect(result.rateLimit).toBeNull();
+  });
+
+  it("throws bad_request when framework is missing", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(PACK_WIRE));
+    const client = makeClient(fetchImpl);
+    await expect(
+      // @ts-expect-error — deliberately omit required framework
+      client.complianceEvidencePack({}),
+    ).rejects.toMatchObject({ code: "bad_request" });
+  });
+
+  it("defaults key_id to null when absent", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({ ...PACK_WIRE, key_id: undefined, signing_status: "unsigned" }),
+    );
+    const client = makeClient(fetchImpl);
+    const result = await client.complianceEvidencePack({ framework: "cfr_part_11" });
+    expect(result.keyId).toBeNull();
+    expect(result.signingStatus).toBe("unsigned");
+  });
+
+  it("throws bad_response when `bundle` is missing", async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse({ framework: "cfr_part_11", sha256: "a".repeat(64) }),
+    );
+    const client = makeClient(fetchImpl);
+    await expect(
+      client.complianceEvidencePack({ framework: "cfr_part_11" }),
+    ).rejects.toMatchObject({ code: "bad_response" });
+  });
+});
+
 describe("listAuditEvents()", () => {
   const EVENT_ALPHA = {
     id: "evt_a",

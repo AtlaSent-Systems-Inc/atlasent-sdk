@@ -39,6 +39,10 @@ import type {
   AssertionSubmitInput,
   AssertionSubmitResult,
   AtlaSentClientOptions,
+  ComplianceControlsResponse,
+  ComplianceControlsQuery,
+  ComplianceEvidencePackResponse,
+  ComplianceEvidencePackQuery,
   Decision,
   AuditEventsResult,
   AuditExportRequest,
@@ -208,7 +212,7 @@ import type { GetApprovalSlaResponse } from "./approvalsSla.js";
 
 const DEFAULT_BASE_URL = "https://api.atlasent.io";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const SDK_VERSION = "2.17.0";
+const SDK_VERSION = "2.18.0";
 
 /**
  * Guard flag: emit the browser-environment warning at most once per
@@ -436,6 +440,85 @@ interface ApiKeySelfWire {
   rate_limit_per_minute: number;
   client_ip?: string | null;
   expires_at?: string | null;
+}
+
+/** Resolved evaluation window echoed back on compliance read endpoints. */
+interface ComplianceWindowWire {
+  from: string | null;
+  to: string | null;
+}
+
+/** Status roll-up shared by both compliance read endpoints. */
+interface ComplianceSummaryWire {
+  enforced: number;
+  partial: number;
+  not_enforced: number;
+  no_data: number;
+  attested: number;
+  total: number;
+}
+
+/** A single resolved control row from `GET /v1-compliance-controls`. */
+interface ComplianceControlWire {
+  clause_id: string;
+  framework_code: string;
+  section: string;
+  title: string;
+  requirement: string;
+  atlasent_primitive: string;
+  status_query: string;
+  evidence_source: string;
+  doc_ref: string | null;
+  display_order: number;
+  status: "enforced" | "partial" | "not_enforced" | "no_data" | "attested";
+  metric: unknown;
+}
+
+/** Raw JSON shape received from `GET /v1-compliance-controls`. */
+interface ComplianceControlsWire {
+  framework: string | null;
+  window: ComplianceWindowWire;
+  generated_at: string;
+  summary: ComplianceSummaryWire;
+  controls: ComplianceControlWire[];
+  truncated: boolean;
+}
+
+/** A single control row inside an evidence-pack `bundle`. */
+interface ComplianceEvidenceControlWire {
+  clause_id: string;
+  framework_code: string;
+  section: string;
+  title: string;
+  requirement: string;
+  atlasent_primitive: string;
+  status_query: string;
+  evidence_source: string;
+  status: "enforced" | "partial" | "not_enforced" | "no_data" | "attested";
+  metric: unknown;
+}
+
+/** The self-contained, hashable evidence payload. */
+interface ComplianceEvidenceBundleWire {
+  schema: string;
+  framework: string;
+  window: ComplianceWindowWire;
+  org_id: string;
+  summary: ComplianceSummaryWire;
+  controls: ComplianceEvidenceControlWire[];
+}
+
+/** Raw JSON shape received from `GET /v1-compliance-evidence-pack`. */
+interface ComplianceEvidencePackWire {
+  framework: string;
+  window: ComplianceWindowWire;
+  generated_at: string;
+  summary: ComplianceSummaryWire;
+  sha256: string;
+  signature: string;
+  signing_status: string;
+  key_id: string | null;
+  bundle: ComplianceEvidenceBundleWire;
 }
 
 /**
@@ -1421,6 +1504,112 @@ export class AtlaSentClient {
       rateLimitPerMinute: wire.rate_limit_per_minute,
       clientIp: wire.client_ip ?? null,
       expiresAt: wire.expires_at ?? null,
+      rateLimit,
+    };
+  }
+
+  /**
+   * Resolve the compliance control catalog into live enforcement status
+   * (`GET /v1-compliance-controls`). Each regulatory clause is mapped to
+   * an AtlaSent enforcement primitive and resolved to a live status —
+   * `enforced` / `partial` / `not_enforced` / `no_data` / `attested`.
+   *
+   * Pass `framework` to filter to one regime (e.g. `"cfr_part_11"`); omit
+   * for every framework. `from` / `to` bound the window the live status
+   * aggregates are computed over. The response is wire-identical with the
+   * server (snake_case rows), with a camelCase summary/window surfaced.
+   *
+   * Read-only — requires the `compliance:read` scope. Throws
+   * {@link AtlaSentError} on transport / auth failures.
+   */
+  async complianceControls(
+    query: ComplianceControlsQuery = {},
+  ): Promise<ComplianceControlsResponse> {
+    const params = new URLSearchParams();
+    if (query.framework) params.set("framework", query.framework);
+    if (query.from) params.set("from", query.from);
+    if (query.to) params.set("to", query.to);
+
+    const { body: wire, rateLimit } = await this.get<ComplianceControlsWire>(
+      "/v1-compliance-controls",
+      params,
+    );
+
+    if (!Array.isArray(wire.controls) || typeof wire.generated_at !== "string") {
+      throw new AtlaSentError(
+        "Malformed response from /v1-compliance-controls: missing `controls` or `generated_at`",
+        { code: "bad_response" },
+      );
+    }
+
+    return {
+      framework: wire.framework ?? null,
+      window: {
+        from: wire.window?.from ?? null,
+        to: wire.window?.to ?? null,
+      },
+      generatedAt: wire.generated_at,
+      summary: wire.summary,
+      controls: wire.controls,
+      truncated: wire.truncated ?? false,
+      rateLimit,
+    };
+  }
+
+  /**
+   * Produce a signed, self-contained compliance evidence pack for one
+   * regulatory framework (`GET /v1-compliance-evidence-pack`). The returned
+   * `bundle` is hashable offline: recompute SHA-256 over it and compare to
+   * `sha256`, then check `signature` against the trust root.
+   *
+   * `framework` is REQUIRED (the server rejects the call without it).
+   * `from` / `to` bound the evaluation window. The `bundle` is wire-identical
+   * with the server so it can be persisted to disk untouched.
+   *
+   * Read-only — requires the `compliance:read` scope. Throws
+   * {@link AtlaSentError} on transport / auth failures.
+   */
+  async complianceEvidencePack(
+    query: ComplianceEvidencePackQuery,
+  ): Promise<ComplianceEvidencePackResponse> {
+    if (!query || !query.framework) {
+      throw new AtlaSentError("framework is required", { code: "bad_request" });
+    }
+    const params = new URLSearchParams();
+    params.set("framework", query.framework);
+    if (query.from) params.set("from", query.from);
+    if (query.to) params.set("to", query.to);
+
+    const { body: wire, rateLimit } =
+      await this.get<ComplianceEvidencePackWire>(
+        "/v1-compliance-evidence-pack",
+        params,
+      );
+
+    if (
+      typeof wire.sha256 !== "string" ||
+      wire.bundle === null ||
+      typeof wire.bundle !== "object"
+    ) {
+      throw new AtlaSentError(
+        "Malformed response from /v1-compliance-evidence-pack: missing `sha256` or `bundle`",
+        { code: "bad_response" },
+      );
+    }
+
+    return {
+      framework: wire.framework,
+      window: {
+        from: wire.window?.from ?? null,
+        to: wire.window?.to ?? null,
+      },
+      generatedAt: wire.generated_at,
+      summary: wire.summary,
+      sha256: wire.sha256,
+      signature: wire.signature,
+      signingStatus: wire.signing_status,
+      keyId: wire.key_id ?? null,
+      bundle: wire.bundle,
       rateLimit,
     };
   }

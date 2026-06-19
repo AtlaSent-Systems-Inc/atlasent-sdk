@@ -55,6 +55,8 @@ from .governance_agents import (
 from .models import (
     ApiKeySelfResult,
     AuthorizationResult,
+    ComplianceControlsResult,
+    ComplianceEvidencePackResult,
     ConstraintTrace,
     EvaluatePreflightResult,
     EvaluateRequest,
@@ -798,6 +800,109 @@ class AsyncAtlaSentClient:
             )
 
         return ApiKeySelfResult.model_validate({**data, "rate_limit": rate_limit})
+
+    async def compliance_controls(
+        self,
+        *,
+        framework: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
+    ) -> ComplianceControlsResult:
+        """Resolve the compliance control catalog into live enforcement status
+        (``GET /v1-compliance-controls``). Async mirror of
+        :meth:`AtlaSentClient.compliance_controls`.
+
+        Read-only — requires the ``compliance:read`` scope.
+
+        Args:
+            framework: Filter to one framework code (e.g. ``"cfr_part_11"``).
+                Omit for every framework.
+            from_: Inclusive lower bound on the evaluation window (ISO 8601).
+                Maps to the ``from`` query key.
+            to: Inclusive upper bound on the evaluation window (ISO 8601).
+
+        Raises:
+            AtlaSentError: Network error, timeout, or malformed payload.
+        """
+        params: dict[str, str] = {}
+        if framework is not None:
+            params["framework"] = framework
+        if from_ is not None:
+            params["from"] = from_
+        if to is not None:
+            params["to"] = to
+
+        logger.debug("compliance_controls framework=%r", framework)
+        data, rate_limit, request_id = await self._get(
+            "/v1-compliance-controls", params=params or None
+        )
+
+        if not isinstance(data.get("controls"), list) or not isinstance(
+            data.get("generated_at"), str
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-compliance-controls response: missing "
+                "`controls` or `generated_at`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        return ComplianceControlsResult.model_validate(
+            {**data, "rate_limit": rate_limit}
+        )
+
+    async def compliance_evidence_pack(
+        self,
+        *,
+        framework: str,
+        from_: str | None = None,
+        to: str | None = None,
+    ) -> ComplianceEvidencePackResult:
+        """Produce a signed compliance evidence pack for one framework
+        (``GET /v1-compliance-evidence-pack``). Async mirror of
+        :meth:`AtlaSentClient.compliance_evidence_pack`.
+
+        Read-only — requires the ``compliance:read`` scope. ``framework``
+        is REQUIRED.
+
+        Args:
+            framework: Framework code the pack covers. REQUIRED.
+            from_: Inclusive lower bound on the evaluation window (ISO 8601).
+                Maps to the ``from`` query key.
+            to: Inclusive upper bound on the evaluation window (ISO 8601).
+
+        Raises:
+            AtlaSentError: Missing ``framework``, network error, timeout, or
+                malformed payload.
+        """
+        if not framework:
+            raise AtlaSentError("framework is required", code="bad_request")
+        params: dict[str, str] = {"framework": framework}
+        if from_ is not None:
+            params["from"] = from_
+        if to is not None:
+            params["to"] = to
+
+        logger.debug("compliance_evidence_pack framework=%r", framework)
+        data, rate_limit, request_id = await self._get(
+            "/v1-compliance-evidence-pack", params=params
+        )
+
+        if not isinstance(data.get("sha256"), str) or not isinstance(
+            data.get("bundle"), dict
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-compliance-evidence-pack response: missing "
+                "`sha256` or `bundle`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        return ComplianceEvidencePackResult.model_validate(
+            {**data, "rate_limit": rate_limit}
+        )
 
     async def revoke_permit(
         self,

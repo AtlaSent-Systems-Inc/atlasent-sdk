@@ -8,6 +8,8 @@ from atlasent.client import AtlaSentClient
 from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
 from atlasent.models import (
     ApiKeySelfResult,
+    ComplianceControlsResult,
+    ComplianceEvidencePackResult,
     ConstraintTrace,
     EvaluatePreflightResult,
     EvaluateResult,
@@ -1088,6 +1090,175 @@ class TestKeySelf:
         mocker.patch.object(client._client, "get", return_value=resp)
         with pytest.raises(RateLimitError):
             client.key_self()
+
+
+# ── compliance_controls / compliance_evidence_pack ───────────────
+
+
+COMPLIANCE_CONTROLS_PAYLOAD = {
+    "framework": "cfr_part_11",
+    "window": {"from": "2026-05-01T00:00:00Z", "to": "2026-06-01T00:00:00Z"},
+    "generated_at": "2026-06-19T00:00:00Z",
+    "summary": {
+        "enforced": 8,
+        "partial": 2,
+        "not_enforced": 1,
+        "no_data": 1,
+        "attested": 0,
+        "total": 12,
+    },
+    "controls": [
+        {
+            "clause_id": "11.10(a)",
+            "framework_code": "cfr_part_11",
+            "section": "11.10",
+            "title": "Validation of systems",
+            "requirement": "Validation of systems to ensure accuracy.",
+            "atlasent_primitive": "execution_evaluations",
+            "status_query": "evaluations_present_30d",
+            "evidence_source": "execution_evaluations",
+            "doc_ref": "https://docs/cfr-11-10a",
+            "display_order": 1,
+            "status": "enforced",
+            "metric": {"count": 42},
+        }
+    ],
+    "truncated": False,
+}
+
+
+class TestComplianceControls:
+    def test_returns_typed_result(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=COMPLIANCE_CONTROLS_PAYLOAD)
+        mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.compliance_controls(framework="cfr_part_11")
+        assert isinstance(result, ComplianceControlsResult)
+        assert result.framework == "cfr_part_11"
+        assert result.window.from_ == "2026-05-01T00:00:00Z"
+        assert result.window.to == "2026-06-01T00:00:00Z"
+        assert result.generated_at == "2026-06-19T00:00:00Z"
+        assert result.summary.total == 12
+        assert len(result.controls) == 1
+        assert result.controls[0].status == "enforced"
+        assert result.controls[0].metric == {"count": 42}
+        assert result.truncated is False
+        assert result.rate_limit is None
+
+    def test_passes_query_params(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=COMPLIANCE_CONTROLS_PAYLOAD)
+        get_mock = mocker.patch.object(client._client, "get", return_value=resp)
+        client.compliance_controls(
+            framework="cfr_part_11", from_="2026-05-01", to="2026-06-01"
+        )
+        assert "/v1-compliance-controls" in get_mock.call_args[0][0]
+        params = get_mock.call_args.kwargs["params"]
+        assert params == {
+            "framework": "cfr_part_11",
+            "from": "2026-05-01",
+            "to": "2026-06-01",
+        }
+
+    def test_no_params_when_no_args(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=COMPLIANCE_CONTROLS_PAYLOAD)
+        get_mock = mocker.patch.object(client._client, "get", return_value=resp)
+        client.compliance_controls()
+        assert get_mock.call_args.kwargs["params"] is None
+
+    def test_issues_get_not_post(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=COMPLIANCE_CONTROLS_PAYLOAD)
+        get_mock = mocker.patch.object(client._client, "get", return_value=resp)
+        post_mock = mocker.patch.object(client._client, "post")
+        client.compliance_controls()
+        assert get_mock.call_count == 1
+        assert post_mock.call_count == 0
+
+    def test_bad_response_on_missing_controls(self, client, mocker):
+        resp = _mock_resp(mocker, json_data={"generated_at": "2026-06-19T00:00:00Z"})
+        mocker.patch.object(client._client, "get", return_value=resp)
+        with pytest.raises(AtlaSentError) as excinfo:
+            client.compliance_controls()
+        assert excinfo.value.code == "bad_response"
+
+
+COMPLIANCE_PACK_PAYLOAD = {
+    "framework": "cfr_part_11",
+    "window": {"from": "2026-05-01T00:00:00Z", "to": "2026-06-01T00:00:00Z"},
+    "generated_at": "2026-06-19T00:00:00Z",
+    "summary": {
+        "enforced": 8,
+        "partial": 2,
+        "not_enforced": 1,
+        "no_data": 1,
+        "attested": 0,
+        "total": 12,
+    },
+    "sha256": "a" * 64,
+    "signature": "ed25519:abc",
+    "signing_status": "signed",
+    "key_id": "v1",
+    "bundle": {
+        "schema": "atlasent.compliance.evidence_pack.v1",
+        "framework": "cfr_part_11",
+        "window": {"from": "2026-05-01T00:00:00Z", "to": "2026-06-01T00:00:00Z"},
+        "org_id": "123e4567-e89b-12d3-a456-426614174000",
+        "summary": {
+            "enforced": 8,
+            "partial": 2,
+            "not_enforced": 1,
+            "no_data": 1,
+            "attested": 0,
+            "total": 12,
+        },
+        "controls": [],
+    },
+}
+
+
+class TestComplianceEvidencePack:
+    def test_returns_typed_result(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=COMPLIANCE_PACK_PAYLOAD)
+        mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.compliance_evidence_pack(framework="cfr_part_11")
+        assert isinstance(result, ComplianceEvidencePackResult)
+        assert result.framework == "cfr_part_11"
+        assert result.sha256 == "a" * 64
+        assert result.signature == "ed25519:abc"
+        assert result.signing_status == "signed"
+        assert result.key_id == "v1"
+        assert result.bundle.schema_ == "atlasent.compliance.evidence_pack.v1"
+        assert result.bundle.org_id == "123e4567-e89b-12d3-a456-426614174000"
+        assert result.rate_limit is None
+
+    def test_passes_query_params(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=COMPLIANCE_PACK_PAYLOAD)
+        get_mock = mocker.patch.object(client._client, "get", return_value=resp)
+        client.compliance_evidence_pack(
+            framework="cfr_part_11", from_="2026-05-01", to="2026-06-01"
+        )
+        assert "/v1-compliance-evidence-pack" in get_mock.call_args[0][0]
+        params = get_mock.call_args.kwargs["params"]
+        assert params == {
+            "framework": "cfr_part_11",
+            "from": "2026-05-01",
+            "to": "2026-06-01",
+        }
+
+    def test_framework_required(self, client, mocker):
+        get_mock = mocker.patch.object(client._client, "get")
+        with pytest.raises(AtlaSentError) as excinfo:
+            client.compliance_evidence_pack(framework="")
+        assert excinfo.value.code == "bad_request"
+        assert get_mock.call_count == 0
+
+    def test_bad_response_on_missing_bundle(self, client, mocker):
+        resp = _mock_resp(
+            mocker,
+            json_data={"framework": "cfr_part_11", "sha256": "a" * 64},
+        )
+        mocker.patch.object(client._client, "get", return_value=resp)
+        with pytest.raises(AtlaSentError) as excinfo:
+            client.compliance_evidence_pack(framework="cfr_part_11")
+        assert excinfo.value.code == "bad_response"
 
 
 # ── list_audit_events / create_audit_export ──────────────────────

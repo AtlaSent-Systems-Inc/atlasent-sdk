@@ -805,6 +805,130 @@ export interface ApiKeySelfResponse {
 }
 
 /**
+ * Canonical compliance control status. Maps a regulatory clause's live
+ * enforcement state.
+ */
+export type ComplianceControlStatus =
+  | "enforced"
+  | "partial"
+  | "not_enforced"
+  | "no_data"
+  | "attested";
+
+/** Resolved evaluation window echoed back on compliance read endpoints. */
+export interface ComplianceWindow {
+  from: string | null;
+  to: string | null;
+}
+
+/** Status roll-up shared by both compliance read endpoints. */
+export interface ComplianceSummary {
+  enforced: number;
+  partial: number;
+  not_enforced: number;
+  no_data: number;
+  attested: number;
+  total: number;
+}
+
+/** A single resolved control row from {@link AtlaSentClient.complianceControls}. */
+export interface ComplianceControl {
+  clause_id: string;
+  framework_code: string;
+  section: string;
+  title: string;
+  requirement: string;
+  atlasent_primitive: string;
+  status_query: string;
+  evidence_source: string;
+  doc_ref: string | null;
+  display_order: number;
+  status: ComplianceControlStatus;
+  /** Raw aggregate the status was derived from; shape is status_query-specific. */
+  metric: unknown;
+}
+
+/** Query accepted by {@link AtlaSentClient.complianceControls}. */
+export interface ComplianceControlsQuery {
+  /** Filter to one framework code (e.g. "cfr_part_11"). Omit for all. */
+  framework?: string;
+  /** Inclusive lower bound on the evaluation window (ISO 8601). */
+  from?: string;
+  /** Inclusive upper bound on the evaluation window (ISO 8601). */
+  to?: string;
+}
+
+/**
+ * Result of {@link AtlaSentClient.complianceControls} — the compliance
+ * control catalog resolved to live enforcement status.
+ */
+export interface ComplianceControlsResponse {
+  /** Framework filtered to, or `null` when all frameworks are returned. */
+  framework: string | null;
+  window: ComplianceWindow;
+  generatedAt: string;
+  summary: ComplianceSummary;
+  controls: ComplianceControl[];
+  /** `true` when the catalog set was capped server-side. */
+  truncated: boolean;
+  rateLimit: RateLimitState | null;
+}
+
+/** A single control row inside a compliance evidence-pack bundle. */
+export interface ComplianceEvidenceControl {
+  clause_id: string;
+  framework_code: string;
+  section: string;
+  title: string;
+  requirement: string;
+  atlasent_primitive: string;
+  status_query: string;
+  evidence_source: string;
+  status: ComplianceControlStatus;
+  metric: unknown;
+}
+
+/** The self-contained, hashable evidence payload. SHA-256 is computed over this. */
+export interface ComplianceEvidenceBundle {
+  schema: string;
+  framework: string;
+  window: ComplianceWindow;
+  org_id: string;
+  summary: ComplianceSummary;
+  controls: ComplianceEvidenceControl[];
+}
+
+/** Query accepted by {@link AtlaSentClient.complianceEvidencePack}. */
+export interface ComplianceEvidencePackQuery {
+  /** Framework code the pack covers. REQUIRED. */
+  framework: string;
+  /** Inclusive lower bound on the evaluation window (ISO 8601). */
+  from?: string;
+  /** Inclusive upper bound on the evaluation window (ISO 8601). */
+  to?: string;
+}
+
+/**
+ * Result of {@link AtlaSentClient.complianceEvidencePack} — a signed,
+ * self-contained evidence bundle for one regulatory framework.
+ */
+export interface ComplianceEvidencePackResponse {
+  framework: string;
+  window: ComplianceWindow;
+  generatedAt: string;
+  summary: ComplianceSummary;
+  /** SHA-256 hex digest of the canonical `bundle`. */
+  sha256: string;
+  /** Detached signature over the bundle / digest. */
+  signature: string;
+  signingStatus: string;
+  /** Signing key identifier, or `null` when unsigned. */
+  keyId: string | null;
+  bundle: ComplianceEvidenceBundle;
+  rateLimit: RateLimitState | null;
+}
+
+/**
  * Result of {@link AtlaSentClient.listAuditEvents}. Extends the raw
  * wire page with a camelCase `rateLimit` alongside the snake_case
  * wire fields.

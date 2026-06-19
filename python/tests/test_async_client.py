@@ -8,6 +8,8 @@ from atlasent.audit import AuditEventsResult, AuditExportResult
 from atlasent.exceptions import AtlaSentDenied, AtlaSentError, RateLimitError
 from atlasent.models import (
     ApiKeySelfResult,
+    ComplianceControlsResult,
+    ComplianceEvidencePackResult,
     ConstraintTrace,
     EvaluatePreflightResult,
     EvaluateResult,
@@ -668,6 +670,135 @@ class TestAsyncKeySelf:
         assert result.rate_limit is not None
         assert result.rate_limit.limit == 600
         assert result.rate_limit.remaining == 0
+
+
+# ── compliance_controls / compliance_evidence_pack (async) ───────────
+
+
+COMPLIANCE_CONTROLS_PAYLOAD = {
+    "framework": "cfr_part_11",
+    "window": {"from": "2026-05-01T00:00:00Z", "to": "2026-06-01T00:00:00Z"},
+    "generated_at": "2026-06-19T00:00:00Z",
+    "summary": {
+        "enforced": 8,
+        "partial": 2,
+        "not_enforced": 1,
+        "no_data": 1,
+        "attested": 0,
+        "total": 12,
+    },
+    "controls": [
+        {
+            "clause_id": "11.10(a)",
+            "framework_code": "cfr_part_11",
+            "section": "11.10",
+            "title": "Validation of systems",
+            "requirement": "Validation of systems to ensure accuracy.",
+            "atlasent_primitive": "execution_evaluations",
+            "status_query": "evaluations_present_30d",
+            "evidence_source": "execution_evaluations",
+            "doc_ref": None,
+            "display_order": 1,
+            "status": "enforced",
+            "metric": {"count": 42},
+        }
+    ],
+    "truncated": False,
+}
+
+COMPLIANCE_PACK_PAYLOAD = {
+    "framework": "cfr_part_11",
+    "window": {"from": None, "to": None},
+    "generated_at": "2026-06-19T00:00:00Z",
+    "summary": {
+        "enforced": 8,
+        "partial": 2,
+        "not_enforced": 1,
+        "no_data": 1,
+        "attested": 0,
+        "total": 12,
+    },
+    "sha256": "a" * 64,
+    "signature": "ed25519:abc",
+    "signing_status": "signed",
+    "key_id": "v1",
+    "bundle": {
+        "schema": "atlasent.compliance.evidence_pack.v1",
+        "framework": "cfr_part_11",
+        "window": {"from": None, "to": None},
+        "org_id": "123e4567-e89b-12d3-a456-426614174000",
+        "summary": {
+            "enforced": 8,
+            "partial": 2,
+            "not_enforced": 1,
+            "no_data": 1,
+            "attested": 0,
+            "total": 12,
+        },
+        "controls": [],
+    },
+}
+
+
+class TestAsyncCompliance:
+    @pytest.mark.asyncio
+    async def test_controls_returns_typed_result(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(mocker, json_data=COMPLIANCE_CONTROLS_PAYLOAD),
+        )
+        result = await async_client.compliance_controls(framework="cfr_part_11")
+        assert isinstance(result, ComplianceControlsResult)
+        assert result.framework == "cfr_part_11"
+        assert len(result.controls) == 1
+        assert result.controls[0].status == "enforced"
+
+    @pytest.mark.asyncio
+    async def test_controls_bad_response(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(
+                mocker, json_data={"generated_at": "2026-06-19T00:00:00Z"}
+            ),
+        )
+        with pytest.raises(AtlaSentError) as excinfo:
+            await async_client.compliance_controls()
+        assert excinfo.value.code == "bad_response"
+
+    @pytest.mark.asyncio
+    async def test_pack_returns_typed_result(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(mocker, json_data=COMPLIANCE_PACK_PAYLOAD),
+        )
+        result = await async_client.compliance_evidence_pack(framework="cfr_part_11")
+        assert isinstance(result, ComplianceEvidencePackResult)
+        assert result.sha256 == "a" * 64
+        assert result.bundle.schema_ == "atlasent.compliance.evidence_pack.v1"
+
+    @pytest.mark.asyncio
+    async def test_pack_framework_required(self, async_client, mocker):
+        get_mock = mocker.patch.object(async_client._client, "get")
+        with pytest.raises(AtlaSentError) as excinfo:
+            await async_client.compliance_evidence_pack(framework="")
+        assert excinfo.value.code == "bad_request"
+        assert get_mock.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_pack_bad_response(self, async_client, mocker):
+        mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=_mock_resp(
+                mocker, json_data={"framework": "cfr_part_11", "sha256": "a" * 64}
+            ),
+        )
+        with pytest.raises(AtlaSentError) as excinfo:
+            await async_client.compliance_evidence_pack(framework="cfr_part_11")
+        assert excinfo.value.code == "bad_response"
 
 
 # ── list_audit_events / create_audit_export ──────────────────────

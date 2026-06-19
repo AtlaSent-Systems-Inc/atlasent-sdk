@@ -51,6 +51,8 @@ from .hitl import (
 from .models import (
     ApiKeySelfResult,
     AuthorizationResult,
+    ComplianceControlsResult,
+    ComplianceEvidencePackResult,
     ConstraintTrace,
     EvaluatePreflightResult,
     EvaluateRequest,
@@ -702,6 +704,117 @@ class AtlaSentClient:
             )
 
         return ApiKeySelfResult.model_validate({**data, "rate_limit": rate_limit})
+
+    # ── Compliance read endpoints ────────────────────────────────────────────
+
+    def compliance_controls(
+        self,
+        *,
+        framework: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
+    ) -> ComplianceControlsResult:
+        """Resolve the compliance control catalog into live enforcement status
+        (``GET /v1-compliance-controls``).
+
+        Each regulatory clause is mapped to an AtlaSent enforcement
+        primitive and resolved to a live status — ``enforced`` /
+        ``partial`` / ``not_enforced`` / ``no_data`` / ``attested``.
+
+        Read-only — requires the ``compliance:read`` scope.
+
+        Args:
+            framework: Filter to one framework code (e.g. ``"cfr_part_11"``).
+                Omit for every framework.
+            from_: Inclusive lower bound on the evaluation window (ISO 8601).
+                Maps to the ``from`` query key.
+            to: Inclusive upper bound on the evaluation window (ISO 8601).
+
+        Raises:
+            AtlaSentError: Network error, timeout, or malformed payload.
+        """
+        params: dict[str, str] = {}
+        if framework is not None:
+            params["framework"] = framework
+        if from_ is not None:
+            params["from"] = from_
+        if to is not None:
+            params["to"] = to
+
+        logger.debug("compliance_controls framework=%r", framework)
+        data, rate_limit, request_id = self._get(
+            "/v1-compliance-controls", params=params or None
+        )
+
+        if not isinstance(data.get("controls"), list) or not isinstance(
+            data.get("generated_at"), str
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-compliance-controls response: missing "
+                "`controls` or `generated_at`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        return ComplianceControlsResult.model_validate(
+            {**data, "rate_limit": rate_limit}
+        )
+
+    def compliance_evidence_pack(
+        self,
+        *,
+        framework: str,
+        from_: str | None = None,
+        to: str | None = None,
+    ) -> ComplianceEvidencePackResult:
+        """Produce a signed, self-contained compliance evidence pack for one
+        regulatory framework (``GET /v1-compliance-evidence-pack``).
+
+        The returned ``bundle`` is hashable offline: recompute SHA-256 over
+        it and compare to ``sha256``, then check ``signature`` against the
+        trust root.
+
+        Read-only — requires the ``compliance:read`` scope.
+
+        Args:
+            framework: Framework code the pack covers (e.g. ``"cfr_part_11"``).
+                REQUIRED — the server rejects the call without it.
+            from_: Inclusive lower bound on the evaluation window (ISO 8601).
+                Maps to the ``from`` query key.
+            to: Inclusive upper bound on the evaluation window (ISO 8601).
+
+        Raises:
+            AtlaSentError: Missing ``framework``, network error, timeout, or
+                malformed payload.
+        """
+        if not framework:
+            raise AtlaSentError("framework is required", code="bad_request")
+        params: dict[str, str] = {"framework": framework}
+        if from_ is not None:
+            params["from"] = from_
+        if to is not None:
+            params["to"] = to
+
+        logger.debug("compliance_evidence_pack framework=%r", framework)
+        data, rate_limit, request_id = self._get(
+            "/v1-compliance-evidence-pack", params=params
+        )
+
+        if not isinstance(data.get("sha256"), str) or not isinstance(
+            data.get("bundle"), dict
+        ):
+            raise AtlaSentError(
+                "Malformed /v1-compliance-evidence-pack response: missing "
+                "`sha256` or `bundle`",
+                code="bad_response",
+                request_id=request_id,
+                response_body=data,
+            )
+
+        return ComplianceEvidencePackResult.model_validate(
+            {**data, "rate_limit": rate_limit}
+        )
 
     # ── License verification (self-hosted / air-gapped) ──────────────────────
 
