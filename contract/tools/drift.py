@@ -74,6 +74,8 @@ def _python_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
     try:
         from atlasent.models import (  # type: ignore[import-not-found]
             ApiKeySelfResult,
+            ComplianceControlsResult,
+            ComplianceEvidencePackResult,
             EvaluateRequest,
             EvaluateResult,
             VerifyRequest,
@@ -111,6 +113,15 @@ def _python_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
         "/v1-api-key-self": {
             "request_keys": None,
             "response_keys": _wire_aliases(ApiKeySelfResult),
+        },
+        # GET endpoints — query params only, no request body.
+        "/v1-compliance-controls": {
+            "request_keys": None,
+            "response_keys": _wire_aliases(ComplianceControlsResult),
+        },
+        "/v1-compliance-evidence-pack": {
+            "request_keys": None,
+            "response_keys": _wire_aliases(ComplianceEvidencePackResult),
         },
     }
 
@@ -206,6 +217,17 @@ def _typescript_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
         "/v1-api-key-self": {
             "request_keys": None,
             "response_keys": _wire_interface_keys("ApiKeySelfWire"),
+        },
+        # GET endpoints — query params only; wire shapes live on the
+        # `ComplianceControlsWire` / `ComplianceEvidencePackWire`
+        # interfaces in client.ts.
+        "/v1-compliance-controls": {
+            "request_keys": None,
+            "response_keys": _wire_interface_keys("ComplianceControlsWire"),
+        },
+        "/v1-compliance-evidence-pack": {
+            "request_keys": None,
+            "response_keys": _wire_interface_keys("ComplianceEvidencePackWire"),
         },
     }
 
@@ -391,6 +413,13 @@ def run() -> DriftReport:
         # GET endpoint — response-only, no request schema.
         "/v1-api-key-self": {
             "response": _load_schema("api-key-self.schema.json"),
+        },
+        # GET endpoints — response-only, no request schema.
+        "/v1-compliance-controls": {
+            "response": _load_schema("compliance-controls.schema.json"),
+        },
+        "/v1-compliance-evidence-pack": {
+            "response": _load_schema("compliance-evidence-pack.schema.json"),
         },
     }
 

@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.18.0
+
+### Added
+
+- `AtlaSentClient.compliance_controls(*, framework=None, from_=None, to=None)`
+  and `AsyncAtlaSentClient.compliance_controls(...)` — read the compliance
+  control catalog (`GET /v1-compliance-controls`) resolved to live
+  enforcement status per regulatory clause (`enforced` / `partial` /
+  `not_enforced` / `no_data` / `attested`). Optional `framework` filters to
+  one regime; `from_`/`to` bound the evaluation window (`from_` maps to the
+  `from` query key). Read-only — requires the `compliance:read` scope.
+- `AtlaSentClient.compliance_evidence_pack(*, framework, from_=None, to=None)`
+  and the async mirror — fetch a signed, self-contained compliance evidence
+  pack for one framework (`GET /v1-compliance-evidence-pack`). `framework`
+  is required. The returned `bundle` is hashable offline against `sha256`,
+  and `signature` / `signing_status` / `key_id` carry the signing state.
+- New pydantic result models: `ComplianceControlsResult`,
+  `ComplianceEvidencePackResult`, plus `ComplianceControl`,
+  `ComplianceEvidenceControl`, `ComplianceEvidenceBundle`,
+  `ComplianceSummary`, `ComplianceWindow`, and the
+  `ComplianceControlStatus` literal.
+- Contract schemas `compliance-controls.schema.json` and
+  `compliance-evidence-pack.schema.json`; the drift detector now pins both
+  read endpoints.
+
 ## Unreleased
 
 ### Added

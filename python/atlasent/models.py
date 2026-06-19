@@ -782,6 +782,154 @@ class ApiKeySelfResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
 
 
+# ── Compliance read endpoints ─────────────────────────────────────────
+
+
+ComplianceControlStatus = Literal[
+    "enforced", "partial", "not_enforced", "no_data", "attested"
+]
+
+
+class ComplianceWindow(BaseModel):
+    """Resolved evaluation window echoed back on compliance read endpoints."""
+
+    from_: str | None = Field(default=None, alias="from")
+    to: str | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ComplianceSummary(BaseModel):
+    """Status roll-up shared by both compliance read endpoints."""
+
+    enforced: int = 0
+    partial: int = 0
+    not_enforced: int = 0
+    no_data: int = 0
+    attested: int = 0
+    total: int = 0
+
+
+class ComplianceControl(BaseModel):
+    """A single resolved control row from ``GET /v1-compliance-controls``."""
+
+    clause_id: str
+    framework_code: str
+    section: str
+    title: str
+    requirement: str
+    atlasent_primitive: str
+    status_query: str
+    evidence_source: str
+    doc_ref: str | None = None
+    display_order: int
+    status: ComplianceControlStatus
+    metric: Any = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ComplianceControlsResult(BaseModel):
+    """Successful response from ``GET /v1-compliance-controls``.
+
+    Resolves the compliance control catalog into live enforcement status
+    per regulatory clause. Read-only; requires the ``compliance:read``
+    scope.
+
+    Attributes:
+        framework: Framework code filtered to, or ``None`` when all
+            frameworks are returned.
+        window: Resolved evaluation window the aggregates were computed
+            over.
+        generated_at: ISO 8601 timestamp the server resolved the catalog.
+        summary: Roll-up of control statuses across the returned set.
+        controls: One row per regulatory clause, resolved to a live
+            enforcement status.
+        truncated: ``True`` when the catalog set was capped server-side.
+        rate_limit: Per-key rate-limit state from ``X-RateLimit-*``
+            headers; ``None`` when the server didn't emit them.
+    """
+
+    framework: str | None = None
+    window: ComplianceWindow = Field(default_factory=ComplianceWindow)
+    generated_at: str
+    summary: ComplianceSummary = Field(default_factory=ComplianceSummary)
+    controls: list[ComplianceControl] = Field(default_factory=list)
+    truncated: bool = False
+    rate_limit: RateLimitState | None = None
+
+    model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
+
+
+class ComplianceEvidenceControl(BaseModel):
+    """A single control row inside an evidence-pack ``bundle``."""
+
+    clause_id: str
+    framework_code: str
+    section: str
+    title: str
+    requirement: str
+    atlasent_primitive: str
+    status_query: str
+    evidence_source: str
+    status: ComplianceControlStatus
+    metric: Any = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ComplianceEvidenceBundle(BaseModel):
+    """The self-contained, hashable evidence payload.
+
+    ``ComplianceEvidencePackResult.sha256`` is computed over this object.
+    """
+
+    schema_: str = Field(alias="schema")
+    framework: str
+    window: ComplianceWindow = Field(default_factory=ComplianceWindow)
+    org_id: str
+    summary: ComplianceSummary = Field(default_factory=ComplianceSummary)
+    controls: list[ComplianceEvidenceControl] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ComplianceEvidencePackResult(BaseModel):
+    """Successful response from ``GET /v1-compliance-evidence-pack``.
+
+    A signed, self-contained evidence bundle for one regulatory
+    framework. Read-only; requires the ``compliance:read`` scope.
+    ``framework`` is REQUIRED on the request.
+
+    Attributes:
+        framework: Framework code the pack covers.
+        window: Resolved evaluation window the pack was computed over.
+        generated_at: ISO 8601 timestamp the server generated the pack.
+        summary: Roll-up of control statuses across the bundle.
+        sha256: SHA-256 hex digest of the canonical ``bundle`` payload.
+        signature: Detached signature over the bundle / digest.
+        signing_status: Whether the pack was signed and with what key
+            state (e.g. ``"signed"`` / ``"unsigned"``).
+        key_id: Identifier of the signing key, or ``None`` when unsigned.
+        bundle: The self-contained, hashable evidence payload.
+        rate_limit: Per-key rate-limit state from ``X-RateLimit-*``
+            headers; ``None`` when the server didn't emit them.
+    """
+
+    framework: str
+    window: ComplianceWindow = Field(default_factory=ComplianceWindow)
+    generated_at: str
+    summary: ComplianceSummary = Field(default_factory=ComplianceSummary)
+    sha256: str
+    signature: str
+    signing_status: str
+    key_id: str | None = None
+    bundle: ComplianceEvidenceBundle
+    rate_limit: RateLimitState | None = None
+
+    model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
+
+
 # ── Gate (convenience) ────────────────────────────────────────────────
 
 
