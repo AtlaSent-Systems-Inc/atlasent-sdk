@@ -36,7 +36,7 @@ from urllib.parse import quote
 from .exceptions import AtlaSentError
 
 if TYPE_CHECKING:
-    from .client import AtlaSentClient
+    from ._transport import SyncTransport
 
 SiemFormat = Literal["splunk_hec", "elastic_ecs", "qradar_cef", "json"]
 SiemAuthType = Literal["bearer", "basic", "api_key", "none"]
@@ -52,7 +52,7 @@ def _enc(value: str) -> str:
 
 
 def _do(
-    client: AtlaSentClient,
+    client: SyncTransport,
     method: str,
     path: str,
     body: dict[str, Any] | None = None,
@@ -88,7 +88,7 @@ def _do(
         ) from exc
 
 
-def get_siem_config(client: AtlaSentClient, org_id: str) -> dict[str, Any]:
+def get_siem_config(client: SyncTransport, org_id: str) -> dict[str, Any]:
     """``GET /v1/orgs/{orgId}/siem-config`` — fetch current SIEM configuration.
 
     The ``credential`` field is never returned by the server (write-only).
@@ -110,7 +110,7 @@ def get_siem_config(client: AtlaSentClient, org_id: str) -> dict[str, Any]:
 
 
 def upsert_siem_config(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     *,
     destination_url: str,
@@ -182,7 +182,7 @@ def upsert_siem_config(
     return _do(client, "PATCH", f"/v1/orgs/{_enc(org_id)}/siem-config", body)
 
 
-def siem_test_delivery(client: AtlaSentClient, org_id: str) -> dict[str, Any]:
+def siem_test_delivery(client: SyncTransport, org_id: str) -> dict[str, Any]:
     """``POST /v1/orgs/{orgId}/siem-exports/test`` — send a test event.
 
     Delivers a synthetic event to verify connectivity and authentication.

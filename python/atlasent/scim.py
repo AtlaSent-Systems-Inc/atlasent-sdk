@@ -28,7 +28,7 @@ from urllib.parse import quote, urlencode
 from .exceptions import AtlaSentError
 
 if TYPE_CHECKING:
-    from .client import AtlaSentClient
+    from ._transport import SyncTransport
 
 SCIM_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User"
 SCIM_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group"
@@ -55,7 +55,7 @@ def _scim_qs(
 
 
 def _do(
-    client: AtlaSentClient,
+    client: SyncTransport,
     method: str,
     path: str,
     body: dict[str, Any] | None = None,
@@ -97,7 +97,7 @@ def _do(
 
 
 def scim_list_users(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     *,
     filter: str | None = None,
@@ -121,7 +121,7 @@ def scim_list_users(
 
 
 def scim_create_user(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     user: dict[str, Any],
 ) -> dict[str, Any]:
@@ -145,7 +145,7 @@ def scim_create_user(
 
 
 def scim_get_user(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     user_id: str,
 ) -> dict[str, Any]:
@@ -154,7 +154,7 @@ def scim_get_user(
 
 
 def scim_replace_user(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     user_id: str,
     user: dict[str, Any],
@@ -166,7 +166,7 @@ def scim_replace_user(
 
 
 def scim_patch_user(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     user_id: str,
     operations: list[dict[str, Any]],
@@ -186,7 +186,7 @@ def scim_patch_user(
 
 
 def scim_delete_user(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     user_id: str,
 ) -> None:
@@ -198,7 +198,7 @@ def scim_delete_user(
 
 
 def scim_list_groups(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     *,
     filter: str | None = None,
@@ -211,7 +211,7 @@ def scim_list_groups(
 
 
 def scim_create_group(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     group: dict[str, Any],
 ) -> dict[str, Any]:
@@ -222,7 +222,7 @@ def scim_create_group(
 
 
 def scim_get_group(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     group_id: str,
 ) -> dict[str, Any]:
@@ -231,7 +231,7 @@ def scim_get_group(
 
 
 def scim_replace_group(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     group_id: str,
     group: dict[str, Any],
@@ -245,7 +245,7 @@ def scim_replace_group(
 
 
 def scim_patch_group(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     group_id: str,
     operations: list[dict[str, Any]],
@@ -266,7 +266,7 @@ def scim_patch_group(
 
 
 def scim_delete_group(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     group_id: str,
 ) -> None:

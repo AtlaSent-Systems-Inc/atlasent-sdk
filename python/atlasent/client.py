@@ -17,6 +17,9 @@ from urllib.parse import quote, urlparse
 
 import httpx
 
+from . import evidence_exports as _evx
+from . import scim as _scim
+from . import siem as _siem
 from ._version import __version__
 from .access_governance_log import AccessGovernanceLogClient
 from .approval_artifact import ApprovalReference
@@ -243,19 +246,6 @@ class AtlaSentClient:
         self.sso = SsoClient(self)
         self.access_governance_log = AccessGovernanceLogClient(self)
         self.evidence_bundles = EvidenceBundlesClient(self)
-
-        # Enterprise method modules are imported here (deferred) rather than at
-        # module top level: these modules import AtlaSentClient under
-        # TYPE_CHECKING, so a top-level import would form a static import cycle
-        # (CodeQL py/cyclic-import). The deferred import breaks the cycle while
-        # keeping the flat functions single-sourced.
-        from . import evidence_exports as _evx
-        from . import scim as _scim
-        from . import siem as _siem
-
-        self._scim = _scim
-        self._siem = _siem
-        self._evx = _evx
 
     # ── properties ────────────────────────────────────────────
 
@@ -715,33 +705,33 @@ class AtlaSentClient:
         count: int | None = None,
     ) -> dict[str, Any]:
         """``GET /v1/scim/v2/{orgId}/Users`` — list provisioned users."""
-        return self._scim.scim_list_users(
+        return _scim.scim_list_users(
             self, org_id, filter=filter, start_index=start_index, count=count
         )
 
     def scim_create_user(self, org_id: str, user: dict[str, Any]) -> dict[str, Any]:
         """``POST /v1/scim/v2/{orgId}/Users`` — provision a new user."""
-        return self._scim.scim_create_user(self, org_id, user)
+        return _scim.scim_create_user(self, org_id, user)
 
     def scim_get_user(self, org_id: str, user_id: str) -> dict[str, Any]:
         """``GET /v1/scim/v2/{orgId}/Users/{userId}`` — fetch a user by ID."""
-        return self._scim.scim_get_user(self, org_id, user_id)
+        return _scim.scim_get_user(self, org_id, user_id)
 
     def scim_replace_user(
         self, org_id: str, user_id: str, user: dict[str, Any]
     ) -> dict[str, Any]:
         """``PUT /v1/scim/v2/{orgId}/Users/{userId}`` — full replacement."""
-        return self._scim.scim_replace_user(self, org_id, user_id, user)
+        return _scim.scim_replace_user(self, org_id, user_id, user)
 
     def scim_patch_user(
         self, org_id: str, user_id: str, operations: list[dict[str, Any]]
     ) -> dict[str, Any]:
         """``PATCH /v1/scim/v2/{orgId}/Users/{userId}`` — partial update."""
-        return self._scim.scim_patch_user(self, org_id, user_id, operations)
+        return _scim.scim_patch_user(self, org_id, user_id, operations)
 
     def scim_delete_user(self, org_id: str, user_id: str) -> None:
         """``DELETE /v1/scim/v2/{orgId}/Users/{userId}`` — deprovision a user."""
-        return self._scim.scim_delete_user(self, org_id, user_id)
+        return _scim.scim_delete_user(self, org_id, user_id)
 
     def scim_list_groups(
         self,
@@ -752,39 +742,39 @@ class AtlaSentClient:
         count: int | None = None,
     ) -> dict[str, Any]:
         """``GET /v1/scim/v2/{orgId}/Groups`` — list provisioned groups."""
-        return self._scim.scim_list_groups(
+        return _scim.scim_list_groups(
             self, org_id, filter=filter, start_index=start_index, count=count
         )
 
     def scim_create_group(self, org_id: str, group: dict[str, Any]) -> dict[str, Any]:
         """``POST /v1/scim/v2/{orgId}/Groups`` — create a group."""
-        return self._scim.scim_create_group(self, org_id, group)
+        return _scim.scim_create_group(self, org_id, group)
 
     def scim_get_group(self, org_id: str, group_id: str) -> dict[str, Any]:
         """``GET /v1/scim/v2/{orgId}/Groups/{groupId}`` — fetch a group by ID."""
-        return self._scim.scim_get_group(self, org_id, group_id)
+        return _scim.scim_get_group(self, org_id, group_id)
 
     def scim_replace_group(
         self, org_id: str, group_id: str, group: dict[str, Any]
     ) -> dict[str, Any]:
         """``PUT /v1/scim/v2/{orgId}/Groups/{groupId}`` — full replacement."""
-        return self._scim.scim_replace_group(self, org_id, group_id, group)
+        return _scim.scim_replace_group(self, org_id, group_id, group)
 
     def scim_patch_group(
         self, org_id: str, group_id: str, operations: list[dict[str, Any]]
     ) -> dict[str, Any]:
         """``PATCH /v1/scim/v2/{orgId}/Groups/{groupId}`` — add/remove members."""
-        return self._scim.scim_patch_group(self, org_id, group_id, operations)
+        return _scim.scim_patch_group(self, org_id, group_id, operations)
 
     def scim_delete_group(self, org_id: str, group_id: str) -> None:
         """``DELETE /v1/scim/v2/{orgId}/Groups/{groupId}`` — delete a group."""
-        return self._scim.scim_delete_group(self, org_id, group_id)
+        return _scim.scim_delete_group(self, org_id, group_id)
 
     # ── SIEM ─────────────────────────────────────────────────────────────
 
     def get_siem_config(self, org_id: str) -> dict[str, Any]:
         """``GET /v1/orgs/{orgId}/siem-config`` — fetch current SIEM config."""
-        return self._siem.get_siem_config(self, org_id)
+        return _siem.get_siem_config(self, org_id)
 
     def upsert_siem_config(
         self,
@@ -800,7 +790,7 @@ class AtlaSentClient:
         retry_count: int = 3,
     ) -> dict[str, Any]:
         """``PATCH /v1/orgs/{orgId}/siem-config`` — create or update SIEM config."""
-        return self._siem.upsert_siem_config(
+        return _siem.upsert_siem_config(
             self,
             org_id,
             destination_url=destination_url,
@@ -815,7 +805,7 @@ class AtlaSentClient:
 
     def siem_test_delivery(self, org_id: str) -> dict[str, Any]:
         """``POST /v1/orgs/{orgId}/siem-exports/test`` — send a test event."""
-        return self._siem.siem_test_delivery(self, org_id)
+        return _siem.siem_test_delivery(self, org_id)
 
     # ── Evidence exports ─────────────────────────────────────────────────
 
@@ -823,11 +813,11 @@ class AtlaSentClient:
         self, org_id: str, *, regime: str | None = None
     ) -> dict[str, Any]:
         """``GET /v1/orgs/{orgId}/evidence-exports`` — list past evidence exports."""
-        return self._evx.list_evidence_exports(self, org_id, regime=regime)
+        return _evx.list_evidence_exports(self, org_id, regime=regime)
 
     def get_evidence_export(self, org_id: str, export_id: str) -> dict[str, Any]:
         """``GET /v1/orgs/{orgId}/evidence-exports/{exportId}`` — fetch one export."""
-        return self._evx.get_evidence_export(self, org_id, export_id)
+        return _evx.get_evidence_export(self, org_id, export_id)
 
     def create_evidence_export(
         self,
@@ -839,7 +829,7 @@ class AtlaSentClient:
         evidence: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """``POST /v1/orgs/{orgId}/evidence-exports`` — build & persist a bundle."""
-        return self._evx.create_evidence_export(
+        return _evx.create_evidence_export(
             self,
             org_id,
             regime=regime,

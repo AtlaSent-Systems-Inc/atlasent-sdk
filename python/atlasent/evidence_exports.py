@@ -39,7 +39,7 @@ from urllib.parse import quote
 from .exceptions import AtlaSentError
 
 if TYPE_CHECKING:
-    from .client import AtlaSentClient
+    from ._transport import SyncTransport
 
 RegimeId = Literal["soc2_type_ii", "hipaa", "gdpr"]
 
@@ -51,7 +51,7 @@ def _enc(value: str) -> str:
 
 
 def _do(
-    client: AtlaSentClient,
+    client: SyncTransport,
     method: str,
     path: str,
     body: dict[str, Any] | None = None,
@@ -88,7 +88,7 @@ def _do(
 
 
 def list_evidence_exports(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     *,
     regime: RegimeId | None = None,
@@ -117,7 +117,7 @@ def list_evidence_exports(
 
 
 def get_evidence_export(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     export_id: str,
 ) -> dict[str, Any]:
@@ -144,7 +144,7 @@ def get_evidence_export(
 
 
 def create_evidence_export(
-    client: AtlaSentClient,
+    client: SyncTransport,
     org_id: str,
     *,
     regime: RegimeId,
