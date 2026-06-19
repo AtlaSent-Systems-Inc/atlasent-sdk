@@ -8,6 +8,7 @@ condition. Spec: contract/ENFORCE_PACK.md. Gate: contract/SIM_SCENARIOS.md
 from __future__ import annotations
 
 from ._enforce import Enforce
+from ._version import __version__
 from .errors import DisallowedConfigError
 from .types import (
     Bindings,
@@ -19,8 +20,6 @@ from .types import (
     RunResult,
     VerifiedPermit,
 )
-
-__version__ = "0.0.0"
 
 __all__ = [
     "__version__",

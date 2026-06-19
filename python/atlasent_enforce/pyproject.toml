@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atlasent-enforce"
-version = "0.0.0"
+dynamic = ["version"]
 description = "AtlaSent Enforce Pack — non-bypassable execution wrapper around the v1 SDK."
 readme = "README.md"
 license = "Apache-2.0"
@@ -42,6 +42,9 @@ include = ["atlasent_enforce*"]
 
 [tool.setuptools.package-data]
 atlasent_enforce = ["py.typed"]
+
+[tool.setuptools.dynamic]
+version = { attr = "atlasent_enforce._version.__version__" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
