@@ -4,6 +4,19 @@
 
 ### Added
 
+- Synchronous `AtlaSentClient` enterprise method parity with
+  `AsyncAtlaSentClient`: `scim_list_users` / `scim_create_user` /
+  `scim_get_user` / `scim_replace_user` / `scim_patch_user` /
+  `scim_delete_user` and the matching `scim_*_group` methods, plus
+  `get_siem_config` / `upsert_siem_config` / `siem_test_delivery` and
+  `list_evidence_exports` / `get_evidence_export` / `create_evidence_export`.
+  These were previously reachable from the sync client only as
+  module-level functions (`atlasent.scim_list_users(client, ...)`); they
+  are now first-class methods (`client.scim_list_users(...)`), matching the
+  async client's `async_*` surface minus the prefix. They delegate to the
+  same verified flat functions, so endpoints and payloads stay
+  single-sourced.
+
 - `atlasent.taxonomy` — the canonical authorization taxonomy:
   `ACTION_CLASS_FAMILIES` (10), `CONDITION_TYPES` (26), `REASON_CODES` (31,
   the frozen deny-code set), plus `family_for_slug()` (roll an `action_type`

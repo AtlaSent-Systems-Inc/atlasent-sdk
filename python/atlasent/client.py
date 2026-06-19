@@ -17,6 +17,9 @@ from urllib.parse import quote, urlparse
 
 import httpx
 
+from . import evidence_exports as _evx
+from . import scim as _scim
+from . import siem as _siem
 from ._version import __version__
 from .access_governance_log import AccessGovernanceLogClient
 from .approval_artifact import ApprovalReference
@@ -686,6 +689,154 @@ class AtlaSentClient:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
         self.close()
+
+    # ── SCIM 2.0 ─────────────────────────────────────────────────────────
+    # Method-level parity with AsyncAtlaSentClient's async_scim_* methods.
+    # These delegate to the verified flat functions in atlasent.scim so the
+    # endpoints/payloads stay single-sourced; sync callers get
+    # ``client.scim_list_users(...)`` instead of importing module functions.
+
+    def scim_list_users(
+        self,
+        org_id: str,
+        *,
+        filter: str | None = None,  # noqa: A002
+        start_index: int | None = None,
+        count: int | None = None,
+    ) -> dict[str, Any]:
+        """``GET /v1/scim/v2/{orgId}/Users`` — list provisioned users."""
+        return _scim.scim_list_users(
+            self, org_id, filter=filter, start_index=start_index, count=count
+        )
+
+    def scim_create_user(self, org_id: str, user: dict[str, Any]) -> dict[str, Any]:
+        """``POST /v1/scim/v2/{orgId}/Users`` — provision a new user."""
+        return _scim.scim_create_user(self, org_id, user)
+
+    def scim_get_user(self, org_id: str, user_id: str) -> dict[str, Any]:
+        """``GET /v1/scim/v2/{orgId}/Users/{userId}`` — fetch a user by ID."""
+        return _scim.scim_get_user(self, org_id, user_id)
+
+    def scim_replace_user(
+        self, org_id: str, user_id: str, user: dict[str, Any]
+    ) -> dict[str, Any]:
+        """``PUT /v1/scim/v2/{orgId}/Users/{userId}`` — full replacement."""
+        return _scim.scim_replace_user(self, org_id, user_id, user)
+
+    def scim_patch_user(
+        self, org_id: str, user_id: str, operations: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """``PATCH /v1/scim/v2/{orgId}/Users/{userId}`` — partial update."""
+        return _scim.scim_patch_user(self, org_id, user_id, operations)
+
+    def scim_delete_user(self, org_id: str, user_id: str) -> None:
+        """``DELETE /v1/scim/v2/{orgId}/Users/{userId}`` — deprovision a user."""
+        return _scim.scim_delete_user(self, org_id, user_id)
+
+    def scim_list_groups(
+        self,
+        org_id: str,
+        *,
+        filter: str | None = None,  # noqa: A002
+        start_index: int | None = None,
+        count: int | None = None,
+    ) -> dict[str, Any]:
+        """``GET /v1/scim/v2/{orgId}/Groups`` — list provisioned groups."""
+        return _scim.scim_list_groups(
+            self, org_id, filter=filter, start_index=start_index, count=count
+        )
+
+    def scim_create_group(self, org_id: str, group: dict[str, Any]) -> dict[str, Any]:
+        """``POST /v1/scim/v2/{orgId}/Groups`` — create a group."""
+        return _scim.scim_create_group(self, org_id, group)
+
+    def scim_get_group(self, org_id: str, group_id: str) -> dict[str, Any]:
+        """``GET /v1/scim/v2/{orgId}/Groups/{groupId}`` — fetch a group by ID."""
+        return _scim.scim_get_group(self, org_id, group_id)
+
+    def scim_replace_group(
+        self, org_id: str, group_id: str, group: dict[str, Any]
+    ) -> dict[str, Any]:
+        """``PUT /v1/scim/v2/{orgId}/Groups/{groupId}`` — full replacement."""
+        return _scim.scim_replace_group(self, org_id, group_id, group)
+
+    def scim_patch_group(
+        self, org_id: str, group_id: str, operations: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """``PATCH /v1/scim/v2/{orgId}/Groups/{groupId}`` — add/remove members."""
+        return _scim.scim_patch_group(self, org_id, group_id, operations)
+
+    def scim_delete_group(self, org_id: str, group_id: str) -> None:
+        """``DELETE /v1/scim/v2/{orgId}/Groups/{groupId}`` — delete a group."""
+        return _scim.scim_delete_group(self, org_id, group_id)
+
+    # ── SIEM ─────────────────────────────────────────────────────────────
+
+    def get_siem_config(self, org_id: str) -> dict[str, Any]:
+        """``GET /v1/orgs/{orgId}/siem-config`` — fetch current SIEM config."""
+        return _siem.get_siem_config(self, org_id)
+
+    def upsert_siem_config(
+        self,
+        org_id: str,
+        *,
+        destination_url: str,
+        format: str = "json",  # noqa: A002
+        auth_type: str = "none",
+        credential: str | None = None,
+        enabled: bool = True,
+        included_event_types: list[str] | None = None,
+        batch_size: int = 100,
+        retry_count: int = 3,
+    ) -> dict[str, Any]:
+        """``PATCH /v1/orgs/{orgId}/siem-config`` — create or update SIEM config."""
+        return _siem.upsert_siem_config(
+            self,
+            org_id,
+            destination_url=destination_url,
+            format=format,
+            auth_type=auth_type,
+            credential=credential,
+            enabled=enabled,
+            included_event_types=included_event_types,
+            batch_size=batch_size,
+            retry_count=retry_count,
+        )
+
+    def siem_test_delivery(self, org_id: str) -> dict[str, Any]:
+        """``POST /v1/orgs/{orgId}/siem-exports/test`` — send a test event."""
+        return _siem.siem_test_delivery(self, org_id)
+
+    # ── Evidence exports ─────────────────────────────────────────────────
+
+    def list_evidence_exports(
+        self, org_id: str, *, regime: str | None = None
+    ) -> dict[str, Any]:
+        """``GET /v1/orgs/{orgId}/evidence-exports`` — list past evidence exports."""
+        return _evx.list_evidence_exports(self, org_id, regime=regime)
+
+    def get_evidence_export(self, org_id: str, export_id: str) -> dict[str, Any]:
+        """``GET /v1/orgs/{orgId}/evidence-exports/{exportId}`` — fetch one export."""
+        return _evx.get_evidence_export(self, org_id, export_id)
+
+    def create_evidence_export(
+        self,
+        org_id: str,
+        *,
+        regime: str,
+        window: dict[str, str] | None = None,
+        bundle_id: str | None = None,
+        evidence: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """``POST /v1/orgs/{orgId}/evidence-exports`` — build & persist a bundle."""
+        return _evx.create_evidence_export(
+            self,
+            org_id,
+            regime=regime,
+            window=window,
+            bundle_id=bundle_id,
+            evidence=evidence,
+        )
 
     def key_self(self) -> ApiKeySelfResult:
         logger.debug("key_self")
