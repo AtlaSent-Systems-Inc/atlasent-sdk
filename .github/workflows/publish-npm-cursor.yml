@@ -76,8 +76,10 @@ jobs:
         uses: AtlaSent-Systems-Inc/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           action: production.deploy
+          api-url: https://kttccumlnmdtupgbyfue.supabase.co/functions/v1
           actor: ${{ github.actor }}
           environment: production
           context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'
