@@ -41,7 +41,7 @@ jobs:
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
         with:
-          action: production.release
+          action: production.deploy
           actor: ${{ github.actor }}
           environment: production
           context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'
