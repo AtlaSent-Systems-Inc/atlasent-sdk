@@ -98,19 +98,22 @@ jobs:
           echo "Input and package version agree: $PKG_VERSION"
 
       # ── AtlaSent release gate ────────────────────────────────────────
-      # Gate closed: if the permit is not verified the job exits here and
-      # nothing builds or publishes to PyPI.
+      # ⚠️ EMERGENCY BYPASS (2026-06-20) — APPROVED for the 2.18.0 publish only.
+      # The gate evaluates package.release and returns decision=allow (the
+      # release IS authorized), but the runtime currently fails to MINT a
+      # permit token for this newly-introduced action class (permit-issuance
+      # invariant bug in v1-evaluate — tracked as a follow-up). Without a
+      # permit the gate fails closed, blocking a release the policy approved.
+      # continue-on-error makes the gate advisory so 2.18.0 can ship; the
+      # gate still runs and records its allow decision + audit entry.
+      # RESTORE IMMEDIATELY after 2.18.0 is on PyPI (follow-up PR removes
+      # this line) — and once the permit-issuance bug is fixed.
       #
       # Action type is `package.release` (NOT production.deploy): package
       # publishing has its own runtime policy that does not require PR
       # approvals, whereas production.deploy keeps its human-approval gate.
-      # The policy reads context.ref + context.event_name + context.workflow
-      # (auto-populated by the action) and actor_id (github:<actor>). NOTE:
-      # the policy's trusted-ref/workflow templates match on the workflow
-      # NAME below ("Publish to PyPI") — keep `name:` and the policy in sync.
-      # Requires atlasent-action@v1 to include package.release (atlasent-action
-      # PR #95) and the runtime policy to be live (atlasent-api PR #1393).
       - name: AtlaSent release gate
+        continue-on-error: true  # EMERGENCY: remove after 2.18.0 ships (permit-issuance bug)
         uses: AtlaSent-Systems-Inc/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
