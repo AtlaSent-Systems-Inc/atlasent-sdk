@@ -98,30 +98,23 @@ jobs:
           echo "Input and package version agree: $PKG_VERSION"
 
       # ── AtlaSent release gate ────────────────────────────────────────
-      # ⚠️ EMERGENCY BYPASS (2026-06-20) — APPROVED for the 2.18.0 publish ONLY.
-      # The gate evaluates package.release and returns decision=allow (the
-      # release IS authorized), but the runtime currently fails to MINT a
-      # permit token for this newly-introduced action class (permit-issuance
-      # invariant bug in v1-evaluate — tracked as a follow-up). Without a
-      # permit the gate fails closed, blocking a release the policy approved.
-      #
-      # continue-on-error is an EXPRESSION scoped to the 2.18.0 manual
-      # dispatch only — it is true *exclusively* when this is a
-      # workflow_dispatch with inputs.version == '2.18.0'. Every other
-      # version, and every python-v* tag push, evaluates to false, so the
-      # gate stays HARD-BLOCKING for all other releases (a denial, missing
-      # secret, API outage, or the permit-minting failure all block publish
-      # as normal). This enforces the "one-time" approval in YAML, not just
-      # in intent (addresses Codex P1 on PR #400).
-      # RESTORE: a follow-up PR removes this line entirely once 2.18.0 is on
-      # PyPI and the permit-issuance bug is fixed.
+      # Gate closed: if the permit is not verified the job exits here and
+      # nothing builds or publishes to PyPI.
       #
       # Action type is `package.release` (NOT production.deploy): package
       # publishing has its own runtime policy that does not require PR
       # approvals, whereas production.deploy keeps its human-approval gate.
+      # The policy reads context.ref + context.event_name + context.workflow
+      # (auto-populated by the action) and actor_id (github:<actor>); the
+      # trusted-ref/workflow templates match the workflow NAME above
+      # ("Publish to PyPI") — keep `name:` and the policy in sync.
+      #
+      # The 2026-06-20 emergency bypass that shipped 2.18.0 (PR #400) is
+      # removed here — the gate is fully blocking again. Before the NEXT
+      # release, the package.release permit-issuance bug in v1-evaluate must
+      # be fixed (the gate returned allow but minted no permit token), or
+      # this gate will hard-block the publish (correctly, fail-closed).
       - name: AtlaSent release gate
-        # EMERGENCY: true only for the 2.18.0 dispatch; remove after it ships.
-        continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version == '2.18.0' }}
         uses: AtlaSent-Systems-Inc/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
