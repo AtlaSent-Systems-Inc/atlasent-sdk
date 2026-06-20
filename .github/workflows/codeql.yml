@@ -21,7 +21,7 @@ jobs:
       matrix:
         language: [javascript-typescript, python]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # BCCAEClient accepts a caller-configured base URL that is TLS-validated
       # by enforceTls() (https:// required; http:// only for localhost). CodeQL

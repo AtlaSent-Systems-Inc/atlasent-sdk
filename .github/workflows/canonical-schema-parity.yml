@@ -59,7 +59,7 @@ jobs:
     name: Canonical schema pin (schema/v1-rc)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Run pin verifier
         run: scripts/verify-canonical-pin.sh
