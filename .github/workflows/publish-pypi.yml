@@ -100,17 +100,27 @@ jobs:
       # ── AtlaSent release gate ────────────────────────────────────────
       # Gate closed: if the permit is not verified the job exits here and
       # nothing builds or publishes to PyPI.
+      #
+      # Action type is `package.release` (NOT production.deploy): package
+      # publishing has its own runtime policy that does not require PR
+      # approvals, whereas production.deploy keeps its human-approval gate.
+      # The policy reads context.ref + context.event_name + context.workflow
+      # (auto-populated by the action) and actor_id (github:<actor>). NOTE:
+      # the policy's trusted-ref/workflow templates match on the workflow
+      # NAME below ("Publish to PyPI") — keep `name:` and the policy in sync.
+      # Requires atlasent-action@v1 to include package.release (atlasent-action
+      # PR #95) and the runtime policy to be live (atlasent-api PR #1393).
       - name: AtlaSent release gate
         uses: AtlaSent-Systems-Inc/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          action: production.deploy
+          action: package.release
           api-url: https://kttccumlnmdtupgbyfue.supabase.co/functions/v1
           actor: ${{ github.actor }}
           environment: production
-          context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'  
+          context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'
 
       - name: Install build dependencies
         run: |
