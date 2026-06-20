@@ -98,22 +98,30 @@ jobs:
           echo "Input and package version agree: $PKG_VERSION"
 
       # ── AtlaSent release gate ────────────────────────────────────────
-      # ⚠️ EMERGENCY BYPASS (2026-06-20) — APPROVED for the 2.18.0 publish only.
+      # ⚠️ EMERGENCY BYPASS (2026-06-20) — APPROVED for the 2.18.0 publish ONLY.
       # The gate evaluates package.release and returns decision=allow (the
       # release IS authorized), but the runtime currently fails to MINT a
       # permit token for this newly-introduced action class (permit-issuance
       # invariant bug in v1-evaluate — tracked as a follow-up). Without a
       # permit the gate fails closed, blocking a release the policy approved.
-      # continue-on-error makes the gate advisory so 2.18.0 can ship; the
-      # gate still runs and records its allow decision + audit entry.
-      # RESTORE IMMEDIATELY after 2.18.0 is on PyPI (follow-up PR removes
-      # this line) — and once the permit-issuance bug is fixed.
+      #
+      # continue-on-error is an EXPRESSION scoped to the 2.18.0 manual
+      # dispatch only — it is true *exclusively* when this is a
+      # workflow_dispatch with inputs.version == '2.18.0'. Every other
+      # version, and every python-v* tag push, evaluates to false, so the
+      # gate stays HARD-BLOCKING for all other releases (a denial, missing
+      # secret, API outage, or the permit-minting failure all block publish
+      # as normal). This enforces the "one-time" approval in YAML, not just
+      # in intent (addresses Codex P1 on PR #400).
+      # RESTORE: a follow-up PR removes this line entirely once 2.18.0 is on
+      # PyPI and the permit-issuance bug is fixed.
       #
       # Action type is `package.release` (NOT production.deploy): package
       # publishing has its own runtime policy that does not require PR
       # approvals, whereas production.deploy keeps its human-approval gate.
       - name: AtlaSent release gate
-        continue-on-error: true  # EMERGENCY: remove after 2.18.0 ships (permit-issuance bug)
+        # EMERGENCY: true only for the 2.18.0 dispatch; remove after it ships.
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version == '2.18.0' }}
         uses: AtlaSent-Systems-Inc/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
