@@ -179,6 +179,12 @@ streaming evaluate, GraphQL client, behavior-conditioning helper)
 ships as additive Phase 1 / Phase 2 work on the same `/v1/*` wire
 surface.
 
+## The permit
+
+The permit token is a **capability token** in the macaroon ([Stanford, 2014](https://research.google.com/pubs/archive/41892.pdf)) / [biscuit](https://www.biscuitsec.org/) lineage: short-lived (1-hour TTL), single-use, scoped to the evaluated action, and cryptographically signed. The SDK treats it as the one artifact every authority source produces — a human approval, a policy rule, a deploy gate, and a risk decision all converge on the same permit, and the SDK never re-implements or re-derives the authorization itself: the server decides. By default the SDK calls the server for every decision; an **optional, opt-in client-side TTL cache** (`TTLCache`) can short-circuit repeat evaluations when you configure one.
+
+What we take from that lineage: bounded expiry and a scope attenuated to the action. What we deliberately don't expose today: third-party caveats and holder-of-key binding. One difference from a pure capability token: **single-use is enforced server-side** — `verify_permit` consumes the token (a nonce ledger prevents replay), so verification is not fully offline. This is vocabulary alignment, not a wire-format change.
+
 ## Repository layout
 
 ```
