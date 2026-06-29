@@ -27,6 +27,19 @@
 
 ## Unreleased
 
+### Changed
+
+- `import atlasent` is now **lazy** (PEP 562): top-level names resolve from
+  their submodule on first attribute access instead of all at import time.
+  This keeps a bare `import atlasent` — and in particular the network-free
+  offline verifier CLI `atlasent-verify-bundle` — from eagerly pulling in the
+  HTTP client stack (`httpx`) or `pydantic`. The offline
+  `verify_evidence_bundle` path needs only `cryptography` + the standard
+  library, and that is now true at import time, not just at call time. No
+  public API change: `__all__`, attribute access (`atlasent.protect`), the
+  `from atlasent import …` surface, and the `authorize` / `with_permit` /
+  `require_permit` symbol-vs-submodule contract are all unchanged.
+
 ### Added
 
 - Synchronous `AtlaSentClient` enterprise method parity with
