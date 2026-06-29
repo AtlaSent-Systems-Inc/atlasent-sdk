@@ -6,6 +6,11 @@ describe("deny codes", () => {
     expect(DENY_CODES.INSUFFICIENT_APPROVALS).toBe("INSUFFICIENT_APPROVALS");
   });
 
+  it("exposes ACTOR_UNVERIFIED (verified-actor gate) and it is not a human-approval shortfall", () => {
+    expect(DENY_CODES.ACTOR_UNVERIFIED).toBe("ACTOR_UNVERIFIED");
+    expect(isHumanApprovalRequired("ACTOR_UNVERIFIED")).toBe(false);
+  });
+
   it("isHumanApprovalRequired accepts a raw code", () => {
     expect(isHumanApprovalRequired("INSUFFICIENT_APPROVALS")).toBe(true);
     expect(isHumanApprovalRequired(DENY_CODES.INSUFFICIENT_APPROVALS)).toBe(true);

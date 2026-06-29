@@ -42,6 +42,12 @@
 
 ### Added
 
+- `DenyCode.ACTOR_UNVERIFIED` — the verified-actor gate deny code. Returned
+  when an action class requires a verified actor identity
+  (`requires_verified_actor`) and the request carried no valid, in-binding
+  `actor_identity.v1` assertion. Distinct from `INSUFFICIENT_APPROVALS`
+  (`requires_human_approval()` returns `False` for it). `retry_advice` is
+  `with_modified_input`: attach a signed `actor_identity` assertion.
 - Synchronous `AtlaSentClient` enterprise method parity with
   `AsyncAtlaSentClient`: `scim_list_users` / `scim_create_user` /
   `scim_get_user` / `scim_replace_user` / `scim_patch_user` /

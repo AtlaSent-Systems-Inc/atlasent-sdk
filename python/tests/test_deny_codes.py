@@ -47,6 +47,14 @@ def test_known_codes_are_upper_snake() -> None:
         DenyCode.NO_AUTHORITY,
         DenyCode.HARD_CONSTRAINT_VIOLATED,
         DenyCode.INSUFFICIENT_APPROVALS,
+        DenyCode.ACTOR_UNVERIFIED,
     ):
         assert code == code.upper()
         assert " " not in code
+
+
+def test_actor_unverified_constant() -> None:
+    # Agent Authorization: the verified-actor gate deny code.
+    assert DenyCode.ACTOR_UNVERIFIED == "ACTOR_UNVERIFIED"
+    # It is NOT a human-approval shortfall — distinct routing.
+    assert requires_human_approval(DenyCode.ACTOR_UNVERIFIED) is False

@@ -35,6 +35,16 @@ export const DENY_CODES = {
    * approval queue and re-evaluate. `retry_advice` is `after_human_approval`.
    */
   INSUFFICIENT_APPROVALS: "INSUFFICIENT_APPROVALS",
+  /**
+   * The action class requires a verified actor identity
+   * (`requires_verified_actor`) but the request carried no valid, in-binding
+   * `actor_identity.v1` assertion — fails closed before authority evaluation.
+   * A self-asserted `actor_id` is not trusted. Attach an `actor_identity`
+   * assertion signed by a trusted issuer (subject = `actor_id`; binding matches
+   * `action_type` / tenant / `environment`). `retry_advice` is
+   * `with_modified_input`.
+   */
+  ACTOR_UNVERIFIED: "ACTOR_UNVERIFIED",
 } as const;
 
 /** A documented deny code. The wire `deny_code` may also be any other string. */
