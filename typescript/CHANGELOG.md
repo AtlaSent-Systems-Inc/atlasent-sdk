@@ -10,12 +10,6 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ### Added
 
-- `DENY_CODES.ACTOR_UNVERIFIED` — the verified-actor gate deny code. Returned
-  when an action class requires a verified actor identity
-  (`requires_verified_actor`) and the request carried no valid, in-binding
-  `actor_identity.v1` assertion. Distinct from `INSUFFICIENT_APPROVALS`
-  (`isHumanApprovalRequired` returns `false` for it). `retry_advice` is
-  `with_modified_input`: attach a signed `actor_identity` assertion.
 - `AtlaSentClient.complianceControls({ framework?, from?, to? })` — read the
   compliance control catalog (`GET /v1-compliance-controls`) resolved to
   live enforcement status per regulatory clause (`enforced` / `partial` /
@@ -40,6 +34,12 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ### Added
 
+- `DENY_CODES.ACTOR_UNVERIFIED` — the verified-actor gate deny code. Returned
+  when an action class requires a verified actor identity
+  (`requires_verified_actor`) and the request carried no valid, in-binding
+  `actor_identity.v1` assertion. Distinct from `INSUFFICIENT_APPROVALS`
+  (`isHumanApprovalRequired` returns `false` for it). `retry_advice` is
+  `with_modified_input`: attach a signed `actor_identity` assertion.
 - `taxonomy` module — the canonical authorization taxonomy:
   `ACTION_CLASS_FAMILIES` (10), `CONDITION_TYPES` (26), `REASON_CODES` (31,
   the frozen deny-code set), plus `familyForSlug()` (roll an `action_type`
