@@ -87,8 +87,19 @@ RESOURCE_ASSERTION_TRUST_LEVELS: tuple[str, ...] = (
 
 _SHA256_PREFIXED = re.compile(r"^sha256:[0-9a-f]{64}$")
 
+# Full ISO-8601 UTC/offset timestamp: date + time(seconds) + optional fraction
+# + ``Z`` or ``±HH:MM``. Keeps the Python and TypeScript checks accepting the
+# same set (no date-only / seconds-less drift).
+_ISO8601_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
+)
+
 
 def _is_iso8601(value: str) -> bool:
+    # Format gate first, then ``fromisoformat`` rejects impossible calendar
+    # dates (e.g. 2026-02-30) that a lenient parser would silently normalize.
+    if not _ISO8601_RE.match(value):
+        return False
     try:
         datetime.fromisoformat(value.replace("Z", "+00:00"))
         return True
@@ -113,33 +124,42 @@ def validate_resource_classification_assertion(value: Any) -> list[str]:
     source = value.get("source")
     if not isinstance(source, str) or not source:
         problems.append("source is required and must be a non-empty string")
-    trust = value.get("trust")
-    if trust is not None and trust not in RESOURCE_ASSERTION_TRUST_LEVELS:
+    # Optional fields are validated when the KEY IS PRESENT — including an
+    # explicit ``null``, which is rejected (matches the TS validator's
+    # ``x !== undefined`` semantics; ``dict.get()`` would wrongly treat an
+    # explicit null the same as an omitted key).
+    if "trust" in value and value["trust"] not in RESOURCE_ASSERTION_TRUST_LEVELS:
         problems.append(
             "trust, when present, must be one of "
             + ", ".join(RESOURCE_ASSERTION_TRUST_LEVELS)
         )
-    confidence = value.get("confidence")
-    if confidence is not None and (
-        isinstance(confidence, bool)
-        or not isinstance(confidence, (int, float))
-        or not (0.0 <= float(confidence) <= 1.0)
-    ):
-        problems.append("confidence, when present, must be a number in [0, 1]")
+    if "confidence" in value:
+        confidence = value["confidence"]
+        if (
+            isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not (0.0 <= float(confidence) <= 1.0)
+        ):
+            problems.append("confidence, when present, must be a number in [0, 1]")
     for ts_field in ("asserted_at", "valid_until"):
-        ts = value.get(ts_field)
-        if ts is not None and (not isinstance(ts, str) or not _is_iso8601(ts)):
-            problems.append(f"{ts_field}, when present, must be an ISO-8601 timestamp")
-    assertion_id = value.get("assertion_id")
-    if assertion_id is not None and (
-        not isinstance(assertion_id, str) or not assertion_id
-    ):
-        problems.append("assertion_id, when present, must be a non-empty string")
-    content_hash = value.get("content_hash")
-    if content_hash is not None and (
-        not isinstance(content_hash, str) or not _SHA256_PREFIXED.match(content_hash)
-    ):
-        problems.append("content_hash, when present, must match sha256:<64 hex chars>")
+        if ts_field in value:
+            ts = value[ts_field]
+            if not isinstance(ts, str) or not _is_iso8601(ts):
+                problems.append(
+                    f"{ts_field}, when present, must be an ISO-8601 timestamp"
+                )
+    if "assertion_id" in value:
+        assertion_id = value["assertion_id"]
+        if not isinstance(assertion_id, str) or not assertion_id:
+            problems.append("assertion_id, when present, must be a non-empty string")
+    if "content_hash" in value:
+        content_hash = value["content_hash"]
+        if not isinstance(content_hash, str) or not _SHA256_PREFIXED.match(
+            content_hash
+        ):
+            problems.append(
+                "content_hash, when present, must match sha256:<64 hex chars>"
+            )
     return problems
 
 

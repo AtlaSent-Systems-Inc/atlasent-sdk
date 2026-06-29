@@ -25,6 +25,16 @@ describe("ResourceClassificationAssertion (ADR-041 SDK convenience type)", () =>
     const minimal = { classification: "internal", source: "caller" };
     expect(validateResourceClassificationAssertion(minimal)).toEqual([]);
     expect(isResourceClassificationAssertion(minimal)).toBe(true);
+
+    // Offset and fractional-second timestamp forms are accepted.
+    expect(
+      isResourceClassificationAssertion({
+        classification: "phi",
+        source: "s",
+        asserted_at: "2026-06-29T12:00:00+00:00",
+        valid_until: "2026-06-29T12:00:00.500Z",
+      }),
+    ).toBe(true);
   });
 
   it("accepts every declared trust tier and both confidence bounds", () => {
@@ -53,6 +63,16 @@ describe("ResourceClassificationAssertion (ADR-041 SDK convenience type)", () =>
       { classification: "phi", source: "s", assertion_id: "" },
       { classification: "phi", source: "s", content_hash: "md5:abc" },
       { classification: "phi", source: "s", content_hash: "sha256:abc" },
+      // Explicit null is rejected for optional fields (matches the Python validator).
+      { classification: "phi", source: "s", trust: null },
+      { classification: "phi", source: "s", confidence: null },
+      { classification: "phi", source: "s", valid_until: null },
+      { classification: "phi", source: "s", assertion_id: null },
+      { classification: "phi", source: "s", content_hash: null },
+      // Impossible calendar date (Feb 30) is rejected, not normalized to March.
+      { classification: "phi", source: "s", asserted_at: "2026-02-30T00:00:00Z" },
+      // Date-only / seconds-less strings are not accepted (full timestamp only).
+      { classification: "phi", source: "s", asserted_at: "2026-06-29" },
     ];
     for (const value of bad) {
       expect(validateResourceClassificationAssertion(value).length).toBeGreaterThan(0);

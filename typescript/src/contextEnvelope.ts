@@ -103,8 +103,36 @@ export interface ResourceClassificationAssertion {
 
 const RESOURCE_ASSERTION_SHA256_PREFIXED = /^sha256:[0-9a-f]{64}$/;
 
+// Full ISO-8601 UTC/offset timestamp: date + time(seconds) + optional fraction
+// + `Z` or `±HH:MM`. Matches the Python check so both accept the same set.
+const RESOURCE_ASSERTION_ISO8601_RE =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
 function isResourceAssertionIso8601(value: unknown): boolean {
-  return typeof value === "string" && value.length > 0 && !Number.isNaN(Date.parse(value));
+  if (typeof value !== "string") return false;
+  const m = RESOURCE_ASSERTION_ISO8601_RE.exec(value);
+  if (m === null) return false;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  const second = Number(m[6]);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) {
+    return false;
+  }
+  // Reject impossible calendar dates (e.g. 2026-02-30, which `Date.parse` would
+  // silently normalize to March). Build a UTC date from the wall-clock parts and
+  // require it to round-trip unchanged.
+  const dt = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  return (
+    dt.getUTCFullYear() === year &&
+    dt.getUTCMonth() === month - 1 &&
+    dt.getUTCDate() === day &&
+    dt.getUTCHours() === hour &&
+    dt.getUTCMinutes() === minute &&
+    dt.getUTCSeconds() === second
+  );
 }
 
 /**

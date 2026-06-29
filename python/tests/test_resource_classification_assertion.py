@@ -34,6 +34,17 @@ def test_well_formed_full_and_minimal() -> None:
     )
     assert minimal.validate() == []
 
+    # Offset and fractional-second timestamp forms are accepted.
+    assert (
+        ResourceClassificationAssertion(
+            classification="phi",
+            source="s",
+            asserted_at="2026-06-29T12:00:00+00:00",
+            valid_until="2026-06-29T12:00:00.500Z",
+        ).validate()
+        == []
+    )
+
 
 def test_as_dict_omits_unset_optionals() -> None:
     d = ResourceClassificationAssertion(classification="phi", source="caller").as_dict()
@@ -102,6 +113,20 @@ def test_rejects_malformed_provenance() -> None:
         {"classification": "phi", "source": "s", "assertion_id": ""},
         {"classification": "phi", "source": "s", "content_hash": "md5:abc"},
         {"classification": "phi", "source": "s", "content_hash": "sha256:abc"},
+        # Explicit null is rejected for optional fields (matches the TS validator).
+        {"classification": "phi", "source": "s", "trust": None},
+        {"classification": "phi", "source": "s", "confidence": None},
+        {"classification": "phi", "source": "s", "valid_until": None},
+        {"classification": "phi", "source": "s", "assertion_id": None},
+        {"classification": "phi", "source": "s", "content_hash": None},
+        # Impossible calendar date (Feb 30) is rejected, not silently normalized.
+        {
+            "classification": "phi",
+            "source": "s",
+            "asserted_at": "2026-02-30T00:00:00Z",
+        },
+        # Date-only / seconds-less strings are not accepted (full timestamp only).
+        {"classification": "phi", "source": "s", "asserted_at": "2026-06-29"},
     ]
     for value in bad:
         problems = validate_resource_classification_assertion(value)
