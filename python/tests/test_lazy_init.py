@@ -26,10 +26,7 @@ import pytest
 import atlasent
 
 _VECTORS = (
-    Path(__file__).resolve().parents[2]
-    / "contract"
-    / "vectors"
-    / "evidence-bundles"
+    Path(__file__).resolve().parents[2] / "contract" / "vectors" / "evidence-bundles"
 )
 
 
@@ -57,9 +54,9 @@ def test_import_atlasent_does_not_load_httpx_or_pydantic() -> None:
         "print(','.join(loaded));"
         "sys.exit(1 if loaded else 0)"
     )
-    assert proc.returncode == 0, (
-        f"import atlasent eagerly loaded: {proc.stdout.strip()!r}\n{proc.stderr}"
-    )
+    assert (
+        proc.returncode == 0
+    ), f"import atlasent eagerly loaded: {proc.stdout.strip()!r}\n{proc.stderr}"
 
 
 def test_offline_verifier_imports_without_httpx() -> None:
@@ -69,9 +66,9 @@ def test_offline_verifier_imports_without_httpx() -> None:
         "from atlasent.evidence_bundle_verifier import verify_evidence_bundle;"
         "sys.exit(1 if 'httpx' in sys.modules else 0)"
     )
-    assert proc.returncode == 0, (
-        f"importing the verifier pulled in httpx:\n{proc.stdout}\n{proc.stderr}"
-    )
+    assert (
+        proc.returncode == 0
+    ), f"importing the verifier pulled in httpx:\n{proc.stdout}\n{proc.stderr}"
 
 
 def test_every_public_name_resolves() -> None:
