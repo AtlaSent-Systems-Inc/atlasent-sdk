@@ -140,7 +140,7 @@ def test_collision_name_resolves_to_callable_after_submodule_import(
 def test_cli_verify_bundle_end_to_end() -> None:
     """The ``atlasent-verify-bundle`` CLI: valid → exit 0, tampered → exit 1."""
     pytest.importorskip("cryptography")
-    from atlasent import _cli_verify
+    import atlasent._cli_verify as _cli_verify
 
     key_set = str(_VECTORS / "key-set.json")
 
