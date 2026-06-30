@@ -91,7 +91,7 @@ _SHA256_PREFIXED = re.compile(r"^sha256:[0-9a-f]{64}$")
 # + ``Z`` or ``±HH:MM``. Keeps the Python and TypeScript checks accepting the
 # same set (no date-only / seconds-less drift).
 _ISO8601_RE = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$"
 )
 
 

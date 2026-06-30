@@ -127,6 +127,12 @@ def test_rejects_malformed_provenance() -> None:
         },
         # Date-only / seconds-less strings are not accepted (full timestamp only).
         {"classification": "phi", "source": "s", "asserted_at": "2026-06-29"},
+        # Out-of-range timezone offset (hours 00-23, minutes 00-59).
+        {
+            "classification": "phi",
+            "source": "s",
+            "asserted_at": "2026-06-29T12:00:00+99:99",
+        },
     ]
     for value in bad:
         problems = validate_resource_classification_assertion(value)

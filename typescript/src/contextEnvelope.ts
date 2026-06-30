@@ -106,7 +106,7 @@ const RESOURCE_ASSERTION_SHA256_PREFIXED = /^sha256:[0-9a-f]{64}$/;
 // Full ISO-8601 UTC/offset timestamp: date + time(seconds) + optional fraction
 // + `Z` or `±HH:MM`. Matches the Python check so both accept the same set.
 const RESOURCE_ASSERTION_ISO8601_RE =
-  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 
 function isResourceAssertionIso8601(value: unknown): boolean {
   if (typeof value !== "string") return false;

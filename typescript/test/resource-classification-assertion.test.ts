@@ -73,6 +73,8 @@ describe("ResourceClassificationAssertion (ADR-041 SDK convenience type)", () =>
       { classification: "phi", source: "s", asserted_at: "2026-02-30T00:00:00Z" },
       // Date-only / seconds-less strings are not accepted (full timestamp only).
       { classification: "phi", source: "s", asserted_at: "2026-06-29" },
+      // Out-of-range timezone offset (hours 00-23, minutes 00-59).
+      { classification: "phi", source: "s", asserted_at: "2026-06-29T12:00:00+99:99" },
     ];
     for (const value of bad) {
       expect(validateResourceClassificationAssertion(value).length).toBeGreaterThan(0);
