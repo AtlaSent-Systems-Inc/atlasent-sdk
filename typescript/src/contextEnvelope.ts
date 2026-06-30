@@ -51,6 +51,149 @@ export interface ContextSignal {
   ttl_seconds: number | null;
 }
 
+/** Trust tiers for a resource classification assertion. Absent ⇒ `caller_asserted`. */
+export const RESOURCE_ASSERTION_TRUST_LEVELS = [
+  "caller_asserted",
+  "partner_attested",
+  "verified",
+] as const;
+
+export type ResourceAssertionTrust = (typeof RESOURCE_ASSERTION_TRUST_LEVELS)[number];
+
+/**
+ * A trusted, provenance-bearing classification assertion about a resource —
+ * the unit AtlaSent *consumes* from an external data-security classifier
+ * (e.g. Inspect Data); it does not produce classifications itself (ADR-041).
+ *
+ * Attach under the `resource` namespace of a context envelope. Only
+ * `classification` and `source` are required. Policy MUST NOT treat an
+ * assertion as fact without checking `trust` / freshness. Mirrors the contract
+ * `ResourceClassificationAssertion` and the Python SDK.
+ *
+ * ```ts
+ * const resource = {
+ *   kind: "customer_record",
+ *   ref: "crm:account:A_1",
+ *   classification: ["confidential", "pii"],
+ *   assertions: [
+ *     { classification: "phi", source: "partner:inspect-data",
+ *       trust: "partner_attested", confidence: 0.98 },
+ *   ],
+ * };
+ * ```
+ */
+export interface ResourceClassificationAssertion {
+  /** What is asserted about the resource, e.g. "phi", "pci". */
+  classification: string;
+  /** Who asserted it — a stable producer id/URN, e.g. "partner:inspect-data". */
+  source: string;
+  /** Trust tier. Absent ⇒ `caller_asserted`. */
+  trust?: ResourceAssertionTrust;
+  /** Producer-reported confidence in [0, 1]. */
+  confidence?: number;
+  /** ISO-8601 UTC when the assertion was produced. */
+  asserted_at?: string;
+  /** ISO-8601 UTC after which the assertion is stale. */
+  valid_until?: string;
+  /** Stable id of the assertion in the producer's system, for audit linkage. */
+  assertion_id?: string;
+  /** Optional `sha256:<hex>` binding the assertion content for tamper-evidence. */
+  content_hash?: string;
+}
+
+const RESOURCE_ASSERTION_SHA256_PREFIXED = /^sha256:[0-9a-f]{64}$/;
+
+// Full ISO-8601 UTC/offset timestamp: date + time(seconds) + optional fraction
+// + `Z` or `±HH:MM`. Matches the Python check so both accept the same set.
+const RESOURCE_ASSERTION_ISO8601_RE =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
+
+function isResourceAssertionIso8601(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const m = RESOURCE_ASSERTION_ISO8601_RE.exec(value);
+  if (m === null) return false;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  const second = Number(m[6]);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) {
+    return false;
+  }
+  // Reject impossible calendar dates (e.g. 2026-02-30, which `Date.parse` would
+  // silently normalize to March). Build a UTC date from the wall-clock parts and
+  // require it to round-trip unchanged.
+  const dt = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  return (
+    dt.getUTCFullYear() === year &&
+    dt.getUTCMonth() === month - 1 &&
+    dt.getUTCDate() === day &&
+    dt.getUTCHours() === hour &&
+    dt.getUTCMinutes() === minute &&
+    dt.getUTCSeconds() === second
+  );
+}
+
+/**
+ * Validate a resource classification assertion. Returns a list of problems;
+ * an empty list means well-formed. Mirrors the contract / Python validators so
+ * all three agree on "well-formed". Only `classification` + `source` required.
+ */
+export function validateResourceClassificationAssertion(input: unknown): string[] {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return ["assertion must be a non-null object"];
+  }
+  const a = input as Record<string, unknown>;
+  const problems: string[] = [];
+  if (typeof a.classification !== "string" || a.classification.length === 0) {
+    problems.push("classification is required and must be a non-empty string");
+  }
+  if (typeof a.source !== "string" || a.source.length === 0) {
+    problems.push("source is required and must be a non-empty string");
+  }
+  if (
+    a.trust !== undefined &&
+    !(RESOURCE_ASSERTION_TRUST_LEVELS as readonly string[]).includes(a.trust as string)
+  ) {
+    problems.push(
+      `trust, when present, must be one of ${RESOURCE_ASSERTION_TRUST_LEVELS.join(", ")}`,
+    );
+  }
+  if (
+    a.confidence !== undefined &&
+    (typeof a.confidence !== "number" ||
+      !Number.isFinite(a.confidence) ||
+      a.confidence < 0 ||
+      a.confidence > 1)
+  ) {
+    problems.push("confidence, when present, must be a number in [0, 1]");
+  }
+  if (a.asserted_at !== undefined && !isResourceAssertionIso8601(a.asserted_at)) {
+    problems.push("asserted_at, when present, must be an ISO-8601 timestamp");
+  }
+  if (a.valid_until !== undefined && !isResourceAssertionIso8601(a.valid_until)) {
+    problems.push("valid_until, when present, must be an ISO-8601 timestamp");
+  }
+  if (a.assertion_id !== undefined && (typeof a.assertion_id !== "string" || a.assertion_id.length === 0)) {
+    problems.push("assertion_id, when present, must be a non-empty string");
+  }
+  if (
+    a.content_hash !== undefined &&
+    (typeof a.content_hash !== "string" || !RESOURCE_ASSERTION_SHA256_PREFIXED.test(a.content_hash))
+  ) {
+    problems.push("content_hash, when present, must match sha256:<64 hex chars>");
+  }
+  return problems;
+}
+
+/** Type guard: true when `input` is a well-formed ResourceClassificationAssertion. */
+export function isResourceClassificationAssertion(
+  input: unknown,
+): input is ResourceClassificationAssertion {
+  return validateResourceClassificationAssertion(input).length === 0;
+}
+
 /**
  * A canonical V1 context envelope — the deterministic input set that
  * powers execution-time authorization decisions.

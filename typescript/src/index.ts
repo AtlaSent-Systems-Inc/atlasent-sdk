@@ -326,6 +326,9 @@ export {
 // ── Context Envelope ──────────────────────────────────────────────────────────────────────────────────────
 export {
   CONTEXT_NAMESPACES,
+  RESOURCE_ASSERTION_TRUST_LEVELS,
+  isResourceClassificationAssertion,
+  validateResourceClassificationAssertion,
 } from "./contextEnvelope.js";
 export type {
   ContextEnvelope,
@@ -333,6 +336,8 @@ export type {
   ContextNamespaceKey,
   ContextSignal,
   RecordContextEnvelopeInput,
+  ResourceAssertionTrust,
+  ResourceClassificationAssertion,
 } from "./contextEnvelope.js";
 
 // ── V1 Proof bundle ──────────────────────────────────────────────────────────────────────────────────────

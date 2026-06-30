@@ -160,10 +160,13 @@ _LAZY_MODULES: dict[str, tuple[str, ...]] = {
     ".config": ("configure",),
     ".context_envelope": (
         "CONTEXT_NAMESPACES",
+        "RESOURCE_ASSERTION_TRUST_LEVELS",
         "ContextEnvelope",
         "ContextNamespaceEntry",
         "ContextSignal",
         "RecordContextEnvelopeInput",
+        "ResourceClassificationAssertion",
+        "validate_resource_classification_assertion",
     ),
     ".deny_codes": ("DenyCode", "requires_human_approval"),
     ".evidence_engine": (
@@ -582,10 +585,13 @@ if TYPE_CHECKING:
     from .config import configure
     from .context_envelope import (
         CONTEXT_NAMESPACES,
+        RESOURCE_ASSERTION_TRUST_LEVELS,
         ContextEnvelope,
         ContextNamespaceEntry,
         ContextSignal,
         RecordContextEnvelopeInput,
+        ResourceClassificationAssertion,
+        validate_resource_classification_assertion,
     )
     from .deny_codes import DenyCode, requires_human_approval
     from .evidence_engine import (
@@ -880,6 +886,9 @@ __all__ = [
     "ContextSignal",
     "ContextNamespaceEntry",
     "RecordContextEnvelopeInput",
+    "ResourceClassificationAssertion",
+    "validate_resource_classification_assertion",
+    "RESOURCE_ASSERTION_TRUST_LEVELS",
     "DenyCode",
     "requires_human_approval",
     "ACTION_CLASS_FAMILIES",

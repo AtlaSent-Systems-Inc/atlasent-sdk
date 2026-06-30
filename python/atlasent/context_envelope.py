@@ -10,7 +10,9 @@ These types mirror the DB schema introduced in migration
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Literal
 
 # Canonical V1 envelope top-level namespace keys.
@@ -73,6 +75,155 @@ class ContextSignal:
 
     ttl_seconds: int | None = None
     """Seconds until the signal is stale. ``None`` = no expiry."""
+
+
+# Trust tiers for a resource classification assertion (mirrors the contract
+# ResourceAssertionTrust). Absent ⇒ treat as ``caller_asserted``.
+RESOURCE_ASSERTION_TRUST_LEVELS: tuple[str, ...] = (
+    "caller_asserted",
+    "partner_attested",
+    "verified",
+)
+
+_SHA256_PREFIXED = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+# Full ISO-8601 UTC/offset timestamp: date + time(seconds) + optional fraction
+# + ``Z`` or ``±HH:MM``. Keeps the Python and TypeScript checks accepting the
+# same set (no date-only / seconds-less drift).
+_ISO8601_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$"
+)
+
+
+def _is_iso8601(value: str) -> bool:
+    # Format gate first, then ``fromisoformat`` rejects impossible calendar
+    # dates (e.g. 2026-02-30) that a lenient parser would silently normalize.
+    if not _ISO8601_RE.match(value):
+        return False
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return True
+    except ValueError:
+        return False
+
+
+def validate_resource_classification_assertion(value: Any) -> list[str]:
+    """Validate a resource classification assertion (dict form).
+
+    Returns a list of human-readable problems; an empty list means the
+    assertion is well-formed. Only ``classification`` and ``source`` are
+    required. Mirrors ``validateResourceClassificationAssertion`` in the
+    contract / TypeScript SDK so all three agree on "well-formed".
+    """
+    if not isinstance(value, dict):
+        return ["assertion must be a dict"]
+    problems: list[str] = []
+    classification = value.get("classification")
+    if not isinstance(classification, str) or not classification:
+        problems.append("classification is required and must be a non-empty string")
+    source = value.get("source")
+    if not isinstance(source, str) or not source:
+        problems.append("source is required and must be a non-empty string")
+    # Optional fields are validated when the KEY IS PRESENT — including an
+    # explicit ``null``, which is rejected (matches the TS validator's
+    # ``x !== undefined`` semantics; ``dict.get()`` would wrongly treat an
+    # explicit null the same as an omitted key).
+    if "trust" in value and value["trust"] not in RESOURCE_ASSERTION_TRUST_LEVELS:
+        problems.append(
+            "trust, when present, must be one of "
+            + ", ".join(RESOURCE_ASSERTION_TRUST_LEVELS)
+        )
+    if "confidence" in value:
+        confidence = value["confidence"]
+        if (
+            isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not (0.0 <= float(confidence) <= 1.0)
+        ):
+            problems.append("confidence, when present, must be a number in [0, 1]")
+    for ts_field in ("asserted_at", "valid_until"):
+        if ts_field in value:
+            ts = value[ts_field]
+            if not isinstance(ts, str) or not _is_iso8601(ts):
+                problems.append(
+                    f"{ts_field}, when present, must be an ISO-8601 timestamp"
+                )
+    if "assertion_id" in value:
+        assertion_id = value["assertion_id"]
+        if not isinstance(assertion_id, str) or not assertion_id:
+            problems.append("assertion_id, when present, must be a non-empty string")
+    if "content_hash" in value:
+        content_hash = value["content_hash"]
+        if not isinstance(content_hash, str) or not _SHA256_PREFIXED.match(
+            content_hash
+        ):
+            problems.append(
+                "content_hash, when present, must match sha256:<64 hex chars>"
+            )
+    return problems
+
+
+@dataclass(frozen=True)
+class ResourceClassificationAssertion:
+    """A trusted, provenance-bearing classification assertion about a resource.
+
+    The unit AtlaSent *consumes* from an external data-security classifier
+    (e.g. Inspect Data) — it does not produce classifications itself (ADR-041).
+    Attach the ``as_dict()`` form under the ``resource`` namespace of a context
+    envelope; AtlaSent consumes it alongside identity, approvals, policy, and
+    runtime context to make — and prove — the authorization decision::
+
+        env = {
+            "resource": {
+                "kind": "customer_record",
+                "ref": "crm:account:A_1",
+                "assertions": [
+                    ResourceClassificationAssertion(
+                        classification="phi",
+                        source="partner:inspect-data",
+                        trust="partner_attested",
+                        confidence=0.98,
+                    ).as_dict()
+                ],
+            }
+        }
+
+    Only ``classification`` and ``source`` are required. Policy MUST NOT treat
+    an assertion as fact without checking ``trust`` / freshness.
+    """
+
+    classification: str
+    source: str
+    trust: str | None = None
+    confidence: float | None = None
+    asserted_at: str | None = None
+    valid_until: str | None = None
+    assertion_id: str | None = None
+    content_hash: str | None = None
+
+    def validate(self) -> list[str]:
+        """Return a list of problems; an empty list means well-formed."""
+        return validate_resource_classification_assertion(self.as_dict())
+
+    def as_dict(self) -> dict[str, Any]:
+        """Serialize to the wire dict, omitting unset optional fields."""
+        out: dict[str, Any] = {
+            "classification": self.classification,
+            "source": self.source,
+        }
+        if self.trust is not None:
+            out["trust"] = self.trust
+        if self.confidence is not None:
+            out["confidence"] = self.confidence
+        if self.asserted_at is not None:
+            out["asserted_at"] = self.asserted_at
+        if self.valid_until is not None:
+            out["valid_until"] = self.valid_until
+        if self.assertion_id is not None:
+            out["assertion_id"] = self.assertion_id
+        if self.content_hash is not None:
+            out["content_hash"] = self.content_hash
+        return out
 
 
 @dataclass(frozen=True)
