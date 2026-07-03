@@ -27,6 +27,8 @@ from .client import (
     _server_message,
     _validate_api_key,
 )
+from .config import get_api_key as _get_api_key
+from .config import get_base_url as _get_base_url
 from .evidence_exports import (
     _VALID_REGIMES,
 )
@@ -143,8 +145,6 @@ class AsyncAtlaSentClient:
         retry_backoff: float = DEFAULT_RETRY_BACKOFF,
         cache: TTLCache | None = None,
     ) -> None:
-        from .config import get_api_key as _get_api_key, get_base_url as _get_base_url
-
         resolved_api_key = api_key or _get_api_key()
         resolved_base_url = base_url or _get_base_url()
         self._api_key = _validate_api_key(resolved_api_key)

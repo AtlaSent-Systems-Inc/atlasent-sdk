@@ -771,7 +771,6 @@ if TYPE_CHECKING:
         TrustRootManager,
         TrustRootRevocationEntry,
         TrustRootSnapshot,
-        _set_global_trust_root_manager_for_tests,
         get_global_trust_root_manager,
     )
     from .usage_metering import UsageMeteringClient
