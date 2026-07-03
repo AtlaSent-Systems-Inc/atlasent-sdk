@@ -5,6 +5,10 @@ import type { EscalationHandle } from "../approvalRuntime.js";
 
 export type GxpActionType =
   | "manufacturing.batch_record.release"
+  // AC-001 Deploy — validated system deployment (validated-state semantics; AI-agent excluded)
+  | "gxp.system.deploy"
+  // AC-020 Certify — QP batch release (personal, non-delegatable qualified authority)
+  | "manufacturing.qp.certify"
   | "clinical.tmf.record.modify"
   | "clinical.data.access"
   | "clinical.source_data.read"
@@ -29,6 +33,8 @@ export type GxpActionType =
 
 const GXP_ACTION_RISK: Record<GxpActionType, "high" | "critical"> = {
   "manufacturing.batch_record.release": "critical",
+  "gxp.system.deploy": "critical",
+  "manufacturing.qp.certify": "critical",
   "clinical.tmf.record.modify": "high",
   "clinical.data.access": "high",
   "clinical.source_data.read": "high",
