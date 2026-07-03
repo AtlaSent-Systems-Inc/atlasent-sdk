@@ -771,7 +771,6 @@ if TYPE_CHECKING:
         TrustRootManager,
         TrustRootRevocationEntry,
         TrustRootSnapshot,
-        _set_global_trust_root_manager_for_tests,
         get_global_trust_root_manager,
     )
     from .usage_metering import UsageMeteringClient
@@ -1117,7 +1116,6 @@ __all__ = [
     "TrustRootRevocationEntry",
     "TrustRootSnapshot",
     "get_global_trust_root_manager",
-    "_set_global_trust_root_manager_for_tests",
     # Verticals — domain-specific protect() convenience wrappers.
     # Phase 4: HR, model governance, data delete, contract, pricing.
     "protect_hr_action",

@@ -125,10 +125,11 @@ function getClient(): AtlaSentClient {
 
   // Guard process.env access so this module is safe in browser and
   // edge-runtime environments where `process` is not defined as a global.
-  const envApiKey =
-    typeof process !== "undefined" && process.env
-      ? process.env.ATLASENT_API_KEY
-      : undefined;
+  const hasProcessEnv = typeof process !== "undefined" && !!process.env;
+  const envApiKey = hasProcessEnv ? process.env.ATLASENT_API_KEY : undefined;
+  const envBaseUrl = hasProcessEnv
+    ? (process.env.ATLASENT_BASE_URL ?? process.env.ATLASENT_API_URL)
+    : undefined;
 
   const apiKey = overrides.apiKey ?? envApiKey;
   if (!apiKey) {
@@ -138,7 +139,8 @@ function getClient(): AtlaSentClient {
     );
   }
   const options: AtlaSentClientOptions = { apiKey };
-  if (overrides.baseUrl !== undefined) options.baseUrl = overrides.baseUrl;
+  const baseUrl = overrides.baseUrl ?? envBaseUrl;
+  if (baseUrl !== undefined) options.baseUrl = baseUrl;
   if (overrides.timeoutMs !== undefined)
     options.timeoutMs = overrides.timeoutMs;
   if (overrides.fetch !== undefined) options.fetch = overrides.fetch;
