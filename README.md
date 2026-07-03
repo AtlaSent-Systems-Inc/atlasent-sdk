@@ -64,9 +64,11 @@ const guardedTools = withLangChainGuard(
 ### CI/CD deploy gate
 
 ```python
-from atlasent import protect
+from atlasent import AtlaSentClient
 
-permit = protect(
+client = AtlaSentClient(api_key=os.environ["ATLASENT_API_KEY"])
+
+permit = client.protect(
     agent="ci-deploy-bot",
     action="production.deploy",
     context={"repo": "atlasent/api", "commit": commit, "environment": "production"},
