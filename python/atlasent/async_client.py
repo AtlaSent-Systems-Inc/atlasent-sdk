@@ -134,18 +134,22 @@ class AsyncAtlaSentClient:
 
     def __init__(
         self,
-        api_key: str,
+        api_key: str | None = None,
         *,
         anon_key: str = "",
-        base_url: str = DEFAULT_BASE_URL,
+        base_url: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         retry_backoff: float = DEFAULT_RETRY_BACKOFF,
         cache: TTLCache | None = None,
     ) -> None:
-        self._api_key = _validate_api_key(api_key)
+        from .config import get_api_key as _get_api_key, get_base_url as _get_base_url
+
+        resolved_api_key = api_key or _get_api_key()
+        resolved_base_url = base_url or _get_base_url()
+        self._api_key = _validate_api_key(resolved_api_key)
         self._anon_key = anon_key
-        self._base_url = _enforce_tls(base_url).rstrip("/")
+        self._base_url = _enforce_tls(resolved_base_url).rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries
         self._retry_backoff = retry_backoff
@@ -154,7 +158,7 @@ class AsyncAtlaSentClient:
             headers={
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "Authorization": f"Bearer {api_key}",
+                "Authorization": f"Bearer {resolved_api_key}",
                 "User-Agent": f"atlasent-python/{__version__}",
             },
             timeout=self._timeout,

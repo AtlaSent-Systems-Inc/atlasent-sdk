@@ -1117,7 +1117,6 @@ __all__ = [
     "TrustRootRevocationEntry",
     "TrustRootSnapshot",
     "get_global_trust_root_manager",
-    "_set_global_trust_root_manager_for_tests",
     # Verticals — domain-specific protect() convenience wrappers.
     # Phase 4: HR, model governance, data delete, contract, pricing.
     "protect_hr_action",
