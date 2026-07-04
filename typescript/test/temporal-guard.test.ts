@@ -206,6 +206,132 @@ describe("TemporalGuard — pre-check 3: permit freshness", () => {
     const result = await guard.run(makePermitToken(0), freshContext(), async () => "ok");
     expect(result.value).toBe("ok");
   });
+
+  it("skips freshness check for pt.v3.* tokens (no iat client-side)", async () => {
+    const client = makeClient({});
+    const guard = new TemporalGuard(client, {
+      actionType: "agent.write",
+      maxPermitAgeMs: 1, // very tight — would fail if checked
+    });
+    const result = await guard.run("pt.v3.fakepayload.fakesig", freshContext(), async () => "ok");
+    expect(result.value).toBe("ok");
+  });
+});
+
+// Build a pt.v4.* COSE Sign1 token with the given iat (Unix seconds).
+// Does NOT produce a valid Ed25519 signature (all-zero bytes) — only suitable
+// for testing checkPermitFreshness which is client-side and skips sig verification.
+function makeV4Token(iatSec: number): string {
+  // permit_claims CBOR map: {4: 0, 6: iatSec}
+  // Keys must be in canonical order (RFC 8949 §4.2.1): 4 before 6.
+  const encUint = (n: number): number[] => {
+    if (n <= 23) return [n];
+    if (n <= 0xff) return [0x18, n];
+    if (n <= 0xffff) return [0x19, n >> 8, n & 0xff];
+    return [0x1a, (n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+  };
+  const payload = Uint8Array.from([
+    0xa2,       // map(2)
+    0x04, 0x00, // key 4 (exp) = 0
+    0x06, ...encUint(iatSec), // key 6 (iat) = iatSec
+  ]);
+
+  // COSE_Sign1 components
+  const protectedHdr = [0xa1, 0x01, 0x27]; // {1: -8} = EdDSA
+  const emptyMap = [0xa0];
+  const sig = new Array(64).fill(0); // all-zero signature (not verified client-side)
+
+  // Encode bstr(protectedHdr): 0x43 a1 01 27
+  const protectedBstr = [0x43, ...protectedHdr];
+
+  // Encode bstr(payload): 0x40|len or 0x58 len (payload.length <= 23 guaranteed for test payloads)
+  const payloadBstr =
+    payload.length <= 23
+      ? [0x40 | payload.length, ...payload]
+      : [0x58, payload.length, ...payload];
+
+  // Encode bstr(sig): 0x58 0x40 <64 bytes>
+  const sigBstr = [0x58, 0x40, ...sig];
+
+  // COSE_Sign1 = d2 84 [protectedBstr, {}, payloadBstr, sigBstr]
+  const coseBytes = Uint8Array.from([
+    0xd2, // tag(18)
+    0x84, // array(4)
+    ...protectedBstr,
+    ...emptyMap,
+    ...payloadBstr,
+    ...sigBstr,
+  ]);
+
+  const binary = String.fromCharCode(...coseBytes);
+  const b64 = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  return `pt.v4.${b64}`;
+}
+
+describe("TemporalGuard — pre-check 3: permit freshness (pt.v4.*)", () => {
+  it("throws PERMIT_NOT_FRESH when pt.v4 permit is too old", async () => {
+    const client = makeClient({});
+    const oldIatSec = Math.floor((Date.now() - 120_000) / 1000); // 2 min ago
+    const guard = new TemporalGuard(client, {
+      actionType: "agent.write",
+      maxPermitAgeMs: 60_000,
+    });
+    await expect(
+      guard.run(makeV4Token(oldIatSec), freshContext(), async () => 42),
+    ).rejects.toMatchObject({ code: "PERMIT_NOT_FRESH" });
+  });
+
+  it("allows execution when pt.v4 permit is fresh", async () => {
+    const client = makeClient({});
+    const iatSec = Math.floor((Date.now() - 1_000) / 1000);
+    const guard = new TemporalGuard(client, {
+      actionType: "agent.write",
+      maxPermitAgeMs: 60_000,
+    });
+    const result = await guard.run(makeV4Token(iatSec), freshContext(), async () => "ok");
+    expect(result.value).toBe("ok");
+  });
+
+  it("fails closed on malformed pt.v4 token (invalid base64url)", async () => {
+    const client = makeClient({});
+    const guard = new TemporalGuard(client, {
+      actionType: "agent.write",
+      maxPermitAgeMs: 60_000,
+    });
+    await expect(
+      guard.run("pt.v4.!!!notbase64!!!", freshContext(), async () => 42),
+    ).rejects.toMatchObject({ code: "PERMIT_NOT_FRESH" });
+  });
+
+  it("fails closed on pt.v4 token with valid base64 but non-COSE bytes", async () => {
+    const client = makeClient({});
+    const garbage = btoa("this is not COSE").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+    const guard = new TemporalGuard(client, {
+      actionType: "agent.write",
+      maxPermitAgeMs: 60_000,
+    });
+    await expect(
+      guard.run(`pt.v4.${garbage}`, freshContext(), async () => 42),
+    ).rejects.toMatchObject({ code: "PERMIT_NOT_FRESH" });
+  });
+
+  it("fails closed on pt.v4 token with empty payload after prefix", async () => {
+    const client = makeClient({});
+    const guard = new TemporalGuard(client, {
+      actionType: "agent.write",
+      maxPermitAgeMs: 60_000,
+    });
+    await expect(
+      guard.run("pt.v4.", freshContext(), async () => 42),
+    ).rejects.toMatchObject({ code: "PERMIT_NOT_FRESH" });
+  });
+
+  it("skips pt.v4 freshness check when maxPermitAgeMs is not set", async () => {
+    const client = makeClient({});
+    const guard = new TemporalGuard(client, { actionType: "agent.write" });
+    const result = await guard.run(makeV4Token(0), freshContext(), async () => "ok");
+    expect(result.value).toBe("ok");
+  });
 });
 
 describe("TemporalGuard — revalidation during execution", () => {
