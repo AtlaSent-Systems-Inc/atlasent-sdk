@@ -258,9 +258,19 @@ export class TemporalGuard {
   private checkPermitFreshness(permitToken: string, nowMs: number): { fresh: boolean; elapsedMs: number } {
     const maxMs = this.opts.maxPermitAgeMs!;
     try {
+      if (permitToken.startsWith('pt.v4.')) {
+        // Decode the COSE Sign1 payload without verifying the Ed25519 signature (client-side only)
+        const iatSec = extractIatV4(permitToken);
+        if (iatSec === null || !Number.isFinite(iatSec)) {
+          return { fresh: false, elapsedMs: Infinity };
+        }
+        const elapsedMs = Math.max(0, nowMs - iatSec * 1000);
+        return { fresh: elapsedMs <= maxMs, elapsedMs };
+      }
+
       // Decode the pt.v2 payload without verifying the HMAC (client-side only)
       if (!permitToken.startsWith('pt.v2.')) {
-        return { fresh: true, elapsedMs: 0 }; // Legacy UUID token: skip freshness check
+        return { fresh: true, elapsedMs: 0 }; // pt.v3.* or legacy UUID token: skip freshness check
       }
       const withoutPrefix = permitToken.slice('pt.v2.'.length);
       const lastDot = withoutPrefix.lastIndexOf('.');
@@ -283,6 +293,92 @@ export class TemporalGuard {
       // Fail-closed on parse error
       return { fresh: false, elapsedMs: Infinity };
     }
+  }
+}
+
+// ─── pt.v4 iat extraction (client-side, no signature verification) ────────────
+
+/**
+ * Extract the `iat` (issued-at, Unix seconds) from a pt.v4.* COSE Sign1 token.
+ *
+ * Decodes the COSE_Sign1 structure and reads key 6 from the CBOR permit_claims
+ * map WITHOUT verifying the Ed25519 signature — same trust model as the existing
+ * pt.v2.* path which extracts `issued_at_ms` from the JSON payload without HMAC
+ * verification.  Signature verification happens server-side in v1-verify-permit.
+ *
+ * Returns the iat value in seconds, or null on any parse error.
+ */
+function extractIatV4(token: string): number | null {
+  try {
+    const b64 = token.slice('pt.v4.'.length);
+    if (!b64) return null;
+    const standard = b64.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = standard.length % 4;
+    const padded = pad === 0 ? standard : standard + '='.repeat(4 - pad);
+    const binary = atob(padded);
+    const buf = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+
+    let pos = 0;
+
+    // Minimal CBOR reader (integer types + bstr/tstr skip, no floats)
+    const rb = (): number => {
+      if (pos >= buf.length) throw new Error('eof');
+      return buf[pos++] as number;
+    };
+    const rarg = (a: number): number => {
+      if (a < 24) return a;
+      if (a === 24) return rb();
+      if (a === 25) return (rb() << 8) | rb();
+      if (a === 26) return ((rb() << 24) >>> 0) | (rb() << 16) | (rb() << 8) | rb();
+      throw new Error('cbor:arg');
+    };
+    const rh = (): [number, number] => { const b = rb(); return [(b >> 5) & 7, rarg(b & 0x1f)]; };
+    const sk = (): void => {
+      const [m, n] = rh();
+      if (m <= 1) return;                           // uint / nint: head only
+      if (m === 2 || m === 3) { pos += n; return; } // bstr / tstr: skip content
+      if (m === 4) { for (let i = 0; i < n; i++) sk(); return; }       // array
+      if (m === 5) { for (let i = 0; i < n * 2; i++) sk(); return; }   // map
+      if (m === 6) { sk(); return; }                // tag: skip tagged item
+      throw new Error('cbor:major');
+    };
+
+    // Consume optional COSE tag 18 header byte (major type 6).
+    // rh() reads only the tag head (0xd2 = one byte for tag 18 < 24); it does
+    // NOT consume the tagged item — the array(4) body follows immediately.
+    if (pos < buf.length && ((buf[pos] as number) >> 5) === 6) rh();
+
+    // Outer COSE_Sign1 = array(4)
+    const [am, al] = rh();
+    if (am !== 4 || al !== 4) return null;
+
+    sk(); // protected header bstr
+    sk(); // unprotected map {}
+
+    // Payload bstr: read header, then scan the CBOR map inline
+    const [pm, pn] = rh();
+    if (pm !== 2) return null;
+    // pos now at start of the payload CBOR map
+
+    const [mm, mn] = rh();
+    if (mm !== 5) return null;
+
+    for (let k = 0; k < mn; k++) {
+      const [km, kn] = rh();
+      const key = km === 0 ? kn : km === 1 ? -1 - kn : null;
+      if (key === null) return null;
+      if (key === 6) {
+        const [vm, vn] = rh();
+        if (vm !== 0) return null; // iat must be a uint
+        return vn;
+      }
+      sk(); // skip value for other keys
+    }
+    void pn;
+    return null; // iat key not found
+  } catch {
+    return null;
   }
 }
 
