@@ -356,6 +356,12 @@ _LAZY_MODULES: dict[str, tuple[str, ...]] = {
         "evaluate_many",
         "graphql",
     ),
+    ".verify_permit_v4": (
+        "PermitClaimsV4",
+        "PermitV4VerifyError",
+        "PermitV4VerifyResult",
+        "verify_permit_v4",
+    ),
     ".verticals.access_cert": (
         "protect_access_cert_action",
         "protect_access_cert_revoke",
@@ -798,6 +804,12 @@ if TYPE_CHECKING:
         evaluate_many,
         graphql,
     )
+    from .verify_permit_v4 import (
+        PermitClaimsV4,
+        PermitV4VerifyError,
+        PermitV4VerifyResult,
+        verify_permit_v4,
+    )
     from .verticals.access_cert import (
         protect_access_cert_action,
         protect_access_cert_revoke,
@@ -1154,4 +1166,9 @@ __all__ = [
     "RuntimeAuditEntry",
     "VerificationFailure",
     "VerificationResult",
+    # pt.v4.* offline permit verifier (ADR-050).
+    "verify_permit_v4",
+    "PermitClaimsV4",
+    "PermitV4VerifyError",
+    "PermitV4VerifyResult",
 ]
