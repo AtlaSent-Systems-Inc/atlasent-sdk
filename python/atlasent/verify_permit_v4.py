@@ -22,7 +22,6 @@ Requires the ``cryptography`` library (already a dependency of the SDK).
 from __future__ import annotations
 
 import base64
-import struct
 import uuid as _uuid_module
 from dataclasses import dataclass
 from typing import Optional

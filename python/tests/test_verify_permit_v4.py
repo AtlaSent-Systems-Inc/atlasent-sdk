@@ -7,7 +7,6 @@ a real sign → verify round-trip.
 from __future__ import annotations
 
 import base64
-import struct
 import time
 import uuid
 
@@ -20,11 +19,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 from atlasent.verify_permit_v4 import (
     PermitClaimsV4,
     PermitV4VerifyError,
-    PermitV4VerifyResult,
     REASON_BAD_FORMAT,
     REASON_BAD_PREFIX,
-    REASON_CLAIMS_DECODE_FAILED,
-    REASON_COSE_DECODE_FAILED,
     REASON_EXPIRED,
     REASON_SIGNATURE_INVALID,
     REASON_WRONG_PROTECTED_HEADER,
