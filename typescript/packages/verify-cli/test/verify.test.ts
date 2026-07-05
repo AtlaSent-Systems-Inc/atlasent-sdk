@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createHash, generateKeyPairSync, sign as edSign } from "node:crypto";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -395,8 +395,7 @@ describe("verifyEvidenceBundle — missing required fields", () => {
 
 // ── CLI unit tests ────────────────────────────────────────────────────────────
 
-const TMPDIR = join(tmpdir(), "atlasent-verify-test");
-mkdirSync(TMPDIR, { recursive: true });
+const TMPDIR = mkdtempSync(join(tmpdir(), "atlasent-verify-test-"));
 
 function writeTempBundle(name: string, bundle: EvidenceBundle, ks: KeySet): [string, string] {
   const bp = join(TMPDIR, `${name}-bundle.json`);
