@@ -124,6 +124,13 @@ export {
   type ProtectedAction,
 } from "./requirePermit.js";
 export { withPermit } from "./withPermit.js";
+export {
+  verifyPermitV4,
+  PermitV4VerifyError,
+  type PermitClaimsV4,
+  type PermitV4VerifyResult,
+  type PermitV4VerifyReason,
+} from "./verify-permit-v4.js";
 export type {
   ApiKeySelfResponse,
   AssertionSubmitInput,
