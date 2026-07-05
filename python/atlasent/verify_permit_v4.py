@@ -49,18 +49,19 @@ class PermitV4VerifyError(Exception):
 
 # ─── Permit claims dataclass ──────────────────────────────────────────────────
 
+
 @dataclass
 class PermitClaimsV4:
-    permit_id: str    # UUID string (from key 7 / CWT cti — 16-byte bstr)
-    exp: int          # Unix epoch seconds (key 4)
-    iat: int          # Unix epoch seconds (key 6)
+    permit_id: str  # UUID string (from key 7 / CWT cti — 16-byte bstr)
+    exp: int  # Unix epoch seconds (key 4)
+    iat: int  # Unix epoch seconds (key 6)
     decision_id: str  # tstr (key -1)
-    org_id: str       # UUID string (key -2 — 16-byte bstr)
+    org_id: str  # UUID string (key -2 — 16-byte bstr)
     action_type: str  # tstr (key -3)
-    actor_id: str     # tstr (key -4)
+    actor_id: str  # tstr (key -4)
     environment: str  # "live" | "test" (key -5)
-    cdo_hash: str | None = None    # 64-char hex sha256 (key -6, optional)
-    policy_hash: str | None = None # 64-char hex sha256 (key -7, optional)
+    cdo_hash: str | None = None  # 64-char hex sha256 (key -6, optional)
+    policy_hash: str | None = None  # 64-char hex sha256 (key -7, optional)
 
 
 @dataclass
@@ -70,6 +71,7 @@ class PermitV4VerifyResult:
 
 
 # ─── Minimal CBOR reader ──────────────────────────────────────────────────────
+
 
 class _CborReader:
     def __init__(self, data: bytes) -> None:
@@ -100,14 +102,14 @@ class _CborReader:
     def _read_head(self) -> tuple[int, int]:
         b = self._read_byte()
         major = (b >> 5) & 7
-        n = self._read_uint_val(b & 0x1f)
+        n = self._read_uint_val(b & 0x1F)
         return major, n
 
     def read_bstr(self) -> bytes:
         major, n = self._read_head()
         if major != 2:
             raise ValueError(f"cbor: expected bstr, got major {major}")
-        out = self._b[self._pos:self._pos + n]
+        out = self._b[self._pos : self._pos + n]
         self._pos += n
         return out
 
@@ -135,7 +137,7 @@ class _CborReader:
         major, n = self._read_head()
         if major != 3:
             raise ValueError(f"cbor: expected tstr, got major {major}")
-        out = self._b[self._pos:self._pos + n]
+        out = self._b[self._pos : self._pos + n]
         self._pos += n
         return out.decode("utf-8")
 
@@ -171,14 +173,15 @@ class _CborReader:
 
 # ─── CBOR encoding helpers (for Sig_Structure) ───────────────────────────────
 
+
 def _cbor_uint(n: int) -> bytes:
     if n <= 23:
         return bytes([n])
-    if n <= 0xff:
+    if n <= 0xFF:
         return bytes([24, n])
-    if n <= 0xffff:
-        return bytes([25, n >> 8, n & 0xff])
-    return bytes([26, (n >> 24) & 0xff, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff])
+    if n <= 0xFFFF:
+        return bytes([25, n >> 8, n & 0xFF])
+    return bytes([26, (n >> 24) & 0xFF, (n >> 16) & 0xFF, (n >> 8) & 0xFF, n & 0xFF])
 
 
 def _cbor_bstr(b: bytes) -> bytes:
@@ -202,10 +205,11 @@ def _cbor_array(items: list[bytes]) -> bytes:
 
 # ─── Protected header ─────────────────────────────────────────────────────────
 
-_PROTECTED_HEADER = bytes([0xa1, 0x01, 0x27])  # { 1: -8 } = EdDSA
+_PROTECTED_HEADER = bytes([0xA1, 0x01, 0x27])  # { 1: -8 } = EdDSA
 
 
 # ─── COSE Sign1 decode ────────────────────────────────────────────────────────
+
 
 def _decode_cose_sign1(data: bytes) -> tuple[bytes, bytes, bytes]:
     """Return (protected_bytes, payload_bytes, sig_bytes)."""
@@ -224,15 +228,18 @@ def _decode_cose_sign1(data: bytes) -> tuple[bytes, bytes, bytes]:
 
 def _build_sig_structure(protected_bytes: bytes, payload_bytes: bytes) -> bytes:
     """Build the COSE Sig_Structure for signing/verification (RFC 9052 §4.4)."""
-    return _cbor_array([
-        _cbor_tstr("Signature1"),
-        _cbor_bstr(protected_bytes),
-        _cbor_bstr(b""),
-        _cbor_bstr(payload_bytes),
-    ])
+    return _cbor_array(
+        [
+            _cbor_tstr("Signature1"),
+            _cbor_bstr(protected_bytes),
+            _cbor_bstr(b""),
+            _cbor_bstr(payload_bytes),
+        ]
+    )
 
 
 # ─── Permit claims decode ─────────────────────────────────────────────────────
+
 
 def _bytes_to_uuid(b: bytes) -> str:
     return str(_uuid_module.UUID(bytes=b))
@@ -268,8 +275,14 @@ def _decode_permit_claims(data: bytes) -> PermitClaimsV4:
             r.skip()
 
     required = (
-        "exp", "iat", "permit_id", "decision_id",
-        "org_id", "action_type", "actor_id", "environment",
+        "exp",
+        "iat",
+        "permit_id",
+        "decision_id",
+        "org_id",
+        "action_type",
+        "actor_id",
+        "environment",
     )
     for f in required:
         if f not in result:
@@ -290,6 +303,7 @@ def _decode_permit_claims(data: bytes) -> PermitClaimsV4:
 
 
 # ─── Main API ─────────────────────────────────────────────────────────────────
+
 
 def verify_permit_v4(
     token: str,
@@ -326,7 +340,7 @@ def verify_permit_v4(
             REASON_BAD_PREFIX, f"expected pt.v4.* prefix, got: {token[:12]!r}"
         )
 
-    b64_payload = token[len("pt.v4."):]
+    b64_payload = token[len("pt.v4.") :]
     # base64url → standard base64
     padded = b64_payload.replace("-", "+").replace("_", "/")
     padded += "=" * (-len(padded) % 4)
@@ -371,6 +385,7 @@ def verify_permit_v4(
         now_sec = int(_time.time())
         if claims.exp <= now_sec:
             from datetime import datetime, timezone
+
             exp_str = datetime.fromtimestamp(claims.exp, tz=timezone.utc).isoformat()
             raise PermitV4VerifyError(REASON_EXPIRED, f"permit expired at {exp_str}")
 

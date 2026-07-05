@@ -29,6 +29,7 @@ from atlasent.verify_permit_v4 import (
 
 # ─── CBOR helpers for token construction ──────────────────────────────────────
 
+
 def _cbor_uint(n: int) -> bytes:
     if n <= 23:
         return bytes([n])
@@ -72,7 +73,7 @@ def _hex_to_bytes(h: str) -> bytes:
     return bytes.fromhex(h)
 
 
-PROTECTED_HEADER = bytes([0xa1, 0x01, 0x27])  # { 1: -8 } = EdDSA
+PROTECTED_HEADER = bytes([0xA1, 0x01, 0x27])  # { 1: -8 } = EdDSA
 
 
 def _build_permit_claims_cbor(claims: PermitClaimsV4) -> bytes:
@@ -97,31 +98,32 @@ def _build_permit_claims_cbor(claims: PermitClaimsV4) -> bytes:
 
     count = len(entries) // 2
     map_head = bytearray(_cbor_uint(count))
-    map_head[0] |= 0xa0
+    map_head[0] |= 0xA0
     return bytes(map_head) + b"".join(entries)
 
 
 def _build_sig_structure(payload_bytes: bytes) -> bytes:
-    return _cbor_array([
-        _cbor_tstr("Signature1"),
-        _cbor_bstr(PROTECTED_HEADER),
-        _cbor_bstr(b""),
-        _cbor_bstr(payload_bytes),
-    ])
+    return _cbor_array(
+        [
+            _cbor_tstr("Signature1"),
+            _cbor_bstr(PROTECTED_HEADER),
+            _cbor_bstr(b""),
+            _cbor_bstr(payload_bytes),
+        ]
+    )
 
 
 def _build_token(claims: PermitClaimsV4, private_key: Ed25519PrivateKey) -> str:
     payload_bytes = _build_permit_claims_cbor(claims)
     sig_structure = _build_sig_structure(payload_bytes)
     sig = private_key.sign(sig_structure)
-    cose_sign1 = (
-        bytes([0xd2])  # CBOR tag 18
-        + _cbor_array([
+    cose_sign1 = bytes([0xD2]) + _cbor_array(  # CBOR tag 18
+        [
             _cbor_bstr(PROTECTED_HEADER),
-            bytes([0xa0]),          # empty unprotected map {}
+            bytes([0xA0]),  # empty unprotected map {}
             _cbor_bstr(payload_bytes),
             _cbor_bstr(sig),
-        ])
+        ]
     )
     b64 = base64.urlsafe_b64encode(cose_sign1).rstrip(b"=").decode()
     return f"pt.v4.{b64}"
@@ -155,6 +157,7 @@ def key_pair():
 
 
 # ─── Tests ────────────────────────────────────────────────────────────────────
+
 
 def test_verifies_well_formed_token(key_pair):
     priv, pub = key_pair
@@ -229,8 +232,8 @@ def test_rejects_tampered_payload(key_pair):
     token = _build_token(TEST_CLAIMS, priv)
 
     # Decode, flip a byte, re-encode.
-    b64 = token[len("pt.v4."):]
-    padded = b64.replace("-", "+").replace("_", "/") + "==" [: (-len(b64) % 4) or 4]
+    b64 = token[len("pt.v4.") :]
+    padded = b64.replace("-", "+").replace("_", "/") + "=="[: (-len(b64) % 4) or 4]
     raw = bytearray(base64.b64decode(padded))
     raw[len(raw) // 2] ^= 0xFF
     tampered = "pt.v4." + base64.urlsafe_b64encode(bytes(raw)).rstrip(b"=").decode()
@@ -268,22 +271,23 @@ def test_rejects_wrong_protected_header(key_pair):
     priv, pub = key_pair
     payload_bytes = _build_permit_claims_cbor(TEST_CLAIMS)
     # Build COSE_Sign1 with wrong protected header { 1: -7 } = ES256
-    wrong_protected = bytes([0xa1, 0x01, 0x26])
-    sig_structure = _cbor_array([
-        _cbor_tstr("Signature1"),
-        _cbor_bstr(wrong_protected),
-        _cbor_bstr(b""),
-        _cbor_bstr(payload_bytes),
-    ])
-    sig = priv.sign(sig_structure)
-    cose_sign1 = (
-        bytes([0xd2])
-        + _cbor_array([
+    wrong_protected = bytes([0xA1, 0x01, 0x26])
+    sig_structure = _cbor_array(
+        [
+            _cbor_tstr("Signature1"),
             _cbor_bstr(wrong_protected),
-            bytes([0xa0]),
+            _cbor_bstr(b""),
+            _cbor_bstr(payload_bytes),
+        ]
+    )
+    sig = priv.sign(sig_structure)
+    cose_sign1 = bytes([0xD2]) + _cbor_array(
+        [
+            _cbor_bstr(wrong_protected),
+            bytes([0xA0]),
             _cbor_bstr(payload_bytes),
             _cbor_bstr(sig),
-        ])
+        ]
     )
     b64 = base64.urlsafe_b64encode(cose_sign1).rstrip(b"=").decode()
     token = f"pt.v4.{b64}"
