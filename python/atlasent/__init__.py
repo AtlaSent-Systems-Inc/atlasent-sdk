@@ -774,12 +774,6 @@ if TYPE_CHECKING:
         _set_global_trust_root_manager_for_tests,
         get_global_trust_root_manager,
     )
-    from .verify_permit_v4 import (
-        PermitClaimsV4,
-        PermitV4VerifyError,
-        PermitV4VerifyResult,
-        verify_permit_v4,
-    )
     from .usage_metering import UsageMeteringClient
     from .v2_endpoints import (
         BATCH_PATH as V2_BATCH_PATH,
@@ -804,6 +798,12 @@ if TYPE_CHECKING:
         authorize_stream,
         evaluate_many,
         graphql,
+    )
+    from .verify_permit_v4 import (
+        PermitClaimsV4,
+        PermitV4VerifyError,
+        PermitV4VerifyResult,
+        verify_permit_v4,
     )
     from .verticals.access_cert import (
         protect_access_cert_action,

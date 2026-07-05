@@ -17,16 +17,15 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 )
 
 from atlasent.verify_permit_v4 import (
-    PermitClaimsV4,
-    PermitV4VerifyError,
     REASON_BAD_FORMAT,
     REASON_BAD_PREFIX,
     REASON_EXPIRED,
     REASON_SIGNATURE_INVALID,
     REASON_WRONG_PROTECTED_HEADER,
+    PermitClaimsV4,
+    PermitV4VerifyError,
     verify_permit_v4,
 )
-
 
 # ─── CBOR helpers for token construction ──────────────────────────────────────
 

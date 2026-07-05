@@ -8,6 +8,9 @@
 import { describe, expect, it } from "vitest";
 import { verifyPermitV4, PermitV4VerifyError, type PermitClaimsV4 } from "../src/verify-permit-v4.js";
 
+// CryptoKeyPair is DOM-only; @types/node only ships CryptoKey. Define locally.
+type CryptoKeyPair = { publicKey: CryptoKey; privateKey: CryptoKey };
+
 // ─── CBOR helpers for token construction ──────────────────────────────────────
 
 function cborUint(n: number): Uint8Array {
@@ -140,7 +143,7 @@ const TEST_CLAIMS: PermitClaimsV4 = {
 
 describe("verifyPermitV4", () => {
   it("verifies a well-formed pt.v4.* token", async () => {
-    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as unknown as CryptoKeyPair;
     const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
     const publicKeyB64 = toB64(rawPub);
 
@@ -160,7 +163,7 @@ describe("verifyPermitV4", () => {
   });
 
   it("verifies a token with optional cdo_hash and policy_hash", async () => {
-    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as unknown as CryptoKeyPair;
     const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
 
     const claimsWithHashes: PermitClaimsV4 = {
@@ -176,7 +179,7 @@ describe("verifyPermitV4", () => {
   });
 
   it("verifies a test-environment token", async () => {
-    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as unknown as CryptoKeyPair;
     const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
     const claims: PermitClaimsV4 = { ...TEST_CLAIMS, environment: "test" };
     const token = await buildToken(claims, kp.privateKey);
@@ -200,8 +203,8 @@ describe("verifyPermitV4", () => {
   });
 
   it("rejects a token signed by a different key", async () => {
-    const signingKp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
-    const verifyKp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const signingKp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as unknown as CryptoKeyPair;
+    const verifyKp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as unknown as CryptoKeyPair;
     const verifyPub = new Uint8Array(await crypto.subtle.exportKey("raw", verifyKp.publicKey));
 
     const token = await buildToken(TEST_CLAIMS, signingKp.privateKey);
@@ -209,7 +212,7 @@ describe("verifyPermitV4", () => {
   });
 
   it("rejects a token with a tampered payload", async () => {
-    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as unknown as CryptoKeyPair;
     const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
     const token = await buildToken(TEST_CLAIMS, kp.privateKey);
 
@@ -222,7 +225,8 @@ describe("verifyPermitV4", () => {
       return arr;
     })();
     // Flip a byte in the middle of the payload bytes.
-    coseBytes[coseBytes.length >> 1] ^= 0xff;
+    const mid = coseBytes.length >> 1;
+    coseBytes[mid] = coseBytes[mid]! ^ 0xff;
     const tampered = "pt.v4." + toB64url(coseBytes);
 
     // May throw cose_decode_failed, claims_decode_failed, or signature_invalid.
@@ -230,7 +234,7 @@ describe("verifyPermitV4", () => {
   });
 
   it("accepts an unexpired token when checkExpiry: true", async () => {
-    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as unknown as CryptoKeyPair;
     const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
     const token = await buildToken(TEST_CLAIMS, kp.privateKey);
     const result = await verifyPermitV4(token, toB64(rawPub), { checkExpiry: true });
@@ -238,7 +242,7 @@ describe("verifyPermitV4", () => {
   });
 
   it("rejects an expired token when checkExpiry: true", async () => {
-    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as unknown as CryptoKeyPair;
     const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
     const expiredClaims: PermitClaimsV4 = {
       ...TEST_CLAIMS,
@@ -250,7 +254,7 @@ describe("verifyPermitV4", () => {
   });
 
   it("accepts an expired token without checkExpiry (default)", async () => {
-    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as unknown as CryptoKeyPair;
     const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
     const expiredClaims: PermitClaimsV4 = {
       ...TEST_CLAIMS,
@@ -263,7 +267,7 @@ describe("verifyPermitV4", () => {
   });
 
   it("rejects a token with wrong protected header", async () => {
-    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as unknown as CryptoKeyPair;
     const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
 
     // Build a COSE_Sign1 with a wrong protected header (e.g. { 1: -7 } = ES256).

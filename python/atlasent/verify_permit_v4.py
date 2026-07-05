@@ -24,11 +24,9 @@ from __future__ import annotations
 import base64
 import uuid as _uuid_module
 from dataclasses import dataclass
-from typing import Optional
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
 
 # ─── Error types ──────────────────────────────────────────────────────────────
 
@@ -61,8 +59,8 @@ class PermitClaimsV4:
     action_type: str  # tstr (key -3)
     actor_id: str     # tstr (key -4)
     environment: str  # "live" | "test" (key -5)
-    cdo_hash: Optional[str] = None    # 64-char hex sha256 (key -6, optional)
-    policy_hash: Optional[str] = None # 64-char hex sha256 (key -7, optional)
+    cdo_hash: str | None = None    # 64-char hex sha256 (key -6, optional)
+    policy_hash: str | None = None # 64-char hex sha256 (key -7, optional)
 
 
 @dataclass
@@ -269,7 +267,10 @@ def _decode_permit_claims(data: bytes) -> PermitClaimsV4:
         else:
             r.skip()
 
-    required = ("exp", "iat", "permit_id", "decision_id", "org_id", "action_type", "actor_id", "environment")
+    required = (
+        "exp", "iat", "permit_id", "decision_id",
+        "org_id", "action_type", "actor_id", "environment",
+    )
     for f in required:
         if f not in result:
             raise ValueError(f"missing required claim: {f}")
@@ -321,7 +322,9 @@ def verify_permit_v4(
     if not isinstance(token, str):
         raise PermitV4VerifyError(REASON_BAD_FORMAT, "token must be a string")
     if not token.startswith("pt.v4."):
-        raise PermitV4VerifyError(REASON_BAD_PREFIX, f"expected pt.v4.* prefix, got: {token[:12]!r}")
+        raise PermitV4VerifyError(
+            REASON_BAD_PREFIX, f"expected pt.v4.* prefix, got: {token[:12]!r}"
+        )
 
     b64_payload = token[len("pt.v4."):]
     # base64url → standard base64
@@ -330,7 +333,9 @@ def verify_permit_v4(
     try:
         cose_bytes = base64.b64decode(padded)
     except Exception as exc:
-        raise PermitV4VerifyError(REASON_BAD_FORMAT, f"base64url decode failed: {exc}") from exc
+        raise PermitV4VerifyError(
+            REASON_BAD_FORMAT, f"base64url decode failed: {exc}"
+        ) from exc
 
     try:
         protected_bytes, payload_bytes, sig = _decode_cose_sign1(cose_bytes)
@@ -354,9 +359,13 @@ def verify_permit_v4(
         pub_key = Ed25519PublicKey.from_public_bytes(raw_key)
         pub_key.verify(sig, to_verify)
     except InvalidSignature:
-        raise PermitV4VerifyError(REASON_SIGNATURE_INVALID, "Ed25519 signature did not verify")
+        raise PermitV4VerifyError(
+            REASON_SIGNATURE_INVALID, "Ed25519 signature did not verify"
+        )
     except Exception as exc:
-        raise PermitV4VerifyError(REASON_SIGNATURE_INVALID, f"key or signature error: {exc}") from exc
+        raise PermitV4VerifyError(
+            REASON_SIGNATURE_INVALID, f"key or signature error: {exc}"
+        ) from exc
 
     if check_expiry:
         now_sec = int(_time.time())
