@@ -356,6 +356,12 @@ _LAZY_MODULES: dict[str, tuple[str, ...]] = {
         "evaluate_many",
         "graphql",
     ),
+    ".verify_permit_v4": (
+        "PermitClaimsV4",
+        "PermitV4VerifyError",
+        "PermitV4VerifyResult",
+        "verify_permit_v4",
+    ),
     ".verticals.access_cert": (
         "protect_access_cert_action",
         "protect_access_cert_revoke",
