@@ -86,6 +86,21 @@ import {
 
 export { AtlaSentClient } from "./client.js";
 export {
+  ACTION_CATALOG,
+  ACTION_SLUGS,
+  getActionBySlug,
+  getActionById,
+  listActions,
+  type ActionCatalogEntry,
+  type ActionCatalogKey,
+  type ActionGateFlags,
+  type ActionId,
+  type ActionSlug,
+  type AiRisk,
+  type AuthorizationPatternType,
+  type RiskPosture,
+} from "./catalog.js";
+export {
   DEPLOY_GATE_CODES,
   DEPLOYMENT_PRODUCTION_ACTION,
   PRODUCTION_DEPLOY_ACTION,
