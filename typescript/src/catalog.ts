@@ -455,8 +455,14 @@ export const ACTION_CATALOG = {
 /** All canonical action catalog keys. */
 export type ActionCatalogKey = keyof typeof ACTION_CATALOG;
 
+/** Canonical action ID string (e.g. "ACT-0001"). */
+export type ActionId = string;
+
+/** Canonical action slug string (e.g. "production.deploy"). */
+export type ActionSlug = string;
+
 /** All canonical action slugs. */
-export const ACTION_SLUGS = Object.values(ACTION_CATALOG).map(a => a.slug) as string[];
+export const ACTION_SLUGS = Object.values(ACTION_CATALOG).map(a => a.slug) as ActionSlug[];
 
 /** Look up a catalog entry by slug. Returns undefined if not found. */
 export function getActionBySlug(slug: string): ActionCatalogEntry | undefined {
