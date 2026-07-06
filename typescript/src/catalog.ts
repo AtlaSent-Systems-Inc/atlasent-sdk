@@ -73,7 +73,7 @@ export const ACTION_CATALOG = {
     },
     authorization_pattern: {
       type: 'four-eyes',
-      machine_executable: true,
+      machine_executable: false,
       minimum_approvals: 2,
     },
     sdk_constant: 'PRODUCTION_DEPLOY',
