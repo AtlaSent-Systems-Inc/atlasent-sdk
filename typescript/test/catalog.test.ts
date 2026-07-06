@@ -30,16 +30,16 @@ describe("ACTION_CATALOG", () => {
 
   it("human-only patterns never have machineExecutable=true", () => {
     for (const entry of Object.values(ACTION_CATALOG)) {
-      if (entry.authorizationPattern.type === "human-only") {
-        expect(entry.authorizationPattern.machineExecutable).toBe(false);
+      if (entry.authorization_pattern.type === "human-only") {
+        expect(entry.authorization_pattern.machine_executable).toBe(false);
       }
     }
   });
 
   it("entries requiring human approval have machineExecutable=false", () => {
     for (const entry of Object.values(ACTION_CATALOG)) {
-      if (entry.gateFlags.requiresHumanApproval) {
-        expect(entry.authorizationPattern.machineExecutable).toBe(false);
+      if (entry.gate_flags.requires_human_approval) {
+        expect(entry.authorization_pattern.machine_executable).toBe(false);
       }
     }
   });
