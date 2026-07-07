@@ -1223,3 +1223,18 @@ export {
   type ConditionType,
   type ReasonCodeEntry,
 } from "./taxonomy.js";
+
+// ── Clinical Trial Blinding / Unblinding ─────────────────────────────────────
+export type {
+  ClinicalBlindingStatus,
+  ClinicalBlindRequest,
+  ClinicalBlindResponse,
+  ClinicalEmergencyRequest,
+  ClinicalHistoryResponse,
+  ClinicalMutationResponse,
+  ClinicalTrialBlind,
+  ClinicalTrialGetResponse,
+  ClinicalTrialListResponse,
+  ClinicalUnblindingEvent,
+  ClinicalUnblindRequest,
+} from "./clinical.js";
