@@ -873,6 +873,9 @@ export class AtlaSentClient {
   /**
    * Subscribe to a live stream of decisions for this org.
    *
+   * DISABLED: This endpoint is not deployed in production.
+   * See atlasent-api/supabase/runtime-functions-disabled.json
+   *
    * Wraps `GET /v1-decisions-stream`. The server emits one SSE frame
    * per audit event and sends a heartbeat every 15 s. The session
    * auto-closes after `maxSeconds` (default 30 min); reconnect with
