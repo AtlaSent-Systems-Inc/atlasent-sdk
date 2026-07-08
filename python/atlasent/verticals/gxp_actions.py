@@ -119,41 +119,27 @@ def protect_trial_action(
     """
     if action == "trial.blinding.setup":
         if not kwargs.get("randomization_list_hash"):
-            raise ValueError(
-                "trial.blinding.setup requires 'randomization_list_hash'"
-            )
+            raise ValueError("trial.blinding.setup requires 'randomization_list_hash'")
         if not kwargs.get("blinding_administrator"):
-            raise ValueError(
-                "trial.blinding.setup requires 'blinding_administrator'"
-            )
+            raise ValueError("trial.blinding.setup requires 'blinding_administrator'")
 
     if action == "trial.unblinding.execute":
         if not kwargs.get("unblinding_authority"):
-            raise ValueError(
-                "trial.unblinding.execute requires 'unblinding_authority'"
-            )
+            raise ValueError("trial.unblinding.execute requires 'unblinding_authority'")
         if not kwargs.get("unblinding_reason"):
-            raise ValueError(
-                "trial.unblinding.execute requires 'unblinding_reason'"
-            )
+            raise ValueError("trial.unblinding.execute requires 'unblinding_reason'")
         if not kwargs.get("data_integrity_check"):
-            raise ValueError(
-                "trial.unblinding.execute requires 'data_integrity_check'"
-            )
+            raise ValueError("trial.unblinding.execute requires 'data_integrity_check'")
 
     if action == "trial.unblinding.emergency":
         if not kwargs.get("patient_id"):
-            raise ValueError(
-                "trial.unblinding.emergency requires 'patient_id'"
-            )
+            raise ValueError("trial.unblinding.emergency requires 'patient_id'")
         if not kwargs.get("treating_physician_id"):
             raise ValueError(
                 "trial.unblinding.emergency requires 'treating_physician_id'"
             )
         if not kwargs.get("emergency_reason"):
-            raise ValueError(
-                "trial.unblinding.emergency requires 'emergency_reason'"
-            )
+            raise ValueError("trial.unblinding.emergency requires 'emergency_reason'")
 
     risk_level = _TRIAL_RISK[action]
     is_emergency = action in _EMERGENCY_UNBLINDING_ACTIONS
@@ -197,9 +183,7 @@ def protect_trial_action(
         context["emergency_reason"] = kwargs["emergency_reason"]
         # Emergency path: single treating physician — no quorum wait
         context["hitl_escalation"] = {
-            "assigned_to_role": kwargs.get(
-                "assigned_to_role", "treating-physician"
-            ),
+            "assigned_to_role": kwargs.get("assigned_to_role", "treating-physician"),
             "quorum_required": "single_approver",
             # No wait — patient safety requires immediate permit
             "wait_ms": kwargs.get("wait_ms", 0),
