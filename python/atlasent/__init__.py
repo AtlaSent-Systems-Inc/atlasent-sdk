@@ -381,6 +381,17 @@ _LAZY_MODULES: dict[str, tuple[str, ...]] = {
         "protect_financial_close_action",
         "protect_period_close_certify",
     ),
+    ".verticals.gxp_actions": (
+        "TrialActionType",
+        "TrialBlindingActionType",
+        "TrialDenialEvidence",
+        "TrialPermitEvidence",
+        "TrialUnblindingActionType",
+        "protect_trial_action",
+        "protect_trial_blinding_setup",
+        "protect_trial_unblinding_emergency",
+        "protect_trial_unblinding_execute",
+    ),
     ".verticals.hr_actions": (
         "protect_hr_action",
         "protect_hr_offboard",
@@ -829,6 +840,17 @@ if TYPE_CHECKING:
         protect_financial_close_action,
         protect_period_close_certify,
     )
+    from .verticals.gxp_actions import (
+        TrialActionType,
+        TrialBlindingActionType,
+        TrialDenialEvidence,
+        TrialPermitEvidence,
+        TrialUnblindingActionType,
+        protect_trial_action,
+        protect_trial_blinding_setup,
+        protect_trial_unblinding_emergency,
+        protect_trial_unblinding_execute,
+    )
     from .verticals.hr_actions import (
         protect_hr_action,
         protect_hr_offboard,
@@ -1129,6 +1151,16 @@ __all__ = [
     "TrustRootSnapshot",
     "get_global_trust_root_manager",
     # Verticals — domain-specific protect() convenience wrappers.
+    # GxP: clinical trial blinding / unblinding (ICH E6(R2) §4.8 / 21 CFR Part 11).
+    "TrialActionType",
+    "TrialBlindingActionType",
+    "TrialDenialEvidence",
+    "TrialPermitEvidence",
+    "TrialUnblindingActionType",
+    "protect_trial_action",
+    "protect_trial_blinding_setup",
+    "protect_trial_unblinding_emergency",
+    "protect_trial_unblinding_execute",
     # Phase 4: HR, model governance, data delete, contract, pricing.
     "protect_hr_action",
     "protect_hr_offboard",
