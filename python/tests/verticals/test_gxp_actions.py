@@ -251,7 +251,9 @@ class TestTrialUnblindingEmergency:
         assert ctx["risk_level"] == "critical"
         assert ctx["patient_id"] == "pat:PT-2026-007"
         assert ctx["treating_physician_id"] == "physician:dr-nguyen"
-        assert ctx["emergency_reason"] == "severe adverse event requiring immediate treatment"
+        assert ctx["emergency_reason"] == (
+            "severe adverse event requiring immediate treatment"
+        )
         hitl = ctx["hitl_escalation"]
         assert hitl["assigned_to_role"] == "treating-physician"
         assert hitl["quorum_required"] == "single_approver"

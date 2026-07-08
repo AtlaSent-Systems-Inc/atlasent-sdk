@@ -5,7 +5,8 @@ and 21 CFR Part 11 §11.10 / §11.300:
 
 - ``trial.blinding.setup``   — high risk; requires human approval + state snapshot
 - ``trial.unblinding.execute`` — critical; requires verified actor + human approval
-- ``trial.unblinding.emergency`` — critical; requires MFA + verified actor (patient safety)
+- ``trial.unblinding.emergency`` — critical; requires MFA + verified actor
+  (patient safety)
 
 All three are machine_executable=False. Unblinding actions always use HITL
 escalation; the server-side resolver handles quorum and assignment.
