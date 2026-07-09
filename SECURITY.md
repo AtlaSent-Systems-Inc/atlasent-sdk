@@ -61,9 +61,9 @@ For context when reporting issues:
 
 - **API key handling**: Keys are passed as Bearer tokens in Authorization headers; they are never logged by the SDK. Callers are responsible for not embedding keys in client-side bundles.
 - **Permit verification**: `verify()` validates Ed25519 signatures on permit payloads. The signature key is fetched from the AtlaSent API at verification time — it is never bundled in the SDK.
-- **Network requests**: All SDK calls go to `https://*.supabase.co/functions/v1/` or a caller-supplied `baseUrl`. No data is sent to any other endpoint.
-- **No persistent state**: The SDK is stateless. It does not cache credentials, tokens, or permit payloads to disk.
-- **Python**: Uses `httpx` for async and `requests` for sync transport. TLS verification is always enabled and cannot be disabled via public SDK API.
+- **Network requests**: By default, SDK calls target the AtlaSent API (`https://api.atlasent.io/v1-evaluate` and `https://api.atlasent.io/v1-verify-permit`) unless a caller provides an explicit `baseUrl` override.
+- **No persistent state**: The SDK does not persist credentials, tokens, or permit payloads to disk. Optional in-memory TTL caching can be enabled explicitly by callers for repeated evaluation requests.
+- **Python**: Uses `httpx` for both sync and async transport. TLS verification is always enabled and cannot be disabled via public SDK API.
 - **TypeScript**: Uses native `fetch`. Runs in Node 18+ and modern browsers. No polyfills that could alter TLS behavior.
 
 ## Known limitations

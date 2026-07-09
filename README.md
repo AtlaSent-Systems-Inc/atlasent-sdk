@@ -202,6 +202,15 @@ atlasent-sdk/
 
 All SDKs target the same two endpoints and wire shapes. Canonical definitions live in [`contract/`](./contract/).
 
+## Documentation map
+
+For pilot-customer onboarding and external review, start with:
+
+- [`docs/README.md`](./docs/README.md) — consolidated documentation index.
+- [`SECURITY.md`](./SECURITY.md) — security policy and disclosure process.
+- [`REVOCATION_RUNBOOK.md`](./REVOCATION_RUNBOOK.md) — operational incident handling.
+- [`RELEASING.md`](./RELEASING.md) and [`docs/PUBLISH_READINESS.md`](./docs/PUBLISH_READINESS.md) — release controls and publish gates.
+
 ## Getting an API key
 
 Sign up at [atlasent.io](https://atlasent.io) → Settings → API Keys.
