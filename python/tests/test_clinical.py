@@ -37,7 +37,9 @@ def make_blind(status: str = "blinded") -> ClinicalTrialBlind:
     )
 
 
-def make_event(occurred_at: str, event_type: str = "unblinding_executed") -> ClinicalUnblindingEvent:
+def make_event(
+    occurred_at: str, event_type: str = "unblinding_executed"
+) -> ClinicalUnblindingEvent:
     return ClinicalUnblindingEvent(
         id=f"cue_{occurred_at}",
         org_id="org_01",
@@ -106,7 +108,9 @@ def test_emergency_request() -> None:
 
 
 def test_mutation_and_container_responses() -> None:
-    mut = ClinicalMutationResponse(success=True, trial_id="TRIAL-042", status="unblinded")
+    mut = ClinicalMutationResponse(
+        success=True, trial_id="TRIAL-042", status="unblinded"
+    )
     assert mut.success is True
     assert ClinicalTrialListResponse(trials=[make_blind()]).trials[0].id == "ctb_01"
     assert ClinicalTrialGetResponse(trial=make_blind()).trial.id == "ctb_01"
