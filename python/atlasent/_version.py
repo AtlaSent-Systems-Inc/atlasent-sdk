@@ -1,3 +1,3 @@
 """Single source of truth for the AtlaSent SDK version."""
 
-__version__ = "2.18.0"
+__version__ = "2.19.0"

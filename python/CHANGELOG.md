@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.19.0
+
+### Added
+
+- Clinical trial blinding / unblinding wire types (`atlasent.clinical`),
+  parity with `typescript/src/clinical.ts` — the `v1-clinical-unblind`
+  edge-function surface for ICH E6(R2) §4.8 / 21 CFR Part 11 §11.10(a) /
+  §11.50 / §11.300 execution-time authorization of clinical trial
+  unblinding operations. New pydantic models: `ClinicalTrialBlind`,
+  `ClinicalUnblindingEvent`, `ClinicalBlindRequest`,
+  `ClinicalBlindResponse`, `ClinicalUnblindRequest`,
+  `ClinicalEmergencyRequest`, `ClinicalMutationResponse`,
+  `ClinicalTrialListResponse`, `ClinicalTrialGetResponse`,
+  `ClinicalHistoryResponse`, plus the `ClinicalBlindingStatus` and
+  `ClinicalUnblindingEventType` literals and the pure helpers
+  `is_unblinded()` and `latest_unblinding_event()`. All are lazily
+  exported from the top-level `atlasent` package.
+
 ## 2.18.0
 
 ### Added
