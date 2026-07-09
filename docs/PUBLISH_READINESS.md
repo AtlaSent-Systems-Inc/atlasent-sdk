@@ -113,16 +113,15 @@ bypass with `--no-verify` or skip the job. Either:
 
 ## Versioning policy
 
-Semver. Cross-language: Python and TypeScript SDKs publish in lock-
-step on the same version number. A `1.2.0` Python release implies a
-`1.2.0` TypeScript release the same day, with identical `protect()`
-behavior.
+Semver per package. Python (`atlasent`) and TypeScript
+(`@atlasent/sdk`) version independently and publish via their own
+tag prefixes and workflows.
 
 Breaking changes go through:
 
-1. Deprecation warning in version `N.x` — logged on first use.
-2. Major bump to `N+1.0.0` — deprecated path removed.
-3. Migration guide in `docs/migration-guide-vN.md`.
+1. Deprecation warning in version `N.x` where possible.
+2. Major bump to `N+1.0.0` for the package introducing the breaking change.
+3. Migration notes in language-specific changelogs and migration docs.
 
 Never break the wire contract in a minor. The API has its own
 versioning (`/v1/...`); SDK majors do not bump it.
