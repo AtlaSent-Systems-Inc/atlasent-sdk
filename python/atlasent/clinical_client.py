@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import json
 import urllib.request as urllib_request
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 from urllib.parse import urlencode
 
 from .clinical import (
@@ -45,12 +45,24 @@ from .clinical import (
 )
 from .exceptions import AtlaSentError
 
-if TYPE_CHECKING:
-    from .client import AtlaSentClient
+
+class _ClientLike(Protocol):
+    """Minimal host-client surface this sub-client reads.
+
+    Annotating against a structural Protocol (rather than importing the
+    concrete ``AtlaSentClient``) keeps this module free of a back-import to
+    ``atlasent.client``, so there is no module-level import cycle.
+    """
+
+    @property
+    def base_url(self) -> str: ...
+
+    @property
+    def api_key(self) -> str: ...
 
 
 def _request(
-    client: AtlaSentClient,
+    client: _ClientLike,
     method: str,
     path: str,
     *,
@@ -91,7 +103,7 @@ class ClinicalTrialsClient:
 
     _BASE = "/v1/clinical-unblind"
 
-    def __init__(self, client: AtlaSentClient) -> None:
+    def __init__(self, client: _ClientLike) -> None:
         self._client = client
 
     # ── Reads (clinical:read) ────────────────────────────────────────────
@@ -128,23 +140,31 @@ class ClinicalTrialsClient:
 
     # ── Writes (clinical:manage) ─────────────────────────────────────────
 
-    def blind(self, request: ClinicalBlindRequest | dict[str, Any]) -> ClinicalBlindResponse:
+    def blind(
+        self, request: ClinicalBlindRequest | dict[str, Any]
+    ) -> ClinicalBlindResponse:
         """Establish a new blinding record for a clinical trial."""
-        data = _request(self._client, "POST", f"{self._BASE}/blind", body=_as_body(request))
+        data = _request(
+            self._client, "POST", f"{self._BASE}/blind", body=_as_body(request)
+        )
         return ClinicalBlindResponse.model_validate(data)
 
     def request_unblind(
         self, request: ClinicalUnblindRequest | dict[str, Any]
     ) -> ClinicalMutationResponse:
         """Record an authorized standard (protocol-defined) unblinding."""
-        data = _request(self._client, "POST", f"{self._BASE}/unblind", body=_as_body(request))
+        data = _request(
+            self._client, "POST", f"{self._BASE}/unblind", body=_as_body(request)
+        )
         return ClinicalMutationResponse.model_validate(data)
 
     def emergency_unblind(
         self, request: ClinicalEmergencyRequest | dict[str, Any]
     ) -> ClinicalMutationResponse:
         """Record an emergency individual-patient unblinding (ICH E6(R2) §4.8)."""
-        data = _request(self._client, "POST", f"{self._BASE}/emergency", body=_as_body(request))
+        data = _request(
+            self._client, "POST", f"{self._BASE}/emergency", body=_as_body(request)
+        )
         return ClinicalMutationResponse.model_validate(data)
 
     def verify_permit(

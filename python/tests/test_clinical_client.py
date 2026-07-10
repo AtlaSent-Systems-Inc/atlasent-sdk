@@ -88,15 +88,24 @@ def test_get_single_trial() -> None:
 
 def test_history() -> None:
     event = {
-        "id": "cue_1", "org_id": "org_1", "trial_id": "NCT12345678", "blind_id": "ctb_1",
-        "event_type": "unblinding_executed", "actor_id": "pi", "reason": "DSMB",
-        "unblinding_scope": "full", "occurred_at": "2026-07-10T01:00:00Z",
+        "id": "cue_1",
+        "org_id": "org_1",
+        "trial_id": "NCT12345678",
+        "blind_id": "ctb_1",
+        "event_type": "unblinding_executed",
+        "actor_id": "pi",
+        "reason": "DSMB",
+        "unblinding_scope": "full",
+        "occurred_at": "2026-07-10T01:00:00Z",
     }
     client = ClinicalTrialsClient(_fake_client())
     with _mock_urlopen({"events": [event]}) as m:
         resp = client.history("NCT12345678")
     assert resp.events[0].event_type == "unblinding_executed"
-    assert "/v1/clinical-unblind/history?trial_id=NCT12345678" in m.call_args[0][0].full_url
+    assert (
+        "/v1/clinical-unblind/history?trial_id=NCT12345678"
+        in m.call_args[0][0].full_url
+    )
 
 
 # ── Writes ────────────────────────────────────────────────────────────────────
@@ -127,13 +136,17 @@ def test_blind_accepts_model_and_posts_body() -> None:
 
 def test_request_unblind_accepts_dict() -> None:
     client = ClinicalTrialsClient(_fake_client())
-    with _mock_urlopen({"success": True, "trial_id": "NCT12345678", "status": "unblinded"}) as m:
-        resp = client.request_unblind({
-            "trial_id": "NCT12345678",
-            "actor_id": "pi",
-            "reason": "DSMB interim analysis",
-            "approval_meaning": "I authorize the unblinding of NCT12345678.",
-        })
+    with _mock_urlopen(
+        {"success": True, "trial_id": "NCT12345678", "status": "unblinded"}
+    ) as m:
+        resp = client.request_unblind(
+            {
+                "trial_id": "NCT12345678",
+                "actor_id": "pi",
+                "reason": "DSMB interim analysis",
+                "approval_meaning": "I authorize the unblinding of NCT12345678.",
+            }
+        )
     assert resp.success is True
     assert resp.status == "unblinded"
     assert m.call_args[0][0].full_url.endswith("/unblind")
@@ -143,12 +156,14 @@ def test_emergency_unblind() -> None:
     client = ClinicalTrialsClient(_fake_client())
     body = {"success": True, "trial_id": "NCT12345678", "subject_id": "S-7"}
     with _mock_urlopen(body) as m:
-        resp = client.emergency_unblind({
-            "trial_id": "NCT12345678",
-            "actor_id": "dr",
-            "subject_id": "S-7",
-            "emergency_justification": "SAE",
-        })
+        resp = client.emergency_unblind(
+            {
+                "trial_id": "NCT12345678",
+                "actor_id": "dr",
+                "subject_id": "S-7",
+                "emergency_justification": "SAE",
+            }
+        )
     assert resp.subject_id == "S-7"
     assert m.call_args[0][0].full_url.endswith("/emergency")
 
@@ -184,9 +199,15 @@ def test_empty_body_returns_empty_dict() -> None:
     client = ClinicalTrialsClient(_fake_client())
     with _mock_urlopen(None):
         # empty body → {} → verify_permit returns {}
-        assert client.verify_permit(
-            trial_id="t", permit_token="p", action_type="trial.unblinding.execute", actor_id="a"
-        ) == {}
+        assert (
+            client.verify_permit(
+                trial_id="t",
+                permit_token="p",
+                action_type="trial.unblinding.execute",
+                actor_id="a",
+            )
+            == {}
+        )
 
 
 def test_exported_from_package() -> None:
