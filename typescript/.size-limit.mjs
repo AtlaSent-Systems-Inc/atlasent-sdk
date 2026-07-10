@@ -2,10 +2,11 @@
  * Size Limit configuration for @atlasent/sdk.
  *
  * Measured limits (gzip, after tree-shaking with esbuild):
- *   core path (protect + requirePermit):           ~18.1 kB  → limit 19 kB
- *     (bumped 16.5→19 kB: full 17-action catalog with gate flags, regulatory
- *      mappings, and sales data contributes to the tree-shaken bundle)
- *   core + webhook + streaming errors:             ~18.5 kB  → limit 19.5 kB
+ *   core path (protect + requirePermit):           ~21.8 kB  → limit 23 kB
+ *     (bumped 19→23 kB: the canonical action catalog grew 17→29 actions
+ *      — with gate flags, regulatory mappings, and sales data — and rides
+ *      in the tree-shaken core bundle; prior bump was 16.5→19 kB at 17 actions)
+ *   core + webhook + streaming errors:             ~22.1 kB  → limit 23.5 kB
  *
  * `modifyEsbuildConfig` sets `platform: "node"` so built-in Node modules
  * (crypto, fs/promises) are treated as external and not counted toward size.
@@ -18,7 +19,7 @@ export default [
     name: "core (protect + requirePermit)",
     path: "dist/index.js",
     import: "{ protect, requirePermit }",
-    limit: "19 kB",
+    limit: "23 kB",
     modifyEsbuildConfig(config) {
       config.platform = "node";
       return config;
@@ -29,7 +30,7 @@ export default [
     path: "dist/index.js",
     import:
       "{ protect, requirePermit, verifyWebhook, assertWebhook, StreamTimeoutError, StreamParseError }",
-    limit: "19.5 kB",
+    limit: "23.5 kB",
     modifyEsbuildConfig(config) {
       config.platform = "node";
       return config;

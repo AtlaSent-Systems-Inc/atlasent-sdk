@@ -90,6 +90,7 @@ export {
   ACTION_SLUGS,
   getActionBySlug,
   getActionById,
+  getActionByCanonId,
   listActions,
   type ActionCatalogEntry,
   type ActionCatalogKey,
