@@ -12,7 +12,7 @@ Cross-repo invariants for this repo:
 - Wire types source of truth is `atlasent-api/packages/types/`. SDK re-exports; never redefines independently.
 - Any `/v1-evaluate` or `/v1-verify-permit` wire-shape change must go through `contract/schemas/` before SDK code changes.
 - `contract/tools/drift.py` (drift detector) blocks CI if SDK types drift from API types.
-- `packages/sdk/src/rules.ts` must stay byte-identical to `supabase/functions/_shared/rules.ts`. `rules-sync` CI enforces this.
+- The canonical rule engine is `atlasent-api/packages/sdk/src/rules.ts` (its only byte-identical copy is `atlasent-api/supabase/functions/_shared/rules.ts`, kept in sync by the blocking `rules-sync` CI job **in atlasent-api**). This repo holds **no** `rules.ts` of its own — it consumes the engine via the published `@atlasent/sdk` package / re-export and never re-implements policy logic. Do not add a local `rules.ts`. See [ADR CROSS-002](https://github.com/AtlaSent-Systems-Inc/atlasent-docs/blob/main/architecture/adr/CROSS-002-rule-engine-single-source-of-truth.md).
 - SDKs do NOT cache authorization decisions or re-implement policy logic.
 - Publish mechanics: `@atlasent/sdk` and related packages release on `sdk-v*` tags; type-only changes on `types-v*` tags.
 
