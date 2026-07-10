@@ -4,17 +4,24 @@ import {
   ACTION_SLUGS,
   getActionBySlug,
   getActionById,
+  getActionByCanonId,
   listActions,
 } from "../src/catalog.js";
 
 describe("ACTION_CATALOG", () => {
-  it("has 17 entries", () => {
-    expect(Object.keys(ACTION_CATALOG)).toHaveLength(17);
+  it("has 29 entries", () => {
+    expect(Object.keys(ACTION_CATALOG)).toHaveLength(29);
   });
 
   it("all entries have valid IDs matching ACT-XXXX", () => {
     for (const entry of Object.values(ACTION_CATALOG)) {
       expect(entry.id).toMatch(/^ACT-\d{4}$/);
+    }
+  });
+
+  it("all entries have a permanent canon_id matching CANON-NNNNNN", () => {
+    for (const entry of Object.values(ACTION_CATALOG)) {
+      expect(entry.canon_id).toMatch(/^CANON-\d{6}$/);
     }
   });
 
@@ -26,6 +33,11 @@ describe("ACTION_CATALOG", () => {
   it("all IDs are unique", () => {
     const ids = Object.values(ACTION_CATALOG).map((a) => a.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("all canon_ids are unique", () => {
+    const canonIds = Object.values(ACTION_CATALOG).map((a) => a.canon_id);
+    expect(new Set(canonIds).size).toBe(canonIds.length);
   });
 
   it("human-only patterns never have machineExecutable=true", () => {
@@ -67,9 +79,21 @@ describe("getActionById", () => {
   });
 });
 
+describe("getActionByCanonId", () => {
+  it("finds CANON-000001 (production.deploy)", () => {
+    const action = getActionByCanonId("CANON-000001");
+    expect(action?.slug).toBe("production.deploy");
+    expect(action?.id).toBe("ACT-0001");
+  });
+
+  it("returns undefined for unknown canon IDs", () => {
+    expect(getActionByCanonId("CANON-999999")).toBeUndefined();
+  });
+});
+
 describe("listActions", () => {
-  it("returns 17 actions", () => {
-    expect(listActions()).toHaveLength(17);
+  it("returns 29 actions", () => {
+    expect(listActions()).toHaveLength(29);
   });
 
   it("every entry has a non-empty slug", () => {
@@ -80,9 +104,12 @@ describe("listActions", () => {
 });
 
 describe("ACTION_SLUGS", () => {
-  it("contains all 17 slugs", () => {
-    expect(ACTION_SLUGS).toHaveLength(17);
+  it("contains all 29 slugs", () => {
+    expect(ACTION_SLUGS).toHaveLength(29);
     expect(ACTION_SLUGS).toContain("production.deploy");
     expect(ACTION_SLUGS).toContain("compliance.certify");
+    expect(ACTION_SLUGS).toContain("model.promote");
+    expect(ACTION_SLUGS).toContain("data.export");
+    expect(ACTION_SLUGS).toContain("security.breakglass");
   });
 });
