@@ -1234,7 +1234,12 @@ export type {
   ClinicalMutationResponse,
   ClinicalTrialBlind,
   ClinicalTrialGetResponse,
+  ClinicalTrialListQuery,
   ClinicalTrialListResponse,
+  ClinicalTrialsSubClient,
   ClinicalUnblindingEvent,
   ClinicalUnblindRequest,
+  ClinicalVerifyPermitRequest,
+  ClinicalVerifyPermitResult,
 } from "./clinical.js";
+export { makeClinicalTrialsClient } from "./clinical.js";

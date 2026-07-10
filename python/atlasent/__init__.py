@@ -164,6 +164,7 @@ _LAZY_MODULES: dict[str, tuple[str, ...]] = {
         "is_unblinded",
         "latest_unblinding_event",
     ),
+    ".clinical_client": ("ClinicalTrialsClient",),
     ".compliance_evidence": (
         "ComplianceEvidenceRun",
         "ControlStatus",
@@ -622,6 +623,7 @@ if TYPE_CHECKING:
         is_unblinded,
         latest_unblinding_event,
     )
+    from .clinical_client import ClinicalTrialsClient
     from .compliance_evidence import (
         ComplianceEvidenceRun,
         ControlStatus,
@@ -1127,6 +1129,7 @@ __all__ = [
     "ClinicalHistoryResponse",
     "is_unblinded",
     "latest_unblinding_event",
+    "ClinicalTrialsClient",
     # Compliance evidence (parity with the TS SDK).
     "SOC2ControlId",
     "ControlStatus",

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.20.0
+
+### Added
+
+- `AtlaSentClient.clinical_trials` sub-client for the clinical trial unblinding
+  gate (`v1-clinical-unblind`, `/v1/clinical-unblind`): `list` / `get` /
+  `history` (reads, `clinical:read`) and `blind` / `request_unblind` /
+  `emergency_unblind` / `verify_permit` (writes, `clinical:manage`). New module
+  `atlasent.clinical_client` (`ClinicalTrialsClient`), lazily exported from the
+  top-level package. Consumes the existing `atlasent.clinical` pydantic wire
+  shapes; no new endpoint invented.
+
 ## 2.19.0
 
 ### Added
