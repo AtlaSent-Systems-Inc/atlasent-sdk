@@ -6,6 +6,18 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## 2.19.0
+
+### Added
+
+- `client.clinicalTrials` sub-client for the clinical trial unblinding gate
+  (`v1-clinical-unblind`, `/v1/clinical-unblind`): `list` / `get` / `history`
+  (reads, `clinical:read`) and `blind` / `requestUnblind` / `emergencyUnblind`
+  / `verifyPermit` (writes, `clinical:manage`). Plus `makeClinicalTrialsClient`
+  and the `ClinicalTrialsSubClient` / `ClinicalVerifyPermitRequest` /
+  `ClinicalVerifyPermitResult` / `ClinicalTrialListQuery` types. Consumes the
+  existing `clinical.ts` wire shapes; no new endpoint invented.
+
 ## 2.18.0
 
 ### Added

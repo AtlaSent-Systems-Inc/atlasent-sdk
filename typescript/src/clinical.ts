@@ -158,3 +158,103 @@ export interface ClinicalTrialGetResponse {
 export interface ClinicalHistoryResponse {
   events: ClinicalUnblindingEvent[];
 }
+
+/** POST /verify-permit request. */
+export interface ClinicalVerifyPermitRequest {
+  trial_id: string;
+  permit_token: string;
+  /** One of the clinical action classes. */
+  action_type:
+    | "trial.blinding.setup"
+    | "trial.unblinding.execute"
+    | "trial.unblinding.emergency";
+  actor_id: string;
+}
+
+/** POST /verify-permit result (as returned by the permit verifier). */
+export interface ClinicalVerifyPermitResult {
+  valid?: boolean;
+  outcome?: string;
+  verify_error_code?: string;
+  reason?: string;
+}
+
+/** Optional filters for {@link ClinicalTrialsSubClient.list}. */
+export interface ClinicalTrialListQuery {
+  status?: ClinicalBlindingStatus;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Client for the clinical trial blinding/unblinding gate
+ * (`v1-clinical-unblind`, public path `/v1/clinical-unblind`). Reads require
+ * the `clinical:read` scope; writes require `clinical:manage`.
+ */
+export interface ClinicalTrialsSubClient {
+  list(query?: ClinicalTrialListQuery): Promise<ClinicalTrialListResponse>;
+  get(trialId: string): Promise<ClinicalTrialGetResponse>;
+  history(trialId: string): Promise<ClinicalHistoryResponse>;
+  blind(request: ClinicalBlindRequest): Promise<ClinicalBlindResponse>;
+  requestUnblind(request: ClinicalUnblindRequest): Promise<ClinicalMutationResponse>;
+  emergencyUnblind(request: ClinicalEmergencyRequest): Promise<ClinicalMutationResponse>;
+  verifyPermit(request: ClinicalVerifyPermitRequest): Promise<ClinicalVerifyPermitResult>;
+}
+
+const CLINICAL_BASE = "/v1/clinical-unblind";
+
+/**
+ * Build the clinical-trials sub-client from the host client's request
+ * primitives. Mirrors the other `make*Client` factories.
+ */
+export function makeClinicalTrialsClient(
+  getFn: <T>(path: string, query?: URLSearchParams) => Promise<{ body: T }>,
+  postFn: <T>(path: string, body: unknown) => Promise<{ body: T }>,
+): ClinicalTrialsSubClient {
+  return {
+    async list(query = {}) {
+      const sp = new URLSearchParams();
+      if (query.status) sp.set("status", query.status);
+      if (query.limit != null) sp.set("limit", String(query.limit));
+      if (query.offset != null) sp.set("offset", String(query.offset));
+      const qs = [...sp].length ? sp : undefined;
+      const { body } = await getFn<ClinicalTrialListResponse>(CLINICAL_BASE, qs);
+      return body;
+    },
+
+    async get(trialId: string) {
+      const sp = new URLSearchParams({ trial_id: trialId });
+      const { body } = await getFn<ClinicalTrialGetResponse>(CLINICAL_BASE, sp);
+      return body;
+    },
+
+    async history(trialId: string) {
+      const sp = new URLSearchParams({ trial_id: trialId });
+      const { body } = await getFn<ClinicalHistoryResponse>(`${CLINICAL_BASE}/history`, sp);
+      return body;
+    },
+
+    async blind(request: ClinicalBlindRequest) {
+      const { body } = await postFn<ClinicalBlindResponse>(`${CLINICAL_BASE}/blind`, request);
+      return body;
+    },
+
+    async requestUnblind(request: ClinicalUnblindRequest) {
+      const { body } = await postFn<ClinicalMutationResponse>(`${CLINICAL_BASE}/unblind`, request);
+      return body;
+    },
+
+    async emergencyUnblind(request: ClinicalEmergencyRequest) {
+      const { body } = await postFn<ClinicalMutationResponse>(`${CLINICAL_BASE}/emergency`, request);
+      return body;
+    },
+
+    async verifyPermit(request: ClinicalVerifyPermitRequest) {
+      const { body } = await postFn<ClinicalVerifyPermitResult>(
+        `${CLINICAL_BASE}/verify-permit`,
+        request,
+      );
+      return body;
+    },
+  };
+}
