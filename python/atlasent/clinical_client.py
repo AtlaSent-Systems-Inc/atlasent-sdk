@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import json
 import urllib.request as urllib_request
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
 from .clinical import (
@@ -45,24 +45,12 @@ from .clinical import (
 )
 from .exceptions import AtlaSentError
 
-
-class _ClientLike(Protocol):
-    """Minimal host-client surface this sub-client reads.
-
-    Annotating against a structural Protocol (rather than importing the
-    concrete ``AtlaSentClient``) keeps this module free of a back-import to
-    ``atlasent.client``, so there is no module-level import cycle.
-    """
-
-    @property
-    def base_url(self) -> str: ...
-
-    @property
-    def api_key(self) -> str: ...
+if TYPE_CHECKING:
+    from .client import AtlaSentClient
 
 
 def _request(
-    client: _ClientLike,
+    client: AtlaSentClient,
     method: str,
     path: str,
     *,
@@ -103,7 +91,7 @@ class ClinicalTrialsClient:
 
     _BASE = "/v1/clinical-unblind"
 
-    def __init__(self, client: _ClientLike) -> None:
+    def __init__(self, client: AtlaSentClient) -> None:
         self._client = client
 
     # ── Reads (clinical:read) ────────────────────────────────────────────
