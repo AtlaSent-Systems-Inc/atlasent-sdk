@@ -95,17 +95,22 @@ without a schema or a proposal in `contract/` first — see
 
 ## Disabled Endpoints
 
-The following 8 API endpoints exist in this SDK's client code or type definitions but are **not deployed in production**. They are held back in `atlasent-api/supabase/runtime-functions-disabled.json` pending future promotion to the V1 pilot surface. Do not write new SDK code that depends on these endpoints without first confirming they have been re-enabled in the runtime manifest.
+The following 7 API endpoints exist in this SDK's client code or type definitions but are **not deployed in production**. They are held back in `atlasent-api/supabase/runtime-functions-disabled.json` pending future promotion to the V1 pilot surface. Do not write new SDK code that depends on these endpoints without first confirming they have been re-enabled in the runtime manifest.
 
 | Endpoint | SDK reference | Notes |
 |---|---|---|
 | `v1-redteam-runs` | none currently | Red team evaluation runs |
 | `v1-post-evaluations` | none currently | Post-hoc evaluation submission |
 | `v1-spiffe-validate` | none currently | SPIFFE identity validation |
-| `v1-sso` | none currently | SSO configuration |
 | `v1-policy-bundles` | none currently | Policy bundle management |
 | `v1-marketplace-packs` | none currently | Marketplace action pack catalog |
 | `v1-decisions-stream` | `typescript/src/client.ts` `subscribeDecisions()` | SSE stream of audit events; guarded by `v2_decisions_stream` tenant feature flag |
 | `v1-transparency-anchor` | none currently | Transparency log anchoring |
+
+> **`v1-sso` is shipped, not disabled** (re-enabled 2026-06-01). The full
+> `typescript/src/sso.ts` module (SSO connections, JIT rules, events, and the
+> enforcement state machine) is live and wired as `client.sso`; it calls the
+> deployed `/v1/sso/*` routes and does **not** carry a `// DISABLED:` comment.
+> Do not re-add `v1-sso` to the table above.
 
 If you find a reference to one of these endpoints in new SDK code, add the comment `// DISABLED: This endpoint is not deployed in production. See atlasent-api/supabase/runtime-functions-disabled.json` and open a tracking issue before shipping the change.
