@@ -6,6 +6,39 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## 2.20.0
+
+### Changed
+
+- **`EvaluateRequest` now uses the canonical `actor_id` / `action_type`
+  field names** (matching the runtime `/v1-evaluate` wire format and the
+  contract at `contract/schemas/evaluate-request.schema.json`). This resolves
+  the SDK field-name divergence tracked in atlasent issue #345 (finding T-02,
+  ADR CROSS-008): the type surface previously taught `agent` / `action`, which
+  no consumer can send to the runtime directly.
+
+  This is a **compatibility-preserving transition, not a breaking removal**:
+  - `actor_id` / `action_type` are the documented, recommended fields.
+  - `agent` / `action` remain accepted as **deprecated aliases** — they are
+    normalized to `actor_id` / `action_type` internally (per-field, so a mixed
+    shape like `{ actor_id, action }` resolves correctly) and emit a one-time
+    `console.warn` deprecation notice. They will be removed in a future major
+    release.
+  - The wire body sent to `/v1-evaluate` is unchanged — it has always been
+    `{ action_type, actor_id, context }`; only the SDK-facing input type and
+    its documentation changed. No permit bytes, CDO shapes, or runtime
+    authorization semantics are affected.
+  - Existing callers using `client.evaluate({ agent, action })` continue to
+    work at runtime.
+
+### Added
+
+- `resolveEvaluateIdentity(input)` — exported helper that resolves the
+  canonical `{ action_type, actor_id }` identity from either the canonical or
+  legacy input shape (per-field, with a deprecation warning when a legacy alias
+  is used). Used internally by `evaluate()`, `evaluatePreflight()`, and
+  `protectStream()` so all three accept both shapes.
+
 ## 2.19.0
 
 ### Added

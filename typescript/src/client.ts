@@ -82,6 +82,7 @@ import type {
 } from "./types.js";
 import {
   normalizeEvaluateRequest,
+  resolveEvaluateIdentity,
   type LegacyEvaluateRequest,
   type V2EvaluateRequest,
 } from "./compat.js";
@@ -1058,10 +1059,15 @@ export class AtlaSentClient {
     input: EvaluateRequest,
   ): Promise<EvaluatePreflightResponse> {
     _warnOversizeContext(input.context);
+    // Accept both the canonical {action_type, actor_id} and the legacy
+    // {action, agent} shape; always serialize the canonical wire.
+    const normalized = normalizeEvaluateRequest(
+      input as LegacyEvaluateRequest | V2EvaluateRequest,
+    );
     const body = {
-      action_type: input.action,
-      actor_id: input.agent,
-      context: input.context ?? {},
+      action_type: normalized.action_type,
+      actor_id: normalized.actor_id,
+      context: normalized.context ?? {},
     };
     const query = new URLSearchParams({ include: "constraint_trace" });
     const { body: wire, rateLimit } = await this.post<EvaluateWire>(
@@ -1913,9 +1919,16 @@ export class AtlaSentClient {
     const streamTimeoutMs = opts.timeoutMs ?? 30_000;
     const maxRetries = opts.maxRetries ?? 3;
 
+    // Accept both the canonical {action_type, actor_id} and the legacy
+    // {action, agent} input shape. The decisions-stream endpoint keeps its
+    // own {action, agent} wire contract (unchanged here); source those fields
+    // from the resolved canonical identity so canonical callers work too.
+    const { action_type, actor_id } = resolveEvaluateIdentity(
+      input as LegacyEvaluateRequest | V2EvaluateRequest,
+    );
     const body = {
-      action: input.action,
-      agent: input.agent,
+      action: action_type,
+      agent: actor_id,
       context: input.context ?? {},
       api_key: this.apiKey,
     };

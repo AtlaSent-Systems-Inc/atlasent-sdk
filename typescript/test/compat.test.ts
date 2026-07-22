@@ -1,11 +1,23 @@
 import { describe, it, expect, vi } from "vitest";
-import { normalizeEvaluateRequest, normalizeEvaluateResponse } from "../src/compat.js";
+import {
+  normalizeEvaluateRequest,
+  normalizeEvaluateResponse,
+  resolveEvaluateIdentity,
+} from "../src/compat.js";
 
 describe("normalizeEvaluateRequest", () => {
   it("passes through v2 shape (action_type/actor_id) unchanged", () => {
     const input = { action_type: "files.read", actor_id: "agent-1", context: { env: "prod" } };
     const result = normalizeEvaluateRequest(input);
     expect(result).toBe(input);
+  });
+
+  it("does not emit a deprecation warning for the canonical shape", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    normalizeEvaluateRequest({ action_type: "files.read", actor_id: "agent-1" });
+    const depWarn = warnSpy.mock.calls.find((args) => String(args[0]).includes("Deprecation"));
+    expect(depWarn).toBeUndefined();
+    warnSpy.mockRestore();
   });
 
   it("normalizes legacy shape (action/agent) to v2 with deprecation warning", () => {
@@ -24,6 +36,68 @@ describe("normalizeEvaluateRequest", () => {
     const result = normalizeEvaluateRequest({ action: "data.write", agent: "bot" });
     expect(result.action_type).toBe("data.write");
     expect(result.context).toBeUndefined();
+    warnSpy.mockRestore();
+  });
+
+  it("resolves a mixed shape (canonical actor_id + legacy action) per-field", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const result = normalizeEvaluateRequest({ actor_id: "agent-1", action: "files.read" });
+    expect(result.action_type).toBe("files.read");
+    expect(result.actor_id).toBe("agent-1");
+    const depWarn = warnSpy.mock.calls.find((args) => String(args[0]).includes("Deprecation"));
+    expect(depWarn).toBeDefined();
+    warnSpy.mockRestore();
+  });
+
+  it("resolves a mixed shape (canonical action_type + legacy agent) per-field", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const result = normalizeEvaluateRequest({ action_type: "files.read", agent: "agent-1" });
+    expect(result.action_type).toBe("files.read");
+    expect(result.actor_id).toBe("agent-1");
+    warnSpy.mockRestore();
+  });
+
+  it("prefers canonical fields over legacy aliases when both are present", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const input = {
+      action_type: "files.read",
+      actor_id: "canonical-actor",
+      action: "legacy.action",
+      agent: "legacy-agent",
+    };
+    const result = normalizeEvaluateRequest(input);
+    // Pure-canonical resolution: both canonical fields present → pass-through.
+    expect(result.action_type).toBe("files.read");
+    expect(result.actor_id).toBe("canonical-actor");
+    const depWarn = warnSpy.mock.calls.find((args) => String(args[0]).includes("Deprecation"));
+    expect(depWarn).toBeUndefined();
+    warnSpy.mockRestore();
+  });
+});
+
+describe("resolveEvaluateIdentity", () => {
+  it("resolves canonical fields without a deprecation warning", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const id = resolveEvaluateIdentity({ action_type: "files.read", actor_id: "agent-1" });
+    expect(id).toEqual({ action_type: "files.read", actor_id: "agent-1" });
+    expect(warnSpy.mock.calls.length).toBe(0);
+    warnSpy.mockRestore();
+  });
+
+  it("resolves legacy aliases with a deprecation warning", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const id = resolveEvaluateIdentity({ action: "files.read", agent: "agent-1" });
+    expect(id).toEqual({ action_type: "files.read", actor_id: "agent-1" });
+    const depWarn = warnSpy.mock.calls.find((args) => String(args[0]).includes("Deprecation"));
+    expect(depWarn).toBeDefined();
+    warnSpy.mockRestore();
+  });
+
+  it("returns undefined for a missing identity component", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const id = resolveEvaluateIdentity({ action_type: "files.read" } as never);
+    expect(id.action_type).toBe("files.read");
+    expect(id.actor_id).toBeUndefined();
     warnSpy.mockRestore();
   });
 });

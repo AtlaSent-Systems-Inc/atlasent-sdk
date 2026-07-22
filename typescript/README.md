@@ -58,8 +58,9 @@ AtlaSent is **authorize-before-execute**, not after-the-fact logging. The two-st
 ## Simple V1 surface
 
 ```ts
-client.evaluate({ agent, action, context? })
+client.evaluate({ actor_id, action_type, context? })
   // → { decision: "allow" | "deny" | "hold" | "escalate", permitId, reason, auditHash, timestamp }
+  // Legacy { agent, action } is still accepted (deprecated alias, normalized internally).
 
 client.verifyPermit({ permitId, agent?, action?, context? })
   // → { verified, outcome, permitHash, timestamp }
@@ -113,8 +114,8 @@ import { AtlaSentClient } from "@atlasent/sdk";
 const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
 
 const evaluation = await client.evaluate({
-  agent: "ci-deploy-bot",
-  action: "production.deploy",
+  actor_id: "ci-deploy-bot",
+  action_type: "production.deploy",
   context: { service: "billing-api", commit: process.env.GIT_SHA },
 });
 
@@ -156,7 +157,7 @@ The SDK throws exactly one error type — `AtlaSentError` — with a flat shape 
 import { AtlaSentError } from "@atlasent/sdk";
 
 try {
-  await client.evaluate({ agent: "a", action: "b" });
+  await client.evaluate({ actor_id: "a", action_type: "b" });
 } catch (err) {
   if (err instanceof AtlaSentError) {
     console.error(err.code, err.status, err.requestId, err.retryAfterMs);
@@ -243,8 +244,8 @@ const client = new AtlaSentClient({
 });
 
 const result = await client.evaluate({
-  agent: currentUser.id,
-  action: "view_sensitive_report",
+  actor_id: currentUser.id,
+  action_type: "view_sensitive_report",
 });
 ```
 
