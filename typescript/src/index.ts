@@ -258,6 +258,7 @@ export {
 } from "./retry.js";
 export {
   normalizeEvaluateRequest,
+  resolveEvaluateIdentity,
   normalizeEvaluateResponse,
   type LegacyEvaluateRequest,
   type LegacyEvaluateResponse,

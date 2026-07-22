@@ -340,12 +340,51 @@ export interface EmergencyOverrideV1 {
   accepted_blocks?: string[];
 }
 
-/** Input to {@link AtlaSentClient.evaluate}. */
+/**
+ * Input to {@link AtlaSentClient.evaluate}.
+ *
+ * The canonical fields are `actor_id` and `action_type` — the same names
+ * the runtime `/v1-evaluate` wire format uses (see the contract at
+ * `contract/schemas/evaluate-request.schema.json`). Prefer these.
+ *
+ * The legacy `agent` / `action` fields are still accepted as deprecated
+ * aliases for backward compatibility with pre-2.20 SDK consumers: they
+ * are normalized to `actor_id` / `action_type` internally (with a
+ * one-time `console.warn` deprecation notice) and will be removed in a
+ * future major release. Supply the canonical pair OR the legacy pair —
+ * the client resolves whichever is present.
+ *
+ * @example
+ * ```ts
+ * // Canonical (recommended)
+ * await client.evaluate({ actor_id: "clinical-data-agent", action_type: "modify_patient_record" });
+ * // Legacy (deprecated; still works)
+ * await client.evaluate({ agent: "clinical-data-agent", action: "modify_patient_record" });
+ * ```
+ */
 export interface EvaluateRequest {
-  /** Identifier of the calling agent (e.g. "clinical-data-agent"). */
-  agent: string;
-  /** The action being authorized (e.g. "modify_patient_record"). */
-  action: string;
+  /**
+   * Identifier of the calling actor / agent (e.g. "clinical-data-agent").
+   * Canonical field — matches the runtime wire format.
+   */
+  actor_id?: string;
+  /**
+   * The action being authorized (e.g. "modify_patient_record").
+   * Canonical field — matches the runtime wire format.
+   */
+  action_type?: string;
+  /**
+   * @deprecated Use {@link EvaluateRequest.actor_id} instead. Accepted as a
+   * legacy alias and normalized to `actor_id`; will be removed in a future
+   * major release.
+   */
+  agent?: string;
+  /**
+   * @deprecated Use {@link EvaluateRequest.action_type} instead. Accepted as a
+   * legacy alias and normalized to `action_type`; will be removed in a future
+   * major release.
+   */
+  action?: string;
   /** Arbitrary policy context (user, environment, resource IDs). */
   context?: Record<string, unknown>;
   /**

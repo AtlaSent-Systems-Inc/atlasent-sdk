@@ -185,6 +185,53 @@ describe("evaluate()", () => {
     });
   });
 
+  // ── issue #345 / ADR CROSS-008: canonical actor_id/action_type ──────────
+  it("accepts the canonical actor_id/action_type shape and sends it verbatim", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fetchImpl = mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.evaluate({
+      actor_id: "clinical-data-agent",
+      action_type: "modify_patient_record",
+      context: { env: "prod" },
+    });
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1]!.body as string);
+    expect(body).toEqual({
+      action_type: "modify_patient_record",
+      actor_id: "clinical-data-agent",
+      context: { env: "prod" },
+    });
+    // Canonical input must NOT emit a deprecation warning.
+    const depWarn = warnSpy.mock.calls.find((args) =>
+      String(args[0]).includes("Deprecation"),
+    );
+    expect(depWarn).toBeUndefined();
+    warnSpy.mockRestore();
+  });
+
+  it("accepts the legacy agent/action shape, warns, and still sends canonical wire", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fetchImpl = mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE));
+    const client = makeClient(fetchImpl);
+    await client.evaluate({
+      agent: "clinical-data-agent",
+      action: "modify_patient_record",
+      context: { env: "prod" },
+    });
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1]!.body as string);
+    // Wire is always canonical regardless of the input field names.
+    expect(body).toEqual({
+      action_type: "modify_patient_record",
+      actor_id: "clinical-data-agent",
+      context: { env: "prod" },
+    });
+    const depWarn = warnSpy.mock.calls.find((args) =>
+      String(args[0]).includes("Deprecation"),
+    );
+    expect(depWarn).toBeDefined();
+    warnSpy.mockRestore();
+  });
+
   it("sets Authorization, User-Agent, and X-Request-ID headers", async () => {
     const fetchImpl = mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE));
     const client = makeClient(fetchImpl);

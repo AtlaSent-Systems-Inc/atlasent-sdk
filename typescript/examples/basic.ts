@@ -16,8 +16,8 @@ if (!apiKey) {
 const client = new AtlaSentClient({ apiKey });
 
 const result = await client.evaluate({
-  agent: "clinical-data-agent",
-  action: "modify_patient_record",
+  actor_id: "clinical-data-agent",
+  action_type: "modify_patient_record",
   context: {
     user: "dr_smith",
     environment: "production",
