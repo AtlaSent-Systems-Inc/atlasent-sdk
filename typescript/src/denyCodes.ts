@@ -26,6 +26,22 @@ export const DENY_CODES = {
   INTENT_MISMATCH: "INTENT_MISMATCH",
   PRESSURE_THRESHOLD_EXCEEDED: "PRESSURE_THRESHOLD_EXCEEDED",
   BOUNDARY_VIOLATION: "BOUNDARY_VIOLATION",
+  /**
+   * The action class requires a temporal execution window but none is
+   * configured (fail-closed; also returned if the window lookup errors). No
+   * time permits the action until an operator configures an execution window
+   * on the action class, or removes the requirement. `retry_advice` is
+   * `after_human_approval`.
+   */
+  NO_EXECUTION_WINDOW: "NO_EXECUTION_WINDOW",
+  /**
+   * The request arrived outside the action class's configured execution
+   * window(s); the current time is not inside an open window. The response
+   * carries the next window (`next_window`). Retry once inside an open window,
+   * or have an operator adjust the window. `retry_advice` is
+   * `after_rate_window`.
+   */
+  OUTSIDE_EXECUTION_WINDOW: "OUTSIDE_EXECUTION_WINDOW",
   PERMIT_UNBOUND_EXECUTION: "PERMIT_UNBOUND_EXECUTION",
   EXECUTION_PAYLOAD_HASH_REQUIRED: "EXECUTION_PAYLOAD_HASH_REQUIRED",
   /**
