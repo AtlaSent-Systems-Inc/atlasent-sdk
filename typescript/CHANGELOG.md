@@ -6,6 +6,19 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## Unreleased
+
+### Added
+
+- Two temporal-execution-window deny-code constants to `DENY_CODES`:
+  `NO_EXECUTION_WINDOW` and `OUTSIDE_EXECUTION_WINDOW`. These are part of the
+  six evaluate-path authorization deny codes frozen in the runtime catalog
+  (contract freeze 63 → 69, B5 Amendment 3); the other four
+  (`NO_AUTHORITY`, `NO_SNAPSHOT`, `SNAPSHOT_TAMPERED`, `BOUNDARY_VIOLATION`)
+  were already present. Client-side convenience constants only — no wire
+  request/response, permit, or CDO shape changed; the `deny_code` field
+  remains an open string. (atlasent#348 PR 2)
+
 ## 2.20.0
 
 ### Changed
