@@ -95,22 +95,28 @@ without a schema or a proposal in `contract/` first — see
 
 ## Disabled Endpoints
 
-The following 7 API endpoints exist in this SDK's client code or type definitions but are **not deployed in production**. They are held back in `atlasent-api/supabase/runtime-functions-disabled.json` pending future promotion to the V1 pilot surface. Do not write new SDK code that depends on these endpoints without first confirming they have been re-enabled in the runtime manifest.
+**Source of truth:** `atlasent-api/supabase/runtime-functions-disabled.json`. As of
+2026-07-11 the disabled set is exactly **3 SSO skeleton handlers** (disabled 2026-06-02,
+enterprise-tier SSO not yet in pilot scope). Do not write new SDK code that depends on
+these endpoints without first confirming they have been re-enabled in the runtime manifest.
 
 | Endpoint | SDK reference | Notes |
 |---|---|---|
-| `v1-redteam-runs` | none currently | Red team evaluation runs |
-| `v1-post-evaluations` | none currently | Post-hoc evaluation submission |
-| `v1-spiffe-validate` | none currently | SPIFFE identity validation |
-| `v1-policy-bundles` | none currently | Policy bundle management |
-| `v1-marketplace-packs` | none currently | Marketplace action pack catalog |
-| `v1-decisions-stream` | `typescript/src/client.ts` `subscribeDecisions()` | SSE stream of audit events; guarded by `v2_decisions_stream` tenant feature flag |
-| `v1-transparency-anchor` | none currently | Transparency log anchoring |
+| `v1-sso-assertion-hook` | none currently | SSO SAML assertion hook — held back until SSO is in the V1 pilot surface |
+| `v1-sso-providers` | none currently | SSO identity-provider management — held back (re-enable with `v1-sso-connections`) |
+| `v1-sso-connections` | none currently | SSO connection management CRUD — enterprise tier only |
 
-> **`v1-sso` is shipped, not disabled** (re-enabled 2026-06-01). The full
-> `typescript/src/sso.ts` module (SSO connections, JIT rules, events, and the
-> enforcement state machine) is live and wired as `client.sso`; it calls the
-> deployed `/v1/sso/*` routes and does **not** carry a `// DISABLED:` comment.
-> Do not re-add `v1-sso` to the table above.
+> **`v1-sso` is shipped, not disabled** (re-enabled 2026-06-01) and is distinct from the
+> three `v1-sso-*` skeletons above. The full `typescript/src/sso.ts` module (SSO
+> connections, JIT rules, events, and the enforcement state machine) is live and wired as
+> `client.sso`; it calls the deployed `/v1/sso/*` routes and does **not** carry a
+> `// DISABLED:` comment. Do not add `v1-sso` to the table above.
 
-If you find a reference to one of these endpoints in new SDK code, add the comment `// DISABLED: This endpoint is not deployed in production. See atlasent-api/supabase/runtime-functions-disabled.json` and open a tracking issue before shipping the change.
+> **Formerly-disabled, now re-enabled (2026-06-01) — do NOT re-add to the table:**
+> `v1-redteam-runs`, `v1-post-evaluations`, `v1-spiffe-validate`, `v1-policy-bundles`,
+> `v1-marketplace-packs`, `v1-decisions-stream`, `v1-transparency-anchor`. These 7 were on
+> the original disabled list but are deployed today and present in `runtime-functions.json`.
+> Note `v1-decisions-stream` (`typescript/src/client.ts` `subscribeDecisions()`) remains
+> guarded by the `v2_decisions_stream` tenant feature flag even though it is deployed.
+
+If you find a reference to a genuinely-disabled endpoint in new SDK code, add the comment `// DISABLED: This endpoint is not deployed in production. See atlasent-api/supabase/runtime-functions-disabled.json` and open a tracking issue before shipping the change.
