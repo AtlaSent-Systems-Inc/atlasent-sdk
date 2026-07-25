@@ -100,7 +100,7 @@
   },
   "devDependencies": {
     "@size-limit/esbuild": "^12.1.0",
-    "@size-limit/file": "^12.1.0",
+    "@size-limit/file": "^13.0.1",
     "@types/express": "^5.0.6",
     "@types/jsdom": "^28.0.1",
     "@types/node": "^26.1.0",
