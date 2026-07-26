@@ -414,14 +414,33 @@ def run() -> DriftReport:
 
     # The nested `permit.approval` sub-schema, lifted out of the evaluate-response
     # schema so the strict binding can be checked as its own "endpoint" against the
-    # Python `PermitApprovalBinding` model (tracker M2).
+    # Python `PermitApprovalBinding` model (tracker M2). This MUST fail closed: if
+    # the sub-schema is deleted/renamed or weakened, an empty `{}` fallback would
+    # make `_schema_field_sets` report "no required, extras allowed" and the model's
+    # fields would degrade to warnings only — so `drift.py` would exit 0 even though
+    # the binding it protects vanished. Detect that and fail instead.
     _evaluate_response_schema = _load_schema("evaluate-response.schema.json")
     _permit_approval_schema = (
         _evaluate_response_schema.get("properties", {})
         .get("permit", {})
         .get("properties", {})
-        .get("approval", {})
+        .get("approval")
     )
+    if not isinstance(_permit_approval_schema, dict) or not _permit_approval_schema.get(
+        "properties"
+    ):
+        report.fail(
+            "[python] /v1-evaluate#permit.approval: the nested permit.approval "
+            "sub-schema is missing or empty in evaluate-response.schema.json — the "
+            "approval-binding drift guard cannot run (fail closed; tracker M2)."
+        )
+        _permit_approval_schema = {}
+    elif _permit_approval_schema.get("additionalProperties", True) is not False:
+        report.fail(
+            "[python] /v1-evaluate#permit.approval: permit.approval must stay strict "
+            "(additionalProperties:false) so binding drift is caught — it is now loose "
+            "(tracker M2)."
+        )
 
     v1_schemas: dict[str, dict[str, dict[str, Any]]] = {
         "/v1-evaluate": {
