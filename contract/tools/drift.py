@@ -78,6 +78,7 @@ def _python_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
             ComplianceEvidencePackResult,
             EvaluateRequest,
             EvaluateResult,
+            PermitApprovalBinding,
             VerifyRequest,
             VerifyResult,
         )
@@ -104,6 +105,16 @@ def _python_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
         "/v1-evaluate": {
             "request_keys": _aliases(EvaluateRequest),
             "response_keys": _wire_aliases(EvaluateResult),
+        },
+        # Nested `permit.approval` binding (PermitV2.approval). The response body's
+        # `permit` object is additionalProperties:true, but its `approval` sub-object
+        # is STRICT (5 required fields) — so a drift inside it would slip past the
+        # top-level `/v1-evaluate` response check. The Python SDK surfaces this wire
+        # sub-shape as the `PermitApprovalBinding` model; assert it against the nested
+        # schema so the approval binding can't drift undetected. (See tracker M2.)
+        "/v1-evaluate#permit.approval": {
+            "request_keys": None,
+            "response_keys": _aliases(PermitApprovalBinding),
         },
         "/v1-verify-permit": {
             "request_keys": _aliases(VerifyRequest),
@@ -401,10 +412,43 @@ def run() -> DriftReport:
     def _load_v2(name: str) -> dict[str, Any]:
         return json.loads((SCHEMAS / "v2" / name).read_text())
 
+    # The nested `permit.approval` sub-schema, lifted out of the evaluate-response
+    # schema so the strict binding can be checked as its own "endpoint" against the
+    # Python `PermitApprovalBinding` model (tracker M2). This MUST fail closed: if
+    # the sub-schema is deleted/renamed or weakened, an empty `{}` fallback would
+    # make `_schema_field_sets` report "no required, extras allowed" and the model's
+    # fields would degrade to warnings only — so `drift.py` would exit 0 even though
+    # the binding it protects vanished. Detect that and fail instead.
+    _evaluate_response_schema = _load_schema("evaluate-response.schema.json")
+    _permit_approval_schema = (
+        _evaluate_response_schema.get("properties", {})
+        .get("permit", {})
+        .get("properties", {})
+        .get("approval")
+    )
+    if not isinstance(_permit_approval_schema, dict) or not _permit_approval_schema.get(
+        "properties"
+    ):
+        report.fail(
+            "[python] /v1-evaluate#permit.approval: the nested permit.approval "
+            "sub-schema is missing or empty in evaluate-response.schema.json — the "
+            "approval-binding drift guard cannot run (fail closed; tracker M2)."
+        )
+        _permit_approval_schema = {}
+    elif _permit_approval_schema.get("additionalProperties", True) is not False:
+        report.fail(
+            "[python] /v1-evaluate#permit.approval: permit.approval must stay strict "
+            "(additionalProperties:false) so binding drift is caught — it is now loose "
+            "(tracker M2)."
+        )
+
     v1_schemas: dict[str, dict[str, dict[str, Any]]] = {
         "/v1-evaluate": {
             "request": _load_schema("evaluate-request.schema.json"),
-            "response": _load_schema("evaluate-response.schema.json"),
+            "response": _evaluate_response_schema,
+        },
+        "/v1-evaluate#permit.approval": {
+            "response": _permit_approval_schema,
         },
         "/v1-verify-permit": {
             "request": _load_schema("verify-permit-request.schema.json"),
