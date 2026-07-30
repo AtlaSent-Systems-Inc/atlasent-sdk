@@ -56,4 +56,7 @@ jobs:
         run: npm run build
 
       - name: Bundle size check
+        # size-limit 13 requires Node >= 22 (uses fs.promises.glob);
+        # the budget only needs to run once, on the newest matrix leg.
+        if: matrix.node-version == '22.x'
         run: npm run size
