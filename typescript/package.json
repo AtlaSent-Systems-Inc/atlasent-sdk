@@ -99,7 +99,7 @@
     "access": "public"
   },
   "devDependencies": {
-    "@size-limit/esbuild": "^12.1.0",
+    "@size-limit/esbuild": "^13.0.1",
     "@size-limit/file": "^12.1.0",
     "@types/express": "^5.0.6",
     "@types/jsdom": "^28.0.1",
