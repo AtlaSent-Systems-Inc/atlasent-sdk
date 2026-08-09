@@ -1,0 +1,144 @@
+name: Publish @atlasent/gmail to npm
+
+# Triggers on gmail-vX.Y.Z tags. Tag pattern must match package.json version.
+# Release procedure: tag the main branch commit after the PR merges.
+# Mirrors publish-npm-cursor.yml exactly (same test-then-publish shape).
+
+on:
+  push:
+    tags:
+      - "gmail-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Run tests before publishing
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["20.x", "22.x"]
+    defaults:
+      run:
+        working-directory: typescript/packages/gmail
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: typescript/packages/gmail/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  publish:
+    name: Build and publish to npm
+    runs-on: ubuntu-latest
+    needs: test
+    environment: npm
+    # id-token: write is required for:
+    #   1. `npm publish --provenance` (Sigstore-backed npm provenance).
+    #   2. cosign keyless signing (Sigstore Fulcio + Rekor, R4).
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: typescript/packages/gmail
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: typescript/packages/gmail/package-lock.json
+          registry-url: "https://registry.npmjs.org"
+
+      # ── AtlaSent release gate ────────────────────────────────────────
+      # Gate closed: if the permit is not verified the job exits here and
+      # nothing builds or publishes.
+      - name: AtlaSent release gate
+        uses: AtlaSent-Systems-Inc/atlasent-action@v1
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          action: production.deploy
+          api-url: https://kttccumlnmdtupgbyfue.supabase.co/functions/v1
+          actor: ${{ github.actor }}
+          environment: production
+          context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package version
+        if: github.event_name == 'push'
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/gmail-v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)."
+            exit 1
+          fi
+          echo "Tag and package version agree: $PKG_VERSION"
+
+      - name: Build
+        run: npm run build
+
+      - name: Pack tarball for signing
+        run: npm pack
+
+      # ── R4: cosign keyless signing ──────────────────────────────────────
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Sign npm tarball (keyless, Sigstore Fulcio + Rekor)
+        run: |
+          TARBALL="$(ls *.tgz | head -1)"
+          cosign sign-blob \
+            --yes \
+            --bundle="${TARBALL}.bundle" \
+            "${TARBALL}"
+          echo "TARBALL=${TARBALL}" >> "$GITHUB_ENV"
+
+      - name: Verify signature
+        run: |
+          cosign verify-blob \
+            --bundle="${TARBALL}.bundle" \
+            --certificate-identity-regexp='https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/.github/workflows/publish-npm-gmail.yml@refs/tags/gmail-v.*' \
+            --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
+            "${TARBALL}"
+
+      - name: Upload signature bundle as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-tarball-cosign-bundle-gmail
+          path: typescript/packages/gmail/${{ env.TARBALL }}.bundle
+          retention-days: 90
+
+      - name: Inspect tarball contents (dry-run)
+        run: npm pack --dry-run
+
+      - name: Publish (with provenance)
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
