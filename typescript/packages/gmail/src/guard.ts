@@ -162,6 +162,43 @@ export async function computeExternalSendTargetId(facts: GmailExternalSendFacts)
     .join("");
 }
 
+/**
+ * Sort all object keys recursively so the JSON serialization is
+ * deterministic. Byte-identical to `@atlasent/sdk`'s internal
+ * `protect.ts` helper of the same name — not re-exported by the SDK, so
+ * duplicated here rather than reached into a private module.
+ */
+function sortKeysDeep(val: unknown): unknown {
+  if (Array.isArray(val)) return val.map(sortKeysDeep);
+  if (val !== null && typeof val === "object") {
+    return Object.keys(val as object)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, k) => {
+        acc[k] = sortKeysDeep((val as Record<string, unknown>)[k]);
+        return acc;
+      }, {});
+  }
+  return val;
+}
+
+/**
+ * SHA-256 hex digest of the recursively key-sorted canonical JSON of the
+ * evaluate payload `{action_type, actor_id, context}` — the `execution_hash`
+ * the verify request must present. `AtlaSentClient.verifyPermit` does NOT
+ * consult a `context` field (see `typescript/src/client.ts`: "context / api_key
+ * are NOT consulted by the verify handler") — `execution_hash` is the only
+ * binding channel, exactly as `@atlasent/sdk`'s `protect()` computes it.
+ * Passing anything else here (e.g. `context: {target:{id}}`) is silently
+ * ignored by the server and provides no binding at all.
+ */
+async function computeExecutionHash(payload: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(sortKeysDeep(payload)));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function deriveRecipientDomain(facts: GmailExternalSendFacts): string | undefined {
   if (facts.recipientDomain) return facts.recipientDomain;
   const at = facts.recipient.lastIndexOf("@");
@@ -286,6 +323,16 @@ async function runGuardedSend<TResponse>(
 
   const permitId = evalResp.permitId;
 
+  // Binding channel: execution_hash over the SAME {action_type, actor_id,
+  // context} the evaluate call sent — the exact-binding target.id folded
+  // into `context` above is what makes a mutated recipient/attachment/
+  // sensitivity after evaluate change this hash and fail verify.
+  const executionHash = await computeExecutionHash({
+    action_type: COMMUNICATION_EXTERNAL_SEND,
+    actor_id: options.agent,
+    context,
+  });
+
   let verifyResp: VerifyPermitResponse;
   try {
     verifyResp = await atlasent.verifyPermit({
@@ -293,7 +340,7 @@ async function runGuardedSend<TResponse>(
       agent: options.agent,
       action: COMMUNICATION_EXTERNAL_SEND,
       environment,
-      context: { target: { id: targetId } },
+      execution_hash: executionHash,
     });
   } catch (err) {
     return blocked(options, {

@@ -144,10 +144,9 @@ describe("guardedGmailSend", () => {
     );
   });
 
-  it("verifies with the same target-id hash presented at evaluate time", async () => {
+  it("verifies via execution_hash, not context (context is ignored by the server)", async () => {
     const gmail = makeGmail();
     const atlasent = makeClient();
-    const expectedTargetId = await computeExternalSendTargetId(BASE_FACTS);
     await guardedGmailSend(
       gmail as never,
       atlasent,
@@ -155,14 +154,45 @@ describe("guardedGmailSend", () => {
       BASE_FACTS,
       { agent: "user:sales-rep-01" },
     );
-    expect(atlasent.verifyPermit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        permitId: "permit-alpha",
-        agent: "user:sales-rep-01",
-        action: COMMUNICATION_EXTERNAL_SEND,
-        context: { target: { id: expectedTargetId } },
-      }),
+    const call = (atlasent.verifyPermit as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call).toMatchObject({
+      permitId: "permit-alpha",
+      agent: "user:sales-rep-01",
+      action: COMMUNICATION_EXTERNAL_SEND,
+      environment: "production",
+    });
+    // AtlaSentClient.verifyPermit does not consult `context` at all — the
+    // only binding channel is execution_hash. A regression that goes back
+    // to sending `context` instead would leave verify unbound in
+    // production and must fail this test.
+    expect(call.context).toBeUndefined();
+    expect(call.execution_hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("execution_hash changes when the exact-binding facts change (same exact-binding sensitivity as target-id)", async () => {
+    const gmail = makeGmail();
+    const atlasentA = makeClient();
+    await guardedGmailSend(
+      gmail as never,
+      atlasentA,
+      { userId: "me", requestBody: {} },
+      BASE_FACTS,
+      { agent: "user:sales-rep-01" },
     );
+    const hashA = (atlasentA.verifyPermit as ReturnType<typeof vi.fn>).mock.calls[0][0].execution_hash;
+
+    const gmail2 = makeGmail();
+    const atlasentB = makeClient();
+    await guardedGmailSend(
+      gmail2 as never,
+      atlasentB,
+      { userId: "me", requestBody: {} },
+      { ...BASE_FACTS, recipient: "swapped-recipient@example.com" },
+      { agent: "user:sales-rep-01" },
+    );
+    const hashB = (atlasentB.verifyPermit as ReturnType<typeof vi.fn>).mock.calls[0][0].execution_hash;
+
+    expect(hashA).not.toBe(hashB);
   });
 
   // The single most important test: on a DENY, the real Gmail send call
