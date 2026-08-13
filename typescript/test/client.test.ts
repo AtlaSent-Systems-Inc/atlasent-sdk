@@ -1110,6 +1110,25 @@ describe("X-RateLimit-* header parsing", () => {
     expect(result.authorityBasis).toBeUndefined();
     expect(result.escalationId).toBeUndefined();
   });
+
+  it("maps human_approval_required and human_approval_status from response (two-stage lifecycle, #1617)", async () => {
+    const wire = {
+      ...EVALUATE_PERMIT_WIRE,
+      human_approval_required: true,
+      human_approval_status: "pending",
+    };
+    const client = makeClient(mockFetch(() => jsonResponse(wire)));
+    const result = await client.evaluate({ agent: "bot", action: "act" });
+    expect(result.humanApprovalRequired).toBe(true);
+    expect(result.humanApprovalStatus).toBe("pending");
+  });
+
+  it("omits humanApprovalRequired and humanApprovalStatus when absent from response (backward compat with older runtimes)", async () => {
+    const client = makeClient(mockFetch(() => jsonResponse(EVALUATE_PERMIT_WIRE)));
+    const result = await client.evaluate({ agent: "bot", action: "act" });
+    expect(result.humanApprovalRequired).toBeUndefined();
+    expect(result.humanApprovalStatus).toBeUndefined();
+  });
 });
 
 describe("keySelf()", () => {

@@ -138,6 +138,15 @@
       "type": "string",
       "description": "Present iff decision == 'hold'. ID of the HITL escalation auto-created by the control plane. Poll GET /v1/escalations/{id} for resolution."
     },
+    "human_approval_required": {
+      "type": "boolean",
+      "description": "Two-stage authorization lifecycle (atlasent-api #1617). Whether this evaluation requires a verified human approval, independent of whether that requirement is currently satisfied — see `human_approval_status`. Absent on responses from a runtime predating this mechanism; SDKs MUST treat absence as unknown, never as false."
+    },
+    "human_approval_status": {
+      "type": "string",
+      "enum": ["not_required", "pending", "satisfied", "rejected", "expired", "revoked"],
+      "description": "Two-stage authorization lifecycle (atlasent-api #1617). Current satisfaction state of the human-approval requirement, distinct from the requirement itself (`human_approval_required`). `rejected` / `expired` / `revoked` are never collapsed into `pending` — each names a distinct reason authority is not presently available. Absent on responses from a runtime predating this mechanism."
+    },
     "permit": {
       "type": "object",
       "description": "Wire-format PermitV2 body. Returned alongside `permit_token` when the legacy v1 surface is upgraded to V2.",

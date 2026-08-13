@@ -612,6 +612,30 @@ export interface EvaluateResponse {
    */
   escalationId?: string;
   /**
+   * Two-stage authorization lifecycle (#1617): whether this evaluation
+   * REQUIRES a verified human approval, independent of whether that
+   * requirement is currently satisfied — see {@link humanApprovalStatus}
+   * for the satisfaction state. `undefined` on responses from a runtime
+   * predating this field (treat as unknown, not `false`).
+   */
+  humanApprovalRequired?: boolean;
+  /**
+   * Two-stage authorization lifecycle (#1617): the current satisfaction
+   * state of the human-approval requirement, distinct from the
+   * requirement itself ({@link humanApprovalRequired}). Closed set:
+   * `"not_required"` — no approval requirement applies to this decision.
+   * `"pending"` — required and not yet satisfied; `decision` is
+   *   typically `"escalate"` or `"hold"` in this state, and no permit
+   *   is issued.
+   * `"satisfied"` — a verified, bound approval lifted the requirement;
+   *   `decision` may be `"allow"`.
+   * `"rejected"` / `"expired"` / `"revoked"` — the approval attempt or
+   *   a previously satisfying approval is no longer valid; never
+   *   collapsed into `"pending"`.
+   * `undefined` on responses from a runtime predating this field.
+   */
+  humanApprovalStatus?: "not_required" | "pending" | "satisfied" | "rejected" | "expired" | "revoked";
+  /**
    * Authorized execution trajectory returned when the engine approved a
    * `proposed_trajectory`. Present only on `allow` decisions.
    * May differ from what was proposed — the engine may add checkpoints,

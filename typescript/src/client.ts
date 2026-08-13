@@ -399,6 +399,19 @@ interface EvaluateWire {
     expires_at?: string;
   };
   escalation_id?: string;
+  /**
+   * Two-stage authorization lifecycle (#1617): the human-approval
+   * REQUIREMENT for this evaluation, distinct from its current
+   * satisfaction state (`human_approval_status`).
+   */
+  human_approval_required?: boolean;
+  /**
+   * Two-stage authorization lifecycle (#1617): the human-approval
+   * satisfaction state. Closed set:
+   * `not_required | pending | satisfied | rejected | expired | revoked`.
+   * Absent on responses from a runtime predating this field.
+   */
+  human_approval_status?: string;
 }
 
 interface EvaluateBatchWireItem {
@@ -787,6 +800,14 @@ export class AtlaSentClient {
         },
       }),
       ...(wire.escalation_id !== undefined && { escalationId: wire.escalation_id }),
+      ...(wire.human_approval_required !== undefined && {
+        humanApprovalRequired: wire.human_approval_required,
+      }),
+      ...(wire.human_approval_status !== undefined && {
+        humanApprovalStatus: wire.human_approval_status as NonNullable<
+          EvaluateResponse["humanApprovalStatus"]
+        >,
+      }),
     };
   }
 
@@ -1126,6 +1147,14 @@ export class AtlaSentClient {
           hardBlocks: wire.risk_envelope.hard_blocks ?? [],
           ...(wire.risk_envelope.factors && { factors: wire.risk_envelope.factors }),
         },
+      }),
+      ...(wire.human_approval_required !== undefined && {
+        humanApprovalRequired: wire.human_approval_required,
+      }),
+      ...(wire.human_approval_status !== undefined && {
+        humanApprovalStatus: wire.human_approval_status as NonNullable<
+          EvaluateResponse["humanApprovalStatus"]
+        >,
       }),
     };
 

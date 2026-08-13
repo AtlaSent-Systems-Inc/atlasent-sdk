@@ -342,6 +342,16 @@ class EvaluateResult(BaseModel):
         denial: Populated on non-allow decisions. ``{"reason", "code"}``.
         rate_limit: Per-key rate-limit state from ``X-RateLimit-*``
             headers. ``None`` when the server didn't emit them.
+        human_approval_required: Two-stage authorization lifecycle
+            (#1617). Whether this evaluation requires a verified human
+            approval, independent of whether that requirement is
+            currently satisfied. ``None`` on responses from a runtime
+            predating this field.
+        human_approval_status: The current satisfaction state of the
+            human-approval requirement — ``"not_required"``,
+            ``"pending"``, ``"satisfied"``, ``"rejected"``,
+            ``"expired"``, or ``"revoked"``. ``None`` on responses from
+            a runtime predating this field.
 
     Legacy attributes (kept for backward-compat with existing readers,
     populated alongside their canonical counterparts):
@@ -380,6 +390,22 @@ class EvaluateResult(BaseModel):
     authority_basis: dict[str, Any] | None = None
     # Present iff decision == 'hold'. ID of the auto-created HITL escalation.
     escalation_id: str | None = None
+    # Two-stage authorization lifecycle (atlasent-api #1617): the human
+    # approval REQUIREMENT for this evaluation, distinct from its current
+    # satisfaction state (``human_approval_status``). ``None`` on responses
+    # from a runtime predating this field — never coerced to ``False``.
+    human_approval_required: bool | None = None
+    # Two-stage authorization lifecycle (#1617): the current satisfaction
+    # state, closed set ``not_required | pending | satisfied | rejected |
+    # expired | revoked``. ``rejected``/``expired``/``revoked`` are distinct
+    # states, never collapsed into ``pending``. ``None`` on responses from a
+    # runtime predating this field.
+    human_approval_status: (
+        Literal[
+            "not_required", "pending", "satisfied", "rejected", "expired", "revoked"
+        ]
+        | None
+    ) = None
 
     # Legacy fields. Populated by the model_validator (from canonical
     # `decision` / `permit_token` / `denial`) so existing readers like

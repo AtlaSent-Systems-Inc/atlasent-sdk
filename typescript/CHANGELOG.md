@@ -10,6 +10,16 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ### Added
 
+- `EvaluateResponse` gains two optional fields surfacing the two-stage
+  authorization lifecycle (atlasent-api #1617): `humanApprovalRequired`
+  (whether this evaluation requires a verified human approval) and
+  `humanApprovalStatus` (the current satisfaction state — closed set
+  `not_required | pending | satisfied | rejected | expired | revoked`).
+  Both are already emitted by `/v1-evaluate` on runtimes that have shipped
+  the lifecycle; this change teaches the SDK response type and mapping to
+  surface them. No wire request shape, decision semantics, or existing
+  field changed — purely additive and optional (`undefined` on older
+  runtimes that predate the fields, never a fabricated default).
 - Two temporal-execution-window deny-code constants to `DENY_CODES`:
   `NO_EXECUTION_WINDOW` and `OUTSIDE_EXECUTION_WINDOW`. These are part of the
   six evaluate-path authorization deny codes frozen in the runtime catalog
