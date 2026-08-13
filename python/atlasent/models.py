@@ -401,7 +401,9 @@ class EvaluateResult(BaseModel):
     # states, never collapsed into ``pending``. ``None`` on responses from a
     # runtime predating this field.
     human_approval_status: (
-        Literal["not_required", "pending", "satisfied", "rejected", "expired", "revoked"]
+        Literal[
+            "not_required", "pending", "satisfied", "rejected", "expired", "revoked"
+        ]
         | None
     ) = None
 
