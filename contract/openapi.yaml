@@ -258,6 +258,11 @@ components:
         require_approval:
           type: boolean
           description: "Caller assertion that this action requires verified human approval, even when the action_type heuristic does not match. Echoed onto /v1-verify-permit so the consumer can hard-deny when the permit's persisted `approval` block is missing."
+        operation_intent_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: "2026-08-13: optional caller-generated identifier for one intended organizational effect (recommended: ULID or UUIDv4 — never a content hash). Generated once by the trusted orchestrator before the first evaluate() call for that effect and presented unchanged on every re-evaluation/retry of the SAME intent (a crash-retry re-evaluates for real and gets a new decision_id, but must reuse the same operation_intent_id). Bound into the issued permit's signed claims; /v1-verify-permit cross-checks a presented value against the bound one and denies PERMIT_BINDING_MISMATCH on disagreement. Used by the consequential-operation substrate as part of operation identity (organization + provider/destination + protected action + operation_intent_id) so two independent requests with identical payloads never collide, while a genuine retry of the same intent does. Distinct from `request_id` (a single-call replay/idempotency key) and from decision_id (audit lineage only, never operation identity)."
         environment:
           type: string
           description: "Deployment environment where the action executes (e.g. 'production', 'staging'). Bound into the permit and used for enforcement-posture lookups."
@@ -658,6 +663,11 @@ components:
         require_approval:
           type: boolean
           description: "Caller assertion that this consume must produce a permit row with a populated approval binding. When true and the row carries no binding, the verifier returns APPROVAL_LINKAGE_MISSING (valid=false, consumed=true). Use this when calling on behalf of an action whose human-approval requirement isn't covered by the action_type-prefix heuristic on the server."
+        operation_intent_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: "2026-08-13: optional cross-check — re-present the operation_intent_id supplied at evaluate time. When the permit carries a bound operation_intent_id and the presented value disagrees (or is omitted where the binding requires it), the verifier denies PERMIT_BINDING_MISMATCH — the same frozen verify_error_code already used for a target_id disagreement, not a new code."
 
     VerifyPermitResponse:
       title: VerifyPermitResponse
