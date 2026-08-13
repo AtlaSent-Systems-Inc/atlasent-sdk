@@ -4,6 +4,16 @@
 
 ### Added
 
+- `EvaluateResult` gains two optional fields surfacing the two-stage
+  authorization lifecycle (atlasent-api #1617): `human_approval_required`
+  (whether this evaluation requires a verified human approval) and
+  `human_approval_status` (the current satisfaction state — closed set
+  `not_required | pending | satisfied | rejected | expired | revoked`).
+  Both are already emitted by `/v1-evaluate` on runtimes that have shipped
+  the lifecycle; this change teaches the model to parse and surface them.
+  No wire request shape, decision semantics, or existing field changed —
+  purely additive and optional (`None` on older runtimes that predate the
+  fields, never a fabricated default).
 - Two temporal-execution-window deny-code constants to `DenyCode`:
   `NO_EXECUTION_WINDOW` and `OUTSIDE_EXECUTION_WINDOW`. These are part of the
   six evaluate-path authorization deny codes frozen in the runtime catalog

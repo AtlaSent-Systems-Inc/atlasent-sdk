@@ -116,6 +116,32 @@ class TestEvaluateResult:
         assert result.denial == {"reason": "no quorum", "code": "MISSING_APPROVAL"}
         assert result.reason == "no quorum"  # legacy mirror
 
+    def test_human_approval_fields_parsed_from_response(self):
+        """Two-stage authorization lifecycle (#1617): human_approval_required
+        and human_approval_status are parsed from the wire response."""
+        result = EvaluateResult.model_validate(
+            {
+                "decision": "escalate",
+                "human_approval_required": True,
+                "human_approval_status": "pending",
+            }
+        )
+        assert result.decision == "escalate"
+        assert result.human_approval_required is True
+        assert result.human_approval_status == "pending"
+
+    def test_human_approval_fields_none_when_absent(self):
+        """Backward compat: a runtime response predating the lifecycle
+        fields leaves both attributes None, never a fabricated default."""
+        result = EvaluateResult.model_validate(
+            {
+                "decision": "allow",
+                "permit_token": "pt_xyz",
+            }
+        )
+        assert result.human_approval_required is None
+        assert result.human_approval_status is None
+
 
 class TestVerifyRequest:
     def test_canonical_serializes_to_canonical_wire(self):
