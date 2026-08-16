@@ -1,91 +1,88 @@
 # AtlaSent SDKs
 
-> **Versioning note (Doctrine 5).** Per-language SDK SemVer is
-> **independent** of the AtlaSent platform version. There is one
-> platform version — `v1` — and no "v2 product." A
-> `@atlasent/sdk@2.x` release is the second major **SDK** contract
-> generation (a breaking change in SDK ergonomics, wire-call API,
-> or type surface) and is not "AtlaSent v2." Both SDKs target the
-> stable `/v1-evaluate` and `/v1-verify-permit` endpoints. See the
-> umbrella [Versioning Doctrine](https://github.com/AtlaSent-Systems-Inc/atlasent/blob/main/VERSIONING_DOCTRINE.md)
-> (Doctrines 3 and 5) and the precedent set by Stripe, AWS, and
-> OpenAI client libraries.
+Client SDKs for **execution-time authorization**: ask whether a consequential
+action is authorized before it executes, receive a scoped permit when allowed,
+and verify that permit at the execution boundary.
 
-Client SDKs for **AtlaSent execution-time authorization infrastructure** — one runtime gating protected actions across AI agent tool calls, CI/CD deployment, financial close, and any action whose effect leaves the model sandbox.
+AtlaSent is designed for actions whose effects leave the model or application
+sandbox — deployments, external communications, data changes, financial
+operations, regulated actions, and AI-agent tool calls.
 
-Fail-closed by design — no protected action proceeds without an explicit, server-verified permit.
-
-Authorization can be granted by many sources — a human approval, a policy rule, a deployment gate, a risk-engine decision, or a signed external authorization. The SDK doesn't care which: it calls `authorize()` before the action and proceeds only on a server-issued permit. Human approval is one source of authority; the permit is the artifact every source produces.
-
-> AtlaSent is **not** a feature flag platform. A flag controls
-> whether a behavior is enabled; AtlaSent controls whether an action
-> is authorized to execute. See
-> [Runtime control vs. feature flags](https://github.com/AtlaSent-Systems-Inc/atlasent-docs/blob/main/architecture/runtime-control-vs-feature-flags.md)
-> and the
-> [Protected actions catalog](https://github.com/AtlaSent-Systems-Inc/atlasent-docs/blob/main/guides/protected-actions-catalog.md).
-
-| Language   | Package           | Install                    | Source                                   |
-|------------|-------------------|----------------------------|------------------------------------------|
-| Python     | `atlasent`        | `pip install atlasent`     | [`./python/`](./python/)                 |
-| TypeScript | `@atlasent/sdk`   | `npm i @atlasent/sdk`      | [`./typescript/`](./typescript/)         |
-
-## 30-second quickstart
-
-### Governing agent tool calls (LangChain / MCP / AI-native)
-
-Wrap any LangChain tool with one decorator to gate every call through AtlaSent:
-
-```python
-from atlasent_langchain import with_langchain_guard
-
-@with_langchain_guard(
-    agent="agent:research-bot",
-    action="agent.search.web",
-)
-def search_web(query: str) -> str:
-    return requests.get(f"https://search.example.com?q={query}").text
-
-# AtlaSent evaluates the action before search_web() runs.
-# If denied or held, the function raises AtlaSentDeniedError — the search never executes.
-result = search_web("latest SEC filings for ACME Corp")
+```text
+attempted action
+      │
+      ▼
+   evaluate
+      │
+ allow? ── no ──► do not execute
+      │ yes
+      ▼
+ scoped permit
+      │
+      ▼
+ verify permit
+      │
+      ▼
+ execute protected action
 ```
 
-```ts
-import { withLangChainGuard } from "@atlasent/guard/langchain";
+## Packages
 
-const guardedTools = withLangChainGuard(
-  [searchWebTool, writeDatabaseTool, callExternalApiTool],
-  { agent: "agent:research-bot" },
-);
-// Every tool in guardedTools calls AtlaSent before executing.
-// Tools use their name as the action_type by default (e.g. "search_web").
-```
+| Language | Package | Install |
+|---|---|---|
+| Python | `atlasent` | `pip install atlasent` |
+| TypeScript | `@atlasent/sdk` | `npm install @atlasent/sdk` |
 
-### CI/CD deploy gate
+The language SDKs have their own SemVer release numbers. Those numbers do **not**
+rename the platform API. Both clients target the stable AtlaSent `/v1-*`
+authorization surface.
+
+## Python quick start
 
 ```python
+import os
 from atlasent import AtlaSentClient
 
 client = AtlaSentClient(api_key=os.environ["ATLASENT_API_KEY"])
 
+# protect() performs the authorization/permit verification path before returning.
 permit = client.protect(
     agent="ci-deploy-bot",
     action="production.deploy",
-    context={"repo": "atlasent/api", "commit": commit, "environment": "production"},
-    state_snapshot={"source": "github-actions", "complete": True},
+    context={
+        "repo": "acme/payments-api",
+        "commit": os.environ["GIT_SHA"],
+        "environment": "production",
+    },
+    state_snapshot={
+        "source": "github-actions",
+        "complete": True,
+    },
 )
-# If protect() returns, /v1-evaluate allowed and /v1-verify-permit verified.
+
+# Reached only after the protected action's authorization path succeeded.
 run_deploy()
 ```
+
+## TypeScript quick start
 
 ```ts
 import { AtlaSentClient } from "@atlasent/sdk";
 
-const client = new AtlaSentClient({ apiKey: process.env.ATLASENT_API_KEY! });
+const client = new AtlaSentClient({
+  apiKey: process.env.ATLASENT_API_KEY!,
+});
 
 const gate = await client.deployGate({
-  context: { repo: "atlasent/api", commit: process.env.GIT_SHA, environment: "production" },
-  stateSnapshot: { source: "github-actions", complete: true },
+  context: {
+    repo: "acme/payments-api",
+    commit: process.env.GIT_SHA,
+    environment: "production",
+  },
+  stateSnapshot: {
+    source: "github-actions",
+    complete: true,
+  },
 });
 
 if (!gate.allowed) {
@@ -95,132 +92,157 @@ if (!gate.allowed) {
 runDeploy();
 ```
 
-All forms perform `evaluate → permit → verify` in one call. The
-mutation is unreachable unless the policy allowed the action *and* the
-issued permit verified server-side. On any other outcome (`deny`,
-`hold`, `escalate`, or any non-verified permit) the SDK raises
-`AtlaSentDeniedError` and the mutation never runs. See
-[Execution binding](https://github.com/AtlaSent-Systems-Inc/atlasent-docs/blob/main/guides/execution-binding.md).
+The critical integration rule is simple: **the side effect must be unreachable
+unless the required authorization and permit-verification checks succeeded.**
+Do not treat an `allow` string by itself as equivalent to execution-boundary
+verification when the selected SDK path requires a permit check.
 
-## LangChain and MCP integration
+## AI agents and MCP
 
-AtlaSent ships first-class integrations for the two most common AI agent patterns:
+Agent governance uses the same contract. A database write, external API call,
+code execution, file mutation, payment initiation, or other sensitive tool call
+can be represented as an `action_type` and evaluated before the tool runs.
 
-### LangChain guard (`@atlasent/guard/langchain` / `atlasent_langchain`)
+Typical application-defined names include:
 
-Wrap any tool array with `withLangChainGuard()` (TypeScript) or decorate individual tool functions with `@with_langchain_guard` (Python). The guard:
-
-- Calls `/v1-evaluate` before every tool invocation.
-- Passes the tool name as `action_type` by default; override per-tool with a custom resolver.
-- Annotates successful tool results with the `permit_token` for downstream audit.
-- On `deny` or `hold`: raises `AtlaSentDeniedError` (throw mode) or returns a structured `DenialResult` (tool-result mode — lets the LLM see the denial reason and respond gracefully).
-- Supports `permitRevalidationIntervalMs` for long-running agent loops (continuous authorization heartbeat).
-
-```ts
-import { withLangChainGuard } from "@atlasent/guard/langchain";
-
-const tools = withLangChainGuard(
-  [webSearchTool, databaseWriteTool, externalApiTool],
-  {
-    agent: "agent:my-assistant",
-    onDeny: "tool-result",         // let the LLM handle denials gracefully
-    extraContext: () => ({
-      session_id: getCurrentSession(),
-    }),
-  },
-);
+```text
+agent.db.write
+agent.db.delete
+agent.api.post
+agent.code.execute
+agent.fs.write
+agent.email.send
+agent.payment.initiate
 ```
 
-### MCP server (`@atlasent/mcp-server`)
+For MCP-compatible hosts, use the public
+[`atlasent-mcp-server`](https://github.com/AtlaSent-Systems-Inc/atlasent-mcp-server).
+It demonstrates the authorize-before-execute interception pattern and can run a
+local demo without AtlaSent credentials.
 
-Install the MCP server to expose AtlaSent tools (`atlasent_evaluate`, `atlasent_verify_permit`) to any MCP-compatible agent host (Claude Desktop, Cursor, Claude Code). The agent calls `evaluate` before every sensitive tool and `verify_permit` afterwards to close the audit loop.
+## GitHub Actions
 
-```bash
-npx -y @atlasent/mcp-server   # 60-second local demo, no credentials needed
+For CI/CD enforcement, use the public
+[`atlasent-action`](https://github.com/AtlaSent-Systems-Inc/atlasent-action).
+The Action derives GitHub execution facts, evaluates the protected action, and
+can verify a permit immediately before the deployment or other consequential CI
+step.
+
+## Wire contract
+
+Canonical request/response schemas and compatibility fixtures live in
+[`contract/`](./contract/). The contract is shared by the Python and TypeScript
+clients so a permit produced through one language uses the same runtime wire
+semantics as the other.
+
+Primary authorization endpoints:
+
+```text
+POST /v1-evaluate
+POST /v1-verify-permit
 ```
 
-See [atlasent-mcp-server](https://github.com/AtlaSent-Systems-Inc/atlasent-mcp-server) for the full demo and integration guide.
+Additional SDK features may use additive `/v1-*` endpoints, but SDK major
+versions do not imply a separate "AtlaSent v2" product or a replacement control
+plane.
 
-## Canonical protected actions
+## Permits
 
-`action_type` is yours to define — any string that names a meaningful operation in your system. The canonical catalog below shows the breadth of what AtlaSent governs out of the box:
+A permit is the execution artifact produced by successful authorization. The SDK
+does not re-derive organizational authority locally; the runtime is the decision
+authority.
 
-| Action | Used for |
-|---|---|
-| `model.agent.execute_tool` | **Agent tool calls** — any tool invocation whose effect leaves the model sandbox (web search, DB write, external API, code execution). |
-| `production.deploy` | Service deploys from CI to production. |
-| `vendor.payment.release` | Outbound payments from accounts payable. |
-| `customer.data.export` | Exports of customer records out of the system of record. |
-| `reconciliation.certify` | Period-end reconciliation certification. |
+Permits are scoped and time-bounded. Where single-use verification applies, the
+runtime records consumption so replay can be refused. Execution bindings can
+also constrain the permit to the artifact, target, environment, or other
+verified context expected at the execution boundary.
 
-**AI-native and MCP builders** typically define their own action namespace. Common patterns:
+A human approval is one possible source of authority. Policy rules, deployment
+gates, signed external assertions, and other approved authority sources can feed
+the same authorization model. The protected action should depend on the permit,
+not on each integration re-implementing those authority rules itself.
 
-```
-agent.search.web            agent.db.write              agent.db.delete
-agent.api.post              agent.code.execute          agent.fs.write
-agent.email.send            agent.calendar.create       agent.payment.initiate
-```
+## Fail-closed integration
 
-Any `action_type` your policies don't recognize is **denied by default** — fail-closed is the system default.
+For protected actions, treat these as block conditions rather than silent
+successes:
 
-A runnable example wiring all five catalog actions end to end lives in
-[`atlasent-examples/protected-actions-catalog/`](https://github.com/AtlaSent-Systems-Inc/atlasent-examples/tree/main/protected-actions-catalog).
+- `deny`, `hold`, or `escalate` when execution requires `allow`;
+- missing permit when a permit is required;
+- failed, expired, revoked, replayed, or mismatched permit;
+- missing required execution binding;
+- authentication failure;
+- authority-service failure on a path configured to require live authorization.
 
-## API endpoints
+A caller may choose separate advisory or shadow workflows for observation, but
+those modes should not be described as enforced execution protection.
 
-Both SDKs target the same two endpoints on the `/v1-*` surface:
+## Independent evidence verification
 
-- `POST https://api.atlasent.io/v1-evaluate`
-- `POST https://api.atlasent.io/v1-verify-permit`
+The public
+[`atlasent-verify`](https://github.com/AtlaSent-Systems-Inc/atlasent-verify)
+repository contains the standalone offline audit-chain verifier and its public
+canonical-form contract. Public verifier keys, revocations, and trust-root
+material are published in
+[`atlasent-keys`](https://github.com/AtlaSent-Systems-Inc/atlasent-keys).
 
-Full wire-format parity: a Python permit token is verifiable from the TypeScript SDK and vice-versa.
-
-The `V2_ROLLOUT.md` document in this repo is a **historical filename**
-preserved per Doctrine 4. Its substantive content (batch evaluate,
-streaming evaluate, GraphQL client, behavior-conditioning helper)
-ships as additive Phase 1 / Phase 2 work on the same `/v1/*` wire
-surface.
-
-## The permit
-
-The permit token is a **capability token** in the macaroon ([Stanford, 2014](https://research.google.com/pubs/archive/41892.pdf)) / [biscuit](https://www.biscuitsec.org/) lineage: short-lived (1-hour TTL), single-use, scoped to the evaluated action, and cryptographically signed. The SDK treats it as the one artifact every authority source produces — a human approval, a policy rule, a deploy gate, and a risk decision all converge on the same permit, and the SDK never re-implements or re-derives the authorization itself: the server decides. By default the SDK calls the server for every decision; an **optional, opt-in client-side TTL cache** (`TTLCache`) can short-circuit repeat evaluations when you configure one.
-
-What we take from that lineage: bounded expiry and a scope attenuated to the action. What we deliberately don't expose today: third-party caveats and holder-of-key binding. One difference from a pure capability token: **single-use is enforced server-side** — `verify_permit` consumes the token (a nonce ledger prevents replay), so verification is not fully offline. This is vocabulary alignment, not a wire-format change.
+Those repositories are intentionally public so a customer or auditor can inspect
+the verification path without access to AtlaSent private infrastructure.
 
 ## Repository layout
 
-```
+```text
 atlasent-sdk/
-├── python/         # Python SDK — pip install atlasent
-├── typescript/     # TypeScript SDK — npm i @atlasent/sdk
-├── contract/       # Shared API contract — schemas, vectors, drift detector
-└── .github/
-    └── workflows/  # per-language CI, path-filtered
+├── python/         # Python SDK
+├── typescript/     # TypeScript SDK
+├── contract/       # shared wire schemas, vectors, and drift checks
+├── docs/           # SDK-facing documentation
+└── .github/        # CI and release workflows
 ```
 
-## The contract
+## Development
 
-All SDKs target the same two endpoints and wire shapes. Canonical definitions live in [`contract/`](./contract/).
+Python:
 
-## Documentation map
+```bash
+cd python
+python -m pytest tests/
+```
 
-For pilot-customer onboarding and external review, start with:
+TypeScript:
 
-- [`docs/README.md`](./docs/README.md) — consolidated documentation index.
-- [`SECURITY.md`](./SECURITY.md) — security policy and disclosure process.
-- [`REVOCATION_RUNBOOK.md`](./REVOCATION_RUNBOOK.md) — operational incident handling.
-- [`RELEASING.md`](./RELEASING.md) and [`docs/PUBLISH_READINESS.md`](./docs/PUBLISH_READINESS.md) — release controls and publish gates.
+```bash
+cd typescript
+npm ci
+npm run typecheck
+npm test
+npm run build
+```
 
-## Getting an API key
+Use the repository's pinned CI and package-manager configuration as the
+authoritative release check.
 
-Sign up at [atlasent.io](https://atlasent.io) → Settings → API Keys.
+## Security
+
+Do not place API keys, private signing material, customer secrets, or production
+credentials in source control. Applications should load AtlaSent credentials
+from their platform's secret store and keep authorization context limited to the
+facts the selected policy actually needs.
+
+Security-sensitive integration code should keep the protected side effect after
+the authorization boundary in control flow — not merely log a decision and
+continue regardless of the result.
+
+## Public ecosystem
+
+- [`atlasent-action`](https://github.com/AtlaSent-Systems-Inc/atlasent-action) — GitHub Actions execution gate
+- [`atlasent-mcp-server`](https://github.com/AtlaSent-Systems-Inc/atlasent-mcp-server) — MCP authorize-before-execute integration
+- [`atlasent-verify`](https://github.com/AtlaSent-Systems-Inc/atlasent-verify) — independent offline audit verifier
+- [`atlasent-keys`](https://github.com/AtlaSent-Systems-Inc/atlasent-keys) — public verification material
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](./LICENSE). See [NOTICE](./NOTICE) for attribution.
+Licensed under the [Apache License, Version 2.0](./LICENSE). See
+[`NOTICE`](./NOTICE) for attribution.
 
 Copyright (c) AtlaSent IP Holdings LLC
-
-Commercial licensing inquiries: [legal@atlasent.io](mailto:legal@atlasent.io)
-
-> Note: subpackage manifests under `python/` and `typescript/` may still carry their previous license metadata. Future releases will publish under Apache-2.0; already-published tarballs cannot be retroactively relicensed.
