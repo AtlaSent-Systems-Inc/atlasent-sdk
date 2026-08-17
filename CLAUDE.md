@@ -103,8 +103,8 @@ these endpoints without first confirming they have been re-enabled in the runtim
 | Endpoint | SDK reference | Notes |
 |---|---|---|
 | `v1-sso-assertion-hook` | none currently | SSO SAML assertion hook — held back until SSO is in the V1 pilot surface |
-| `v1-sso-providers` | none currently | SSO identity-provider management — held back (re-enable with `v1-sso-connections`) |
-| `v1-sso-connections` | none currently | SSO connection management CRUD — enterprise tier only |
+| `v1-sso-providers` | none currently | SSO identity-provider management — held back; stale cross-reference to `v1-sso-connections` as a re-enable target removed 2026-08-10 (that function is now quarantined, not a re-enable target) |
+| `v1-sso-connections` | none currently | QUARANTINED 2026-08-10 — real table-mismatch bug (POST wrote `sso_connections`; GET/:id, PATCH, DELETE read/wrote `identity_providers`). Do not re-enable without a redesign; `v1-sso` already implements this resource correctly |
 
 > **`v1-sso` is shipped, not disabled** (re-enabled 2026-06-01) and is distinct from the
 > three `v1-sso-*` skeletons above. The full `typescript/src/sso.ts` module (SSO
