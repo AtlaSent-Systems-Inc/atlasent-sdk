@@ -358,7 +358,15 @@ export function matchesResourceContextCondition(
   // operator === "in"
   if (!Array.isArray(condition.value) || condition.value.length === 0) return "undetermined";
   const values: unknown[] = condition.value;
+  if (!isConditionScalar(values[0])) return "undetermined";
   const elementType = typeof values[0];
+  // The contract requires a homogeneous scalar array; a mixed-type array
+  // (reachable via untyped JSON) is itself malformed, so trusting just
+  // element 0 as representative would let a policy-authoring bug slip past
+  // as a confident match/no_match instead of holding on it.
+  if (!values.every((v) => isConditionScalar(v) && typeof v === elementType)) {
+    return "undetermined";
+  }
   if (!isConditionScalar(actual) || typeof actual !== elementType) return "undetermined";
   return values.includes(actual) ? "match" : "no_match";
 }

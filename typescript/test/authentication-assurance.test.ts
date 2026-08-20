@@ -317,4 +317,20 @@ describe("matchesResourceContextCondition (tri-state)", () => {
       matchesResourceContextCondition({ field: "risk_score", operator: "in", value: [42, 43] }, numericContext),
     ).toBe("match");
   });
+
+  it("is undetermined for a non-homogeneous (mixed-type) 'in' declared value, regardless of which element 'actual' would match (REGRESSION)", () => {
+    // The declared array itself violates the "homogeneous scalar array"
+    // contract. A naive implementation sampling only element 0's type
+    // would let this slip through as a confident match/no_match.
+    const mixed = ["42", 43] as unknown as string[];
+    expect(
+      matchesResourceContextCondition({ field: "risk_score", operator: "in", value: mixed }, { risk_score: "42" }),
+    ).toBe("undetermined");
+    expect(
+      matchesResourceContextCondition({ field: "risk_score", operator: "in", value: mixed }, { risk_score: 43 }),
+    ).toBe("undetermined");
+    expect(
+      matchesResourceContextCondition({ field: "risk_score", operator: "in", value: mixed }, { risk_score: 99 }),
+    ).toBe("undetermined");
+  });
 });
