@@ -364,6 +364,30 @@ export type {
   ResourceClassificationAssertion,
 } from "./contextEnvelope.js";
 
+// ── Authentication assurance (CROSS-016 / proposal 0003) ────────────────────────────────────────────────────
+export {
+  isAuthenticationAssuranceOutcomeCode,
+  isAuthenticationAssuranceRequirement,
+  matchesResourceContextCondition,
+  validateAuthenticationAssuranceEvidence,
+  validateAuthenticationAssuranceRequirement,
+} from "./authenticationAssurance.js";
+export type {
+  AssuranceEvaluationOutcome,
+  AssuranceRequirementLayer,
+  AssuranceResolutionReason,
+  AssuranceResolutionStatus,
+  AuthenticationAssuranceEvidence,
+  AuthenticationAssuranceOutcomeCode,
+  AuthenticationAssuranceRequirement,
+  EffectiveAuthenticationAssuranceRequirement,
+  MethodProvenance,
+  PredicateInstance,
+  PredicateRegistryEntry,
+  ResourceContextCondition,
+  ResourceContextConditionMatch,
+} from "./authenticationAssurance.js";
+
 // ── V1 Proof bundle ──────────────────────────────────────────────────────────────────────────────────────
 export type {
   GovernanceEvent,
