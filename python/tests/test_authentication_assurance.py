@@ -384,3 +384,33 @@ def test_matches_resource_context_condition_undetermined_on_type_mismatch() -> N
         )
         == "undetermined"
     )
+
+
+def test_matches_resource_context_condition_undetermined_on_mixed_kind_in_array() -> (
+    None
+):
+    """REGRESSION: a non-homogeneous 'in' declared array is undetermined
+    regardless of which element 'actual' would match — sampling only
+    element 0's kind would let a malformed array slip past."""
+    mixed = ["42", 43]
+    assert (
+        matches_resource_context_condition(
+            {"field": "risk_score", "operator": "in", "value": mixed},
+            {"risk_score": "42"},
+        )
+        == "undetermined"
+    )
+    assert (
+        matches_resource_context_condition(
+            {"field": "risk_score", "operator": "in", "value": mixed},
+            {"risk_score": 43},
+        )
+        == "undetermined"
+    )
+    assert (
+        matches_resource_context_condition(
+            {"field": "risk_score", "operator": "in", "value": mixed},
+            {"risk_score": 99},
+        )
+        == "undetermined"
+    )

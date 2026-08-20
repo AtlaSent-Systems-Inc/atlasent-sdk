@@ -494,6 +494,14 @@ def matches_resource_context_condition(
     if not isinstance(candidate_values, list) or len(candidate_values) == 0:
         return "undetermined"
     element_kind = _scalar_kind(candidate_values[0])
+    if element_kind is None:
+        return "undetermined"
+    # The contract requires a homogeneous scalar array; a mixed-kind array
+    # (reachable via untyped JSON) is itself malformed, so trusting just
+    # element 0 as representative would let a policy-authoring bug slip
+    # past as a confident match/no_match instead of holding on it.
+    if any(_scalar_kind(v) != element_kind for v in candidate_values):
+        return "undetermined"
     if actual_kind is None or actual_kind != element_kind:
         return "undetermined"
     return "match" if actual in candidate_values else "no_match"
