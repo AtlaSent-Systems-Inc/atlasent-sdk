@@ -196,6 +196,35 @@ function isIso8601(x: unknown): x is string {
   return typeof x === "string" && ISO_8601.test(x);
 }
 
+function isMethodProvenanceShape(x: unknown): x is MethodProvenance {
+  return (
+    isRecord(x) &&
+    typeof x.method === "string" &&
+    x.method.length > 0 &&
+    typeof x.issuer === "string" &&
+    x.issuer.length > 0 &&
+    typeof x.verified === "boolean"
+  );
+}
+
+function isPredicateInstanceShape(x: unknown): x is PredicateInstance {
+  return isRecord(x) && typeof x.predicate_id === "string" && x.predicate_id.length > 0 && "value" in x;
+}
+
+function isResourceContextConditionShape(x: unknown): x is ResourceContextCondition {
+  if (!isRecord(x)) return false;
+  if (typeof x.field !== "string" || x.field.length === 0) return false;
+  if (x.operator !== "eq" && x.operator !== "in") return false;
+  if (x.operator === "eq") {
+    return typeof x.value === "string" || typeof x.value === "number" || typeof x.value === "boolean";
+  }
+  // operator === "in": a non-empty, homogeneous array of scalars.
+  if (!Array.isArray(x.value) || x.value.length === 0) return false;
+  const elementType = typeof x.value[0];
+  if (elementType !== "string" && elementType !== "number" && elementType !== "boolean") return false;
+  return x.value.every((v) => typeof v === elementType);
+}
+
 /** Structural validation for AuthenticationAssuranceEvidence. Returns a list of problems (empty = valid). */
 export function validateAuthenticationAssuranceEvidence(input: unknown): string[] {
   const problems: string[] = [];
@@ -203,7 +232,11 @@ export function validateAuthenticationAssuranceEvidence(input: unknown): string[
     return ["input must be an object"];
   }
   const e = input;
-  if (!Array.isArray(e.methods)) problems.push("methods must be an array");
+  if (!Array.isArray(e.methods)) {
+    problems.push("methods must be an array");
+  } else if (!e.methods.every(isMethodProvenanceShape)) {
+    problems.push("methods must contain only well-formed { method, issuer, verified } entries");
+  }
   if (typeof e.factor_count !== "number" || !Number.isInteger(e.factor_count) || e.factor_count < 0) {
     problems.push("factor_count must be a non-negative integer");
   }
@@ -213,7 +246,11 @@ export function validateAuthenticationAssuranceEvidence(input: unknown): string[
   if (e.verification_status !== "verified" && e.verification_status !== "unverified" && e.verification_status !== "unknown") {
     problems.push("verification_status must be 'verified' | 'unverified' | 'unknown'");
   }
-  if (!Array.isArray(e.capability_summary)) problems.push("capability_summary must be an array");
+  if (!Array.isArray(e.capability_summary)) {
+    problems.push("capability_summary must be an array");
+  } else if (!e.capability_summary.every((c) => typeof c === "string")) {
+    problems.push("capability_summary must contain only strings");
+  }
   return problems;
 }
 
@@ -236,13 +273,23 @@ export function validateAuthenticationAssuranceRequirement(input: unknown): stri
     problems.push(`source_type must be absent when layer is ${String(layer)}`);
   }
   if (typeof r.source_id !== "string" || r.source_id.length === 0) problems.push("source_id must be a non-empty string");
-  if (!Array.isArray(r.predicates)) problems.push("predicates must be an array");
+  if (!Array.isArray(r.predicates)) {
+    problems.push("predicates must be an array");
+  } else if (!r.predicates.every(isPredicateInstanceShape)) {
+    problems.push("predicates must contain only well-formed { predicate_id, value } entries");
+  }
   if (layer === "resource_context") {
     if (!Array.isArray(r.when) || r.when.length === 0) {
       problems.push("when must be a non-empty array when layer is resource_context");
+    } else if (!r.when.every(isResourceContextConditionShape)) {
+      problems.push("when must contain only well-formed { field, operator, value } conditions");
     }
-  } else if (r.when !== undefined && !Array.isArray(r.when)) {
-    problems.push("when, when present, must be an array");
+  } else if (r.when !== undefined) {
+    if (!Array.isArray(r.when)) {
+      problems.push("when, when present, must be an array");
+    } else if (!r.when.every(isResourceContextConditionShape)) {
+      problems.push("when must contain only well-formed { field, operator, value } conditions");
+    }
   }
   if (!isIso8601(r.effective_from)) problems.push("effective_from must be an RFC 3339 date-time");
   if (r.effective_until !== undefined && r.effective_until !== null && !isIso8601(r.effective_until)) {
@@ -279,13 +326,22 @@ export function isAuthenticationAssuranceOutcomeCode(
 
 export type ResourceContextConditionMatch = "match" | "no_match" | "undetermined";
 
+function isConditionScalar(x: unknown): x is string | number | boolean {
+  return typeof x === "string" || typeof x === "number" || typeof x === "boolean";
+}
+
 /**
  * Evaluates a single ResourceContextCondition against a flat context map.
- * A missing context key, or an `in` condition whose declared value isn't
- * actually an array, is `undetermined` — not `no_match`. A caller MUST
- * treat `undetermined` as `hold` (CROSS-016 §7); collapsing it into a plain
- * boolean `false` reads as "this condition doesn't apply" and can silently
- * drop a requirement from composition instead of holding on it.
+ * `undetermined` — never `no_match` — for: a missing context key; an `in`
+ * condition whose declared value isn't actually an array (or is empty, so
+ * no element type can be determined); a context value that isn't itself a
+ * scalar; or a scalar-type mismatch between the context value and the
+ * condition's declared value(s) (e.g. comparing a number against a
+ * declared string). A caller MUST treat `undetermined` as `hold`
+ * (CROSS-016 §7); collapsing it into a plain boolean `false` reads as
+ * "this condition doesn't apply" and can silently drop a requirement from
+ * composition instead of holding on it — that includes a type mismatch,
+ * which is exactly as undecidable as a missing field.
  */
 export function matchesResourceContextCondition(
   condition: ResourceContextCondition,
@@ -294,10 +350,15 @@ export function matchesResourceContextCondition(
   if (!(condition.field in context)) return "undetermined";
   const actual = context[condition.field];
   if (condition.operator === "eq") {
+    if (!isConditionScalar(actual) || typeof actual !== typeof condition.value) {
+      return "undetermined";
+    }
     return actual === condition.value ? "match" : "no_match";
   }
   // operator === "in"
-  if (!Array.isArray(condition.value)) return "undetermined";
+  if (!Array.isArray(condition.value) || condition.value.length === 0) return "undetermined";
   const values: unknown[] = condition.value;
+  const elementType = typeof values[0];
+  if (!isConditionScalar(actual) || typeof actual !== elementType) return "undetermined";
   return values.includes(actual) ? "match" : "no_match";
 }

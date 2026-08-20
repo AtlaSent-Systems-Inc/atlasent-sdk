@@ -39,6 +39,34 @@ describe("AuthenticationAssuranceEvidence (CROSS-016 / proposal 0003)", () => {
       }).length,
     ).toBeGreaterThan(0);
   });
+
+  it("rejects malformed entries inside methods / capability_summary (REGRESSION)", () => {
+    const wellFormedExceptMethods = {
+      methods: [null, { method: "webauthn", issuer: "https://idp.example.com" }],
+      factor_count: 1,
+      phishing_resistant: true,
+      auth_time: "2026-08-20T00:00:00Z",
+      issuer: "https://idp.example.com",
+      verification_status: "verified",
+      capability_summary: ["mfa"],
+    };
+    expect(validateAuthenticationAssuranceEvidence(wellFormedExceptMethods)).toContain(
+      "methods must contain only well-formed { method, issuer, verified } entries",
+    );
+
+    const wellFormedExceptCapabilities = {
+      methods: [{ method: "webauthn", issuer: "https://idp.example.com", verified: true }],
+      factor_count: 1,
+      phishing_resistant: true,
+      auth_time: "2026-08-20T00:00:00Z",
+      issuer: "https://idp.example.com",
+      verification_status: "verified",
+      capability_summary: ["mfa", 123],
+    };
+    expect(validateAuthenticationAssuranceEvidence(wellFormedExceptCapabilities)).toContain(
+      "capability_summary must contain only strings",
+    );
+  });
 });
 
 describe("AuthenticationAssuranceRequirement (CROSS-016 / proposal 0003)", () => {
@@ -156,6 +184,50 @@ describe("AuthenticationAssuranceRequirement (CROSS-016 / proposal 0003)", () =>
       }),
     ).toBe(false);
   });
+
+  it("rejects malformed entries inside predicates / when (REGRESSION)", () => {
+    const nullPredicate = {
+      layer: "organization",
+      source_id: "org_1",
+      predicates: [null],
+      effective_from: "2026-01-01T00:00:00Z",
+    };
+    expect(validateAuthenticationAssuranceRequirement(nullPredicate)).toContain(
+      "predicates must contain only well-formed { predicate_id, value } entries",
+    );
+
+    const predicateMissingValueKey = {
+      layer: "organization",
+      source_id: "org_1",
+      predicates: [{ predicate_id: "mfa_required" }], // no `value` key at all
+      effective_from: "2026-01-01T00:00:00Z",
+    };
+    expect(validateAuthenticationAssuranceRequirement(predicateMissingValueKey)).toContain(
+      "predicates must contain only well-formed { predicate_id, value } entries",
+    );
+
+    const malformedWhenOnActionClass = {
+      layer: "action_class",
+      source_id: "ac_1",
+      predicates: [],
+      when: [{ field: "environment" }], // missing operator + value
+      effective_from: "2026-01-01T00:00:00Z",
+    };
+    expect(validateAuthenticationAssuranceRequirement(malformedWhenOnActionClass)).toContain(
+      "when must contain only well-formed { field, operator, value } conditions",
+    );
+
+    const malformedWhenOnResourceContext = {
+      layer: "resource_context",
+      source_id: "rc_1",
+      predicates: [],
+      when: [{ field: "target.tier", operator: "in", value: [] }], // empty array — can't determine element type
+      effective_from: "2026-01-01T00:00:00Z",
+    };
+    expect(validateAuthenticationAssuranceRequirement(malformedWhenOnResourceContext)).toContain(
+      "when must contain only well-formed { field, operator, value } conditions",
+    );
+  });
 });
 
 describe("isAuthenticationAssuranceOutcomeCode", () => {
@@ -208,5 +280,41 @@ describe("matchesResourceContextCondition (tri-state)", () => {
         context,
       ),
     ).toBe("undetermined");
+  });
+
+  it("is undetermined — never a silent no_match — on a scalar-type mismatch (REGRESSION)", () => {
+    // A numeric context value compared against a declared string `eq` value: strict
+    // equality would already be `false` (=> a plain-boolean implementation reads that
+    // as "no_match"), but a type mismatch is undecidable, not "definitely doesn't
+    // apply" — CROSS-016 §7 requires this to hold, not silently drop the requirement.
+    const numericContext = { risk_score: 42 };
+    expect(
+      matchesResourceContextCondition({ field: "risk_score", operator: "eq", value: "42" }, numericContext),
+    ).toBe("undetermined");
+
+    // Same principle for `in`: the declared array is homogeneous strings, the context
+    // value is a number — undetermined, not "not found in the array".
+    expect(
+      matchesResourceContextCondition(
+        { field: "risk_score", operator: "in", value: ["42", "43"] },
+        numericContext,
+      ),
+    ).toBe("undetermined");
+
+    // A non-scalar context value (object/array) can never be compared meaningfully.
+    expect(
+      matchesResourceContextCondition(
+        { field: "tags", operator: "eq", value: "gold" },
+        { tags: ["gold", "vip"] },
+      ),
+    ).toBe("undetermined");
+
+    // Same-type comparisons still work normally after the fix.
+    expect(
+      matchesResourceContextCondition({ field: "risk_score", operator: "eq", value: 42 }, numericContext),
+    ).toBe("match");
+    expect(
+      matchesResourceContextCondition({ field: "risk_score", operator: "in", value: [42, 43] }, numericContext),
+    ).toBe("match");
   });
 });

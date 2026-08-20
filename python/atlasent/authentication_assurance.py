@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, TypedDict, Union
 
 # Full RFC 3339 date-time: date + time(seconds) + optional fraction + `Z` or
 # `±HH:MM`. Deliberately regex-only (no calendar-impossibility check) to stay
@@ -35,6 +35,21 @@ _ISO_8601_RE = re.compile(
 
 def _is_iso8601(value: Any) -> bool:
     return isinstance(value, str) and bool(_ISO_8601_RE.match(value))
+
+
+def _scalar_kind(x: Any) -> str | None:
+    """Mirrors JavaScript `typeof` for the three scalar kinds this contract
+    cares about — boolean / number / string — so a bool is never conflated
+    with a number (Python's `bool` is an `int` subclass; check it first).
+    Returns None for anything non-scalar (dict, list, None, etc.).
+    """
+    if isinstance(x, bool):
+        return "boolean"
+    if isinstance(x, (int, float)):
+        return "number"
+    if isinstance(x, str):
+        return "string"
+    return None
 
 
 # ── Leaf shapes ──────────────────────────────────────────────────────────
@@ -167,13 +182,21 @@ class ResourceContextRequirement(_ResourceContextRequirementRequired, total=Fals
     effective_until: str | None
 
 
-AuthenticationAssuranceRequirement = (
-    ExternalObligationRequirement
-    | OrganizationRequirement
-    | ActionClassRequirement
-    | ResourceContextRequirement
-)
-"""What one source demands. See the four per-layer TypedDicts above."""
+AuthenticationAssuranceRequirement = Union[  # noqa: UP007 — py3.9 compat, see docstring below
+    ExternalObligationRequirement,
+    OrganizationRequirement,
+    ActionClassRequirement,
+    ResourceContextRequirement,
+]
+"""What one source demands. See the four per-layer TypedDicts above.
+
+Uses typing.Union rather than the `X | Y` runtime syntax: this is a plain
+module-level assignment (not a type annotation), so `from __future__ import
+annotations` does not defer its evaluation — on Python 3.9 (still this
+package's floor per pyproject.toml), `SomeTypedDict | OtherTypedDict`
+raises TypeError at import time because `type.__or__` for arbitrary classes
+was only added in 3.10.
+"""
 
 
 @dataclass(frozen=True)
@@ -270,9 +293,9 @@ class AssuranceEvaluationOutcomeNonAllow(
     evidence_ref: str
 
 
-AssuranceEvaluationOutcome = (
-    AssuranceEvaluationOutcomeAllow | AssuranceEvaluationOutcomeNonAllow
-)
+AssuranceEvaluationOutcome = Union[  # noqa: UP007 — py3.9 compat, same reason as above
+    AssuranceEvaluationOutcomeAllow, AssuranceEvaluationOutcomeNonAllow
+]
 """CROSS-016 §7. Every outcome references its per-evaluation assurance trace.
 Every non-allow outcome requires a typed code. ``requirement_ref`` is present
 when resolution produced an effective requirement, but is correctly absent
@@ -289,13 +312,59 @@ for applicability/resolver failures that occur before one exists.
 # a constructed dataclass).
 
 
+def _is_method_provenance_shape(x: Any) -> bool:
+    return (
+        isinstance(x, dict)
+        and isinstance(x.get("method"), str)
+        and x.get("method") != ""
+        and isinstance(x.get("issuer"), str)
+        and x.get("issuer") != ""
+        and isinstance(x.get("verified"), bool)
+    )
+
+
+def _is_predicate_instance_shape(x: Any) -> bool:
+    return (
+        isinstance(x, dict)
+        and isinstance(x.get("predicate_id"), str)
+        and x.get("predicate_id") != ""
+        and "value" in x
+    )
+
+
+def _is_resource_context_condition_shape(x: Any) -> bool:
+    if not isinstance(x, dict):
+        return False
+    field_name = x.get("field")
+    if not isinstance(field_name, str) or field_name == "":
+        return False
+    operator = x.get("operator")
+    if operator not in ("eq", "in"):
+        return False
+    value = x.get("value")
+    if operator == "eq":
+        return _scalar_kind(value) is not None
+    # operator == "in": a non-empty, homogeneous list of scalars.
+    if not isinstance(value, list) or len(value) == 0:
+        return False
+    element_kind = _scalar_kind(value[0])
+    if element_kind is None:
+        return False
+    return all(_scalar_kind(v) == element_kind for v in value)
+
+
 def validate_authentication_assurance_evidence(value: Any) -> list[str]:
     """Validate an AuthenticationAssuranceEvidence dict. [] = well-formed."""
     if not isinstance(value, dict):
         return ["input must be a dict"]
     problems: list[str] = []
-    if not isinstance(value.get("methods"), list):
+    methods = value.get("methods")
+    if not isinstance(methods, list):
         problems.append("methods must be an array")
+    elif not all(_is_method_provenance_shape(m) for m in methods):
+        problems.append(
+            "methods must contain only well-formed { method, issuer, verified } entries"
+        )
     factor_count = value.get("factor_count")
     if (
         isinstance(factor_count, bool)
@@ -314,8 +383,11 @@ def validate_authentication_assurance_evidence(value: Any) -> list[str]:
         problems.append(
             "verification_status must be 'verified' | 'unverified' | 'unknown'"
         )
-    if not isinstance(value.get("capability_summary"), list):
+    capability_summary = value.get("capability_summary")
+    if not isinstance(capability_summary, list):
         problems.append("capability_summary must be an array")
+    elif not all(isinstance(c, str) for c in capability_summary):
+        problems.append("capability_summary must contain only strings")
     return problems
 
 
@@ -344,16 +416,32 @@ def validate_authentication_assurance_requirement(value: Any) -> list[str]:
     source_id = value.get("source_id")
     if not isinstance(source_id, str) or not source_id:
         problems.append("source_id must be a non-empty string")
-    if not isinstance(value.get("predicates"), list):
+    predicates = value.get("predicates")
+    if not isinstance(predicates, list):
         problems.append("predicates must be an array")
+    elif not all(_is_predicate_instance_shape(p) for p in predicates):
+        problems.append(
+            "predicates must contain only well-formed { predicate_id, value } entries"
+        )
     when = value.get("when")
     if layer == "resource_context":
         if not isinstance(when, list) or len(when) == 0:
             problems.append(
                 "when must be a non-empty array when layer is resource_context"
             )
-    elif "when" in value and not isinstance(when, list):
-        problems.append("when, when present, must be an array")
+        elif not all(_is_resource_context_condition_shape(c) for c in when):
+            problems.append(
+                "when must contain only well-formed "
+                "{ field, operator, value } conditions"
+            )
+    elif "when" in value:
+        if not isinstance(when, list):
+            problems.append("when, when present, must be an array")
+        elif not all(_is_resource_context_condition_shape(c) for c in when):
+            problems.append(
+                "when must contain only well-formed "
+                "{ field, operator, value } conditions"
+            )
     if not _is_iso8601(value.get("effective_from")):
         problems.append("effective_from must be an RFC 3339 date-time")
     effective_until = value.get("effective_until")
@@ -381,21 +469,32 @@ def matches_resource_context_condition(
 ) -> ResourceContextConditionMatch:
     """Evaluate a single ResourceContextCondition against a flat context dict.
 
-    A missing context key, or an ``in`` condition whose declared value isn't
-    actually a list, is ``undetermined`` — not ``no_match``. A caller MUST
-    treat ``undetermined`` as ``hold`` (CROSS-016 §7); collapsing it into a
-    plain boolean ``False`` reads as "this condition doesn't apply" and can
-    silently drop a requirement from composition instead of holding on it.
+    ``undetermined`` — never ``no_match`` — for: a missing context key; an
+    ``in`` condition whose declared value isn't actually a list (or is
+    empty, so no element kind can be determined); a context value that
+    isn't itself a scalar; or a scalar-kind mismatch between the context
+    value and the condition's declared value(s) (e.g. comparing a number
+    against a declared string). A caller MUST treat ``undetermined`` as
+    ``hold`` (CROSS-016 §7); collapsing it into a plain boolean ``False``
+    reads as "this condition doesn't apply" and can silently drop a
+    requirement from composition instead of holding on it — that includes
+    a type mismatch, which is exactly as undecidable as a missing field.
     """
     field_name = condition["field"]
     if field_name not in context:
         return "undetermined"
     actual = context[field_name]
+    actual_kind = _scalar_kind(actual)
     if condition["operator"] == "eq":
+        if actual_kind is None or actual_kind != _scalar_kind(condition["value"]):
+            return "undetermined"
         return "match" if actual == condition["value"] else "no_match"
     # operator == "in"
     candidate_values = condition["value"]
-    if not isinstance(candidate_values, list):
+    if not isinstance(candidate_values, list) or len(candidate_values) == 0:
+        return "undetermined"
+    element_kind = _scalar_kind(candidate_values[0])
+    if actual_kind is None or actual_kind != element_kind:
         return "undetermined"
     return "match" if actual in candidate_values else "no_match"
 

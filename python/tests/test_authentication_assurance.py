@@ -67,6 +67,45 @@ def test_malformed_evidence_rejected() -> None:
     assert "factor_count must be a non-negative integer" in bool_problems
 
 
+def test_malformed_entries_inside_methods_and_capability_summary_rejected() -> None:
+    """REGRESSION: array-typed fields must validate their contents, not just
+    that the field itself is an array."""
+    bad_methods = validate_authentication_assurance_evidence(
+        {
+            "methods": [None],
+            "factor_count": 1,
+            "phishing_resistant": True,
+            "auth_time": "2026-08-20T00:00:00Z",
+            "issuer": "https://idp.example.com",
+            "verification_status": "verified",
+            "capability_summary": ["mfa"],
+        }
+    )
+    assert (
+        "methods must contain only well-formed { method, issuer, verified } entries"
+        in bad_methods
+    )
+
+    bad_capabilities = validate_authentication_assurance_evidence(
+        {
+            "methods": [
+                {
+                    "method": "webauthn",
+                    "issuer": "https://idp.example.com",
+                    "verified": True,
+                }
+            ],
+            "factor_count": 1,
+            "phishing_resistant": True,
+            "auth_time": "2026-08-20T00:00:00Z",
+            "issuer": "https://idp.example.com",
+            "verification_status": "verified",
+            "capability_summary": ["mfa", 123],
+        }
+    )
+    assert "capability_summary must contain only strings" in bad_capabilities
+
+
 def test_one_well_formed_requirement_per_layer() -> None:
     external_obligation = {
         "layer": "external_obligation",
@@ -171,6 +210,67 @@ def test_unrecognized_layer_rejected() -> None:
     assert is_authentication_assurance_requirement(bad) is False
 
 
+def test_malformed_entries_inside_predicates_and_when_rejected() -> None:
+    """REGRESSION: predicates/when must validate element shape, not just
+    that the field itself is an array (a [None] or a condition missing
+    operator/value previously passed as long as it was list-shaped)."""
+    null_predicate = {
+        "layer": "organization",
+        "source_id": "org_1",
+        "predicates": [None],
+        "effective_from": "2026-01-01T00:00:00Z",
+    }
+    problems = validate_authentication_assurance_requirement(null_predicate)
+    assert (
+        "predicates must contain only well-formed { predicate_id, value } entries"
+        in problems
+    )
+
+    predicate_missing_value_key = {
+        "layer": "organization",
+        "source_id": "org_1",
+        "predicates": [{"predicate_id": "mfa_required"}],
+        "effective_from": "2026-01-01T00:00:00Z",
+    }
+    problems = validate_authentication_assurance_requirement(
+        predicate_missing_value_key
+    )
+    assert (
+        "predicates must contain only well-formed { predicate_id, value } entries"
+        in problems
+    )
+
+    malformed_when_action_class = {
+        "layer": "action_class",
+        "source_id": "ac_1",
+        "predicates": [],
+        "when": [{"field": "environment"}],  # missing operator + value
+        "effective_from": "2026-01-01T00:00:00Z",
+    }
+    problems = validate_authentication_assurance_requirement(
+        malformed_when_action_class
+    )
+    assert (
+        "when must contain only well-formed { field, operator, value } conditions"
+        in problems
+    )
+
+    malformed_when_resource_context = {
+        "layer": "resource_context",
+        "source_id": "rc_1",
+        "predicates": [],
+        "when": [{"field": "target.tier", "operator": "in", "value": []}],
+        "effective_from": "2026-01-01T00:00:00Z",
+    }
+    problems = validate_authentication_assurance_requirement(
+        malformed_when_resource_context
+    )
+    assert (
+        "when must contain only well-formed { field, operator, value } conditions"
+        in problems
+    )
+
+
 def test_every_registered_outcome_code_accepted() -> None:
     codes = [
         "ASSURANCE_APPLICABILITY_UNDETERMINED",
@@ -230,6 +330,57 @@ def test_matches_resource_context_condition_undetermined_not_silent() -> None:
     assert (
         matches_resource_context_condition(
             {"field": "environment", "operator": "in", "value": "production"}, context
+        )
+        == "undetermined"
+    )
+
+
+def test_matches_resource_context_condition_undetermined_on_type_mismatch() -> None:
+    """REGRESSION: a scalar-kind mismatch (e.g. number vs. declared string)
+    must be undetermined, not no_match — strict equality already returns
+    False for mismatched types, so a naive implementation silently
+    misreports "definitely doesn't apply" for something that is actually
+    undecidable."""
+    numeric_context = {"risk_score": 42}
+    assert (
+        matches_resource_context_condition(
+            {"field": "risk_score", "operator": "eq", "value": "42"}, numeric_context
+        )
+        == "undetermined"
+    )
+    assert (
+        matches_resource_context_condition(
+            {"field": "risk_score", "operator": "in", "value": ["42", "43"]},
+            numeric_context,
+        )
+        == "undetermined"
+    )
+    # A non-scalar context value (list/dict) can never be compared meaningfully.
+    assert (
+        matches_resource_context_condition(
+            {"field": "tags", "operator": "eq", "value": "gold"},
+            {"tags": ["gold", "vip"]},
+        )
+        == "undetermined"
+    )
+    # Same-kind comparisons still behave normally.
+    assert (
+        matches_resource_context_condition(
+            {"field": "risk_score", "operator": "eq", "value": 42}, numeric_context
+        )
+        == "match"
+    )
+    assert (
+        matches_resource_context_condition(
+            {"field": "risk_score", "operator": "in", "value": [42, 43]},
+            numeric_context,
+        )
+        == "match"
+    )
+    # bool must not be conflated with number (Python's bool is an int subclass).
+    assert (
+        matches_resource_context_condition(
+            {"field": "flag", "operator": "eq", "value": 1}, {"flag": True}
         )
         == "undetermined"
     )
