@@ -1,29 +1,37 @@
 # AtlaSent SDKs
 
-Client SDKs for **execution-time authorization**: ask whether a consequential
-action is authorized before it executes, receive a scoped permit when allowed,
-and verify that permit at the execution boundary.
+Client SDKs for **authorization of consequential computational actions**.
 
-AtlaSent is designed for actions whose effects leave the model or application
-sandbox — deployments, external communications, data changes, financial
-operations, regulated actions, and AI-agent tool calls.
+AtlaSent performs **execution-time authorization**: before a governed side effect,
+the server-authoritative runtime determines whether this exact Action is authorized
+under current organizational Authority, Policy, approvals, Assertions, Target /
+Resource state, environment, and Context. On `allow`, the runtime can issue a
+bounded Permit that is verified at the execution boundary before the native effect.
+
+> **A plausible request is not organizational authority.**
+
+The SDKs are client-side integration surfaces. They do **not** derive or mint
+organizational Authority locally.
 
 ```text
-attempted action
+Action proposed
       │
       ▼
-   evaluate
+   Evaluate
       │
- allow? ── no ──► do not execute
-      │ yes
+ Decision: allow | deny | hold | escalate
+      │ allow
       ▼
- scoped permit
-      │
-      ▼
- verify permit
+ bounded Permit
       │
       ▼
- execute protected action
+ Permit Verification at the Gate
+      │
+      ▼
+ native Execution
+      │
+      ▼
+ Evidence / Proof
 ```
 
 ## Packages
@@ -33,9 +41,8 @@ attempted action
 | Python | `atlasent` | `pip install atlasent` |
 | TypeScript | `@atlasent/sdk` | `npm install @atlasent/sdk` |
 
-The language SDKs have their own SemVer release numbers. Those numbers do **not**
-rename the platform API. Both clients target the stable AtlaSent `/v1-*`
-authorization surface.
+SDK SemVer is independent of the stable AtlaSent `/v1-*` platform contract. A
+package major version does not create a separate AtlaSent product generation.
 
 ## Python quick start
 
@@ -45,7 +52,7 @@ from atlasent import AtlaSentClient
 
 client = AtlaSentClient(api_key=os.environ["ATLASENT_API_KEY"])
 
-# protect() performs the authorization/permit verification path before returning.
+# protect() performs the authorization / Permit-verification path before returning.
 permit = client.protect(
     agent="ci-deploy-bot",
     action="production.deploy",
@@ -60,11 +67,17 @@ permit = client.protect(
     },
 )
 
-# Reached only after the protected action's authorization path succeeded.
+# Reached only after the selected protected path has completed its required
+# authorization / verification checks.
 run_deploy()
 ```
 
 ## TypeScript quick start
+
+Some SDK helpers preserve historical names for compatibility. For example,
+`deployGate()` is an SDK helper name; customer-facing product language uses
+**Production Change Safeguard** and the canonical Action Type remains
+`production.deploy`.
 
 ```ts
 import { AtlaSentClient } from "@atlasent/sdk";
@@ -86,54 +99,73 @@ const gate = await client.deployGate({
 });
 
 if (!gate.allowed) {
-  throw new Error(`Deploy blocked: ${gate.reason}`);
+  throw new Error(`Production change blocked: ${gate.reason}`);
 }
 
 runDeploy();
 ```
 
-The critical integration rule is simple: **the side effect must be unreachable
-unless the required authorization and permit-verification checks succeeded.**
-Do not treat an `allow` string by itself as equivalent to execution-boundary
-verification when the selected SDK path requires a permit check.
+Check the current helper/version contract for the SDK you install. The stable
+integration invariant is more important than a convenience method name:
+**the native side effect must be unreachable until the required Authorization
+and Permit Verification have succeeded.**
+
+## Canon-backed Action Types
+
+Do not create a new `action_type` taxonomy simply because an application or agent
+framework exposes arbitrary tool names.
+
+AtlaSent separates:
+
+- **Action Type** — Canon-backed categorical identity of the Action;
+- **Action Instance** — this specific occurrence;
+- **Action Class** — organization-specific governance/configuration for the Action Type;
+- **Target / Resource + Context** — where system-, tool-, object-, and request-specific facts belong.
+
+Examples:
+
+```text
+production.deploy
+agent.tool.invoke
+```
+
+For an AI-agent tool call, use the applicable Canon-backed Action Type (for
+example `agent.tool.invoke`) and place tool-specific information such as
+`database.delete`, target record, destination, arguments, environment, delegation
+context, and payload facts in the supported Target / Context fields.
+
+New Action identities should go through the AtlaSent Action Canon process rather
+than being invented independently in each SDK integration.
 
 ## AI agents and MCP
 
-Agent governance uses the same contract. A database write, external API call,
-code execution, file mutation, payment initiation, or other sensitive tool call
-can be represented as an `action_type` and evaluated before the tool runs.
-
-Typical application-defined names include:
-
-```text
-agent.db.write
-agent.db.delete
-agent.api.post
-agent.code.execute
-agent.fs.write
-agent.email.send
-agent.payment.initiate
-```
+AI agents use the same organizational-authority model as humans, services, and
+workflows. Agent identity, tool access, delegation, or a human Approval can all
+be relevant facts; none of them alone establishes that the organization
+currently authorizes this exact consequential Action.
 
 For MCP-compatible hosts, use the public
 [`atlasent-mcp-server`](https://github.com/AtlaSent-Systems-Inc/atlasent-mcp-server).
-It demonstrates the authorize-before-execute interception pattern and can run a
-local demo without AtlaSent credentials.
+A framework wrapper or prompt instruction is not by itself a non-bypassable Gate.
+Security claims belong to the actual execution topology that controls the native
+side effect.
 
 ## GitHub Actions
 
-For CI/CD enforcement, use the public
+For CI/CD integration, use the public
 [`atlasent-action`](https://github.com/AtlaSent-Systems-Inc/atlasent-action).
-The Action derives GitHub execution facts, evaluates the protected action, and
-can verify a permit immediately before the deployment or other consequential CI
+It can derive GitHub execution facts and place the AtlaSent authorization /
+Permit-verification path before a governed deployment or other consequential CI
 step.
+
+The public product label for this use case is **Production Change Safeguard**;
+historical Action/SDK/repository names may remain for compatibility.
 
 ## Wire contract
 
 Canonical request/response schemas and compatibility fixtures live in
-[`contract/`](./contract/). The contract is shared by the Python and TypeScript
-clients so a permit produced through one language uses the same runtime wire
-semantics as the other.
+[`contract/`](./contract/). The Python and TypeScript clients share the same
+runtime wire semantics.
 
 Primary authorization endpoints:
 
@@ -142,52 +174,60 @@ POST /v1-evaluate
 POST /v1-verify-permit
 ```
 
-Additional SDK features may use additive `/v1-*` endpoints, but SDK major
-versions do not imply a separate "AtlaSent v2" product or a replacement control
-plane.
+Use the current server-authoritative OpenAPI and handlers for exact wire fields.
+Do not copy historical nested-Permit response examples into new integrations.
 
-## Permits
+## Authority, Policy, Approval, and Permit
 
-A permit is the execution artifact produced by successful authorization. The SDK
-does not re-derive organizational authority locally; the runtime is the decision
-authority.
+These concepts are intentionally different:
 
-Permits are scoped and time-bounded. Where single-use verification applies, the
-runtime records consumption so replay can be refused. Execution bindings can
-also constrain the permit to the artifact, target, environment, or other
-verified context expected at the execution boundary.
+- **Authority** — standing, scoped organizational right to cause a class of change.
+- **Authorization** — per-request determination whether this exact Action may proceed now.
+- **Policy** — rules defining conditions under which Authority may permit an Action.
+- **Approval** — verified approver input that may satisfy a Policy condition.
+- **Assertion** — verified governance fact consumed by Evaluation.
+- **Decision** — runtime outcome (`allow | deny | hold | escalate`).
+- **Permit** — bounded positive-Authorization artifact for the execution attempt.
+- **Verification** — point-in-time check of the Permit before the governed effect.
+- **Evidence / Proof** — durable record connecting the determination to execution / observed outcome.
 
-A human approval is one possible source of authority. Policy rules, deployment
-gates, signed external assertions, and other approved authority sources can feed
-the same authorization model. The protected action should depend on the permit,
-not on each integration re-implementing those authority rules itself.
+A human Approval is **not a source of organizational Authority** merely because it
+is favorable. Policy rules, risk/context signals, change tickets, test results,
+and deployment gates are also not Authority. They can be conditions or evidence
+used in Evaluation.
+
+The SDK should depend on the server-authoritative Authorization / Permit path
+rather than reimplementing these distinctions locally.
 
 ## Fail-closed integration
 
-For protected actions, treat these as block conditions rather than silent
-successes:
+For a path that is intentionally configured and accepted as fail-closed and
+permit-gated, treat these as block conditions:
 
 - `deny`, `hold`, or `escalate` when execution requires `allow`;
-- missing permit when a permit is required;
-- failed, expired, revoked, replayed, or mismatched permit;
+- missing Permit when a Permit is required;
+- failed, expired, revoked, replayed, or mismatched Permit;
 - missing required execution binding;
 - authentication failure;
-- authority-service failure on a path configured to require live authorization.
+- authorization-service failure where the integration requires live Authorization.
 
-A caller may choose separate advisory or shadow workflows for observation, but
-those modes should not be described as enforced execution protection.
+Shadow/advisory workflows can evaluate and record without blocking. Do not
+describe those modes as enforced execution protection.
 
 ## Independent evidence verification
 
 The public
 [`atlasent-verify`](https://github.com/AtlaSent-Systems-Inc/atlasent-verify)
-repository contains the standalone offline audit-chain verifier and its public
+repository contains the standalone offline evidence verifier and its public
 canonical-form contract. Public verifier keys, revocations, and trust-root
 material are published in
 [`atlasent-keys`](https://github.com/AtlaSent-Systems-Inc/atlasent-keys).
 
-Those repositories are intentionally public so a customer or auditor can inspect
-the verification path without access to AtlaSent private infrastructure.
+These repositories are public so a customer or reviewer can inspect applicable
+verification material without private AtlaSent infrastructure.
+
+Prefer **tamper-evident** over **immutable** unless the underlying storage has a
+separately verified stronger property.
 
 ## Repository layout
 
@@ -220,24 +260,24 @@ npm run build
 ```
 
 Use the repository's pinned CI and package-manager configuration as the
-authoritative release check.
+authoritative release check. A passing SDK CI run is not customer production
+acceptance for a particular execution topology.
 
 ## Security
 
 Do not place API keys, private signing material, customer secrets, or production
-credentials in source control. Applications should load AtlaSent credentials
-from their platform's secret store and keep authorization context limited to the
-facts the selected policy actually needs.
+credentials in source control. Keep authorization context limited to the facts
+required by the selected Policy / execution binding.
 
-Security-sensitive integration code should keep the protected side effect after
-the authorization boundary in control flow — not merely log a decision and
-continue regardless of the result.
+Security-sensitive integration code must keep the protected side effect **after**
+the required Authorization and Permit-verification boundary in control flow—not
+merely log a Decision and continue.
 
 ## Public ecosystem
 
-- [`atlasent-action`](https://github.com/AtlaSent-Systems-Inc/atlasent-action) — GitHub Actions execution gate
+- [`atlasent-action`](https://github.com/AtlaSent-Systems-Inc/atlasent-action) — GitHub Actions integration for production-change authorization
 - [`atlasent-mcp-server`](https://github.com/AtlaSent-Systems-Inc/atlasent-mcp-server) — MCP authorize-before-execute integration
-- [`atlasent-verify`](https://github.com/AtlaSent-Systems-Inc/atlasent-verify) — independent offline audit verifier
+- [`atlasent-verify`](https://github.com/AtlaSent-Systems-Inc/atlasent-verify) — independent offline evidence verifier
 - [`atlasent-keys`](https://github.com/AtlaSent-Systems-Inc/atlasent-keys) — public verification material
 
 ## License
