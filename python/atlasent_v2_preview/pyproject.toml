@@ -7,7 +7,7 @@ name = "atlasent-v2-preview"
 version = "2.0.0a0"
 description = "Preview package for the v2 AtlaSent SDK. DO NOT USE IN PRODUCTION — surfaces here are under active design and will change without semver discipline until v2 GA."
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [
     { name = "AtlaSent Systems Inc.", email = "sdk@atlasent.io" },

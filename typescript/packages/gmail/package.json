@@ -30,6 +30,7 @@
     "url": "git+https://github.com/AtlaSent-Systems-Inc/atlasent-sdk.git",
     "directory": "typescript/packages/gmail"
   },
+  "homepage": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/tree/main/typescript/packages/gmail#readme",
   "publishConfig": {
     "access": "public"
   },
