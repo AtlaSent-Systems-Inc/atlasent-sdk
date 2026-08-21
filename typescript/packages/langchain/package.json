@@ -30,6 +30,7 @@
     "url": "git+https://github.com/AtlaSent-Systems-Inc/atlasent-sdk.git",
     "directory": "typescript/packages/langchain"
   },
+  "homepage": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/tree/main/typescript/packages/langchain#readme",
   "publishConfig": {
     "access": "public"
   },

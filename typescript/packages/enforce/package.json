@@ -50,6 +50,7 @@
     "url": "git+https://github.com/AtlaSent-Systems-Inc/atlasent-sdk.git",
     "directory": "typescript/packages/enforce"
   },
+  "homepage": "https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/tree/main/typescript/packages/enforce#readme",
   "publishConfig": {
     "access": "public",
     "tag": "latest"

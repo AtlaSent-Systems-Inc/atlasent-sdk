@@ -6,14 +6,20 @@ Non-bypassable execution wrapper for the AtlaSent SDK. Forces
 Spec: [`contract/ENFORCE_PACK.md`](../../../contract/ENFORCE_PACK.md).  
 Gate: [`contract/SIM_SCENARIOS.md`](../../../contract/SIM_SCENARIOS.md) — SIM-01..SIM-10 must pass before any Preview-pack code merges.
 
+## Install
+
+```bash
+npm install @atlasent/enforce
+```
+
 ## Surface
 
 ```ts
 import { Enforce } from "@atlasent/enforce";
-import { AtlasentClient } from "@atlasent/sdk"; // v1
+import { AtlaSentClient } from "@atlasent/sdk"; // v1
 
 const enforce = new Enforce({
-  client: new AtlasentClient({ apiKey, baseUrl }),
+  client: new AtlaSentClient({ apiKey, baseUrl }),
   bindings: { orgId, actorId, actionType },
   failClosed: true, // non-toggleable
 });
