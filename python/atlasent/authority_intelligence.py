@@ -46,6 +46,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from .exceptions import AtlaSentError
+
 if TYPE_CHECKING:
     from .client import AtlaSentClient
 
@@ -150,6 +152,21 @@ def _parse_finding(data: dict[str, Any]) -> IntegrityFinding:
 
 
 def _parse_report(data: dict[str, Any]) -> IntegrityReport:
+    # `findings` is required by the committed wire schema. Defaulting an
+    # absent/malformed value to an empty tuple here would manufacture a
+    # "zero findings" audit out of a response the server never actually
+    # sent — exactly the "a check that did not run looks like a check that
+    # passed" failure this feature exists to prevent. A transport that only
+    # checks HTTP status (a misconfigured proxy, a truncated 200) must
+    # surface as an error, not a clean report.
+    raw_findings = data.get("findings")
+    if not isinstance(raw_findings, list):
+        raise AtlaSentError(
+            "Malformed response from /v1-authority-intelligence/integrity-audit: "
+            "'findings' is missing or not a list",
+            code="bad_response",
+            response_body=data,
+        )
     return IntegrityReport(
         schema_version=str(data.get("schema_version", "")),
         query=str(data.get("query", "")),
@@ -157,7 +174,7 @@ def _parse_report(data: dict[str, Any]) -> IntegrityReport:
         evaluated_at=str(data.get("evaluated_at", "")),
         produced_by=tuple(data.get("produced_by") or ()),
         summary=dict(data.get("summary") or {}),
-        findings=tuple(_parse_finding(f) for f in (data.get("findings") or ())),
+        findings=tuple(_parse_finding(f) for f in raw_findings),
         nodes=tuple(data.get("nodes") or ()),
         edges=tuple(data.get("edges") or ()),
     )

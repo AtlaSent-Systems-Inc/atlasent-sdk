@@ -190,7 +190,7 @@ describe("authorityIntelligence.integrityAudit — response", () => {
     expect(report.findings[0]!.effective_at).toBeNull();
   });
 
-  it("defaults absent arrays to empty rather than undefined", async () => {
+  it("defaults absent produced_by/nodes/edges/summary to empty rather than undefined", async () => {
     const { client, getFn } = makeMocks();
     getFn.mockResolvedValue({
       body: {
@@ -198,14 +198,46 @@ describe("authorityIntelligence.integrityAudit — response", () => {
         query: "integrity-audit",
         organization_id: "org-1",
         evaluated_at: "2026-08-22T12:00:00Z",
+        findings: [],
       },
     });
     const report = await client.integrityAudit();
     expect(report.produced_by).toEqual([]);
-    expect(report.findings).toEqual([]);
     expect(report.nodes).toEqual([]);
     expect(report.edges).toEqual([]);
     expect(report.summary).toEqual({});
+  });
+
+  // `findings` is required by the committed wire schema and is NOT defaulted
+  // like the other arrays above: a response missing it is malformed, not "an
+  // audit that found nothing". This was the actual bug (caught in review) —
+  // an earlier version of this method silently defaulted a missing/malformed
+  // `findings` to `[]`, which would have manufactured a clean audit out of a
+  // truncated or misconfigured-proxy 200 response.
+  it("throws rather than manufacturing an empty report when findings is missing", async () => {
+    const { client, getFn } = makeMocks();
+    getFn.mockResolvedValue({
+      body: {
+        schema_version: "v1",
+        query: "integrity-audit",
+        organization_id: "org-1",
+        evaluated_at: "2026-08-22T12:00:00Z",
+        // findings omitted entirely
+      },
+    });
+    await expect(client.integrityAudit()).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+
+  it("throws when findings is present but not an array", async () => {
+    const { client, getFn } = makeMocks();
+    getFn.mockResolvedValue({
+      body: { ...WIRE_REPORT, findings: null },
+    });
+    await expect(client.integrityAudit()).rejects.toMatchObject({
+      code: "bad_response",
+    });
   });
 
   it("returns an empty findings list as data, not as an error", async () => {

@@ -217,10 +217,10 @@ def test_absent_collections_default_to_empty():
             "query": "integrity-audit",
             "organization_id": "org-1",
             "evaluated_at": "2026-08-22T12:00:00Z",
+            "findings": [],
         }
     )
     assert report.produced_by == ()
-    assert report.findings == ()
     assert report.nodes == ()
     assert report.edges == ()
     assert report.summary == {}
@@ -231,15 +231,40 @@ def test_null_collections_default_to_empty():
         {
             **WIRE_REPORT,
             "produced_by": None,
-            "findings": None,
+            "findings": [],
             "nodes": None,
             "edges": None,
             "summary": None,
         }
     )
     assert report.produced_by == ()
-    assert report.findings == ()
     assert report.summary == {}
+
+
+# `findings` is required by the committed wire schema and is NOT defaulted
+# like the other collections above: a response missing it is malformed, not
+# "an audit that found nothing". This was the actual bug (caught in review)
+# — an earlier version of this parser silently defaulted a missing/malformed
+# `findings` to an empty tuple, which would have manufactured a clean audit
+# out of a truncated or misconfigured-proxy 200 response.
+def test_raises_rather_than_manufacturing_an_empty_report_when_findings_is_missing():
+    with pytest.raises(AtlaSentError) as exc_info:
+        _run(
+            {
+                "schema_version": "v1",
+                "query": "integrity-audit",
+                "organization_id": "org-1",
+                "evaluated_at": "2026-08-22T12:00:00Z",
+                # findings omitted entirely
+            }
+        )
+    assert exc_info.value.code == "bad_response"
+
+
+def test_raises_when_findings_is_present_but_not_a_list():
+    with pytest.raises(AtlaSentError) as exc_info:
+        _run({**WIRE_REPORT, "findings": None})
+    assert exc_info.value.code == "bad_response"
 
 
 def test_null_related_source_ids_defaults_to_empty_tuple():

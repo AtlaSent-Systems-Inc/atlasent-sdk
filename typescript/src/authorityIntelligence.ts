@@ -43,6 +43,8 @@
  * ```
  */
 
+import { AtlaSentError } from "./errors.js";
+
 // ── Vocabulary ────────────────────────────────────────────────────────────────
 
 /**
@@ -246,8 +248,21 @@ export function makeAuthorityIntelligenceClient(
         qs.size > 0 ? qs : undefined,
       );
 
-      // Pass the wire shape through as-is. Arrays are defaulted to empty so a
-      // caller can iterate without a null check, but no field is renamed,
+      // `findings` is required by the committed wire schema. Defaulting an
+      // absent/malformed array to `[]` here would manufacture a "zero
+      // findings" audit out of a response the server never actually sent —
+      // exactly the "a check that did not run looks like a check that
+      // passed" failure this whole feature exists to prevent. A transport
+      // that only checks HTTP status (a misconfigured proxy, a truncated
+      // 200) must surface as an error, not a clean report.
+      if (!Array.isArray(body.findings)) {
+        throw new AtlaSentError(
+          "Malformed response from /v1-authority-intelligence/integrity-audit: `findings` is missing or not an array",
+          { code: "bad_response" },
+        );
+      }
+
+      // Everything else is passed through as-is. No field is renamed,
       // coerced, or invented, and no value vocabulary is reinterpreted.
       return {
         schema_version: body.schema_version,
@@ -256,7 +271,7 @@ export function makeAuthorityIntelligenceClient(
         evaluated_at: body.evaluated_at,
         produced_by: body.produced_by ?? [],
         summary: body.summary ?? {},
-        findings: body.findings ?? [],
+        findings: body.findings,
         nodes: body.nodes ?? [],
         edges: body.edges ?? [],
       };
