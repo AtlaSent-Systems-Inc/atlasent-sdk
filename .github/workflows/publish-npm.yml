@@ -107,17 +107,36 @@ jobs:
       # ── AtlaSent release gate ────────────────────────────────────────
       # Gate closed: if the permit is not verified the job exits here and
       # nothing builds or publishes.
+      #
+      # Action type is `package.release` (NOT production.deploy): package
+      # publishing has its own runtime policy that does not require PR
+      # approvals, whereas production.deploy keeps its human-approval gate.
+      # The policy reads context.ref + context.event_name + context.workflow
+      # (auto-populated by the action) and actor_id (github:<actor>); the
+      # trusted-ref/workflow templates match the workflow NAME above
+      # ("Publish to npm") — keep `name:` and the policy in sync. This repo
+      # also publishes python-v* tags for the PyPI package under the same
+      # release-manager identity (see publish-pypi.yml), so the runtime
+      # template additionally requires a typescript-v<semver> tag prefix —
+      # a python-v* tag must never authorize an npm release or vice versa.
+      # See atlasent-api migration 20260958000000 for the corresponding
+      # release-manager template (template G).
+      #
+      # This was previously gated on `production.deploy`, the wrong
+      # protected action for package publication (a release-control
+      # inconsistency vs. publish-pypi.yml, corrected here rather than
+      # worked around via workflow_dispatch or a gate bypass).
       - name: AtlaSent release gate
         uses: AtlaSent-Systems-Inc/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          action: production.deploy
+          action: package.release
           api-url: https://kttccumlnmdtupgbyfue.supabase.co/functions/v1
           actor: ${{ github.actor }}
           environment: production
-          context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'  
+          context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'
 
       - name: Install dependencies
         run: npm ci
