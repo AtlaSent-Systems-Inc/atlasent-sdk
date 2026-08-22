@@ -75,7 +75,8 @@ class _GetCapable(Protocol):
         path: str,
         *,
         params: dict[str, str] | None = None,
-    ) -> tuple[dict[str, Any], RateLimitState | None, str]: ...
+    ) -> tuple[dict[str, Any], RateLimitState | None, str]:
+        raise NotImplementedError
 
 
 #: Wire path of the integrity-audit sub-route.
