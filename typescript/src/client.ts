@@ -121,6 +121,7 @@ import type {
   GovernanceGraphResultRow,
 } from "./governanceGraph.js";
 import type { IncidentTimelineResponse } from "./incidentReconstruction.js";
+import type { ExplainAuthorityResult } from "./explainAuthority.js";
 import type {
   ConnectorType,
   InstallConnectorInput,
@@ -2483,6 +2484,49 @@ export class AtlaSentClient {
       Omit<IncidentTimelineResponse, "rateLimit">
     >(`/v1/governance/timeline/incident/${encodeURIComponent(incidentId)}`);
     return { ...body, rateLimit };
+  }
+
+  // ── Authority Intelligence ────────────────────────────────────────────────
+
+  /**
+   * Explain why (or why not) a principal currently has authority for a
+   * scope in the caller's org — "why may principal P exercise
+   * scope/action A in organization O right now?"
+   *
+   * Calls `GET /v1/authority-intelligence/explain-authority`. Strictly
+   * read-only and additive: it explains the same facts `/v1-evaluate`
+   * and `/v1-verify-permit` already read, and never changes any
+   * deny/hold/allow semantics. Returned verbatim from the server — the
+   * SDK performs no interpretation of `paths` / `unresolved` /
+   * `authority_found` beyond parsing the JSON response.
+   *
+   * Requires the `authority_intelligence:read` API key scope.
+   */
+  async explainAuthority(params: {
+    principalId: string;
+    requestedScope: string;
+    resourceId?: string;
+  }): Promise<ExplainAuthorityResult> {
+    if (!params.principalId) {
+      throw new AtlaSentError("principalId is required", {
+        code: "bad_request",
+      });
+    }
+    if (!params.requestedScope) {
+      throw new AtlaSentError("requestedScope is required", {
+        code: "bad_request",
+      });
+    }
+    const qs = new URLSearchParams({
+      principal_id: params.principalId,
+      requested_scope: params.requestedScope,
+    });
+    if (params.resourceId) qs.set("resource_id", params.resourceId);
+    const { body } = await this.get<ExplainAuthorityResult>(
+      "/v1/authority-intelligence/explain-authority",
+      qs,
+    );
+    return body;
   }
 
   // ── Connector Management ─────────────────────────────────────────────────

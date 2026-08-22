@@ -4,6 +4,20 @@
 
 ### Added
 
+- `AtlaSentClient.explain_authority(principal_id, requested_scope,
+  resource_id=None)` and the async parity method on
+  `AsyncAtlaSentClient`: a new read-only client method for `GET
+  /v1/authority-intelligence/explain-authority` (atlasent-api #2235), which
+  answers "why may principal P exercise scope/action A in organization O right
+  now?". Returns `ExplainAuthorityResult` with `paths` (one entry per
+  matching authority mechanism — `direct_grant` / `delegation` /
+  `role_capability`) and `unresolved` (every excluded or ambiguous
+  relationship as a named finding). Pure pass-through — no client-side
+  interpretation of the response. New Pydantic models:
+  `ExplainAuthorityResult`, `AuthorityExplanationPath`,
+  `AuthorityUnresolvedFinding`. Requires the runtime route from atlasent-api
+  #2235 (draft as of this change) to be deployed; against an older runtime
+  this surfaces as a normal 404 `AtlaSentError`, not a crash.
 - `EvaluateResult` gains two optional fields surfacing the two-stage
   authorization lifecycle (atlasent-api #1617): `human_approval_required`
   (whether this evaluation requires a verified human approval) and

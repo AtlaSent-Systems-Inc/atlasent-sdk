@@ -1643,6 +1643,111 @@ class TestGetPermit:
         assert result.permit.revoke_reason == "approval rescinded"
 
 
+class TestExplainAuthority:
+    EXPLANATION = {
+        "organization_id": "org_1",
+        "principal_id": "principal_1",
+        "requested_scope": "production:deployment.production.approve",
+        "resource_id": None,
+        "authority_found": True,
+        "paths": [
+            {
+                "mechanism": "role_capability",
+                "matched": True,
+                "edges": [
+                    {
+                        "source_table": "user_roles",
+                        "evidence_posture": "direct",
+                        "authority_basis": "role_grant",
+                        "role": "deployer",
+                    }
+                ],
+            }
+        ],
+        "unresolved": [],
+    }
+
+    def test_returns_explanation(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.EXPLANATION)
+        mock_get = mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.explain_authority(
+            "principal_1",
+            "production:deployment.production.approve",
+            resource_id="res_1",
+        )
+        assert result.organization_id == "org_1"
+        assert result.principal_id == "principal_1"
+        assert result.authority_found is True
+        assert len(result.paths) == 1
+        assert result.paths[0].mechanism == "role_capability"
+        assert result.unresolved == []
+
+        url = mock_get.call_args[0][0]
+        assert url.endswith("/v1/authority-intelligence/explain-authority")
+        params = mock_get.call_args.kwargs["params"]
+        assert params == {
+            "principal_id": "principal_1",
+            "requested_scope": "production:deployment.production.approve",
+            "resource_id": "res_1",
+        }
+
+    def test_omits_resource_id_when_not_supplied(self, client, mocker):
+        resp = _mock_resp(mocker, json_data=self.EXPLANATION)
+        mock_get = mocker.patch.object(client._client, "get", return_value=resp)
+        client.explain_authority(
+            "principal_1", "production:deployment.production.approve"
+        )
+        params = mock_get.call_args.kwargs["params"]
+        assert "resource_id" not in params
+
+    def test_surfaces_unresolved_finding_when_not_found(self, client, mocker):
+        not_found = dict(
+            self.EXPLANATION,
+            authority_found=False,
+            paths=[],
+            unresolved=[
+                {
+                    "finding_type": "NO_AUTHORITY_PATH_FOUND",
+                    "reason": "no matching grant, delegation, or role capability",
+                }
+            ],
+        )
+        resp = _mock_resp(mocker, json_data=not_found)
+        mocker.patch.object(client._client, "get", return_value=resp)
+        result = client.explain_authority(
+            "principal_1", "production:deployment.production.approve"
+        )
+        assert result.authority_found is False
+        assert len(result.unresolved) == 1
+        assert result.unresolved[0].finding_type == "NO_AUTHORITY_PATH_FOUND"
+
+    def test_empty_principal_id_raises(self, client):
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.explain_authority("", "production:deployment.production.approve")
+        assert exc_info.value.code == "bad_request"
+
+    def test_empty_requested_scope_raises(self, client):
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.explain_authority("principal_1", "")
+        assert exc_info.value.code == "bad_request"
+
+    def test_validation_error_makes_no_request(self, client, mocker):
+        mock_get = mocker.patch.object(client._client, "get")
+        with pytest.raises(AtlaSentError):
+            client.explain_authority("", "production:deployment.production.approve")
+        mock_get.assert_not_called()
+
+    def test_403_surfaces_as_forbidden(self, client, mocker):
+        resp = _mock_resp(mocker, status_code=403)
+        resp.json.return_value = {"reason": "missing authority_intelligence:read scope"}
+        mocker.patch.object(client._client, "get", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc_info:
+            client.explain_authority(
+                "principal_1", "production:deployment.production.approve"
+            )
+        assert exc_info.value.code == "forbidden"
+
+
 class TestListPermits:
     LIST = {
         "permits": [

@@ -1152,6 +1152,72 @@ class VerifyPermitByIdResult(BaseModel):
     rate_limit: RateLimitState | None = None
 
 
+# ── Authority Intelligence ─────────────────────────────────────────────
+
+
+class AuthorityExplanationPath(BaseModel):
+    """One explicit authority path for a single mechanism, returned by
+    :meth:`AtlaSentClient.explain_authority`.
+
+    ``direct_grant`` / ``delegation`` / ``role_capability`` are never
+    collapsed into one generic edge type, because the runtime treats
+    them differently.
+    """
+
+    mechanism: Literal["direct_grant", "delegation", "role_capability"]
+    matched: bool
+    edges: list[dict[str, Any]] = Field(default_factory=list)
+    """Ordered edge chain for this path. Shape varies by mechanism —
+    treated as an open object, never over-typed per field."""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AuthorityUnresolvedFinding(BaseModel):
+    """An excluded or ambiguous authority relationship reported as an
+    explicit, named finding (e.g. an expired or unacknowledged
+    delegation, a revoked grant, a coarse role whose capability
+    mapping can't be expanded in SQL) — never a silent gap.
+
+    ``finding_type`` is a plain string, not a hardcoded enum: the
+    server may add new finding types (e.g.
+    ``AUTHORITY_GRANT_REVOKED``, ``DELEGATION_EXPIRED``,
+    ``DELEGATOR_ROLE_LOST``, ``NO_AUTHORITY_PATH_FOUND``) without a
+    wire-breaking change.
+    """
+
+    finding_type: str
+    reason: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ExplainAuthorityResult(BaseModel):
+    """Result of :meth:`AtlaSentClient.explain_authority` /
+    :meth:`AtlaSentAsyncClient.explain_authority`.
+
+    Passed through verbatim from
+    ``authority_intelligence_explain_authority_v1`` — answers "why may
+    principal P exercise scope/action A in organization O right now?"
+    Read-only and additive; the SDK performs no interpretation of
+    ``paths`` / ``unresolved`` / ``authority_found`` beyond parsing
+    the JSON response.
+
+    Field names are snake_case to match the wire — no rename layer.
+    """
+
+    organization_id: str
+    principal_id: str
+    requested_scope: str
+    resource_id: str | None = None
+    authority_found: bool
+    paths: list[AuthorityExplanationPath] = Field(default_factory=list)
+    unresolved: list[AuthorityUnresolvedFinding] = Field(default_factory=list)
+    rate_limit: RateLimitState | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 # ── Streaming evaluate events ─────────────────────────────────────────
 
 

@@ -650,6 +650,15 @@ export type {
   IncidentTimelineResponse,
 } from "./incidentReconstruction.js";
 
+// ── Authority Intelligence ──────────────────────────────────────────────────
+export type {
+  AuthorityPathMechanism,
+  AuthorityExplanationPath,
+  KnownAuthorityUnresolvedFindingType,
+  AuthorityUnresolvedFinding,
+  ExplainAuthorityResult,
+} from "./explainAuthority.js";
+
 // ── Connector Management & Organizational Risk Graph ──────────────────────────────────────────────────────
 export type {
   ConnectorType,

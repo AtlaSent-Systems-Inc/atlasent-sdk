@@ -1190,6 +1190,114 @@ class TestAsyncGetPermit:
         assert exc.value.code == "bad_request"
 
 
+class TestAsyncExplainAuthority:
+    EXPLANATION = {
+        "organization_id": "org_1",
+        "principal_id": "principal_1",
+        "requested_scope": "production:deployment.production.approve",
+        "resource_id": None,
+        "authority_found": True,
+        "paths": [
+            {
+                "mechanism": "role_capability",
+                "matched": True,
+                "edges": [
+                    {
+                        "source_table": "user_roles",
+                        "evidence_posture": "direct",
+                        "authority_basis": "role_grant",
+                        "role": "deployer",
+                    }
+                ],
+            }
+        ],
+        "unresolved": [],
+    }
+
+    @pytest.mark.asyncio
+    async def test_returns_explanation(self, async_client, mocker):
+        resp = _mock_resp(mocker, json_data=self.EXPLANATION)
+        mock_get = mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=resp,
+        )
+        result = await async_client.explain_authority(
+            "principal_1",
+            "production:deployment.production.approve",
+            resource_id="res_1",
+        )
+        url = mock_get.call_args[0][0]
+        assert url.endswith("/v1/authority-intelligence/explain-authority")
+        params = mock_get.call_args[1]["params"]
+        assert params["resource_id"] == "res_1"
+        assert result.organization_id == "org_1"
+        assert result.authority_found is True
+        assert len(result.paths) == 1
+
+    @pytest.mark.asyncio
+    async def test_omits_resource_id_when_not_supplied(self, async_client, mocker):
+        resp = _mock_resp(mocker, json_data=self.EXPLANATION)
+        mock_get = mocker.patch.object(
+            async_client._client,
+            "get",
+            return_value=resp,
+        )
+        await async_client.explain_authority(
+            "principal_1", "production:deployment.production.approve"
+        )
+        params = mock_get.call_args[1]["params"]
+        assert "resource_id" not in params
+
+    @pytest.mark.asyncio
+    async def test_surfaces_unresolved_finding_when_not_found(
+        self, async_client, mocker
+    ):
+        not_found = dict(
+            self.EXPLANATION,
+            authority_found=False,
+            paths=[],
+            unresolved=[
+                {
+                    "finding_type": "NO_AUTHORITY_PATH_FOUND",
+                    "reason": "no matching grant, delegation, or role capability",
+                }
+            ],
+        )
+        resp = _mock_resp(mocker, json_data=not_found)
+        mocker.patch.object(async_client._client, "get", return_value=resp)
+        result = await async_client.explain_authority(
+            "principal_1", "production:deployment.production.approve"
+        )
+        assert result.authority_found is False
+        assert result.unresolved[0].finding_type == "NO_AUTHORITY_PATH_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_empty_principal_id_raises(self, async_client):
+        with pytest.raises(AtlaSentError) as exc:
+            await async_client.explain_authority(
+                "", "production:deployment.production.approve"
+            )
+        assert exc.value.code == "bad_request"
+
+    @pytest.mark.asyncio
+    async def test_empty_requested_scope_raises(self, async_client):
+        with pytest.raises(AtlaSentError) as exc:
+            await async_client.explain_authority("principal_1", "")
+        assert exc.value.code == "bad_request"
+
+    @pytest.mark.asyncio
+    async def test_403_surfaces_as_forbidden(self, async_client, mocker):
+        resp = _mock_resp(mocker, status_code=403)
+        resp.json.return_value = {"reason": "missing authority_intelligence:read scope"}
+        mocker.patch.object(async_client._client, "get", return_value=resp)
+        with pytest.raises(AtlaSentError) as exc:
+            await async_client.explain_authority(
+                "principal_1", "production:deployment.production.approve"
+            )
+        assert exc.value.code == "forbidden"
+
+
 class TestAsyncListPermits:
     LIST = {
         "permits": [
