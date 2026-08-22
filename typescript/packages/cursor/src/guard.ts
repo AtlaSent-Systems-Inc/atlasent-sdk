@@ -90,6 +90,15 @@ export interface CursorGuardOptions {
   /** Extra context forwarded to every AtlaSent evaluation. */
   extraContext?: Resolver<Record<string, unknown>>;
   /**
+   * State snapshot forwarded to every AtlaSent evaluation.
+   *
+   * Required when the action class has `requires_state_snapshot = true`
+   * (the default for all action classes). Omitting this option causes
+   * `SNAPSHOT_REQUIRED` denies. At minimum, pass:
+   * `{ source: "your-system", complete: true }`
+   */
+  stateSnapshot?: Resolver<Record<string, unknown>>;
+  /**
    * - `"throw"` (default) — throw `AtlaSentDeniedError` on denial.
    * - `"tool-result"` — return a JSON-serialized `DenialResult` string
    *   so the agent can observe and adapt.
@@ -218,7 +227,10 @@ export function withCursorGuard<T extends CursorGuardedTool>(
       const extra = options.extraContext
         ? await resolve(options.extraContext, name, input)
         : {};
-      const context = { ...extra, tool_input: input };
+      const context: Record<string, unknown> = { ...extra, tool_input: input };
+      const stateSnapshot = options.stateSnapshot
+        ? await resolve(options.stateSnapshot, name, input)
+        : undefined;
       const verifyEnvironment =
         typeof context.environment === "string"
           ? context.environment
@@ -227,7 +239,12 @@ export function withCursorGuard<T extends CursorGuardedTool>(
             : undefined;
 
       try {
-        const evalResp = await client.evaluate({ agent, action, context });
+        const evalResp = await client.evaluate({
+          agent,
+          action,
+          context,
+          ...(stateSnapshot !== undefined ? { state_snapshot: stateSnapshot } : {}),
+        } as Parameters<typeof client.evaluate>[0]);
 
         if (evalResp.decision !== "allow") {
           return handleDenial(options.onDeny, {
