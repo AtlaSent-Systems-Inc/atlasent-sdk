@@ -8,6 +8,7 @@ propagation, and the three-way classification counting helper.
 
 from __future__ import annotations
 
+import importlib
 import json
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -399,7 +400,12 @@ def test_no_boolean_pass_fail_convenience_is_exposed():
     counts = count_findings_by_classification(_report("defect"))
     assert "is_healthy" not in counts
     assert "has_errors" not in counts
-    import atlasent.authority_intelligence as mod
+    # importlib rather than a second `import atlasent.authority_intelligence`
+    # statement — this file already has `from atlasent.authority_intelligence
+    # import (...)` at module scope, and CodeQL's "module imported with both
+    # 'import' and 'import from'" note flags a file combining both forms for
+    # the same module.
+    mod = importlib.import_module("atlasent.authority_intelligence")
 
     assert not hasattr(mod, "is_healthy")
     assert not hasattr(mod, "has_errors")
@@ -435,12 +441,15 @@ def test_direct_construction_around_an_existing_client():
 
 
 def test_top_level_lazy_exports_resolve():
-    import atlasent
+    # importlib rather than `import atlasent` — this file already has
+    # `from atlasent import AtlaSentClient` at module scope; see the comment
+    # in test_no_boolean_pass_fail_convenience_is_exposed above.
+    top = importlib.import_module("atlasent")
 
-    assert atlasent.AuthorityIntelligenceClient is AuthorityIntelligenceClient
-    assert atlasent.IntegrityReport is IntegrityReport
-    assert atlasent.IntegrityFinding is IntegrityFinding
-    assert atlasent.count_findings_by_classification is count_findings_by_classification
+    assert top.AuthorityIntelligenceClient is AuthorityIntelligenceClient
+    assert top.IntegrityReport is IntegrityReport
+    assert top.IntegrityFinding is IntegrityFinding
+    assert top.count_findings_by_classification is count_findings_by_classification
 
 
 def test_sibling_sub_routes_are_not_wrapped_in_this_slice():
