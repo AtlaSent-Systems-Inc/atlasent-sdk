@@ -6,9 +6,38 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
-## Unreleased
+## 2.21.0
 
 ### Added
+
+- `CrossOrgPermissionCheckResult` (`checkCrossOrgPermission()` /
+  `listCrossOrgPermissionChecks()`) gains four additive fields making the
+  cross-org federation trust precheck's non-authoritative nature explicit
+  on the wire (CROSS-028, atlasent-api #2251): `trust_precheck_passed`
+  (canonical replacement for reading `allowed` as authoritative),
+  `authorizes_execution` (always `false` — this result never authorizes
+  execution of anything; route the real decision through `/v1-evaluate`),
+  `requires_local_authority_evaluation` (always `true`), and
+  `conditions_evaluated` (always `false` today — `conditions` is returned
+  unevaluated). New `summarizeTrustPrecheck()` helper, whose return values
+  (`"trust_established"` / `"trust_established_with_unevaluated_conditions"`
+  / `"no_trust"`) deliberately avoid authorization-implying vocabulary.
+  `allowed` and `summarizeCrossOrgPermission()` are deprecated (not
+  removed) in favor of the above.
+  `CrossOrgPermissionCheckRequest.identity_id` is deprecated: the server
+  does not read, persist, or act on it (item 3 of the ratified ADR — no
+  representation-verification mechanism exists yet to wire it into).
+
+### Fixed
+
+- `checkCrossOrgPermission()` and `listCrossOrgPermissionChecks()` posted
+  to `/v1/cross-org/permissions/check[s]`, a path with no matching
+  server-side route anywhere (not the edge function's own router, not the
+  control-plane gateway, not the public OpenAPI spec) — every call would
+  404 against a real deployment. Corrected to the real route,
+  `/v1/federation/permission-check[s]`. Pre-existing bug, found while
+  live-verifying the CROSS-028 production deploy; unrelated to the fields
+  above, no request/response shape changed.
 
 - `AtlaSentClient.explainAuthority({ principalId, requestedScope, resourceId? })`:
   a new read-only client method for `GET
