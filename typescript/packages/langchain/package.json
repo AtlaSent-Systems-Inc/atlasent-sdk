@@ -35,7 +35,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@atlasent/sdk": "^2.10.0"
+    "@atlasent/sdk": "^2.14.0"
   },
   "devDependencies": {
     "@atlasent/sdk": "file:../../",
