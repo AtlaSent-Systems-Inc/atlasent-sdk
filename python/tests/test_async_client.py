@@ -1228,7 +1228,10 @@ class TestAsyncExplainAuthority:
             resource_id="res_1",
         )
         url = mock_get.call_args[0][0]
-        assert url.endswith("/v1/authority-intelligence/explain-authority")
+        # Hyphenated (edge-function-name) form — the real handler strips
+        # `/v1-authority-intelligence/` as a literal prefix; the slash form
+        # from the committed OpenAPI docs never matches and 404s.
+        assert url.endswith("/v1-authority-intelligence/explain-authority")
         params = mock_get.call_args[1]["params"]
         assert params["resource_id"] == "res_1"
         assert result.organization_id == "org_1"

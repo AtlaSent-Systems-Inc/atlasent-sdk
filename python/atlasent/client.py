@@ -24,6 +24,7 @@ from ._version import __version__
 from .access_governance_log import AccessGovernanceLogClient
 from .approval_artifact import ApprovalReference
 from .audit import AuditEventsResult, AuditExportResult
+from .authority_intelligence import AuthorityIntelligenceClient
 from .clinical_client import ClinicalTrialsClient
 from .evidence_bundle import EvidenceBundlesClient
 from .exceptions import (
@@ -251,6 +252,7 @@ class AtlaSentClient:
         self.access_governance_log = AccessGovernanceLogClient(self)
         self.evidence_bundles = EvidenceBundlesClient(self)
         self.clinical_trials = ClinicalTrialsClient(self)
+        self.authority_intelligence = AuthorityIntelligenceClient(self)
 
     # ── properties ────────────────────────────────────────────
 
@@ -1127,7 +1129,7 @@ class AtlaSentClient:
         """Explain why (or why not) ``principal_id`` currently has
         authority for ``requested_scope`` in the caller's org.
 
-        Calls ``GET /v1/authority-intelligence/explain-authority``.
+        Calls ``GET /v1-authority-intelligence/explain-authority``.
         Strictly read-only and additive — it explains the same facts
         ``/v1-evaluate`` and ``/v1-verify-permit`` already read, and
         never changes any deny/hold/allow semantics. Requires the
@@ -1144,7 +1146,7 @@ class AtlaSentClient:
         if resource_id:
             params["resource_id"] = resource_id
         data, rate_limit, _ = self._get(
-            "/v1/authority-intelligence/explain-authority", params=params
+            "/v1-authority-intelligence/explain-authority", params=params
         )
         return ExplainAuthorityResult.model_validate({**data, "rate_limit": rate_limit})
 

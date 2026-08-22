@@ -18,6 +18,41 @@
   `AuthorityUnresolvedFinding`. Requires the runtime route from atlasent-api
   #2235 (draft as of this change) to be deployed; against an older runtime
   this surfaces as a normal 404 `AtlaSentError`, not a crash.
+- **First SDK exposure of the `integrity-audit` sub-route.**
+  New module `atlasent.authority_intelligence` (`AuthorityIntelligenceClient`),
+  wired as the `AtlaSentClient.authority_intelligence` attribute, with a single
+  method — `integrity_audit(*, decision_window_days=None)` wrapping
+  `GET /v1-authority-intelligence/integrity-audit`. Read-only; requires an API
+  key carrying the `authority_intelligence:read` scope. The organization is
+  derived server-side from the authenticated key — there is no client-supplied
+  `organization_id` on this route. Omit `decision_window_days` and **no**
+  query parameter is sent at all, so the server applies its own default and
+  echoes the window actually applied in `report.summary["audited_scope"]`; the
+  SDK never substitutes a guessed default. New frozen dataclasses
+  `IntegrityReport` / `IntegrityFinding` and the helper
+  `count_findings_by_classification()`, all lazily exported from the top-level
+  package. The three sibling sub-routes (`sod-eligibility`, `blast-radius`,
+  `explain-authority`) are deliberately **not** wrapped in this change; the
+  class is left open for them. Note `explain_authority` landed concurrently
+  (see the entry above) as a *flat* client method against the slash path form
+  `/v1/authority-intelligence/explain-authority`; this method uses the
+  hyphenated `/v1-authority-intelligence/...` form its own route was specified
+  with. Reconciling the two path forms — and whether `explain_authority` should
+  move under this client — is deliberately left to a follow-up rather than
+  silently harmonized here.
+
+  Two semantics are load-bearing and deliberate. **The classification is
+  three-way, not a pass/fail signal** — a `non_exercisable` finding is
+  frequently the *correct*, healthy state, and an `unresolved` finding must
+  never be silently treated as clean — so no `is_healthy` / `has_errors`
+  convenience exists and none should be added; `count_findings_by_classification()`
+  zero-fills all three known classifications and surfaces any unrecognized one
+  as its own key rather than folding it in. And **the value vocabulary is open
+  at runtime**: `classification` / `severity` / `evidence_posture` are plain
+  `str` and are never validated, so a future server-side value passes through
+  verbatim rather than raising. A 5xx (the server refusing to return a partial
+  report) propagates as `AtlaSentError` from the shared transport, exactly like
+  every other endpoint — never as an empty report.
 - `EvaluateResult` gains two optional fields surfacing the two-stage
   authorization lifecycle (atlasent-api #1617): `human_approval_required`
   (whether this evaluation requires a verified human approval) and

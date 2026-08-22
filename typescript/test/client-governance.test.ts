@@ -1326,10 +1326,18 @@ const EXPLAIN_AUTHORITY_STUB = {
 };
 
 describe("explainAuthority", () => {
-  it("GETs /v1/authority-intelligence/explain-authority with all params", async () => {
+  it("GETs /v1-authority-intelligence/explain-authority with all params", async () => {
     const fetchMock = mockFetch((url, init) => {
       expect(init.method).toBe("GET");
-      expect(url).toContain("/v1/authority-intelligence/explain-authority");
+      // Hyphenated (edge-function-name) form, not the slash form the
+      // committed OpenAPI docs use — the real handler strips
+      // `/v1-authority-intelligence/` as a literal prefix and only then
+      // matches sub-routes by name; the slash form never matches and 404s.
+      // Confirmed against the one proven-working caller in this ecosystem
+      // (atlasent-console's sod-eligibility/blast-radius hook, which calls
+      // the hyphenated path directly against the same Supabase functions
+      // base this SDK's ATLASENT_BASE_URL points at).
+      expect(url).toContain("/v1-authority-intelligence/explain-authority");
       expect(url).toContain("principal_id=principal_1");
       expect(url).toContain(
         "requested_scope=production%3Adeployment.production.approve",

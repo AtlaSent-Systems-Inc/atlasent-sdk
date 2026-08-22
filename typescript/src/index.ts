@@ -1146,6 +1146,20 @@ export {
   type AccessGovernanceLogSubClient,
 } from "./access-governance-log.js";
 
+// ── Authority Intelligence ────────────────────────────────────────────────────
+export {
+  countFindingsByClassification,
+  makeAuthorityIntelligenceClient,
+  type AuthorityIntelligenceSubClient,
+  type IntegrityAuditQuery,
+  type IntegrityClassification,
+  type IntegrityClassificationCounts,
+  type IntegrityEvidencePosture,
+  type IntegrityFinding,
+  type IntegrityReport,
+  type IntegritySeverity,
+} from "./authorityIntelligence.js";
+
 // ── SMS OTP ───────────────────────────────────────────────────────────────────
 export {
   makeSmsOtpClient,

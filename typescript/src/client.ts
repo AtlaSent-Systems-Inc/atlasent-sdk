@@ -198,6 +198,10 @@ import {
   type AccessGovernanceLogSubClient,
 } from "./access-governance-log.js";
 import {
+  makeAuthorityIntelligenceClient,
+  type AuthorityIntelligenceSubClient,
+} from "./authorityIntelligence.js";
+import {
   makeClinicalTrialsClient,
   type ClinicalTrialsSubClient,
 } from "./clinical.js";
@@ -581,6 +585,8 @@ export class AtlaSentClient {
   readonly sso: SsoSubClient;
   /** Access governance log sub-client. Access as `client.accessGovernanceLog`. */
   readonly accessGovernanceLog: AccessGovernanceLogSubClient;
+  /** Authority intelligence sub-client. Access as `client.authorityIntelligence`. */
+  readonly authorityIntelligence: AuthorityIntelligenceSubClient;
   /** Clinical trial unblinding gate sub-client. Access as `client.clinicalTrials`. */
   readonly clinicalTrials: ClinicalTrialsSubClient;
   /** SMS OTP step-up authentication sub-client. Access as `client.smsOtp`. */
@@ -648,6 +654,9 @@ export class AtlaSentClient {
       (path) => this._delete(path),
     );
     this.accessGovernanceLog = makeAccessGovernanceLogClient(
+      (path, query) => this._get(path, query),
+    );
+    this.authorityIntelligence = makeAuthorityIntelligenceClient(
       (path, query) => this._get(path, query),
     );
     this.clinicalTrials = makeClinicalTrialsClient(
@@ -2493,7 +2502,7 @@ export class AtlaSentClient {
    * scope in the caller's org — "why may principal P exercise
    * scope/action A in organization O right now?"
    *
-   * Calls `GET /v1/authority-intelligence/explain-authority`. Strictly
+   * Calls `GET /v1-authority-intelligence/explain-authority`. Strictly
    * read-only and additive: it explains the same facts `/v1-evaluate`
    * and `/v1-verify-permit` already read, and never changes any
    * deny/hold/allow semantics. Returned verbatim from the server — the
@@ -2523,7 +2532,7 @@ export class AtlaSentClient {
     });
     if (params.resourceId) qs.set("resource_id", params.resourceId);
     const { body } = await this.get<ExplainAuthorityResult>(
-      "/v1/authority-intelligence/explain-authority",
+      "/v1-authority-intelligence/explain-authority",
       qs,
     );
     return body;
