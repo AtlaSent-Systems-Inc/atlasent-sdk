@@ -35,10 +35,24 @@ immediately build a breaking migration on top of its first release."
 
 ## 1. Exactly which public exports would change
 
-`typescript/src/types.ts` has **79 top-level exported symbols**
-(interfaces, types, consts) re-exported through the SDK's public entry
-point (`typescript/src/index.ts`), making all 79 part of the published
-`@atlasent/sdk` npm package's public surface today.
+`typescript/src/types.ts` declares **79 top-level exported symbols**
+(interfaces, types, consts), but **not all 79 reach the published
+package surface.** `typescript/src/index.ts` — the actual entry point —
+re-exports a specific, countable list from `./types.js`: **65 type
+names plus 3 runtime values** (`DEPLOY_GATE_CODES`,
+`DEPLOYMENT_PRODUCTION_ACTION`, `PRODUCTION_DEPLOY_ACTION`), **68
+total**, verified by counting the literal `export type { ... } from
+"./types.js"` block (lines 150-216) plus the adjacent value-export
+block. Names such as `EvaluationProfile`, `EmergencyOverrideV1`, and
+the trajectory types are declared in `types.ts` but absent from the
+root entry point — either genuinely internal, or re-exported from a
+different subpath (e.g. `StateSnapshot` actually ships from
+`snapshots.ts`, not `types.ts`). There is no `./types` subpath export
+in `package.json`, so anything not in that 68 is not part of the
+public npm surface today, regardless of what `types.ts` itself
+declares. **The real public-surface number for this migration's scope
+is 68, not 79** — corrected after an earlier draft of this package
+conflated "declared in types.ts" with "publicly exported."
 
 `@atlasent/types` (`atlasent-api/packages/types/src/`) is considerably
 larger: **121 exports** in `index.ts` alone, plus more across
@@ -62,7 +76,7 @@ estimate's real work). What's established:
   without an import dependency.
 - A **contract drift detector already exists**
   (`atlasent-sdk/contract/tools/drift.py`) and runs in CI, but it checks
-  a narrower surface than "all 79 vs. all 121": it validates the
+  a narrower surface than "all 68 published vs. all 121": it validates the
   TypeScript and Python SDKs' wire shapes for `/v1-evaluate`,
   `/v1-verify-permit`, `/v1-api-key-self`, and four `/v2/*` endpoints
   against **this repo's own local JSON Schema copies**
@@ -75,19 +89,34 @@ estimate's real work). What's established:
 
 ### Inside `atlasent-sdk` itself
 
-**31 files** import from `types.ts` (relative imports:
-`./types.js` / `../types.js` / `../../src/types.js`), across:
-- `typescript/src/*.ts` (17 files: `client.ts`, `protect.ts`, `replay.ts`,
-  `trajectory.ts`, `snapshots.ts`, `governanceGraph.ts`,
-  `incidentReconstruction.ts`, `orgRiskGraph.ts`,
-  `connectorManagement.ts`, `engineVersions.ts`,
-  `actionDependencies.ts`, `evidenceEngine.ts`, `index.ts`, +4 more)
-- `typescript/packages/{behavior,behavior-emit,behavior-preview,enforce,v2,v2-alpha,v2-preview}/src/*.ts` (14 files across 7 sub-packages)
+**Correction:** an earlier draft of this package claimed 31 files across
+`typescript/src/` and 7 `packages/*` sub-packages, by grepping for any
+`./types.js` / `../types.js` import path. That conflated two different
+things. `packages/{behavior,behavior-emit,behavior-preview,enforce,v2,v2-alpha,v2-preview}/src/`
+each have their **own local, independent `types.ts` file** — a relative
+import of `./types.js` from inside `packages/enforce/src/` resolves to
+`packages/enforce/src/types.ts`, not the root `typescript/src/types.ts`.
+None of those 7 sub-package `types.ts` files import from or re-export
+the root module; they are separate, package-scoped type files that
+happen to share a filename.
 
-Every one of these is an internal import path, not a public API surface
-— they can be repointed at `@atlasent/types` (or at a local re-export
-shim of it) without any external consumer noticing, **provided the
-member shapes used stay compatible**.
+**The real number: 13 files**, all under `typescript/src/*.ts` directly
+(`client.ts`, `protect.ts`, `replay.ts`, `trajectory.ts`, `snapshots.ts`,
+`governanceGraph.ts`, `incidentReconstruction.ts`, `orgRiskGraph.ts`,
+`connectorManagement.ts`, `engineVersions.ts`, `actionDependencies.ts`,
+`evidenceEngine.ts`, `index.ts`), verified by re-running the check
+scoped to files that actually import the root `types.ts`. **No
+`packages/*` sub-package needs to change at all** for the root
+`types.ts` migration — each has its own, separately-scoped type
+duplication question (are `packages/enforce/src/types.ts` etc. *also*
+meant to source from `@atlasent/types`, or are they legitimately
+package-local?) that this package does not attempt to answer, since it
+was scoped to the root `types.ts` T-01 names.
+
+Every one of the 13 is an internal import path, not a public API
+surface — they can be repointed at `@atlasent/types` (or at a local
+re-export shim of it) without any external consumer noticing,
+**provided the member shapes used stay compatible**.
 
 ### External consumers of `@atlasent/sdk`'s named exports (not just the client)
 
@@ -122,8 +151,8 @@ and decreasing in "how done is T-01, really":
    This is what T-01's original wording describes. Breaking for any
    consumer whose imported name or shape changed — narrow blast radius
    per §2, but real (`atlasent-api`'s 15 files, at minimum).
-2. **`types.ts` becomes a re-export shim.** Keep every one of the 79
-   current export names in `types.ts`, but change their *definitions*
+2. **`types.ts` becomes a re-export shim.** Keep every one of the 68
+   currently-published export names, but change their *definitions*
    to `export type { X } from '@atlasent/types'` (or a compatible
    local alias) instead of hand-declaring the shape. Non-breaking for
    any consumer that only imports by name and structurally-compatible
@@ -142,7 +171,7 @@ and decreasing in "how done is T-01, really":
    options 1/2 happen, since it's non-breaking and independent.
 
 Option 2 cannot be fully scoped as "safe" without the pairwise diff
-this package does not perform (see §1) — some of the 79 names may turn
+this package does not perform (see §1) — some of the 68 published names may turn
 out to have genuinely incompatible shapes in `@atlasent/types`, in
 which case those specific ones fall back to option 1's breaking path
 while the rest take option 2's non-breaking one. **The real deliverable
@@ -210,12 +239,12 @@ Given §0-§5, the sequence that minimizes stacked risk:
    silently diverging from the runtime — without any breaking change.
 3. **Do the pairwise diff** (§1's missing piece) against the published
    package, now with real installed types to compare rather than
-   reading two files by hand. This produces the actual "which 79 are
+   reading two files by hand. This produces the actual "which of the 68 are
    safe as re-exports, which aren't" answer §3 couldn't give.
 4. **Land `types.ts` as a re-export shim** (§3 option 2) for whatever
    the diff shows is compatible, as a **minor** SDK release (no public
    name or shape change for consumers) — this is very likely the bulk
-   of the 79.
+   of the 68 published names.
 5. **Handle the incompatible remainder** (if any) as an explicit,
    narrow, called-out **major** SDK release, migrating only the names
    that actually changed shape — not a wholesale major bump for the
@@ -250,8 +279,8 @@ issue closed.
 that:
 - `@atlasent/types` isn't published (a real prerequisite step with its
   own gate, not assumed effort in the original 2-3 day figure).
-- The full 79-vs-121 pairwise shape diff has never been done — the
-  actual "is this safe as a re-export" answer for each of the 79 names
+- The full 68-vs-121 pairwise shape diff has never been done — the
+  actual "is this safe as a re-export" answer for each of the 68 published names
   is unknown, not merely undocumented.
 - `atlasent-api`'s 15-file real consumer surface needs its own
   post-change verification, which is a second repo's CI, not this
