@@ -12,7 +12,7 @@ import { evidenceRunPasses, nonPassingControls } from "../src/complianceEvidence
 import type { ComplianceEvidenceRun } from "../src/complianceEvidence.js";
 import { isImpersonationGrantUsable, clampTokenDuration } from "../src/crossOrgImpersonation.js";
 import type { CrossOrgImpersonationGrant } from "../src/crossOrgImpersonation.js";
-import { summarizeCrossOrgPermission } from "../src/crossOrgPermission.js";
+import { summarizeCrossOrgPermission, summarizeTrustPrecheck } from "../src/crossOrgPermission.js";
 import type { CrossOrgPermissionCheckResult } from "../src/crossOrgPermission.js";
 import { buildLiabilityVisualization, buildRiskTimeline } from "../src/financialDashboard.js";
 import type { LiabilityParty } from "../src/liabilityAttribution.js";
@@ -247,6 +247,10 @@ describe("crossOrgImpersonation", () => {
 function makePermissionResult(overrides: Partial<CrossOrgPermissionCheckResult> = {}): CrossOrgPermissionCheckResult {
   return {
     check_id: "chk1",
+    trust_precheck_passed: true,
+    authorizes_execution: false,
+    requires_local_authority_evaluation: true,
+    conditions_evaluated: false,
     allowed: true,
     reason: "trust path found",
     trust_path: [],
@@ -257,16 +261,53 @@ function makePermissionResult(overrides: Partial<CrossOrgPermissionCheckResult> 
 }
 
 describe("crossOrgPermission", () => {
-  it("summarizeCrossOrgPermission returns allowed when allowed with no conditions", () => {
+  // CROSS-028: a trust precheck result must never be readable as an
+  // authorization decision — these two fields are the structural proof.
+  it("authorizes_execution is always false, regardless of trust_precheck_passed", () => {
+    expect(makePermissionResult({ trust_precheck_passed: true }).authorizes_execution).toBe(false);
+    expect(makePermissionResult({ trust_precheck_passed: false }).authorizes_execution).toBe(false);
+  });
+
+  it("requires_local_authority_evaluation is always true", () => {
+    expect(makePermissionResult({ trust_precheck_passed: true }).requires_local_authority_evaluation).toBe(true);
+    expect(makePermissionResult({ trust_precheck_passed: false }).requires_local_authority_evaluation).toBe(true);
+  });
+
+  it("summarizeTrustPrecheck returns trust_established when passed with no conditions", () => {
+    expect(summarizeTrustPrecheck(makePermissionResult())).toBe("trust_established");
+  });
+
+  it("summarizeTrustPrecheck returns trust_established_with_unevaluated_conditions when passed with conditions", () => {
+    expect(summarizeTrustPrecheck(makePermissionResult({ conditions: ["2fa-required"] }))).toBe(
+      "trust_established_with_unevaluated_conditions",
+    );
+  });
+
+  it("summarizeTrustPrecheck returns no_trust when the precheck failed", () => {
+    expect(summarizeTrustPrecheck(makePermissionResult({ trust_precheck_passed: false, allowed: false }))).toBe("no_trust");
+  });
+
+  // Deprecated helper retained for backward compatibility — must keep
+  // agreeing with summarizeTrustPrecheck()'s underlying boolean.
+  it("summarizeCrossOrgPermission (deprecated) returns allowed when allowed with no conditions", () => {
     expect(summarizeCrossOrgPermission(makePermissionResult())).toBe("allowed");
   });
 
-  it("summarizeCrossOrgPermission returns conditional when allowed with conditions", () => {
+  it("summarizeCrossOrgPermission (deprecated) returns conditional when allowed with conditions", () => {
     expect(summarizeCrossOrgPermission(makePermissionResult({ conditions: ["2fa-required"] }))).toBe("conditional");
   });
 
-  it("summarizeCrossOrgPermission returns denied when not allowed", () => {
-    expect(summarizeCrossOrgPermission(makePermissionResult({ allowed: false }))).toBe("denied");
+  it("summarizeCrossOrgPermission (deprecated) returns denied when not allowed", () => {
+    expect(summarizeCrossOrgPermission(makePermissionResult({ allowed: false, trust_precheck_passed: false }))).toBe(
+      "denied",
+    );
+  });
+
+  it("deprecated allowed and canonical trust_precheck_passed never diverge in practice", () => {
+    for (const passed of [true, false]) {
+      const result = makePermissionResult({ trust_precheck_passed: passed, allowed: passed });
+      expect(result.allowed).toBe(result.trust_precheck_passed);
+    }
   });
 });
 

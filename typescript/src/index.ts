@@ -698,6 +698,7 @@ export type {
 // ── Cross-Org Permission Negotiation ────────────────────────────────────────────────────────────────────────────
 export {
   summarizeCrossOrgPermission,
+  summarizeTrustPrecheck,
   type CrossOrgPermissionCheckListParams,
   type CrossOrgPermissionCheckRequest,
   type CrossOrgPermissionCheckResult,
