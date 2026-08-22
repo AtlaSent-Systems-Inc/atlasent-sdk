@@ -986,7 +986,7 @@ class AsyncAtlaSentClient:
 
         Async parity for :meth:`AtlaSentClient.explain_authority`. See
         the sync version for full semantics. Calls ``GET
-        /v1/authority-intelligence/explain-authority``; requires the
+        /v1-authority-intelligence/explain-authority``; requires the
         ``authority_intelligence:read`` API key scope.
         """
         if not principal_id:
@@ -1000,7 +1000,7 @@ class AsyncAtlaSentClient:
         if resource_id:
             params["resource_id"] = resource_id
         data, rate_limit, _ = await self._get(
-            "/v1/authority-intelligence/explain-authority", params=params
+            "/v1-authority-intelligence/explain-authority", params=params
         )
         return ExplainAuthorityResult.model_validate({**data, "rate_limit": rate_limit})
 

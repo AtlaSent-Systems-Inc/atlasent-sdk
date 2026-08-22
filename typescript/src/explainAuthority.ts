@@ -1,6 +1,6 @@
 /**
  * Authority-lineage explanation — wire shape for
- * `GET /v1/authority-intelligence/explain-authority`.
+ * `GET /v1-authority-intelligence/explain-authority`.
  *
  * Answers "why may principal P exercise scope/action A in
  * organization O right now?" Read-only and additive: it explains the
@@ -75,7 +75,7 @@ export interface AuthorityUnresolvedFinding {
 }
 
 /**
- * Result of `GET /v1/authority-intelligence/explain-authority`,
+ * Result of `GET /v1-authority-intelligence/explain-authority`,
  * passed through verbatim from
  * `authority_intelligence_explain_authority_v1` (no client-side
  * interpretation of `paths` / `unresolved` / `authority_found`).

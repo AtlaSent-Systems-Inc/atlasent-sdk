@@ -2502,7 +2502,7 @@ export class AtlaSentClient {
    * scope in the caller's org — "why may principal P exercise
    * scope/action A in organization O right now?"
    *
-   * Calls `GET /v1/authority-intelligence/explain-authority`. Strictly
+   * Calls `GET /v1-authority-intelligence/explain-authority`. Strictly
    * read-only and additive: it explains the same facts `/v1-evaluate`
    * and `/v1-verify-permit` already read, and never changes any
    * deny/hold/allow semantics. Returned verbatim from the server — the
@@ -2532,7 +2532,7 @@ export class AtlaSentClient {
     });
     if (params.resourceId) qs.set("resource_id", params.resourceId);
     const { body } = await this.get<ExplainAuthorityResult>(
-      "/v1/authority-intelligence/explain-authority",
+      "/v1-authority-intelligence/explain-authority",
       qs,
     );
     return body;

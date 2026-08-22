@@ -1141,7 +1141,7 @@ class AtlaSentClient:
         """Explain why (or why not) ``principal_id`` currently has
         authority for ``requested_scope`` in the caller's org.
 
-        Calls ``GET /v1/authority-intelligence/explain-authority``.
+        Calls ``GET /v1-authority-intelligence/explain-authority``.
         Strictly read-only and additive — it explains the same facts
         ``/v1-evaluate`` and ``/v1-verify-permit`` already read, and
         never changes any deny/hold/allow semantics. Requires the
@@ -1158,7 +1158,7 @@ class AtlaSentClient:
         if resource_id:
             params["resource_id"] = resource_id
         data, rate_limit, _ = self._get(
-            "/v1/authority-intelligence/explain-authority", params=params
+            "/v1-authority-intelligence/explain-authority", params=params
         )
         return ExplainAuthorityResult.model_validate({**data, "rate_limit": rate_limit})
 

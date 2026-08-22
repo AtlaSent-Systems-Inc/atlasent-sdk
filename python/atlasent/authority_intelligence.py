@@ -16,13 +16,17 @@ The three unwrapped siblings are deliberately out of scope; the class is left
 open so they can be added without a breaking change.
 
 Note ``explain-authority`` IS wrapped elsewhere in this SDK — as the flat
-:meth:`AtlaSentClient.explain_authority`, landed concurrently (#462), and
-against the *slash* path form ``/v1/authority-intelligence/explain-authority``
-rather than the hyphenated form used here. Both path conventions exist in this
-SDK today (``/v1-evaluate`` vs ``/v1/sso/*``), and each route was specified
-with the form its own method uses. Reconciling them — and deciding whether
-``explain_authority`` should move onto this client — is a follow-up, not
-something to harmonize silently.
+:meth:`AtlaSentClient.explain_authority`, landed concurrently (#462). It
+originally called the *slash* path form
+``/v1/authority-intelligence/explain-authority``; that 404s against the real
+deployed edge function, which strips ``/v1-authority-intelligence/`` as a
+literal prefix and only then matches sub-routes by name (confirmed against
+atlasent-api's ``v1-authority-intelligence/handler.ts`` and against the one
+proven-working caller in this ecosystem, atlasent-console's
+sod-eligibility/blast-radius hook, which calls the hyphenated form directly).
+Corrected to the hyphenated form to match every other route on this edge
+function. Whether ``explain_authority`` should move onto this client remains
+a separate, cosmetic follow-up.
 
 Auth: API key (``ask_live_*`` / ``ask_test_*``) carrying the
 ``authority_intelligence:read`` scope. The organization is derived
