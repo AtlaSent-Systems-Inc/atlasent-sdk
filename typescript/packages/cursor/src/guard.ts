@@ -227,7 +227,7 @@ export function withCursorGuard<T extends CursorGuardedTool>(
       const extra = options.extraContext
         ? await resolve(options.extraContext, name, input)
         : {};
-      const context = { ...extra, tool_input: input };
+      const context: Record<string, unknown> = { ...extra, tool_input: input };
       const stateSnapshot = options.stateSnapshot
         ? await resolve(options.stateSnapshot, name, input)
         : undefined;
