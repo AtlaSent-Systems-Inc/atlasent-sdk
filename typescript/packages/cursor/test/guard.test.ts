@@ -200,6 +200,42 @@ describe("withCursorGuard", () => {
     );
   });
 
+  it("forwards stateSnapshot to evaluate as state_snapshot", async () => {
+    const client = makeClient();
+    const [guarded] = withCursorGuard([editTool], client, {
+      agent: "cursor:proj",
+      stateSnapshot: { source: "cursor", complete: true },
+    });
+    await guarded!.execute({ path: "f.ts", patch: "x" });
+    expect(client.evaluate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        state_snapshot: { source: "cursor", complete: true },
+      }),
+    );
+  });
+
+  it("resolves a stateSnapshot function with tool name and input", async () => {
+    const client = makeClient();
+    const resolver = vi.fn(() => ({ source: "cursor", complete: true }));
+    const [guarded] = withCursorGuard([editTool], client, {
+      agent: "cursor:proj",
+      stateSnapshot: resolver,
+    });
+    await guarded!.execute({ path: "f.ts", patch: "x" });
+    expect(resolver).toHaveBeenCalledWith("edit_file", { path: "f.ts", patch: "x" });
+  });
+
+  it("omits state_snapshot from evaluate when stateSnapshot is not set", async () => {
+    const client = makeClient();
+    const [guarded] = withCursorGuard([editTool], client, { agent: "cursor:proj" });
+    await guarded!.execute({ path: "f.ts", patch: "x" });
+    expect(client.evaluate).toHaveBeenCalledWith({
+      agent: "cursor:proj",
+      action: "edit_file",
+      context: { tool_input: { path: "f.ts", patch: "x" } },
+    });
+  });
+
   it("wraps all tools in the array", async () => {
     const client = makeClient();
     const [g1, g2] = withCursorGuard([editTool, jsonTool], client, { agent: "cursor:proj" });
