@@ -2754,7 +2754,7 @@ export class AtlaSentClient {
     req: CrossOrgPermissionCheckRequest,
   ): Promise<CrossOrgPermissionCheckResult> {
     const { body } = await this.post<CrossOrgPermissionCheckResult>(
-      "/v1/cross-org/permissions/check",
+      "/v1/federation/permission-check",
       req,
     );
     return body;
@@ -2771,7 +2771,7 @@ export class AtlaSentClient {
     if (params?.limit !== undefined) qs.set("limit", String(params.limit));
     const { body } = await this.get<{
       checks: CrossOrgPermissionCheckResult[];
-    }>("/v1/cross-org/permissions/checks", qs);
+    }>("/v1/federation/permission-checks", qs);
     return body.checks ?? [];
   }
 

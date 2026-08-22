@@ -633,10 +633,16 @@ describe("listOrgRiskHistory", () => {
 // ── Cross-Org Permission ──────────────────────────────────────────────────────
 
 describe("checkCrossOrgPermission", () => {
-  it("POSTs to /v1/cross-org/permissions/check and returns result", async () => {
+  it("POSTs to /v1/federation/permission-check and returns result", async () => {
     const fetchMock = mockFetch((url, init) => {
       expect(init.method).toBe("POST");
-      expect(url).toContain("/v1/cross-org/permissions/check");
+      // REGRESSION: this used to assert /v1/cross-org/permissions/check —
+      // a path with no matching server-side route anywhere (not the edge
+      // function's own router, not the gateway, not the public OpenAPI
+      // spec). The real route, matching v1-cross-org-permission/index.ts's
+      // own routing, is /v1/federation/permission-check. This test was
+      // green while the client called a URL that would 404 in production.
+      expect(url).toContain("/v1/federation/permission-check");
       const body = JSON.parse((init.body as string) ?? "{}");
       expect(body.source_org_id).toBe("org_1");
       expect(body.action).toBe("read");
@@ -654,10 +660,12 @@ describe("checkCrossOrgPermission", () => {
 });
 
 describe("listCrossOrgPermissionChecks", () => {
-  it("GETs /v1/cross-org/permissions/checks and returns checks array", async () => {
+  it("GETs /v1/federation/permission-checks and returns checks array", async () => {
     const fetchMock = mockFetch((url, init) => {
       expect(init.method).toBe("GET");
-      expect(url).toContain("/v1/cross-org/permissions/checks");
+      // See the REGRESSION note in the checkCrossOrgPermission test above —
+      // same path-mismatch bug, list variant.
+      expect(url).toContain("/v1/federation/permission-checks");
       return jsonResponse({ checks: [CROSS_ORG_PERMISSION_RESULT] });
     });
     const client = makeClient(fetchMock);
