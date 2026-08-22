@@ -81,9 +81,9 @@ add it to the list above.
 
 The interface is duplicated across framework guards:
 
-- `src/langchain/guard.ts`
-- `src/llamaindex/guard.ts`
-- `src/cursor/guard.ts`
+- `typescript/packages/langchain/src/guard.ts`
+- `typescript/packages/llamaindex/src/guard.ts`
+- `typescript/packages/cursor/src/guard.ts`
 
 The T-02 rename will be mechanical: a single sed pass + type-check confirms
 all three copies are consistent.
