@@ -48,12 +48,34 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 from .exceptions import AtlaSentError
+from .models import RateLimitState
 
-if TYPE_CHECKING:
-    from .client import AtlaSentClient
+
+class _GetCapable(Protocol):
+    """Structural type for the one capability this module needs from
+    :class:`~atlasent.client.AtlaSentClient` (a plain HTTP GET).
+
+    Deliberately NOT an import of ``AtlaSentClient`` itself — CodeQL's
+    cyclic-import queries (both the module-level and general variants)
+    flag the reciprocal relationship between this module and ``client.py``
+    even when the import is ``TYPE_CHECKING``-guarded, because
+    ``client.py`` genuinely does import this module to wire
+    ``self.authority_intelligence``. A structural Protocol has no import
+    edge back to ``client.py`` at all, so there is no cycle to detect —
+    not a suppression of a false positive, an actual removal of the cycle.
+    ``AtlaSentClient`` satisfies this protocol structurally; nothing about
+    its public behavior changes.
+    """
+
+    def _get(
+        self,
+        path: str,
+        *,
+        params: dict[str, str] | None = None,
+    ) -> tuple[dict[str, Any], RateLimitState | None, str]: ...
 
 
 #: Wire path of the integrity-audit sub-route.
@@ -230,7 +252,7 @@ class AuthorityIntelligenceClient:
         ai = AuthorityIntelligenceClient(client)
     """
 
-    def __init__(self, client: AtlaSentClient) -> None:
+    def __init__(self, client: _GetCapable) -> None:
         self._c = client
 
     def integrity_audit(
@@ -265,7 +287,7 @@ class AuthorityIntelligenceClient:
         return _parse_report(data)
 
 
-def authority_intelligence(client: AtlaSentClient) -> AuthorityIntelligenceClient:
+def authority_intelligence(client: _GetCapable) -> AuthorityIntelligenceClient:
     """Return an :class:`AuthorityIntelligenceClient` bound to ``client``.
 
     Mirrors :func:`atlasent.runtime_v2.runtime` for callers that prefer a

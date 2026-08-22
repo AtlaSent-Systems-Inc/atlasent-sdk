@@ -24,6 +24,7 @@ from ._version import __version__
 from .access_governance_log import AccessGovernanceLogClient
 from .approval_artifact import ApprovalReference
 from .audit import AuditEventsResult, AuditExportResult
+from .authority_intelligence import AuthorityIntelligenceClient
 from .clinical_client import ClinicalTrialsClient
 from .evidence_bundle import EvidenceBundlesClient
 from .exceptions import (
@@ -251,19 +252,6 @@ class AtlaSentClient:
         self.access_governance_log = AccessGovernanceLogClient(self)
         self.evidence_bundles = EvidenceBundlesClient(self)
         self.clinical_trials = ClinicalTrialsClient(self)
-        # Deferred (not module-level, unlike the sub-clients above): CodeQL's
-        # module-level-cyclic-import query flagged the reciprocal pair of this
-        # import and authority_intelligence.py's own TYPE_CHECKING-guarded
-        # `from .client import AtlaSentClient` as a new alert on this PR. The
-        # cycle is inert at runtime (that import never executes — TYPE_CHECKING
-        # is False, and `from __future__ import annotations` makes the
-        # annotation itself a lazy string), but a local import here removes it
-        # from CodeQL's module-level analysis entirely rather than relying on
-        # a suppression only a repo admin can grant. The other sub-clients
-        # above have the identical structural shape; they simply predate this
-        # PR so CodeQL doesn't score them as "new".
-        from .authority_intelligence import AuthorityIntelligenceClient
-
         self.authority_intelligence = AuthorityIntelligenceClient(self)
 
     # ── properties ────────────────────────────────────────────
