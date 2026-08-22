@@ -28,6 +28,15 @@ export interface CrossOrgTrustHop {
 export interface CrossOrgPermissionCheckRequest {
   source_org_id: string;
   target_org_id: string;
+  /**
+   * @deprecated Not accepted by the server (CROSS-028 item 3). The ratified
+   * ADR requires either wiring a supplied identity_id into a real
+   * representation check under CROSS-029, or not accepting it at all until
+   * that check exists — CROSS-029's RepresentationAssertionV1 mechanism is
+   * design-only and not implemented, so the server takes the second option.
+   * If set, it is never read, never persisted, and never affects the result.
+   * Do not rely on it for representation/delegation verification.
+   */
   identity_id?: string;
   action: string;
   resource_type?: string;
