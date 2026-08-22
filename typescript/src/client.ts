@@ -198,6 +198,10 @@ import {
   type AccessGovernanceLogSubClient,
 } from "./access-governance-log.js";
 import {
+  makeAuthorityIntelligenceClient,
+  type AuthorityIntelligenceSubClient,
+} from "./authorityIntelligence.js";
+import {
   makeClinicalTrialsClient,
   type ClinicalTrialsSubClient,
 } from "./clinical.js";
@@ -581,6 +585,8 @@ export class AtlaSentClient {
   readonly sso: SsoSubClient;
   /** Access governance log sub-client. Access as `client.accessGovernanceLog`. */
   readonly accessGovernanceLog: AccessGovernanceLogSubClient;
+  /** Authority intelligence sub-client. Access as `client.authorityIntelligence`. */
+  readonly authorityIntelligence: AuthorityIntelligenceSubClient;
   /** Clinical trial unblinding gate sub-client. Access as `client.clinicalTrials`. */
   readonly clinicalTrials: ClinicalTrialsSubClient;
   /** SMS OTP step-up authentication sub-client. Access as `client.smsOtp`. */
@@ -648,6 +654,9 @@ export class AtlaSentClient {
       (path) => this._delete(path),
     );
     this.accessGovernanceLog = makeAccessGovernanceLogClient(
+      (path, query) => this._get(path, query),
+    );
+    this.authorityIntelligence = makeAuthorityIntelligenceClient(
       (path, query) => this._get(path, query),
     );
     this.clinicalTrials = makeClinicalTrialsClient(

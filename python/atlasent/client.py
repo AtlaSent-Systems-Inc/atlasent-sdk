@@ -24,6 +24,7 @@ from ._version import __version__
 from .access_governance_log import AccessGovernanceLogClient
 from .approval_artifact import ApprovalReference
 from .audit import AuditEventsResult, AuditExportResult
+from .authority_intelligence import AuthorityIntelligenceClient
 from .clinical_client import ClinicalTrialsClient
 from .evidence_bundle import EvidenceBundlesClient
 from .exceptions import (
@@ -251,6 +252,7 @@ class AtlaSentClient:
         self.access_governance_log = AccessGovernanceLogClient(self)
         self.evidence_bundles = EvidenceBundlesClient(self)
         self.clinical_trials = ClinicalTrialsClient(self)
+        self.authority_intelligence = AuthorityIntelligenceClient(self)
 
     # ── properties ────────────────────────────────────────────
 

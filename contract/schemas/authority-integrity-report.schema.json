@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://api.atlasent.io/schemas/authority_integrity_report.v1.json",
+  "title": "AuthorityIntegrityReport",
+  "description": "Response shape of GET /v1-authority-intelligence/integrity-audit (the `v1-authority-intelligence` edge function). RECORD OF A CONSUMED SHAPE: this schema is transcribed from the already-merged runtime implementation in atlasent-api — this repo did not originate it and must not evolve it here. The runtime is authoritative; a change lands there first and is mirrored here. Auth is an API key carrying the `authority_intelligence:read` scope; the organization is derived server-side from the authenticated caller and is never a client-supplied parameter. The endpoint fails closed: on failure it returns 5xx rather than a partial or degraded report.",
+  "definitions": {
+    "IntegrityClassification": {
+      "type": "string",
+      "description": "How a finding is classified. Three-way and load-bearing — this is compliance/audit evidence, not a pass/fail health check. `defect`: something is wrong and should be fixed. `non_exercisable`: the authority cannot be exercised — frequently the CORRECT, healthy state, not a problem. `unresolved`: the audit could not determine which of the above applies, and must never be silently treated as clean. Deliberately typed as an open string rather than an `enum`: the wire vocabulary is closed today, but consumers MUST pass an unrecognized future value through verbatim rather than rejecting it. A validating adopter that enumerated this set would fail closed on a forward-compatible server.",
+      "x-known-values": ["defect", "non_exercisable", "unresolved"]
+    },
+    "IntegritySeverity": {
+      "type": "string",
+      "description": "Severity of a finding. Open for the same forward-compatibility reason as IntegrityClassification.",
+      "x-known-values": ["critical", "high", "medium", "low", "info"]
+    },
+    "IntegrityEvidencePosture": {
+      "type": "string",
+      "description": "Whether the finding was directly observed in the source data or derived from it. `observed` outranks `derived` as evidence. Open for the same forward-compatibility reason as IntegrityClassification.",
+      "x-known-values": ["observed", "derived"]
+    },
+    "IntegrityFinding": {
+      "type": "object",
+      "required": [
+        "finding_type",
+        "classification",
+        "severity",
+        "subject_id",
+        "source_table",
+        "source_id",
+        "related_source_ids",
+        "effective_at",
+        "evidence_posture",
+        "reason"
+      ],
+      "properties": {
+        "finding_type": { "type": "string" },
+        "classification": { "$ref": "#/definitions/IntegrityClassification" },
+        "severity": { "$ref": "#/definitions/IntegritySeverity" },
+        "subject_id": { "type": ["string", "null"] },
+        "source_table": { "type": ["string", "null"] },
+        "source_id": { "type": ["string", "null"] },
+        "related_source_ids": { "type": "array", "items": { "type": "string" } },
+        "effective_at": { "type": ["string", "null"], "format": "date-time" },
+        "evidence_posture": { "$ref": "#/definitions/IntegrityEvidencePosture" },
+        "reason": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "type": "object",
+  "required": [
+    "schema_version",
+    "query",
+    "organization_id",
+    "evaluated_at",
+    "produced_by",
+    "summary",
+    "findings",
+    "nodes",
+    "edges"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "query": { "type": "string" },
+    "organization_id": {
+      "type": "string",
+      "description": "Derived server-side from the authenticated API key's organization. Never sent by the client."
+    },
+    "evaluated_at": { "type": "string", "format": "date-time" },
+    "produced_by": { "type": "array", "items": { "type": "string" } },
+    "summary": {
+      "type": "object",
+      "description": "Open-ended bag. Carries `audited_scope` — including the decision window the server ACTUALLY applied, which is the authoritative echo of the optional `decision_window_days` query parameter — plus counts by classification and severity. Its keys are deliberately NOT enumerated here; the server may add to it, and a client must not treat this as a fixed shape.",
+      "additionalProperties": true
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/IntegrityFinding" }
+    },
+    "nodes": {
+      "type": "array",
+      "description": "Opaque graph nodes. Element shape deliberately unconstrained.",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "edges": {
+      "type": "array",
+      "description": "Opaque graph edges. Element shape deliberately unconstrained.",
+      "items": { "type": "object", "additionalProperties": true }
+    }
+  },
+  "additionalProperties": true
+}

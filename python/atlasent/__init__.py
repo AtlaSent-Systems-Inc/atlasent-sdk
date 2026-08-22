@@ -130,6 +130,19 @@ _LAZY_MODULES: dict[str, tuple[str, ...]] = {
         "validate_authentication_assurance_evidence",
         "validate_authentication_assurance_requirement",
     ),
+    # NOTE: the module's ``authority_intelligence()`` factory is deliberately
+    # NOT re-exported at package level. Doing so would make the export name
+    # collide with the submodule name (``atlasent.authority_intelligence``),
+    # joining the ``authorize`` / ``with_permit`` / ``require_permit`` special
+    # case for no benefit — the documented access path is the
+    # ``client.authority_intelligence`` attribute, and the factory stays
+    # importable as ``from atlasent.authority_intelligence import …``.
+    ".authority_intelligence": (
+        "AuthorityIntelligenceClient",
+        "IntegrityFinding",
+        "IntegrityReport",
+        "count_findings_by_classification",
+    ),
     ".authorize": ("authorize", "evaluate", "gate", "protect", "verify"),
     ".bccae": ("BCCAEClient", "generate_bccae_nonce"),
     ".billing": (
@@ -618,6 +631,12 @@ if TYPE_CHECKING:
         matches_resource_context_condition,
         validate_authentication_assurance_evidence,
         validate_authentication_assurance_requirement,
+    )
+    from .authority_intelligence import (
+        AuthorityIntelligenceClient,
+        IntegrityFinding,
+        IntegrityReport,
+        count_findings_by_classification,
     )
     from .authorize import authorize, evaluate, gate, protect, verify
     from .bccae import BCCAEClient, generate_bccae_nonce
@@ -1325,6 +1344,11 @@ __all__ = [
     "protect_database_migration",
     "protect_database_schema_drop",
     "protect_database_table_delete",
+    # Authority intelligence — read-only authority analysis (integrity audit).
+    "AuthorityIntelligenceClient",
+    "IntegrityFinding",
+    "IntegrityReport",
+    "count_findings_by_classification",
     # Runtime v2 — four-plane authorized-state-change lifecycle.
     "RuntimeV2Client",
     "runtime",
