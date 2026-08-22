@@ -1299,3 +1299,131 @@ describe("validateImpersonationToken", () => {
     expect(result.error).toBe("token expired");
   });
 });
+
+// ── Authority Intelligence ──────────────────────────────────────────────────
+
+const EXPLAIN_AUTHORITY_STUB = {
+  organization_id: "org_1",
+  principal_id: "principal_1",
+  requested_scope: "production:deployment.production.approve",
+  resource_id: null,
+  authority_found: true,
+  paths: [
+    {
+      mechanism: "role_capability",
+      matched: true,
+      edges: [
+        {
+          source_table: "user_roles",
+          evidence_posture: "direct",
+          authority_basis: "role_grant",
+          role: "deployer",
+        },
+      ],
+    },
+  ],
+  unresolved: [],
+};
+
+describe("explainAuthority", () => {
+  it("GETs /v1/authority-intelligence/explain-authority with all params", async () => {
+    const fetchMock = mockFetch((url, init) => {
+      expect(init.method).toBe("GET");
+      expect(url).toContain("/v1/authority-intelligence/explain-authority");
+      expect(url).toContain("principal_id=principal_1");
+      expect(url).toContain(
+        "requested_scope=production%3Adeployment.production.approve",
+      );
+      expect(url).toContain("resource_id=res_1");
+      return jsonResponse(EXPLAIN_AUTHORITY_STUB);
+    });
+    const client = makeClient(fetchMock);
+    const result = await client.explainAuthority({
+      principalId: "principal_1",
+      requestedScope: "production:deployment.production.approve",
+      resourceId: "res_1",
+    });
+    expect(result.organization_id).toBe("org_1");
+    expect(result.principal_id).toBe("principal_1");
+    expect(result.authority_found).toBe(true);
+    expect(result.paths).toHaveLength(1);
+    expect(result.paths[0]!.mechanism).toBe("role_capability");
+    expect(result.unresolved).toEqual([]);
+  });
+
+  it("omits resource_id from the query string when not supplied", async () => {
+    const fetchMock = mockFetch((url) => {
+      expect(url).toContain("principal_id=principal_1");
+      expect(url).toContain("requested_scope=");
+      expect(url).not.toContain("resource_id");
+      return jsonResponse({ ...EXPLAIN_AUTHORITY_STUB, resource_id: null });
+    });
+    const client = makeClient(fetchMock);
+    const result = await client.explainAuthority({
+      principalId: "principal_1",
+      requestedScope: "production:deployment.production.approve",
+    });
+    expect(result.resource_id).toBeNull();
+  });
+
+  it("surfaces an unresolved finding when authority is not found", async () => {
+    const fetchMock = mockFetch(() =>
+      jsonResponse({
+        ...EXPLAIN_AUTHORITY_STUB,
+        authority_found: false,
+        paths: [],
+        unresolved: [
+          {
+            finding_type: "NO_AUTHORITY_PATH_FOUND",
+            reason: "no matching grant, delegation, or role capability",
+          },
+        ],
+      }),
+    );
+    const client = makeClient(fetchMock);
+    const result = await client.explainAuthority({
+      principalId: "principal_1",
+      requestedScope: "production:deployment.production.approve",
+    });
+    expect(result.authority_found).toBe(false);
+    expect(result.unresolved).toHaveLength(1);
+    expect(result.unresolved[0]!.finding_type).toBe("NO_AUTHORITY_PATH_FOUND");
+  });
+
+  it("throws bad_request when principalId is empty", async () => {
+    const fetchMock = mockFetch(() => jsonResponse(EXPLAIN_AUTHORITY_STUB));
+    const client = makeClient(fetchMock);
+    await expect(
+      client.explainAuthority({
+        principalId: "",
+        requestedScope: "production:deployment.production.approve",
+      }),
+    ).rejects.toMatchObject({ code: "bad_request" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("throws bad_request when requestedScope is empty", async () => {
+    const fetchMock = mockFetch(() => jsonResponse(EXPLAIN_AUTHORITY_STUB));
+    const client = makeClient(fetchMock);
+    await expect(
+      client.explainAuthority({ principalId: "principal_1", requestedScope: "" }),
+    ).rejects.toMatchObject({ code: "bad_request" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a non-2xx response as AtlaSentError", async () => {
+    const fetchMock = mockFetch(() =>
+      jsonResponse(
+        { error: { message: "missing authority_intelligence:read scope" } },
+        { status: 403 },
+      ),
+    );
+    const client = makeClient(fetchMock);
+    await expect(
+      client.explainAuthority({
+        principalId: "principal_1",
+        requestedScope: "production:deployment.production.approve",
+      }),
+    ).rejects.toMatchObject({ code: "forbidden", status: 403 });
+  });
+});

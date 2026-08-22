@@ -61,6 +61,7 @@ from .models import (
     EvaluatePreflightResult,
     EvaluateRequest,
     EvaluateResult,
+    ExplainAuthorityResult,
     GateResult,
     GetPermitResult,
     LicenseStatus,
@@ -1116,6 +1117,36 @@ class AtlaSentClient:
             permit=PermitRecord.model_validate(data),
             rate_limit=rate_limit,
         )
+
+    def explain_authority(
+        self,
+        principal_id: str,
+        requested_scope: str,
+        resource_id: str | None = None,
+    ) -> ExplainAuthorityResult:
+        """Explain why (or why not) ``principal_id`` currently has
+        authority for ``requested_scope`` in the caller's org.
+
+        Calls ``GET /v1/authority-intelligence/explain-authority``.
+        Strictly read-only and additive — it explains the same facts
+        ``/v1-evaluate`` and ``/v1-verify-permit`` already read, and
+        never changes any deny/hold/allow semantics. Requires the
+        ``authority_intelligence:read`` API key scope.
+        """
+        if not principal_id:
+            raise AtlaSentError("principal_id is required", code="bad_request")
+        if not requested_scope:
+            raise AtlaSentError("requested_scope is required", code="bad_request")
+        params: dict[str, str] = {
+            "principal_id": principal_id,
+            "requested_scope": requested_scope,
+        }
+        if resource_id:
+            params["resource_id"] = resource_id
+        data, rate_limit, _ = self._get(
+            "/v1/authority-intelligence/explain-authority", params=params
+        )
+        return ExplainAuthorityResult.model_validate({**data, "rate_limit": rate_limit})
 
     def list_permits(
         self,

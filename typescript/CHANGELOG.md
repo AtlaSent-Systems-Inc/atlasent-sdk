@@ -10,6 +10,19 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ### Added
 
+- `AtlaSentClient.explainAuthority({ principalId, requestedScope, resourceId? })`:
+  a new read-only client method for `GET
+  /v1/authority-intelligence/explain-authority` (atlasent-api #2235), which
+  answers "why may principal P exercise scope/action A in organization O right
+  now?". Returns `paths` (one entry per matching authority mechanism —
+  `direct_grant` / `delegation` / `role_capability`) and `unresolved` (every
+  excluded or ambiguous relationship as a named finding). Pure pass-through —
+  no client-side interpretation of the response. New types exported from the
+  package root: `ExplainAuthorityResult`, `AuthorityExplanationPath`,
+  `AuthorityPathMechanism`, `AuthorityUnresolvedFinding`,
+  `KnownAuthorityUnresolvedFindingType`. Requires the runtime route from
+  atlasent-api #2235 (draft as of this change) to be deployed; against an
+  older runtime this surfaces as a normal 404 `AtlaSentError`, not a crash.
 - `EvaluateResponse` gains two optional fields surfacing the two-stage
   authorization lifecycle (atlasent-api #1617): `humanApprovalRequired`
   (whether this evaluation requires a verified human approval) and
