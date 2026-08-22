@@ -28,17 +28,6 @@ follows [semver](https://semver.org/): breaking changes bump the major
   does not read, persist, or act on it (item 3 of the ratified ADR — no
   representation-verification mechanism exists yet to wire it into).
 
-### Fixed
-
-- `checkCrossOrgPermission()` and `listCrossOrgPermissionChecks()` posted
-  to `/v1/cross-org/permissions/check[s]`, a path with no matching
-  server-side route anywhere (not the edge function's own router, not the
-  control-plane gateway, not the public OpenAPI spec) — every call would
-  404 against a real deployment. Corrected to the real route,
-  `/v1/federation/permission-check[s]`. Pre-existing bug, found while
-  live-verifying the CROSS-028 production deploy; unrelated to the fields
-  above, no request/response shape changed.
-
 - `AtlaSentClient.explainAuthority({ principalId, requestedScope, resourceId? })`:
   a new read-only client method for `GET
   /v1/authority-intelligence/explain-authority` (atlasent-api #2235), which
@@ -108,6 +97,17 @@ follows [semver](https://semver.org/): breaking changes bump the major
   were already present. Client-side convenience constants only — no wire
   request/response, permit, or CDO shape changed; the `deny_code` field
   remains an open string. (atlasent#348 PR 2)
+
+### Fixed
+
+- `checkCrossOrgPermission()` and `listCrossOrgPermissionChecks()` posted
+  to `/v1/cross-org/permissions/check[s]`, a path with no matching
+  server-side route anywhere (not the edge function's own router, not the
+  control-plane gateway, not the public OpenAPI spec) — every call would
+  404 against a real deployment. Corrected to the real route,
+  `/v1/federation/permission-check[s]`. Pre-existing bug, found while
+  live-verifying the CROSS-028 production deploy; unrelated to the fields
+  above, no request/response shape changed.
 
 ## 2.20.0
 
