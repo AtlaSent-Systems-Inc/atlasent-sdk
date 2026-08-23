@@ -76,7 +76,7 @@ run_deploy()
 
 Some SDK helpers preserve historical names for compatibility. For example,
 `deployGate()` is an SDK helper name; customer-facing product language uses
-**Production Change Safeguard** and the canonical Action Type remains
+**Deploy Gate** and the canonical Action Type remains
 `production.deploy`.
 
 ```ts
@@ -158,7 +158,7 @@ It can derive GitHub execution facts and place the AtlaSent authorization /
 Permit-verification path before a governed deployment or other consequential CI
 step.
 
-The public product label for this use case is **Production Change Safeguard**;
+The public product label for this use case is **Deploy Gate**;
 historical Action/SDK/repository names may remain for compatibility.
 
 ## Wire contract
