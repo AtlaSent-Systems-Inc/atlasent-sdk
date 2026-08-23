@@ -3,7 +3,7 @@
  *
  * For every action in the catalog (production.deploy,
  * vendor.payment.release, customer.data.export,
- * reconciliation.certify, model.agent.execute_tool) the SDK must
+ * reconciliation.certify, agent.tool.invoke) the SDK must
  * guarantee:
  *
  *   1. On `deny`: protect() throws AtlaSentDeniedError; verify is
@@ -66,7 +66,7 @@ const CATALOG_ACTIONS = [
   "vendor.payment.release",
   "customer.data.export",
   "reconciliation.certify",
-  "model.agent.execute_tool",
+  "agent.tool.invoke",
   "manufacturing.batch_record.release",
   "deployment.production.execute",
   "behavior.event.share",
