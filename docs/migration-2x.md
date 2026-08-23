@@ -49,8 +49,8 @@ them internally (with a `console.warn`).
 
 | 1.x field | 2.x field | Notes |
 |-----------|-----------|-------|
-| `agent` | `actorId` (camelCase in SDK; `actor_id` on wire) | Both accepted in 2.x via compat shim |
-| `action` | `actionType` (camelCase; `action_type` on wire) | Both accepted in 2.x via compat shim |
+| `agent` | `actor_id` (snake_case — matches the wire) | Both accepted in 2.x via compat shim; there is no `actorId` camelCase variant on `evaluate()` |
+| `action` | `action_type` (snake_case — matches the wire) | Both accepted in 2.x via compat shim; there is no `actionType` camelCase variant on `evaluate()` |
 | `api_key` in body | Removed | Key now sent exclusively via `Authorization: Bearer` header |
 
 ```ts
@@ -61,10 +61,10 @@ const result = await client.evaluate({
   context,
 });
 
-// 2.x — recommended
+// 2.x — recommended (canonical field names are snake_case, not camelCase)
 const result = await client.evaluate({
-  actorId: "deploy-bot",
-  actionType: "production.deploy",
+  actor_id: "deploy-bot",
+  action_type: "production.deploy",
   context,
 });
 ```
@@ -83,7 +83,9 @@ if (!result.permitted) throw new Error(result.reason);
 
 // 2.x — recommended
 if (result.decision_canonical !== "allow") {
-  throw new Error(result.denial?.message ?? "Denied");
+  // EvaluateResponse has no `.denial` object — use `.reason` (human-readable)
+  // and/or `.deny_code` (machine-readable, non-null only on deny).
+  throw new Error(result.reason || result.deny_code || "Denied");
 }
 ```
 
@@ -104,13 +106,16 @@ update your catch block:
 
 ```ts
 import {
+  protect,
   AtlaSentDeniedError,
   AtlaSentEscalateError,
   AtlaSentError,
 } from "@atlasent/sdk";
 
 try {
-  const permit = await atlasent.protect({ actorId, actionType, context });
+  // `protect()` is a standalone function (not a method on AtlaSentClient),
+  // and takes { agent, action, context } — not { actorId, actionType }.
+  const permit = await protect({ agent, action, context });
   await runAction(permit);
 } catch (e) {
   if (e instanceof AtlaSentEscalateError) {
@@ -118,7 +123,7 @@ try {
     await humanReviewQueue.submit({
       requestId: e.requestId,
       userId: e.userId,
-      actionType,
+      action,
     });
   } else if (e instanceof AtlaSentDeniedError) {
     // Hard denial — log and surface to the caller
@@ -273,9 +278,9 @@ const behaviorClientOpts = {
 // Option A: enriched evaluate (recommended for most callers)
 const behaviorContext = await attachToEvaluate(userId, behaviorClientOpts);
 const result = await client.evaluate({
-  actorId:    userId,
-  actionType: "production.deploy",
-  context:    { ...appContext, ...behaviorContext },
+  actor_id:    userId,
+  action_type: "production.deploy",
+  context:     { ...appContext, ...behaviorContext },
 });
 
 // Option B: manual state summary

@@ -60,7 +60,7 @@ const context = {
   ...(await attachToEvaluate(userId, clientOpts)),
 };
 
-const decision = await atlasent.evaluate({ actionType, actorId, context });
+const decision = await atlasent.evaluate({ action_type: actionType, actor_id: actorId, context });
 ```
 
 ## API
