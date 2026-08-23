@@ -1081,6 +1081,68 @@ describe("X-RateLimit-* header parsing", () => {
     expect(capturedBody.execution_binding).toEqual({ kind: "supabase_migration", adapter_version: "1.0" });
   });
 
+  it("forwards evaluation_profile, override, and completion_proofs in request body (previously silently dropped)", async () => {
+    // Regression test: EvaluateRequest declares these three fields, and the
+    // runtime genuinely reads all of them (resolveProfile(body.evaluation_profile),
+    // the emergency-override gate on body.override, and the quorum check on
+    // body.completion_proofs) — but evaluate()'s body construction never
+    // forwarded them, so a caller setting any of these had it silently
+    // dropped before the request ever reached the server.
+    let capturedBody: Record<string, unknown> = {};
+    const client = makeClient(
+      mockFetch((url, init) => {
+        capturedBody = JSON.parse((init?.body as string) ?? "{}");
+        return Promise.resolve(
+          new Response(JSON.stringify(EVALUATE_PERMIT_WIRE), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+    );
+    await client.evaluate({
+      actor_id: "bot",
+      action_type: "production.deploy",
+      evaluation_profile: "advanced",
+      override: {
+        version: "override.v1",
+        authority_actor_id: "ops-lead-1",
+        reason: "P0 hotfix, snapshot hard block accepted",
+      },
+      completion_proofs: [
+        { actor_id: "reviewer-1", action_type: "code_review.approve", permit_id: "pt.v2.tok" },
+      ],
+    });
+    expect(capturedBody.evaluation_profile).toBe("advanced");
+    expect(capturedBody.override).toEqual({
+      version: "override.v1",
+      authority_actor_id: "ops-lead-1",
+      reason: "P0 hotfix, snapshot hard block accepted",
+    });
+    expect(capturedBody.completion_proofs).toEqual([
+      { actor_id: "reviewer-1", action_type: "code_review.approve", permit_id: "pt.v2.tok" },
+    ]);
+  });
+
+  it("omits evaluation_profile, override, and completion_proofs from request body when not supplied", async () => {
+    let capturedBody: Record<string, unknown> = {};
+    const client = makeClient(
+      mockFetch((url, init) => {
+        capturedBody = JSON.parse((init?.body as string) ?? "{}");
+        return Promise.resolve(
+          new Response(JSON.stringify(EVALUATE_PERMIT_WIRE), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+    );
+    await client.evaluate({ agent: "bot", action: "act" });
+    expect(capturedBody.evaluation_profile).toBeUndefined();
+    expect(capturedBody.override).toBeUndefined();
+    expect(capturedBody.completion_proofs).toBeUndefined();
+  });
+
   it("maps risk_class, authority_basis, escalation_id from response", async () => {
     const wire = {
       ...EVALUATE_PERMIT_WIRE,

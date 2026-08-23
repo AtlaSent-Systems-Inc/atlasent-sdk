@@ -729,6 +729,15 @@ export class AtlaSentClient {
     if (normalized.proposed_state !== undefined) body.proposed_state = normalized.proposed_state;
     if (normalized.execution_binding !== undefined) body.execution_binding = normalized.execution_binding;
     if (normalized.state_snapshot !== undefined) body.state_snapshot = normalized.state_snapshot;
+    // These three are genuinely read server-side (resolveProfile(),
+    // the emergency-override gate, and the quorum check respectively) —
+    // silently dropping them here would mean a caller's evaluation_profile
+    // selection, emergency override, or completion_proofs never actually
+    // reach the runtime despite the public EvaluateRequest type declaring
+    // them as accepted fields.
+    if (normalized.evaluation_profile !== undefined) body.evaluation_profile = normalized.evaluation_profile;
+    if (normalized.override !== undefined) body.override = normalized.override;
+    if (normalized.completion_proofs !== undefined) body.completion_proofs = normalized.completion_proofs;
     const { body: wire, rateLimit } = await this.post<EvaluateWire>(
       "/v1-evaluate",
       body,

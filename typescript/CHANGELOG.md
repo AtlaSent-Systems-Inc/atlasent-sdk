@@ -6,6 +6,24 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## 2.21.1
+
+### Fixed
+
+- `evaluate()` was silently dropping `evaluation_profile`, `override`, and
+  `completion_proofs` from the request body before it ever reached the
+  wire, even though `EvaluateRequest` declares all three and the runtime
+  genuinely reads them (`resolveProfile(body.evaluation_profile)`, the
+  emergency-override gate on `body.override`, and the quorum check on
+  `body.completion_proofs`). A caller setting `override` to invoke an
+  emergency override, `evaluation_profile` to request a non-default
+  profile, or `completion_proofs` to satisfy multi-actor quorum had the
+  field silently discarded with no error — the evaluation proceeded as if
+  the field had never been set. Same fix applied to the legacy-shape
+  branch of `normalizeEvaluateRequest()` (`compat.ts`), which had the
+  identical omission. Purely additive/corrective: callers not using these
+  three fields are unaffected.
+
 ## 2.21.0
 
 ### Added
