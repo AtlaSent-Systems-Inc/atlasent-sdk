@@ -73,6 +73,37 @@ describe("normalizeEvaluateRequest", () => {
     expect(depWarn).toBeUndefined();
     warnSpy.mockRestore();
   });
+
+  it("carries evaluation_profile, override, and completion_proofs through the legacy-shape normalization branch", () => {
+    // Regression coverage: these three fields are genuinely read server-side
+    // (resolveProfile, the emergency-override gate, and the quorum check),
+    // but the legacy-shape branch's field-by-field copy previously omitted
+    // them — so a caller mixing a legacy alias (action/agent) with any of
+    // these newer fields would have lost them silently during normalization,
+    // even before client.ts's own (separately fixed) body construction.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const result = normalizeEvaluateRequest({
+      action: "production.deploy",
+      agent: "ci-bot",
+      evaluation_profile: "advanced",
+      override: {
+        version: "override.v1",
+        authority_actor_id: "ops-lead-1",
+        reason: "P0 hotfix",
+      },
+      completion_proofs: [{ actor_id: "reviewer-1", action_type: "code_review.approve", permit_id: "pt.v2.tok" }],
+    });
+    expect(result.evaluation_profile).toBe("advanced");
+    expect(result.override).toEqual({
+      version: "override.v1",
+      authority_actor_id: "ops-lead-1",
+      reason: "P0 hotfix",
+    });
+    expect(result.completion_proofs).toEqual([
+      { actor_id: "reviewer-1", action_type: "code_review.approve", permit_id: "pt.v2.tok" },
+    ]);
+    warnSpy.mockRestore();
+  });
 });
 
 describe("resolveEvaluateIdentity", () => {

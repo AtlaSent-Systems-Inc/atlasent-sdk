@@ -21,6 +21,8 @@
  * Both shims will be removed in a future major release.
  */
 
+import type { CompletionProof, EmergencyOverrideV1, EvaluationProfile } from "./types.js";
+
 /** Legacy v1.x evaluate request shape (deprecated field names). */
 export interface LegacyEvaluateRequest {
   action?: string;
@@ -56,6 +58,24 @@ export interface V2EvaluateRequest {
     complete?: boolean;
     payload?: Record<string, unknown>;
   };
+  /**
+   * Algorithm profile controlling which evaluation layers run. Read
+   * server-side via `resolveProfile(body.evaluation_profile)` — genuinely
+   * consumed on the wire, not a client-only hint.
+   */
+  evaluation_profile?: EvaluationProfile;
+  /**
+   * Emergency override to accept snapshot hard blocks. Read server-side by
+   * the emergency-override gate (`body.override`) — this is a real
+   * authority-relevant field, not decorative; dropping it silently would
+   * mean a caller's override never actually applies.
+   */
+  override?: EmergencyOverrideV1;
+  /**
+   * Multi-actor quorum completion proofs. Read server-side and forwarded
+   * into the quorum check — genuinely consumed on the wire.
+   */
+  completion_proofs?: CompletionProof[];
 }
 
 const _LEGACY_EVALUATE_FIELDS_WARNING =
@@ -128,6 +148,9 @@ export function normalizeEvaluateRequest(
   if (src.proposed_state !== undefined) normalized.proposed_state = src.proposed_state;
   if (src.execution_binding !== undefined) normalized.execution_binding = src.execution_binding;
   if (src.state_snapshot !== undefined) normalized.state_snapshot = src.state_snapshot;
+  if (src.evaluation_profile !== undefined) normalized.evaluation_profile = src.evaluation_profile;
+  if (src.override !== undefined) normalized.override = src.override;
+  if (src.completion_proofs !== undefined) normalized.completion_proofs = src.completion_proofs;
   return normalized;
 }
 
