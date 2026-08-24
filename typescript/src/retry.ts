@@ -83,6 +83,14 @@ const RETRYABLE_CODES: ReadonlySet<AtlaSentErrorCode> = new Set([
   "rate_limited",
   "server_error",
   "bad_response",
+  // atlasent-api #1634: a permit-mint failure can be a recoverable
+  // signer/config unavailability (503) or an invariant failure (500) —
+  // this SDK's retry policy, like every other code above, does not
+  // distinguish by underlying HTTP status, only by the coarse code, so
+  // it retries uniformly. Matches the Python SDK, whose retry loop is
+  // status-driven and already retries any 5xx (including this one)
+  // before classifying on the terminal raise.
+  "permit_signing_unavailable",
 ]);
 
 /**

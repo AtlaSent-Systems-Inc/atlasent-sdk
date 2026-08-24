@@ -23,6 +23,8 @@ import type {
 } from "./replay.js";
 import {
   AtlaSentError,
+  AtlaSentPermitMintFailedError,
+  PERMIT_MINT_FAILURE_ERROR_CODES,
   StreamParseError,
   StreamTimeoutError,
   type AtlaSentErrorCode,
@@ -774,9 +776,14 @@ export class AtlaSentClient {
       decision === "allow" &&
       (typeof permitToken !== "string" || permitToken.length === 0)
     ) {
-      throw new AtlaSentError(
+      // #1634: a 2xx allow response missing permit_token is the same
+      // "allow, but no executable authority" outcome as the documented
+      // non-2xx permit_signing_unavailable envelope the request() layer
+      // already handles below — defensive fallback in case a future
+      // response shape ever resolves this way over a 2xx status. Same
+      // distinct error class either way.
+      throw new AtlaSentPermitMintFailedError(
         "Malformed response from /v1-evaluate: decision='allow' but no `permit_token` (or legacy `decision_id`)",
-        { code: "bad_response" },
       );
     }
 
@@ -3462,6 +3469,16 @@ async function buildHttpError(
   if (classified.retryAfterMs !== undefined) {
     init.retryAfterMs = classified.retryAfterMs;
   }
+  // #1634: the wire envelope for a permit-mint/signing failure is a
+  // non-2xx status (503 recoverable / 500 invariant) carrying
+  // `{"error": "permit_signing_unavailable", ...}`. Surface it as a
+  // distinct, structurally recognizable error class rather than the
+  // generic AtlaSentError every other non-2xx response gets, so
+  // application code can tell "AtlaSent could not materialize executable
+  // authority" apart from an ordinary transport/auth/rate-limit failure.
+  if (classified.code === "permit_signing_unavailable") {
+    return new AtlaSentPermitMintFailedError(classified.message, init);
+  }
   return new AtlaSentError(classified.message, init);
 }
 
@@ -3471,7 +3488,7 @@ async function classifyHttpStatus(response: Response): Promise<{
   retryAfterMs: number | undefined;
 }> {
   const status = response.status;
-  const serverMessage = await readServerMessage(response);
+  const { message: serverMessage, errorCode } = await readServerBody(response);
 
   if (status === 401) {
     return {
@@ -3496,6 +3513,15 @@ async function classifyHttpStatus(response: Response): Promise<{
     };
   }
   if (status >= 500) {
+    // #1634: the wire envelope for a permit-mint/signing failure is a
+    // non-2xx status carrying `{"error": "permit_signing_unavailable", ...}`.
+    if (errorCode !== null && PERMIT_MINT_FAILURE_ERROR_CODES.has(errorCode)) {
+      return {
+        message: serverMessage ?? `AtlaSent API returned HTTP ${status}`,
+        code: errorCode as AtlaSentErrorCode,
+        retryAfterMs: undefined,
+      };
+    }
     return {
       message: serverMessage ?? `AtlaSent API returned HTTP ${status}`,
       code: "server_error",
@@ -3509,24 +3535,44 @@ async function classifyHttpStatus(response: Response): Promise<{
   };
 }
 
-async function readServerMessage(response: Response): Promise<string | null> {
+/**
+ * Read the response body once and extract both the human-readable
+ * message and, when present, the machine-readable `error` code —
+ * `Response.text()` can only be consumed once, so both must come from
+ * the same read.
+ */
+async function readServerBody(
+  response: Response,
+): Promise<{ message: string | null; errorCode: string | null }> {
   try {
     const text = await response.text();
-    if (!text) return null;
+    if (!text) return { message: null, errorCode: null };
+    let errorCode: string | null = null;
     try {
       const parsed = JSON.parse(text);
       if (parsed && typeof parsed === "object") {
+        const error = (parsed as Record<string, unknown>).error;
+        errorCode = typeof error === "string" ? error : null;
         const msg = (parsed as Record<string, unknown>).message;
         const reason = (parsed as Record<string, unknown>).reason;
-        if (typeof msg === "string" && msg.length > 0) return msg;
-        if (typeof reason === "string" && reason.length > 0) return reason;
+        if (typeof msg === "string" && msg.length > 0) {
+          return { message: msg, errorCode };
+        }
+        if (typeof reason === "string" && reason.length > 0) {
+          return { message: reason, errorCode };
+        }
+        // Neither `message` nor `reason` present — fall through to the
+        // raw-text fallback below, same as before `error` was inspected.
       }
     } catch {
       // Fall through — treat as plain text.
     }
-    return text.length > 500 ? `${text.slice(0, 500)}…` : text;
+    return {
+      message: text.length > 500 ? `${text.slice(0, 500)}…` : text,
+      errorCode,
+    };
   } catch {
-    return null;
+    return { message: null, errorCode: null };
   }
 }
 

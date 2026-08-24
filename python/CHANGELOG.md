@@ -4,6 +4,24 @@
 
 ### Added
 
+- `AtlaSentPermitMintFailedError` — the permit-mint operational-error
+  taxonomy (`atlasent-api` #1634), completing the Python-SDK half of that
+  architecture decision (the runtime/evaluate-side behavior and the
+  `atlasent-api`-local TypeScript SDK's `AtlaSentPermitMintFailedError`
+  already shipped via `atlasent-api` #2294/#2308/#2326). Raised by
+  `AtlaSentClient.evaluate()` / `AsyncAtlaSentClient.evaluate()` when
+  policy evaluation resolved `ALLOW` but AtlaSent could not materialize
+  executable authority: a non-2xx response carrying `{"error":
+  "permit_signing_unavailable", ...}`, or a defensive fallback for a 2xx
+  `decision: "allow"` response missing `permit_token`. Distinct from
+  `AtlaSentDenied`/`AtlaSentDeniedError` (extends neither, extended by
+  neither) so application code can tell "policy denied me" apart from
+  "policy allowed, but AtlaSent could not materialize executable
+  authority" via `isinstance`, not string inspection. `decision` is fixed
+  to `"allow"`. `protect()` does not catch this error — it propagates
+  unwrapped, exactly like the TypeScript SDK. New `AtlaSentErrorCode`
+  member `"permit_signing_unavailable"`.
+
 - `AtlaSentClient.explain_authority(principal_id, requested_scope,
   resource_id=None)` and the async parity method on
   `AsyncAtlaSentClient`: a new read-only client method for `GET

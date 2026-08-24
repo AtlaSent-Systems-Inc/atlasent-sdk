@@ -1,5 +1,5 @@
 {
-  "description": "HTTP error mapping vectors. Every SDK MUST surface these as a single error type (Python: AtlaSentError / RateLimitError; TypeScript: AtlaSentError) carrying status + a coarse code.",
+  "description": "HTTP error mapping vectors. Every SDK MUST surface these carrying status + a coarse code. Most vectors use the shared base error type (Python: AtlaSentError / RateLimitError; TypeScript: AtlaSentError); a vector whose SDK class is a dedicated subclass (e.g. the permit-mint operational-error taxonomy's AtlaSentPermitMintFailedError, atlasent-api #1634) names it explicitly via sdk_error.name (TypeScript) — the Python runner does not check exact class identity, only `code`/`status`.",
   "vectors": [
     {
       "name": "http_401_invalid_api_key",
@@ -53,6 +53,21 @@
         "kind": "bad_request",
         "status": 422,
         "message_contains": "bad field: agent"
+      }
+    },
+    {
+      "name": "http_503_permit_signing_unavailable",
+      "http_status": 503,
+      "response_headers": { "Content-Type": "application/json" },
+      "response_body": {
+        "error": "permit_signing_unavailable",
+        "message": "signer unavailable"
+      },
+      "sdk_error": {
+        "kind": "permit_signing_unavailable",
+        "name": "AtlaSentPermitMintFailedError",
+        "status": 503,
+        "message_contains": "signer unavailable"
       }
     },
     {

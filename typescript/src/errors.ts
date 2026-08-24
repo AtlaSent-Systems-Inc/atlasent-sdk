@@ -75,7 +75,12 @@ export type AtlaSentErrorCode =
   // from "forbidden" (403 authorization denial) so callers can branch
   // on the failure mode.
   | "feature_disabled"
-  | "claim_evidence_incomplete";
+  | "claim_evidence_incomplete"
+  // atlasent-api #1634 (permit-mint operational-error taxonomy): policy
+  // evaluation resolved ALLOW but AtlaSent could not materialize
+  // executable authority (permit mint/signing failed). Distinct from
+  // every other code above — none of those describe an ALLOW outcome.
+  | "permit_signing_unavailable";
 
 /** Initialization options for {@link AtlaSentError}. */
 export interface AtlaSentErrorInit {
@@ -424,6 +429,62 @@ export class BundleVerificationError extends AtlaSentError {
     this.snapshotFetchedAt = init.snapshotFetchedAt;
     this.snapshotSource = init.snapshotSource;
     this.kid = init.kid;
+  }
+}
+
+// ── Permit-mint operational-error taxonomy (atlasent-api #1634) ──────────────
+
+/**
+ * Wire-level error codes belonging to the permit-mint operational-error
+ * taxonomy (atlasent-api #1634). Kept as an explicit allowlist (currently
+ * one entry) rather than a prefix/heuristic match: "preserve
+ * `permit_signing_unavailable` unless a separately reviewed compatibility
+ * migration renames it" per the architecture decision. Add to this set
+ * only alongside such a migration.
+ */
+export const PERMIT_MINT_FAILURE_ERROR_CODES: ReadonlySet<string> = new Set([
+  "permit_signing_unavailable",
+]);
+
+/**
+ * Thrown when policy evaluation resolved `ALLOW` but AtlaSent could not
+ * materialize executable authority — the permit could not be
+ * minted/signed.
+ *
+ * This is a distinct operational/infrastructure failure, NOT an
+ * authorization decision: it must never be confused with
+ * {@link AtlaSentDeniedError} (this class extends neither, and neither
+ * extends this class), even though, like a denial, the practical outcome
+ * for the caller is the same — no permit, do not proceed.
+ *
+ * `decision` is fixed to `"allow"` because that is the policy result that
+ * actually occurred; callers must branch on
+ * `instanceof AtlaSentPermitMintFailedError` (or `code`), not on
+ * `decision`, to learn *why* nothing is executable.
+ *
+ * Two wire shapes both raise this class:
+ *
+ * 1. A non-2xx response (503 for a recoverable signer/config
+ *    unavailability, 500 for an invariant failure) carrying
+ *    `{"error": "permit_signing_unavailable", ...}`.
+ * 2. A defensive fallback: a 2xx response with `decision: "allow"` but no
+ *    `permit_token` — the same "allow, but no executable authority"
+ *    outcome, in case a future response shape ever resolves this way over
+ *    a 2xx status instead of the documented non-2xx envelope above.
+ *
+ * Mirrors the Python SDK's `AtlaSentPermitMintFailedError`
+ * (`python/atlasent/exceptions.py`) for cross-language parity, and the
+ * `atlasent-api`-local TypeScript SDK's class of the same name
+ * (`atlasent-api` `packages/sdk/src/errors.ts`).
+ */
+export class AtlaSentPermitMintFailedError extends AtlaSentError {
+  override name: string = "AtlaSentPermitMintFailedError";
+
+  /** Always `"allow"` — the policy result that actually occurred. */
+  readonly decision = "allow" as const;
+
+  constructor(message: string, init: AtlaSentErrorInit = {}) {
+    super(message, { code: "permit_signing_unavailable", ...init });
   }
 }
 
