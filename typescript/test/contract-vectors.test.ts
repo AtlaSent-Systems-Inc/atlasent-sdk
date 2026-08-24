@@ -69,6 +69,12 @@ interface ErrorVector {
     status?: number;
     message_contains?: string;
     retry_after_seconds?: number;
+    // Constructor name of the expected error class. Every vector so far
+    // maps to the shared AtlaSentError base; a vector whose SDK class is
+    // a dedicated subclass (e.g. AtlaSentPermitMintFailedError) sets this
+    // explicitly. Absent = "AtlaSentError", preserving every existing
+    // vector's behavior unchanged.
+    name?: string;
   };
 }
 
@@ -246,7 +252,7 @@ describe("error vectors", () => {
 
       const client = makeClient(fetchImpl);
       const expected: Record<string, unknown> = {
-        name: "AtlaSentError",
+        name: vector.sdk_error.name ?? "AtlaSentError",
         code: vector.sdk_error.kind,
       };
       if (vector.sdk_error.status !== undefined) {
