@@ -21,6 +21,7 @@ from .client import (
     _ACTION_TYPE_RE,
     _compute_execution_hash,
     _enforce_tls,
+    _parse_mint_failure_code,
     _parse_rate_limit_headers,
     _parse_retry_after,
     _redact_token,
@@ -39,6 +40,7 @@ from .exceptions import (
     AtlaSentDenied,
     AtlaSentDeniedError,
     AtlaSentError,
+    AtlaSentPermitMintFailedError,
     BundleVerificationError,
     PermissionDeniedError,
     RateLimitError,
@@ -264,10 +266,15 @@ class AsyncAtlaSentClient:
             )
 
         if not permit_token_raw:
-            raise AtlaSentError(
+            # #1634: a 2xx allow response missing permit_token is the same
+            # "allow, but no executable authority" outcome as the
+            # documented permit_signing_unavailable envelope the _request()
+            # layer already handles below — defensive fallback in case a
+            # future response shape ever resolves this way over a 2xx
+            # status. Same distinct error class either way.
+            raise AtlaSentPermitMintFailedError(
                 "Malformed /v1-evaluate response: decision='allow' "
                 "but no permit_token (or legacy decision_id)",
-                code="bad_response",
                 request_id=request_id,
                 response_body=data,
             )
@@ -1824,6 +1831,22 @@ class AsyncAtlaSentClient:
                 if attempt < self._max_retries:
                     await self._backoff(attempt)
                     continue
+                # #1634: the wire envelope for a permit-mint/signing failure
+                # is a non-2xx status (503 recoverable / 500 invariant)
+                # carrying `{"error": "permit_signing_unavailable", ...}`.
+                # Surface it as a distinct, structurally recognizable error
+                # class rather than the generic AtlaSentError every other
+                # non-2xx response gets, so application code can tell
+                # "AtlaSent could not materialize executable authority"
+                # apart from an ordinary transport/auth/rate-limit failure.
+                mint_failure_code = _parse_mint_failure_code(response)
+                if mint_failure_code is not None:
+                    raise AtlaSentPermitMintFailedError(
+                        f"API error {response.status_code}: {response.text[:500]}",
+                        code=mint_failure_code,
+                        status_code=response.status_code,
+                        request_id=request_id,
+                    )
                 raise AtlaSentError(
                     f"API error {response.status_code}: {response.text[:500]}",
                     status_code=response.status_code,

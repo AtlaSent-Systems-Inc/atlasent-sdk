@@ -28,9 +28,12 @@ from .authority_intelligence import AuthorityIntelligenceClient
 from .clinical_client import ClinicalTrialsClient
 from .evidence_bundle import EvidenceBundlesClient
 from .exceptions import (
+    PERMIT_MINT_FAILURE_ERROR_CODES,
     AtlaSentDenied,
     AtlaSentDeniedError,
     AtlaSentError,
+    AtlaSentErrorCode,
+    AtlaSentPermitMintFailedError,
     BundleVerificationError,
     PermissionDeniedError,
     RateLimitError,
@@ -353,10 +356,15 @@ class AtlaSentClient:
             )
 
         if not permit_token_raw:
-            raise AtlaSentError(
+            # #1634: a 2xx allow response missing permit_token is the same
+            # "allow, but no executable authority" outcome as the
+            # documented permit_signing_unavailable envelope the _request()
+            # layer already handles below — defensive fallback in case a
+            # future response shape ever resolves this way over a 2xx
+            # status. Same distinct error class either way.
+            raise AtlaSentPermitMintFailedError(
                 "Malformed /v1-evaluate response: decision='allow' "
                 "but no permit_token (or legacy decision_id)",
-                code="bad_response",
                 request_id=request_id,
                 response_body=data,
             )
@@ -1575,6 +1583,22 @@ class AtlaSentClient:
                 if attempt < self._max_retries:
                     self._backoff(attempt)
                     continue
+                # #1634: the wire envelope for a permit-mint/signing failure
+                # is a non-2xx status (503 recoverable / 500 invariant)
+                # carrying `{"error": "permit_signing_unavailable", ...}`.
+                # Surface it as a distinct, structurally recognizable error
+                # class rather than the generic AtlaSentError every other
+                # non-2xx response gets, so application code can tell
+                # "AtlaSent could not materialize executable authority"
+                # apart from an ordinary transport/auth/rate-limit failure.
+                mint_failure_code = _parse_mint_failure_code(response)
+                if mint_failure_code is not None:
+                    raise AtlaSentPermitMintFailedError(
+                        f"API error {response.status_code}: {response.text[:500]}",
+                        code=mint_failure_code,
+                        status_code=response.status_code,
+                        request_id=request_id,
+                    )
                 raise AtlaSentError(
                     f"API error {response.status_code}: {response.text[:500]}",
                     status_code=response.status_code,
@@ -1745,6 +1769,30 @@ def _server_message(response: httpx.Response) -> str | None:
             value = body.get(key)
             if isinstance(value, str) and value:
                 return value
+    return None
+
+
+def _parse_mint_failure_code(response: httpx.Response) -> AtlaSentErrorCode | None:
+    """Return the wire ``error`` code when it's in the permit-mint
+    operational-error taxonomy (#1634), else ``None``.
+
+    Parses ``response.text`` directly (not ``response.json()``) so a
+    non-JSON error body (e.g. a gateway timeout page) falls through to the
+    generic ``AtlaSentAPIError``-equivalent path unchanged, same as before
+    this taxonomy existed.
+    """
+    try:
+        body = json.loads(response.text)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(body, dict):
+        return None
+    error_code = body.get("error")
+    if isinstance(error_code, str) and error_code in PERMIT_MINT_FAILURE_ERROR_CODES:
+        # mypy: the membership check above narrows to the allowlisted
+        # AtlaSentErrorCode literal (mirrors _normalize_permit_outcome's
+        # identical narrowing comment in exceptions.py).
+        return error_code  # type: ignore[return-value]
     return None
 
 
