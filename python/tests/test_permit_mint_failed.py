@@ -88,9 +88,7 @@ class TestSyncPermitMintFailure:
         with pytest.raises(AtlaSentPermitMintFailedError):
             client.evaluate("ci.deploy", "bot")
 
-    def test_mint_failure_is_not_instance_of_atlasent_denied(
-        self, mocker: Any
-    ) -> None:
+    def test_mint_failure_is_not_instance_of_atlasent_denied(self, mocker: Any) -> None:
         # Load-bearing assertion: application code must be able to tell
         # "policy denied me" apart from "policy allowed, but AtlaSent
         # could not materialize executable authority."
@@ -154,9 +152,7 @@ class TestSyncPermitMintFailure:
                 "timestamp": "2026-01-01T00:00:00Z",
             },
         )
-        mocker.patch.object(
-            client._client, "post", side_effect=[transient, recovered]
-        )
+        mocker.patch.object(client._client, "post", side_effect=[transient, recovered])
         result = client.evaluate("ci.deploy", "bot")
         assert result.permit_token == "pt_xyz"
 
