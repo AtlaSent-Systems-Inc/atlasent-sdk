@@ -2774,7 +2774,7 @@
     "schemas": {
       "action_pack": {
         "path": "contract/action-packs/schemas/action-pack.schema.json",
-        "sha256": "sha256:73d7890ad6a07b96ad2a663773f8fce6f10d1d4e7b0b98723ad1d61a774ed9fe"
+        "sha256": "sha256:74ab882ea0d9dadc97218766cab4e5a9bdb44e890ebcc075db61b709d24dd0a1"
       },
       "future_capability": {
         "path": "contract/protection-catalog/schemas/future-capability-registry.schema.json",
@@ -2782,7 +2782,7 @@
       },
       "protection_catalog": {
         "path": "contract/protection-catalog/schemas/protection-catalog.schema.json",
-        "sha256": "sha256:c552b4a78a1616cb707fcccda7f9123ab169bce0a817798662179a4ad5a64145"
+        "sha256": "sha256:bbbe1ee5251160b509e05f588c9d6dc6bb15241ee81f67c83a22f9d3acde3877"
       }
     },
     "source_manifest": [
@@ -2796,7 +2796,7 @@
       },
       {
         "path": "contract/action-packs/schemas/action-pack.schema.json",
-        "sha256": "sha256:73d7890ad6a07b96ad2a663773f8fce6f10d1d4e7b0b98723ad1d61a774ed9fe"
+        "sha256": "sha256:74ab882ea0d9dadc97218766cab4e5a9bdb44e890ebcc075db61b709d24dd0a1"
       },
       {
         "path": "contract/canonical-actions/ACT-0001-production-deploy.yaml",
@@ -3024,7 +3024,7 @@
       },
       {
         "path": "contract/protection-catalog/README.md",
-        "sha256": "sha256:d038eeed848b4cfb64974707dd5ed51d3478a34b35ff1dcde7f930d0c1c86e7e"
+        "sha256": "sha256:27c1b11c7ffe215015d05dc738d6fd4fdc8a63bbbed035bd8190e08db6945a64"
       },
       {
         "path": "contract/protection-catalog/catalog.yaml",
@@ -3040,7 +3040,7 @@
       },
       {
         "path": "contract/protection-catalog/schemas/protection-catalog.schema.json",
-        "sha256": "sha256:c552b4a78a1616cb707fcccda7f9123ab169bce0a817798662179a4ad5a64145"
+        "sha256": "sha256:bbbe1ee5251160b509e05f588c9d6dc6bb15241ee81f67c83a22f9d3acde3877"
       },
       {
         "path": "contract/safeguard-pack/connector-readiness/netsuite.readiness.yaml",
@@ -3101,16 +3101,16 @@
   "schema_version": "1.0",
   "source_digests": {
     "action_pack_registry": "sha256:1f4d681c43f63831b62a8e1628df52304c8cddbede7106ed4971a689e4f50689",
-    "action_pack_schema": "sha256:73d7890ad6a07b96ad2a663773f8fce6f10d1d4e7b0b98723ad1d61a774ed9fe",
+    "action_pack_schema": "sha256:74ab882ea0d9dadc97218766cab4e5a9bdb44e890ebcc075db61b709d24dd0a1",
     "canonical_action_records": "sha256:fd160c5a7f1f8991856f36c96da52ea25d9825d8ab159b879a1200a005723bd2",
     "canonical_registry": "sha256:eeb5173471811c19348850de9e4474714b7282b11310c090e7c7cb131439dc1b",
     "catalog_config": "sha256:3036689de7dfd07a5f84a3f61338428c8eb126d06c01750e07a49936dcb96202",
     "future_capability_registry": "sha256:ca7b8cd33b8cbddf5448f86d1654f8341a2b9ed6372e9f3d41bc74998282cdbd",
     "future_capability_schema": "sha256:b47e527ce8a68c5da1fb00577aa04f895096cae5e9fa524fa49bdbd44a92da4c",
     "generator": "sha256:1865483325c38d65debd1e591693c16325903da45d4286a9ae7557e4a4cdfc56",
-    "protection_catalog_readme": "sha256:d038eeed848b4cfb64974707dd5ed51d3478a34b35ff1dcde7f930d0c1c86e7e",
-    "protection_catalog_schema": "sha256:c552b4a78a1616cb707fcccda7f9123ab169bce0a817798662179a4ad5a64145",
-    "referenced_evidence_sources": "sha256:806aa396f31fb7d5f5b1ff9e6bd9626215f4f3ca29ca490c57eed68ae79bc189",
+    "protection_catalog_readme": "sha256:27c1b11c7ffe215015d05dc738d6fd4fdc8a63bbbed035bd8190e08db6945a64",
+    "protection_catalog_schema": "sha256:bbbe1ee5251160b509e05f588c9d6dc6bb15241ee81f67c83a22f9d3acde3877",
+    "referenced_evidence_sources": "sha256:6a5834326618c510bc2c6f45d3a033c90f1adaefd096439751f8f4b96ef47bef",
     "safeguard_actions": "sha256:6932a4c9c7aac3e9e7a17480ca9921ecf1f1942115778963f82488bb2738de68",
     "safeguard_index": "sha256:56c2b94712fbc8b18a0fe01db2845f2e45a393d38b9430e77ce0bb2e3f49be44",
     "specialization_registry": "sha256:6b1764ad456e70ad40539f1c3f49b7c0eb03795cc28d65eb8de017b283f14f61"

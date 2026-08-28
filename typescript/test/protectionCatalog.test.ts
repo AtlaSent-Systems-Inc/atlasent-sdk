@@ -73,6 +73,13 @@ describe("ProtectionCatalogSchema", () => {
     expect(ProtectionCatalogSchema.safeParse(candidate).success).toBe(false);
   });
 
+  it("rejects a SemVer numeric prerelease identifier with a leading zero", () => {
+    const candidate = structuredClone(catalogFixture);
+    candidate.action_packs[0].version = "1.0.0-01";
+    candidate.action_packs[0].version_history[0].version = "1.0.0-01";
+    expect(ProtectionCatalogSchema.safeParse(candidate).success).toBe(false);
+  });
+
   it("rejects a customer-accepted boundary without L4/L5 exact-scope proof", () => {
     const candidate = structuredClone(catalogFixture);
     candidate.action_packs[0].binding_profiles[0].boundary_status = "customer_accepted";
