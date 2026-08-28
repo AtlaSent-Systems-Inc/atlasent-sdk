@@ -12,6 +12,9 @@ const packId = z.string().regex(/^AP-[0-9]{6}$/);
 const bindingProfileId = z.string().regex(/^BP-[0-9]{6}$/);
 const slug = z.string().regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/);
 const semver = z.string().regex(/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
+const catalogVersion = z.string().regex(/^[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+$/);
+const isoDate = z.iso.date();
+const isoDateTime = z.iso.datetime({ offset: true });
 
 const uniqueValues = <T extends z.ZodTypeAny>(schema: T) =>
   z.array(schema).superRefine((values, ctx) => {
@@ -43,7 +46,7 @@ const exactActionRefSchema = z.object({
 
 const exactScopeEvidenceSchema = z.object({
   evidence_refs: uniqueValues(relativeRef).min(1),
-  evidence_cutoff: nonEmpty,
+  evidence_cutoff: isoDate,
   exact_scope: z.object({
     action_refs: z.array(exactActionRefSchema).min(1),
     system_binding_profile_refs: uniqueValues(bindingProfileId).min(1),
@@ -67,7 +70,7 @@ export const ActionPackMaturitySchema = z.object({
     "production_validated",
   ]).nullable(),
   proof_evidence_refs: uniqueValues(relativeRef),
-  proof_evidence_cutoff: nonEmpty.nullable(),
+  proof_evidence_cutoff: isoDate.nullable(),
   customer_acceptance: z.enum(["not_started", "in_progress", "accepted", "revoked"]),
   customer_acceptance_evidence: exactScopeEvidenceSchema.nullable(),
   eligible_lifecycle_modes: uniqueValues(z.enum(["shadow", "advisory", "enforced"])).min(1),
@@ -139,6 +142,63 @@ export const BindingProofSchema = z.object({
   }
 });
 
+type BindingProfileCandidate = {
+  boundary_status: "planned" | "direct_provider_only" | "provider_boundary" | "customer_accepted";
+  proof: z.infer<typeof BindingProofSchema>;
+};
+
+function hasAcceptedCustomerEvidence(profile: BindingProfileCandidate): boolean {
+  return profile.proof.customer_acceptance.status === "accepted" &&
+    profile.proof.customer_acceptance.evidence_refs.length > 0 &&
+    profile.proof.customer_acceptance.exact_scope_evidence !== null;
+}
+
+function isRuntimeIntegratedBindingProfile(profile: BindingProfileCandidate): boolean {
+  const { proof } = profile;
+  return (
+    (profile.boundary_status === "provider_boundary" || profile.boundary_status === "customer_accepted") &&
+    (["L3", "L4", "L5"] as const).includes(proof.highest_demonstrated_level as "L3" | "L4" | "L5") &&
+    proof.evidence_refs.length > 0 &&
+    proof.readiness_gates.G1_access.status === "met" &&
+    proof.readiness_gates.G2_security.status === "met" &&
+    proof.readiness_gates.G3_behavior.status === "met" &&
+    proof.readiness_gates.G4_customer_acceptance.status !== "not_started" &&
+    proof.readiness_gates.G5_production.status !== "not_started" &&
+    (proof.customer_acceptance.status === "in_progress" || proof.customer_acceptance.status === "accepted")
+  );
+}
+
+function isCustomerAcceptedBindingProfile(profile: BindingProfileCandidate): boolean {
+  const { proof } = profile;
+  return (
+    profile.boundary_status === "customer_accepted" &&
+    (proof.highest_demonstrated_level === "L4" || proof.highest_demonstrated_level === "L5") &&
+    proof.evidence_refs.length > 0 &&
+    proof.readiness_gates.G1_access.status === "met" &&
+    proof.readiness_gates.G2_security.status === "met" &&
+    proof.readiness_gates.G3_behavior.status === "met" &&
+    proof.readiness_gates.G4_customer_acceptance.status === "met" &&
+    (proof.readiness_gates.G5_production.status === "met" ||
+      proof.readiness_gates.G5_production.status === "not_applicable") &&
+    hasAcceptedCustomerEvidence(profile)
+  );
+}
+
+function isProductionValidatedBindingProfile(profile: BindingProfileCandidate): boolean {
+  const { proof } = profile;
+  return (
+    profile.boundary_status === "customer_accepted" &&
+    proof.highest_demonstrated_level === "L5" &&
+    proof.evidence_refs.length > 0 &&
+    proof.readiness_gates.G1_access.status === "met" &&
+    proof.readiness_gates.G2_security.status === "met" &&
+    proof.readiness_gates.G3_behavior.status === "met" &&
+    proof.readiness_gates.G4_customer_acceptance.status === "met" &&
+    proof.readiness_gates.G5_production.status === "met" &&
+    hasAcceptedCustomerEvidence(profile)
+  );
+}
+
 export const SystemBindingProfileSchema = z.object({
   system_binding_profile_id: bindingProfileId,
   display_name: nonEmpty,
@@ -156,7 +216,19 @@ export const SystemBindingProfileSchema = z.object({
     observation_operation: nonEmpty,
   }).strict()).min(1),
   proof: BindingProofSchema,
-}).strict();
+}).strict().superRefine((profile, ctx) => {
+  const requiresCustomerAcceptedProof =
+    profile.boundary_status === "customer_accepted" ||
+    profile.proof.customer_acceptance.status === "accepted";
+
+  if (requiresCustomerAcceptedProof && !isCustomerAcceptedBindingProfile(profile)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["proof"],
+      message: "customer-accepted binding requires L4/L5, accepted exact-scope evidence, and G1-G4 met",
+    });
+  }
+});
 
 const packMembershipSchema = z.object({
   pack_id: packId,
@@ -184,7 +256,7 @@ export const ProtectionCatalogActionSchema = z.object({
 const versionHistorySchema = z.object({
   version: semver,
   state: z.enum(["draft", "proposed", "released", "deprecated"]),
-  recorded_at: nonEmpty,
+  recorded_at: isoDateTime,
   change_summary: nonEmpty,
   source_refs: uniqueValues(relativeRef).min(1),
   content_sha256: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
@@ -335,7 +407,7 @@ export const ActionPackSchema = z.object({
         "PRODUCTION_SHAPED_IMPLEMENTATION_DOCUMENTED",
       ]),
       evidence_refs: uniqueValues(relativeRef).min(1),
-      cutoff: nonEmpty,
+      cutoff: isoDate,
     }).strict()),
     prohibited: z.array(z.object({
       claim_code: z.enum([
@@ -348,7 +420,60 @@ export const ActionPackSchema = z.object({
       reason: nonEmpty,
     }).strict()),
   }).strict(),
-}).strict();
+}).strict().superRefine((pack, ctx) => {
+  const requiredHistoryState = {
+    draft: "draft",
+    proposed: "proposed",
+    active: "released",
+    deprecated: "deprecated",
+  } as const;
+
+  if (pack.maturity.definition_status !== pack.status) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["maturity", "definition_status"],
+      message: "pack status and maturity definition status must agree",
+    });
+  }
+
+  if (!pack.version_history.some((entry) => entry.state === requiredHistoryState[pack.status])) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["version_history"],
+      message: `pack status ${pack.status} requires a ${requiredHistoryState[pack.status]} version-history entry`,
+    });
+  }
+
+  let bindingRequirement: ((profile: SystemBindingProfile) => boolean) | null = null;
+  let bindingRequirementMessage = "";
+
+  if (pack.maturity.surface_tier === "GA" || pack.maturity.proof_rung === "production_validated") {
+    bindingRequirement = isProductionValidatedBindingProfile;
+    bindingRequirementMessage = "GA or production-validated maturity requires L5 customer-accepted binding with G1-G5 met";
+  } else if (
+    pack.maturity.customer_acceptance === "accepted" ||
+    pack.maturity.proof_rung === "customer_accepted" ||
+    pack.maturity.eligible_lifecycle_modes.includes("enforced")
+  ) {
+    bindingRequirement = isCustomerAcceptedBindingProfile;
+    bindingRequirementMessage = "accepted customer proof or enforced eligibility requires customer-accepted binding proof";
+  } else if (pack.maturity.implementation_status === "runtime_integrated") {
+    bindingRequirement = isRuntimeIntegratedBindingProfile;
+    bindingRequirementMessage = "runtime integration requires provider-bound L3+ proof with started readiness gates";
+  }
+
+  if (bindingRequirement !== null) {
+    pack.binding_profiles.forEach((profile, index) => {
+      if (!bindingRequirement!(profile)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["binding_profiles", index],
+          message: bindingRequirementMessage,
+        });
+      }
+    });
+  }
+});
 
 export const FutureCapabilityFlagsSchema = z.object({
   activatable: z.literal(false),
@@ -392,9 +517,9 @@ const sourceDigestsSchema = z.object({
 export const ProtectionCatalogSchema = z.object({
   schema_version: z.literal("1.0"),
   kind: z.literal("protection-catalog"),
-  catalog_version: nonEmpty,
-  released_at: nonEmpty,
-  evidence_cutoff: nonEmpty,
+  catalog_version: catalogVersion,
+  released_at: isoDateTime,
+  evidence_cutoff: isoDate,
   source_digests: sourceDigestsSchema,
   generation_provenance: z.object({
     generator: pathDigestSchema,

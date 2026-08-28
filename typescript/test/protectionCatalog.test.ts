@@ -66,4 +66,54 @@ describe("ProtectionCatalogSchema", () => {
     candidate.summary.active_canonical_action_count = 55;
     expect(ProtectionCatalogSchema.safeParse(candidate).success).toBe(false);
   });
+
+  it("rejects pack status that disagrees with maturity and version history", () => {
+    const candidate = structuredClone(catalogFixture);
+    candidate.action_packs[0].status = "active";
+    expect(ProtectionCatalogSchema.safeParse(candidate).success).toBe(false);
+  });
+
+  it("rejects a customer-accepted boundary without L4/L5 exact-scope proof", () => {
+    const candidate = structuredClone(catalogFixture);
+    candidate.action_packs[0].binding_profiles[0].boundary_status = "customer_accepted";
+    expect(ProtectionCatalogSchema.safeParse(candidate).success).toBe(false);
+  });
+
+  it("rejects GA maturity when any binding profile remains below production proof", () => {
+    const candidate = structuredClone(catalogFixture);
+    const pack = candidate.action_packs[0];
+    const profile = pack.binding_profiles[0];
+    const action = pack.actions[0];
+    const evidenceRef = pack.source_refs[0];
+    const exactScopeEvidence = {
+      evidence_refs: [evidenceRef],
+      evidence_cutoff: "2026-08-28",
+      exact_scope: {
+        action_refs: [{ canon_id: action.canon_id, act_id: action.act_id, slug: action.slug }],
+        system_binding_profile_refs: [profile.system_binding_profile_id],
+        environments: ["production"],
+        resource_scope_refs: [evidenceRef],
+      },
+    };
+
+    pack.maturity.surface_tier = "GA";
+    pack.maturity.implementation_status = "runtime_integrated";
+    pack.maturity.proof_rung = "production_validated";
+    pack.maturity.proof_evidence_refs = [evidenceRef];
+    pack.maturity.proof_evidence_cutoff = "2026-08-28";
+    pack.maturity.customer_acceptance = "accepted";
+    pack.maturity.customer_acceptance_evidence = exactScopeEvidence;
+
+    expect(ProtectionCatalogSchema.safeParse(candidate).success).toBe(false);
+  });
+
+  it.each([
+    ["catalog_version", "1.0.0"],
+    ["released_at", "2026-08-28"],
+    ["evidence_cutoff", "not-a-date"],
+  ])("rejects an invalid %s release field", (field, value) => {
+    const candidate = structuredClone(catalogFixture);
+    candidate[field] = value;
+    expect(ProtectionCatalogSchema.safeParse(candidate).success).toBe(false);
+  });
 });
