@@ -1,7 +1,13 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/hono.ts", "src/behavior.ts", "src/state.ts"],
+  entry: [
+    "src/index.ts",
+    "src/hono.ts",
+    "src/behavior.ts",
+    "src/state.ts",
+    "src/protectionCatalog.ts",
+  ],
   format: ["esm", "cjs"],
   target: "node20",
   dts: true,

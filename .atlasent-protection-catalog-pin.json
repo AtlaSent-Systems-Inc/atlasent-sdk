@@ -1,0 +1,10 @@
+{
+  "$comment": "Pins the canonical Protection Catalog served by atlasent-api and projected by this SDK. Bumping this pin requires vendoring the exact catalog and schema, re-running JSON Schema validation, and reviewing all type/Zod changes. The catalog is read-only discovery metadata and does not grant authority or activate future capabilities.",
+  "canonical_repository": "AtlaSent-Systems-Inc/atlasent",
+  "canonical_commit": "f2b0e7c9a19037355a0db6e6d495de0121d27f0d",
+  "catalog_path": "vendor/atlasent-canonical/protection-catalog/v1/catalog.json",
+  "catalog_sha256": "84fb288bb21d4fbe1bb11a4ef53b088329e8310ef1012707e28338a4894ff646",
+  "schema_path": "vendor/atlasent-canonical/protection-catalog/v1/protection-catalog.schema.json",
+  "schema_sha256": "c552b4a78a1616cb707fcccda7f9123ab169bce0a817798662179a4ad5a64145",
+  "pinned_at": "2026-08-28T03:15:00Z"
+}

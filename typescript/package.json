@@ -48,6 +48,16 @@
         "default": "./dist/state.cjs"
       }
     },
+    "./protection-catalog": {
+      "import": {
+        "types": "./dist/protectionCatalog.d.ts",
+        "default": "./dist/protectionCatalog.js"
+      },
+      "require": {
+        "types": "./dist/protectionCatalog.d.cts",
+        "default": "./dist/protectionCatalog.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -124,5 +134,8 @@
     "hono": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   }
 }

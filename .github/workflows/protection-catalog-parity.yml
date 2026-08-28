@@ -1,0 +1,52 @@
+name: Protection Catalog parity
+
+on:
+  pull_request:
+    paths:
+      - ".atlasent-protection-catalog-pin.json"
+      - "vendor/atlasent-canonical/protection-catalog/**"
+      - "scripts/verify-protection-catalog-pin.py"
+      - "typescript/src/protectionCatalog.ts"
+      - "typescript/test/protectionCatalog.test.ts"
+      - "typescript/tsup.config.ts"
+      - "typescript/package.json"
+      - "typescript/package-lock.json"
+      - ".github/workflows/protection-catalog-parity.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".atlasent-protection-catalog-pin.json"
+      - "vendor/atlasent-canonical/protection-catalog/**"
+      - "scripts/verify-protection-catalog-pin.py"
+      - "typescript/src/protectionCatalog.ts"
+      - "typescript/test/protectionCatalog.test.ts"
+      - "typescript/tsup.config.ts"
+      - "typescript/package.json"
+      - "typescript/package-lock.json"
+      - ".github/workflows/protection-catalog-parity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check jsonschema
+      - run: python scripts/verify-protection-catalog-pin.py
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+      - working-directory: typescript
+        run: npm ci
+      - working-directory: typescript
+        run: npm run typecheck
+      - working-directory: typescript
+        run: npx vitest run test/protectionCatalog.test.ts
