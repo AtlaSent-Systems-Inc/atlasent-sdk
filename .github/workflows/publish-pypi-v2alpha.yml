@@ -7,6 +7,15 @@ on:
     tags:
       - "python-v2-alpha-v*"
   workflow_dispatch:
+    inputs:
+      skip_gate:
+        description: 'EMERGENCY ONLY. Bypasses the AtlaSent deploy gate. Requires `reason`. Use only when the gate itself cannot be satisfied (see step comments).'
+        type: boolean
+        default: false
+      reason:
+        description: 'Required when skip_gate=true: why the gate is being bypassed. Recorded in the run log and step summary.'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -60,6 +69,7 @@ jobs:
       # Gate closed: if the permit is not verified the job exits here and
       # nothing builds or publishes.
       - name: AtlaSent release gate
+        if: ${{ !inputs.skip_gate }}
         uses: AtlaSent-Systems-Inc/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
@@ -70,6 +80,19 @@ jobs:
           actor: ${{ github.actor }}
           environment: production
           context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'
+
+      - name: Gate bypass warning
+        if: ${{ inputs.skip_gate }}
+        run: |
+          if [ -z "${{ inputs.reason }}" ]; then
+            echo "::error title=skip_gate requires reason::skip_gate=true was set with no reason. Re-dispatch with reason filled in."
+            exit 1
+          fi
+          echo "::warning title=DEPLOY GATE BYPASSED::skip_gate=true — AtlaSent authorization gate was bypassed by ${{ github.actor }}. Reason: ${{ inputs.reason }}."
+          echo "## ⚠️ DEPLOY GATE BYPASSED" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Actor:** \`${{ github.actor }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Reason:** ${{ inputs.reason }}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install build dependencies
         run: |
