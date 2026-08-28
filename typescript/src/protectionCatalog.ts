@@ -11,9 +11,18 @@ const actionId = z.string().regex(/^ACT-[0-9]{4}$/);
 const packId = z.string().regex(/^AP-[0-9]{6}$/);
 const bindingProfileId = z.string().regex(/^BP-[0-9]{6}$/);
 const slug = z.string().regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/);
-const semver = z.string().regex(
-  /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/,
-);
+const semver = z.string()
+  .regex(
+    /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/,
+  )
+  .refine((value) => {
+    const [withoutBuild = value] = value.split('+', 1);
+    const separator = withoutBuild.indexOf('-');
+    if (separator < 0) return true;
+    return withoutBuild.slice(separator + 1).split('.').every(
+      (identifier) => !/^[0-9]+$/.test(identifier) || identifier === '0' || !identifier.startsWith('0'),
+    );
+  }, 'numeric prerelease identifiers must not contain leading zeroes');
 const catalogVersion = z.string().regex(/^[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+$/);
 const isoDate = z.iso.date();
 const isoDateTime = z.iso.datetime({ offset: true });
