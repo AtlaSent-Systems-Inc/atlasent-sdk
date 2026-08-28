@@ -1,0 +1,3123 @@
+{
+  "action_packs": [
+    {
+      "actions": [
+        {
+          "act_id": "ACT-0001",
+          "canon_id": "CANON-000001",
+          "car_ref": "contract/canonical-actions/ACT-0001-production-deploy.yaml",
+          "fresh_authorization_required": true,
+          "relationship": "primary",
+          "safeguard_action_refs": [
+            "SG-ACT-001"
+          ],
+          "slug": "production.deploy",
+          "specialization_refs": []
+        },
+        {
+          "act_id": "ACT-0034",
+          "canon_id": "CANON-000031",
+          "car_ref": "contract/canonical-actions/ACT-0034-production-rollback.yaml",
+          "fresh_authorization_required": true,
+          "relationship": "triggered",
+          "safeguard_action_refs": [],
+          "slug": "production.rollback",
+          "specialization_refs": []
+        }
+      ],
+      "actor_authority": {
+        "authority_template_refs": [
+          "contract/canonical-actions/ACT-0001-production-deploy.yaml#/authorization_pattern",
+          "contract/canonical-actions/ACT-0034-production-rollback.yaml#/authorization_pattern"
+        ],
+        "organization_constitution_required": true,
+        "requester_identity_self_authorizes": false,
+        "required_human_resolution_not_machine_substitutable": true,
+        "role_navigation_grants_authority": false,
+        "system_identity_grants_authority": false
+      },
+      "actor_participation": {
+        "executor": {
+          "actor_categories": [
+            "human",
+            "ai_agent",
+            "service_account"
+          ],
+          "authority_semantics": "participation-only",
+          "description": "A human-operated or automated executor may act only after exact permit verification."
+        },
+        "requester": {
+          "actor_categories": [
+            "human",
+            "ai_agent",
+            "service_account"
+          ],
+          "authority_semantics": "participation-only",
+          "description": "A human or AI-assisted workflow may request an exact bounded production change."
+        },
+        "resolver": {
+          "actor_categories": [
+            "human"
+          ],
+          "authority_semantics": "participation-only",
+          "description": "Verified humans resolve the request under the organization's constituted authority."
+        }
+      },
+      "binding_profiles": [
+        {
+          "action_coverage": [
+            {
+              "act_id": "ACT-0001",
+              "canon_id": "CANON-000001",
+              "mutation_operation": "salesforce.metadata.deploy",
+              "observation_operation": "salesforce.metadata.deployment-status-read",
+              "slug": "production.deploy"
+            }
+          ],
+          "boundary_status": "direct_provider_only",
+          "covered_path": "Bounded Gearset-originated change executed and observed through a direct Salesforce provider path.",
+          "display_name": "Gearset to Salesforce production change",
+          "enforcement_boundary": "Direct Salesforce mutation path; Gearset is workflow context until a live Gearset runner boundary is proven.",
+          "execution_system": "salesforce",
+          "observation_system": "salesforce",
+          "proof": {
+            "customer_acceptance": {
+              "evidence_refs": [],
+              "exact_scope_evidence": null,
+              "status": "not_started"
+            },
+            "evidence_refs": [],
+            "highest_demonstrated_level": "L0",
+            "readiness_gates": {
+              "G1_access": {
+                "evidence_refs": [],
+                "notes": "Salesforce has a separate L1 readiness record, but no evidence establishes the complete Gearset-to-Salesforce binding profile.",
+                "status": "not_started"
+              },
+              "G2_security": {
+                "evidence_refs": [],
+                "notes": "Exact profile-level credential, target, and permit-boundary review has not been evidenced.",
+                "status": "not_started"
+              },
+              "G3_behavior": {
+                "evidence_refs": [],
+                "notes": "Deterministic end-to-end behavior for this binding profile has not been evidenced.",
+                "status": "not_started"
+              },
+              "G4_customer_acceptance": {
+                "evidence_refs": [],
+                "notes": "No customer-controlled sandbox acceptance has been earned.",
+                "status": "not_started"
+              },
+              "G5_production": {
+                "evidence_refs": [],
+                "notes": "No controlled production validation has been earned.",
+                "status": "not_started"
+              }
+            }
+          },
+          "source_system": "gearset",
+          "system_binding_profile_id": "BP-000001"
+        },
+        {
+          "action_coverage": [
+            {
+              "act_id": "ACT-0001",
+              "canon_id": "CANON-000001",
+              "mutation_operation": "netsuite.suitecloud.deploy",
+              "observation_operation": "netsuite.deployment-state-read",
+              "slug": "production.deploy"
+            }
+          ],
+          "boundary_status": "planned",
+          "covered_path": "Planned Salto-originated bounded change executed and observed through NetSuite.",
+          "display_name": "Salto to NetSuite production change",
+          "enforcement_boundary": "The runner seam and material content attestation remain prerequisites before an execution boundary can be claimed.",
+          "execution_system": "netsuite",
+          "observation_system": "netsuite",
+          "proof": {
+            "customer_acceptance": {
+              "evidence_refs": [],
+              "exact_scope_evidence": null,
+              "status": "not_started"
+            },
+            "evidence_refs": [],
+            "highest_demonstrated_level": "L0",
+            "readiness_gates": {
+              "G1_access": {
+                "evidence_refs": [],
+                "notes": "NetSuite has a separate L2 readiness record, but no evidence establishes the complete Salto-to-NetSuite binding profile.",
+                "status": "not_started"
+              },
+              "G2_security": {
+                "evidence_refs": [],
+                "notes": "The profile-level runner, credentials, content binding, and observation boundary have not been evidenced.",
+                "status": "not_started"
+              },
+              "G3_behavior": {
+                "evidence_refs": [],
+                "notes": "Deterministic end-to-end behavior for this binding profile has not been evidenced.",
+                "status": "not_started"
+              },
+              "G4_customer_acceptance": {
+                "evidence_refs": [],
+                "notes": "No customer-controlled sandbox acceptance has been earned.",
+                "status": "not_started"
+              },
+              "G5_production": {
+                "evidence_refs": [],
+                "notes": "No controlled production validation has been earned.",
+                "status": "not_started"
+              }
+            }
+          },
+          "source_system": "salto",
+          "system_binding_profile_id": "BP-000002"
+        }
+      ],
+      "claims": {
+        "allowed": [
+          {
+            "claim_code": "ACTION_PACK_CONTRACT_DRAFTED",
+            "cutoff": "2026-08-27",
+            "evidence_refs": [
+              "docs/product/action-packs/FLOQAST_PRODUCTION_CHANGE_AUTHORITY.md"
+            ]
+          },
+          {
+            "claim_code": "DIRECT_PROVIDER_BOUNDARY_DEFINED",
+            "cutoff": "2026-08-27",
+            "evidence_refs": [
+              "docs/product/action-packs/FLOQAST_PRODUCTION_CHANGE_AUTHORITY.md"
+            ]
+          }
+        ],
+        "prohibited": [
+          {
+            "claim_code": "GEARSET_NATIVE_ENFORCEMENT_ESTABLISHED",
+            "reason": "No live Gearset runner boundary has been evidenced."
+          },
+          {
+            "claim_code": "SALTO_NETSUITE_ENFORCEMENT_ESTABLISHED",
+            "reason": "Runner and content-attestation feasibility remain unearned."
+          },
+          {
+            "claim_code": "CUSTOMER_ACCEPTANCE_EARNED",
+            "reason": "No signed customer acceptance exists for either binding profile."
+          },
+          {
+            "claim_code": "PRODUCTION_VALIDATION_EARNED",
+            "reason": "Neither binding profile has controlled production evidence."
+          }
+        ]
+      },
+      "commercial": {
+        "expansion_units": [
+          "action_class",
+          "system_provider",
+          "environment_business_unit",
+          "resource_coverage",
+          "evidence_availability",
+          "overlay"
+        ],
+        "offer_ref": "docs/product/action-packs/FLOQAST_PRODUCTION_CHANGE_AUTHORITY.md"
+      },
+      "composition": {
+        "canonical_fields_inlined": false,
+        "overlay_policy": "additive-only",
+        "reference_only": true,
+        "specialization_semantics_inlined": false
+      },
+      "dependencies": {
+        "optional_future_capability_refs": [
+          "H15-1",
+          "PPB-1"
+        ],
+        "required_refs": [
+          {
+            "id": "CANON-000001",
+            "kind": "canon-record",
+            "ref": "contract/canonical-actions/ACT-0001-production-deploy.yaml"
+          },
+          {
+            "id": "CANON-000031",
+            "kind": "canon-record",
+            "ref": "contract/canonical-actions/ACT-0034-production-rollback.yaml"
+          },
+          {
+            "id": "SG-ACT-001",
+            "kind": "safeguard-action",
+            "ref": "contract/safeguard-pack/protected-actions/safeguard-actions.yaml"
+          }
+        ]
+      },
+      "display_name": "Production Change Authority",
+      "experience": {
+        "required_states": [
+          "empty",
+          "first_run",
+          "degraded",
+          "denied",
+          "expired_session",
+          "provider_failed",
+          "success",
+          "multi_org"
+        ],
+        "role_homes": [
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "coverage-and-risk",
+            "primary_need": "Understand bounded coverage, exclusions, readiness gaps, and expansion choices.",
+            "role_category": "executive_buyer",
+            "role_term": "enterprise-systems-leader"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "organization-configuration",
+            "primary_need": "Configure organization scope, authority references, lifecycle mode, and safe deactivation without raw infrastructure work.",
+            "role_category": "organization_admin",
+            "role_term": "vp-it"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "request-and-status",
+            "primary_need": "Submit one exact change and understand its current authority state and next action.",
+            "role_category": "requester_operator",
+            "role_term": "change-requester"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "resolution-queue",
+            "primary_need": "Resolve an exact held change with visible target, separation-of-duties, and current authority context.",
+            "role_category": "approver_authority_holder",
+            "role_term": "authorized-approver"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "lineage-and-export",
+            "primary_need": "Verify request, authority, permit, execution, observation, and effect as separate milestones.",
+            "role_category": "auditor_observer",
+            "role_term": "auditor"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "connection-and-health",
+            "primary_need": "Establish minimum-scope system access and diagnose provider or observer degradation.",
+            "role_category": "integration_owner",
+            "role_term": "integration-owner"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "recovery-and-escalation",
+            "primary_need": "Recover safely from denied, expired, degraded, and provider-failed states without bypassing authority.",
+            "role_category": "support",
+            "role_term": "support"
+          }
+        ],
+        "shared_journey": [
+          "understand",
+          "connect",
+          "observe",
+          "configure",
+          "prove",
+          "activate",
+          "operate",
+          "verify",
+          "expand"
+        ]
+      },
+      "fact_binding_requirements": {
+        "action": [
+          "canon_id",
+          "act_id",
+          "slug"
+        ],
+        "actor": [
+          "authenticated_subject_id",
+          "actor_category",
+          "originating_principal"
+        ],
+        "authority": [
+          "authority_template_ref",
+          "current_resolution_evidence",
+          "separation_of_duties_state"
+        ],
+        "effect": [
+          "provider_result",
+          "independent_observation",
+          "effect_profile"
+        ],
+        "payload": [
+          "payload_hash",
+          "material_revision",
+          "requested_change_scope"
+        ],
+        "permit": [
+          "actor",
+          "target",
+          "environment",
+          "payload_hash",
+          "expiry",
+          "decision_lineage"
+        ],
+        "policy": [
+          "policy_digest",
+          "configuration_digest",
+          "change_window_state"
+        ],
+        "target": [
+          "organization_or_tenant",
+          "immutable_resource_identity",
+          "environment"
+        ]
+      },
+      "lifecycle_contract": {
+        "adoption_requires_fresh_protected_action": true,
+        "authorization_decisions": [
+          "allow",
+          "deny",
+          "hold",
+          "escalate"
+        ],
+        "denied_or_refused_causes_zero_provider_mutation_calls": true,
+        "execution_refusal_state": "refused",
+        "facts_reread_immediately_before_execution": true,
+        "milestones": [
+          "AUTHORIZED",
+          "EXECUTED",
+          "OBSERVED",
+          "EFFECT_ESTABLISHED"
+        ],
+        "permit_exact_bound": true,
+        "permit_short_lived": true,
+        "permit_signed": true,
+        "permit_single_use": true,
+        "permit_verified_and_atomically_consumed_at_last_responsible_moment": true,
+        "revoke_requires_fresh_protected_action": true,
+        "rollback_requires_fresh_protected_action": true
+      },
+      "maturity": {
+        "customer_acceptance": "not_started",
+        "customer_acceptance_evidence": null,
+        "definition_status": "proposed",
+        "eligible_lifecycle_modes": [
+          "shadow",
+          "advisory"
+        ],
+        "implementation_status": "contract_only",
+        "proof_evidence_cutoff": null,
+        "proof_evidence_refs": [],
+        "proof_rung": null,
+        "surface_tier": "Experimental"
+      },
+      "navigation": {
+        "buyers": [
+          "enterprise-systems-leader",
+          "vp-it"
+        ],
+        "departments": [
+          "engineering",
+          "enterprise-applications",
+          "platform",
+          "security"
+        ],
+        "environments": [
+          "non-production",
+          "production"
+        ],
+        "industries": [
+          "enterprise",
+          "saas"
+        ],
+        "role_terms_grant_authority": false,
+        "roles": [
+          "auditor",
+          "authorized-approver",
+          "change-requester",
+          "enterprise-systems-leader",
+          "integration-owner",
+          "release-operator",
+          "support",
+          "vp-it"
+        ],
+        "semantics": "discovery-only",
+        "systems": [
+          "gearset",
+          "netsuite",
+          "salesforce",
+          "salto"
+        ]
+      },
+      "pack_id": "AP-000001",
+      "purpose": {
+        "economic_owner_terms": [
+          "enterprise-systems-leader",
+          "vp-it"
+        ],
+        "exclusions": [
+          "Whole-estate production-change enforcement is not claimed.",
+          "Gearset-native enforcement is not established.",
+          "Salto-to-NetSuite enforcement is not established.",
+          "Customer acceptance and production validation remain unearned."
+        ],
+        "promised_outcome": "When separately activated and accepted, no covered production change executes without a current exact permit at the trusted provider boundary, and effect truth remains independently verifiable.",
+        "urgent_job": "Establish who or what requested an exact production change, which current authority governed it, and what provider effect was independently observed."
+      },
+      "slug": "production-change-authority",
+      "source_refs": [
+        "docs/product/action-packs/FLOQAST_PRODUCTION_CHANGE_AUTHORITY.md",
+        "contract/canonical-actions/ACT-0001-production-deploy.yaml",
+        "contract/canonical-actions/ACT-0034-production-rollback.yaml",
+        "contract/safeguard-pack/connector-readiness/salesforce.readiness.yaml",
+        "contract/safeguard-pack/connector-readiness/netsuite.readiness.yaml"
+      ],
+      "status": "proposed",
+      "summary": "Reference-only composition for bounded production deployment and fresh, separately authorized rollback paths. The current product evidence defines a direct-provider enforcement direction; it does not establish customer or production acceptance for either system binding.",
+      "version": "0.1.0",
+      "version_history": [
+        {
+          "change_summary": "Initial reference-only contract for bounded production deployment and separately authorized rollback.",
+          "content_sha256": null,
+          "recorded_at": "2026-08-27T23:30:00Z",
+          "source_refs": [
+            "docs/product/action-packs/FLOQAST_PRODUCTION_CHANGE_AUTHORITY.md"
+          ],
+          "state": "proposed",
+          "version": "0.1.0"
+        }
+      ]
+    },
+    {
+      "actions": [
+        {
+          "act_id": "ACT-0009",
+          "canon_id": "CANON-000007",
+          "car_ref": "contract/canonical-actions/ACT-0009-access-grant.yaml",
+          "fresh_authorization_required": true,
+          "relationship": "primary",
+          "safeguard_action_refs": [],
+          "slug": "access.grant",
+          "specialization_refs": []
+        },
+        {
+          "act_id": "ACT-0010",
+          "canon_id": "CANON-000008",
+          "car_ref": "contract/canonical-actions/ACT-0010-access-revoke.yaml",
+          "fresh_authorization_required": true,
+          "relationship": "primary",
+          "safeguard_action_refs": [],
+          "slug": "access.revoke",
+          "specialization_refs": []
+        }
+      ],
+      "actor_authority": {
+        "authority_template_refs": [
+          "contract/canonical-actions/ACT-0009-access-grant.yaml#/authorization_pattern",
+          "contract/canonical-actions/ACT-0010-access-revoke.yaml#/authorization_pattern"
+        ],
+        "organization_constitution_required": true,
+        "requester_identity_self_authorizes": false,
+        "required_human_resolution_not_machine_substitutable": true,
+        "role_navigation_grants_authority": false,
+        "system_identity_grants_authority": false
+      },
+      "actor_participation": {
+        "executor": {
+          "actor_categories": [
+            "human",
+            "ai_agent",
+            "service_account"
+          ],
+          "authority_semantics": "participation-only",
+          "description": "A human-operated or automated provider client executes only after exact permit verification."
+        },
+        "requester": {
+          "actor_categories": [
+            "human",
+            "ai_agent",
+            "service_account"
+          ],
+          "authority_semantics": "participation-only",
+          "description": "A human or AI-assisted workflow may request an exact bounded grant or revocation."
+        },
+        "resolver": {
+          "actor_categories": [
+            "human"
+          ],
+          "authority_semantics": "participation-only",
+          "description": "Verified humans resolve held requests under the organization's constituted authority."
+        }
+      },
+      "binding_profiles": [
+        {
+          "action_coverage": [
+            {
+              "act_id": "ACT-0009",
+              "canon_id": "CANON-000007",
+              "mutation_operation": "google-groups.membership.add",
+              "observation_operation": "google-groups.membership.get",
+              "slug": "access.grant"
+            },
+            {
+              "act_id": "ACT-0010",
+              "canon_id": "CANON-000008",
+              "mutation_operation": "google-groups.membership.remove",
+              "observation_operation": "google-groups.membership.get",
+              "slug": "access.revoke"
+            }
+          ],
+          "boundary_status": "planned",
+          "covered_path": "Exact membership add or remove followed by exact membership observation.",
+          "display_name": "Google Groups membership authorization",
+          "enforcement_boundary": "Google provider mutation seam immediately before one exact membership operation.",
+          "execution_system": "google-groups",
+          "observation_system": "google-groups",
+          "proof": {
+            "customer_acceptance": {
+              "evidence_refs": [],
+              "exact_scope_evidence": null,
+              "status": "not_started"
+            },
+            "evidence_refs": [],
+            "highest_demonstrated_level": "L0",
+            "readiness_gates": {
+              "G1_access": {
+                "evidence_refs": [],
+                "notes": "No Google Groups binding-readiness artifact establishes a live access path.",
+                "status": "not_started"
+              },
+              "G2_security": {
+                "evidence_refs": [],
+                "notes": "Profile-level minimum scopes, credential handling, and target binding have not been evidenced in a readiness ledger.",
+                "status": "not_started"
+              },
+              "G3_behavior": {
+                "evidence_refs": [],
+                "notes": "Product prose documents implementation shape but is not a binding-readiness proof record.",
+                "status": "not_started"
+              },
+              "G4_customer_acceptance": {
+                "evidence_refs": [],
+                "notes": "No customer-controlled Google resource acceptance has been earned.",
+                "status": "not_started"
+              },
+              "G5_production": {
+                "evidence_refs": [],
+                "notes": "No controlled production validation has been earned.",
+                "status": "not_started"
+              }
+            }
+          },
+          "source_system": "atlasent",
+          "system_binding_profile_id": "BP-000003"
+        },
+        {
+          "action_coverage": [
+            {
+              "act_id": "ACT-0009",
+              "canon_id": "CANON-000007",
+              "mutation_operation": "google-drive.permission.create",
+              "observation_operation": "google-drive.permissions.list",
+              "slug": "access.grant"
+            },
+            {
+              "act_id": "ACT-0010",
+              "canon_id": "CANON-000008",
+              "mutation_operation": "google-drive.permission.delete",
+              "observation_operation": "google-drive.permissions.list",
+              "slug": "access.revoke"
+            }
+          ],
+          "boundary_status": "planned",
+          "covered_path": "Exact Drive or Shared Drive permission create or delete followed by effective-permission observation.",
+          "display_name": "Google Drive permission authorization",
+          "enforcement_boundary": "Google provider mutation seam immediately before one exact bounded permission operation.",
+          "execution_system": "google-drive",
+          "observation_system": "google-drive",
+          "proof": {
+            "customer_acceptance": {
+              "evidence_refs": [],
+              "exact_scope_evidence": null,
+              "status": "not_started"
+            },
+            "evidence_refs": [],
+            "highest_demonstrated_level": "L0",
+            "readiness_gates": {
+              "G1_access": {
+                "evidence_refs": [],
+                "notes": "No Google Drive binding-readiness artifact establishes a live access path.",
+                "status": "not_started"
+              },
+              "G2_security": {
+                "evidence_refs": [],
+                "notes": "Profile-level minimum scopes, credential handling, and target binding have not been evidenced in a readiness ledger.",
+                "status": "not_started"
+              },
+              "G3_behavior": {
+                "evidence_refs": [],
+                "notes": "Product prose documents implementation shape but is not a binding-readiness proof record.",
+                "status": "not_started"
+              },
+              "G4_customer_acceptance": {
+                "evidence_refs": [],
+                "notes": "No customer-controlled Google resource acceptance has been earned.",
+                "status": "not_started"
+              },
+              "G5_production": {
+                "evidence_refs": [],
+                "notes": "No controlled production validation has been earned.",
+                "status": "not_started"
+              }
+            }
+          },
+          "source_system": "atlasent",
+          "system_binding_profile_id": "BP-000004"
+        }
+      ],
+      "claims": {
+        "allowed": [
+          {
+            "claim_code": "ACTION_PACK_CONTRACT_DRAFTED",
+            "cutoff": "2026-08-27",
+            "evidence_refs": [
+              "docs/product/action-packs/PROPEL_ACCESS_AUTHORITY.md"
+            ]
+          },
+          {
+            "claim_code": "PRODUCTION_SHAPED_IMPLEMENTATION_DOCUMENTED",
+            "cutoff": "2026-08-27",
+            "evidence_refs": [
+              "docs/product/action-packs/PROPEL_ACCESS_AUTHORITY.md"
+            ]
+          }
+        ],
+        "prohibited": [
+          {
+            "claim_code": "GOOGLE_BINDING_READINESS_ESTABLISHED",
+            "reason": "No Google Groups or Drive binding-readiness artifact establishes L1 or higher proof."
+          },
+          {
+            "claim_code": "CUSTOMER_ACCEPTANCE_EARNED",
+            "reason": "No customer resource has been mutated through an accepted live lane."
+          },
+          {
+            "claim_code": "PRODUCTION_VALIDATION_EARNED",
+            "reason": "Neither binding profile has controlled production evidence."
+          }
+        ]
+      },
+      "commercial": {
+        "expansion_units": [
+          "action_class",
+          "system_provider",
+          "environment_business_unit",
+          "resource_coverage",
+          "evidence_availability",
+          "overlay"
+        ],
+        "offer_ref": "docs/product/action-packs/PROPEL_ACCESS_AUTHORITY.md"
+      },
+      "composition": {
+        "canonical_fields_inlined": false,
+        "overlay_policy": "additive-only",
+        "reference_only": true,
+        "specialization_semantics_inlined": false
+      },
+      "dependencies": {
+        "optional_future_capability_refs": [
+          "H8-1",
+          "PPB-1"
+        ],
+        "required_refs": [
+          {
+            "id": "CANON-000007",
+            "kind": "canon-record",
+            "ref": "contract/canonical-actions/ACT-0009-access-grant.yaml"
+          },
+          {
+            "id": "CANON-000008",
+            "kind": "canon-record",
+            "ref": "contract/canonical-actions/ACT-0010-access-revoke.yaml"
+          }
+        ]
+      },
+      "display_name": "Google Workspace Access Authorization",
+      "experience": {
+        "required_states": [
+          "empty",
+          "first_run",
+          "degraded",
+          "denied",
+          "expired_session",
+          "provider_failed",
+          "success",
+          "multi_org"
+        ],
+        "role_homes": [
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "coverage-and-risk",
+            "primary_need": "Understand resource coverage, exclusions, readiness gaps, and bounded expansion choices.",
+            "role_category": "executive_buyer",
+            "role_term": "it-director"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "organization-configuration",
+            "primary_need": "Configure tenant scope, authority references, lifecycle mode, and safe deactivation without raw infrastructure work.",
+            "role_category": "organization_admin",
+            "role_term": "technology-owner"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "request-and-status",
+            "primary_need": "Request one exact access change and understand its authority state and next action.",
+            "role_category": "requester_operator",
+            "role_term": "access-requester"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "resolution-queue",
+            "primary_need": "Resolve the exact held request with visible target, scope, justification, and separation-of-duties context.",
+            "role_category": "approver_authority_holder",
+            "role_term": "approver"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "lineage-and-export",
+            "primary_need": "Verify grant and revoke authority, provider execution, and effective-access observation independently.",
+            "role_category": "auditor_observer",
+            "role_term": "auditor"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "connection-and-health",
+            "primary_need": "Establish minimum-scope Google access and diagnose provider or observer degradation.",
+            "role_category": "integration_owner",
+            "role_term": "it-administrator"
+          },
+          {
+            "authority_semantics": "navigation-only",
+            "home_id": "recovery-and-escalation",
+            "primary_need": "Recover safely from denied, expired, degraded, and provider-failed states without bypassing authority.",
+            "role_category": "support",
+            "role_term": "support"
+          }
+        ],
+        "shared_journey": [
+          "understand",
+          "connect",
+          "observe",
+          "configure",
+          "prove",
+          "activate",
+          "operate",
+          "verify",
+          "expand"
+        ]
+      },
+      "fact_binding_requirements": {
+        "action": [
+          "canon_id",
+          "act_id",
+          "slug"
+        ],
+        "actor": [
+          "authenticated_subject_id",
+          "actor_category",
+          "originating_principal"
+        ],
+        "authority": [
+          "authority_template_ref",
+          "current_resolution_evidence",
+          "separation_of_duties_state"
+        ],
+        "effect": [
+          "provider_result",
+          "independent_observation",
+          "effective_access_state",
+          "effect_profile"
+        ],
+        "payload": [
+          "payload_hash",
+          "requested_membership_or_permission",
+          "expiry_constraints"
+        ],
+        "permit": [
+          "actor",
+          "target",
+          "environment",
+          "payload_hash",
+          "expiry",
+          "decision_lineage"
+        ],
+        "policy": [
+          "policy_digest",
+          "configuration_digest",
+          "minimum_scope_profile"
+        ],
+        "target": [
+          "tenant",
+          "resource_family",
+          "immutable_resource_identity",
+          "beneficiary_principal",
+          "permission_role",
+          "environment"
+        ]
+      },
+      "lifecycle_contract": {
+        "adoption_requires_fresh_protected_action": true,
+        "authorization_decisions": [
+          "allow",
+          "deny",
+          "hold",
+          "escalate"
+        ],
+        "denied_or_refused_causes_zero_provider_mutation_calls": true,
+        "execution_refusal_state": "refused",
+        "facts_reread_immediately_before_execution": true,
+        "milestones": [
+          "AUTHORIZED",
+          "EXECUTED",
+          "OBSERVED",
+          "EFFECT_ESTABLISHED"
+        ],
+        "permit_exact_bound": true,
+        "permit_short_lived": true,
+        "permit_signed": true,
+        "permit_single_use": true,
+        "permit_verified_and_atomically_consumed_at_last_responsible_moment": true,
+        "revoke_requires_fresh_protected_action": true,
+        "rollback_requires_fresh_protected_action": true
+      },
+      "maturity": {
+        "customer_acceptance": "not_started",
+        "customer_acceptance_evidence": null,
+        "definition_status": "proposed",
+        "eligible_lifecycle_modes": [
+          "shadow",
+          "advisory"
+        ],
+        "implementation_status": "production_shaped",
+        "proof_evidence_cutoff": "2026-08-27",
+        "proof_evidence_refs": [
+          "docs/product/action-packs/PROPEL_ACCESS_AUTHORITY.md"
+        ],
+        "proof_rung": "internally_proven",
+        "surface_tier": "Experimental"
+      },
+      "navigation": {
+        "buyers": [
+          "it-director",
+          "technology-owner"
+        ],
+        "departments": [
+          "it",
+          "people-operations",
+          "security"
+        ],
+        "environments": [
+          "customer-approved-test",
+          "tenant-production"
+        ],
+        "industries": [
+          "enterprise",
+          "saas"
+        ],
+        "role_terms_grant_authority": false,
+        "roles": [
+          "access-requester",
+          "approver",
+          "auditor",
+          "it-administrator",
+          "it-director",
+          "security-reviewer",
+          "support",
+          "technology-owner"
+        ],
+        "semantics": "discovery-only",
+        "systems": [
+          "google-drive",
+          "google-groups",
+          "google-workspace"
+        ]
+      },
+      "pack_id": "AP-000002",
+      "purpose": {
+        "economic_owner_terms": [
+          "it-director",
+          "technology-owner"
+        ],
+        "exclusions": [
+          "Whole-tenant Google Workspace administration is not claimed.",
+          "Domain-wide, anyone, ownership-transfer, and ambiguous permission paths are excluded.",
+          "Google Groups and Drive binding readiness is not established.",
+          "Customer acceptance and production validation remain unearned."
+        ],
+        "promised_outcome": "When separately activated and accepted, no covered Google Workspace grant or revocation executes without a current exact permit at the provider boundary, and effective access truth remains separately observed.",
+        "urgent_job": "Establish who or what requested exact Google Workspace access, which current authority resolved it, and whether effective access was independently observed."
+      },
+      "slug": "google-workspace-access-authorization",
+      "source_refs": [
+        "docs/product/action-packs/PROPEL_ACCESS_AUTHORITY.md",
+        "contract/canonical-actions/ACT-0009-access-grant.yaml",
+        "contract/canonical-actions/ACT-0010-access-revoke.yaml"
+      ],
+      "status": "proposed",
+      "summary": "Reference-only composition for exact Google Groups membership and Google Drive permission grants and revocations. Production-shaped implementation evidence is documented separately; no system-binding readiness or customer acceptance is inferred from that implementation state.",
+      "version": "0.1.0",
+      "version_history": [
+        {
+          "change_summary": "Initial reference-only contract for bounded Google Workspace access grant and revocation.",
+          "content_sha256": null,
+          "recorded_at": "2026-08-27T23:30:00Z",
+          "source_refs": [
+            "docs/product/action-packs/PROPEL_ACCESS_AUTHORITY.md"
+          ],
+          "state": "proposed",
+          "version": "0.1.0"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "act_id": "ACT-0001",
+      "ai_risk": "High",
+      "canon_id": "CANON-000001",
+      "classification": {
+        "actor_categories": [
+          "ai_agent",
+          "human",
+          "service_account"
+        ],
+        "buyers": [
+          "enterprise-systems-leader",
+          "vp-it"
+        ],
+        "departments": [
+          "engineering",
+          "enterprise-applications",
+          "platform",
+          "security"
+        ],
+        "environments": [
+          "non-production",
+          "production"
+        ],
+        "industries": [
+          "enterprise",
+          "saas"
+        ],
+        "role_terms_grant_authority": false,
+        "roles": [
+          "auditor",
+          "authorized-approver",
+          "change-requester",
+          "enterprise-systems-leader",
+          "integration-owner",
+          "release-operator",
+          "support",
+          "vp-it"
+        ],
+        "semantics": "discovery-only",
+        "systems": [
+          "gearset",
+          "netsuite",
+          "salesforce",
+          "salto"
+        ]
+      },
+      "description": "Authorization gate for executing an authorized change or deployment plan against a target system. This spans deploying code, configuration, or infrastructure to a production environment AND applying an authorized change plan to an enterprise business system — for example a CI/CD deployment, or a configuration / permission / workflow / financial-control change plan applied to a system such as a CRM or ERP. These executions carry high blast radius: an unauthorized or insufficiently-reviewed change can cause outages, data corruption, or security/compliance exposure. Every execution must be traceable to a tamper-evident permit bound to the exact canonical plan, with an auditable approval chain.\n",
+      "display_name": "Execute Authorized Change or Deployment Plan",
+      "family": "production.deploy",
+      "pack_memberships": [
+        {
+          "binding_profile_refs": [
+            "BP-000001",
+            "BP-000002"
+          ],
+          "fresh_authorization_required": true,
+          "maturity": {
+            "customer_acceptance": "not_started",
+            "customer_acceptance_evidence": null,
+            "definition_status": "proposed",
+            "eligible_lifecycle_modes": [
+              "shadow",
+              "advisory"
+            ],
+            "implementation_status": "contract_only",
+            "proof_evidence_cutoff": null,
+            "proof_evidence_refs": [],
+            "proof_rung": null,
+            "surface_tier": "Experimental"
+          },
+          "pack_id": "AP-000001",
+          "pack_version": "0.1.0",
+          "relationship": "primary"
+        }
+      ],
+      "risk_posture": "high",
+      "safeguard_action_refs": [
+        "SG-ACT-001"
+      ],
+      "slug": "production.deploy"
+    },
+    {
+      "act_id": "ACT-0002",
+      "ai_risk": "High",
+      "canon_id": "CANON-000002",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for publishing a versioned artifact to a public or private distribution channel — npm, PyPI, crates.io, Docker Hub, Maven Central, GitHub Releases, or any package registry. Once published, an artifact is consumed by downstream systems; a malicious or compromised release propagates silently through the supply chain. Requires cryptographically verified actor identity to close the spoofed-actor attack surface.\n",
+      "display_name": "Artifact Release",
+      "family": "production.deploy",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "artifact.release"
+    },
+    {
+      "act_id": "ACT-0003",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000003",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for recording a human approval decision within a multi-step workflow. An approval is definitionally a human act — it attests that a qualified person reviewed content and authorizes progression. Machine-generated approvals are not approvals; they are automated checks. This action requires a human actor to prevent AI systems from self-approving workflow steps they participate in — the AI self-approval loop that regulators are now mandating controls for.\n",
+      "display_name": "Workflow Approval",
+      "family": "production.deploy",
+      "pack_memberships": [],
+      "risk_posture": "standard",
+      "safeguard_action_refs": [],
+      "slug": "workflow.approve"
+    },
+    {
+      "act_id": "ACT-0005",
+      "ai_risk": "Medium",
+      "canon_id": "CANON-000004",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for modifications to regulated, critical, or shared data. Data modifications have broad downstream effects — corrupted records in healthcare, financial, or compliance contexts can propagate silently and are difficult to reverse. State snapshot binding captures the pre-modification state, enabling rollback evidence and satisfying reason-for-change requirements under 21 CFR Part 11 §11.10(e).\n",
+      "display_name": "Data Modification",
+      "family": "data.access",
+      "pack_memberships": [],
+      "risk_posture": "standard",
+      "safeguard_action_refs": [],
+      "slug": "data.modify"
+    },
+    {
+      "act_id": "ACT-0007",
+      "ai_risk": "High",
+      "canon_id": "CANON-000005",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for ingesting external data into regulated or production systems — ETL pipelines, third-party data feeds, clinical trial data imports, financial data onboarding, and AI training data ingestion. Imported data can introduce corruption, malicious content, or unvalidated records into clean systems. State snapshot binding captures the source dataset hash, satisfying data provenance requirements under 21 CFR Part 11 and HIPAA.\n",
+      "display_name": "Data Import",
+      "family": "data.access",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "data.import"
+    },
+    {
+      "act_id": "ACT-0008",
+      "ai_risk": "High",
+      "canon_id": "CANON-000006",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for deletion of regulated, irreplaceable, or legally significant data. Deletions are irreversible in most systems; unauthorized deletion can result in permanent data loss, GDPR erasure obligation violations (proving deletion happened), and destruction of records required to be retained under SOX or HIPAA. State snapshot binding captures what existed at deletion time for erasure certificates and retention audits.\n",
+      "display_name": "Data Deletion",
+      "family": "data.access",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "data.delete"
+    },
+    {
+      "act_id": "ACT-0009",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000007",
+      "classification": {
+        "actor_categories": [
+          "ai_agent",
+          "human",
+          "service_account"
+        ],
+        "buyers": [
+          "it-director",
+          "technology-owner"
+        ],
+        "departments": [
+          "it",
+          "people-operations",
+          "security"
+        ],
+        "environments": [
+          "customer-approved-test",
+          "tenant-production"
+        ],
+        "industries": [
+          "enterprise",
+          "saas"
+        ],
+        "role_terms_grant_authority": false,
+        "roles": [
+          "access-requester",
+          "approver",
+          "auditor",
+          "it-administrator",
+          "it-director",
+          "security-reviewer",
+          "support",
+          "technology-owner"
+        ],
+        "semantics": "discovery-only",
+        "systems": [
+          "google-drive",
+          "google-groups",
+          "google-workspace"
+        ]
+      },
+      "description": "Authorization gate for granting privileged access — IAM roles, group memberships, elevated permissions, API key provisioning, and service account grants. Access grants are the most consequential identity operation: they expand the privilege surface permanently until revoked. Unauthorized grants enable privilege escalation, lateral movement, and persistent access for attackers. Requires human approval and quorum to prevent unilateral privilege escalation.\n",
+      "display_name": "Access Grant",
+      "family": "identity.grant",
+      "pack_memberships": [
+        {
+          "binding_profile_refs": [
+            "BP-000003",
+            "BP-000004"
+          ],
+          "fresh_authorization_required": true,
+          "maturity": {
+            "customer_acceptance": "not_started",
+            "customer_acceptance_evidence": null,
+            "definition_status": "proposed",
+            "eligible_lifecycle_modes": [
+              "shadow",
+              "advisory"
+            ],
+            "implementation_status": "production_shaped",
+            "proof_evidence_cutoff": "2026-08-27",
+            "proof_evidence_refs": [
+              "docs/product/action-packs/PROPEL_ACCESS_AUTHORITY.md"
+            ],
+            "proof_rung": "internally_proven",
+            "surface_tier": "Experimental"
+          },
+          "pack_id": "AP-000002",
+          "pack_version": "0.1.0",
+          "relationship": "primary"
+        }
+      ],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "access.grant"
+    },
+    {
+      "act_id": "ACT-0010",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000008",
+      "classification": {
+        "actor_categories": [
+          "ai_agent",
+          "human",
+          "service_account"
+        ],
+        "buyers": [
+          "it-director",
+          "technology-owner"
+        ],
+        "departments": [
+          "it",
+          "people-operations",
+          "security"
+        ],
+        "environments": [
+          "customer-approved-test",
+          "tenant-production"
+        ],
+        "industries": [
+          "enterprise",
+          "saas"
+        ],
+        "role_terms_grant_authority": false,
+        "roles": [
+          "access-requester",
+          "approver",
+          "auditor",
+          "it-administrator",
+          "it-director",
+          "security-reviewer",
+          "support",
+          "technology-owner"
+        ],
+        "semantics": "discovery-only",
+        "systems": [
+          "google-drive",
+          "google-groups",
+          "google-workspace"
+        ]
+      },
+      "description": "Authorization gate for revoking access — removing IAM roles, group memberships, elevated permissions, or deprovisioning accounts. Unlike access grants, revocations are often time-critical during security incidents; requiring human approval would delay incident response. Instead, this action gates revocations with role verification and an immutable audit trail, ensuring every revocation is attributed and documented without blocking the speed needed for offboarding or incident containment.\n",
+      "display_name": "Access Revocation",
+      "family": "identity.grant",
+      "pack_memberships": [
+        {
+          "binding_profile_refs": [
+            "BP-000003",
+            "BP-000004"
+          ],
+          "fresh_authorization_required": true,
+          "maturity": {
+            "customer_acceptance": "not_started",
+            "customer_acceptance_evidence": null,
+            "definition_status": "proposed",
+            "eligible_lifecycle_modes": [
+              "shadow",
+              "advisory"
+            ],
+            "implementation_status": "production_shaped",
+            "proof_evidence_cutoff": "2026-08-27",
+            "proof_evidence_refs": [
+              "docs/product/action-packs/PROPEL_ACCESS_AUTHORITY.md"
+            ],
+            "proof_rung": "internally_proven",
+            "surface_tier": "Experimental"
+          },
+          "pack_id": "AP-000002",
+          "pack_version": "0.1.0",
+          "relationship": "primary"
+        }
+      ],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "access.revoke"
+    },
+    {
+      "act_id": "ACT-0011",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000009",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for bypassing a security or compliance control — break-glass access, policy exceptions, emergency overrides, firewall rule bypasses, and regulatory exemptions. Control overrides are the highest-risk action class: they deliberately disable a protective control, creating a window of elevated risk. Every override must be justified, attributed to a verified human actor with MFA, and the risk must be contemporaneously assessed. AI agents must never override security controls autonomously.\n",
+      "display_name": "Control Override",
+      "family": "privileged.operation",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "control.override"
+    },
+    {
+      "act_id": "ACT-0013",
+      "ai_risk": "High",
+      "canon_id": "CANON-000010",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for publishing regulated content — medical device documentation, IFUs, SOPs, labeling, regulatory submissions, clinical study reports, and controlled documents. In regulated industries, a document released without proper authorization constitutes a quality system non-conformance. State snapshot binding captures the document hash at publication time, enabling version traceability.\n",
+      "display_name": "Content Publication",
+      "family": "regulated.release",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "content.publish"
+    },
+    {
+      "act_id": "ACT-0014",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000011",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for electronic signature acts — signing regulated documents, certifying records, and affixing a legally significant identity to a decision. Electronic signatures are legal acts requiring human intent under 21 CFR Part 11, EU eIDAS, and the US eSign Act. This action structurally prevents machine execution: no AI agent, service account, or automated system can sign on behalf of a human. Requires MFA and identity + approval assertions to bind the signer's identity to the signature act.\n",
+      "display_name": "Identity Signature",
+      "family": "identity.grant",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "identity.sign"
+    },
+    {
+      "act_id": "ACT-0015",
+      "ai_risk": "Low",
+      "canon_id": "CANON-000012",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for creation of cloud resources, databases, infrastructure components, and managed services. Resource creation is the origin point of all infrastructure; without attribution at creation time, the lineage of production resources is opaque. State snapshot binding captures the desired configuration at authorization time, preventing configuration drift between approval and provisioning.\n",
+      "display_name": "Resource Creation",
+      "family": "infrastructure.change",
+      "pack_memberships": [],
+      "risk_posture": "standard",
+      "safeguard_action_refs": [],
+      "slug": "resource.create"
+    },
+    {
+      "act_id": "ACT-0016",
+      "ai_risk": "High",
+      "canon_id": "CANON-000013",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for irreversible destruction of cloud resources, databases, storage buckets, and infrastructure components. Resource destruction is one of the highest-risk infrastructure operations — a mistaken or unauthorized destroy can cause catastrophic data loss, extended outages, and regulatory violations. Requires the strongest gate: human approval, MFA, verified actor identity, and a contemporaneous risk assessment proving the actor understood the consequences before proceeding.\n",
+      "display_name": "Resource Destruction",
+      "family": "infrastructure.change",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "resource.destroy"
+    },
+    {
+      "act_id": "ACT-0017",
+      "ai_risk": "High",
+      "canon_id": "CANON-000014",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for deliberate suspension of a production service — taking a service offline for maintenance, as an incident response action, or as a business decision. Service suspension has direct customer impact through SLA obligations and availability commitments. State snapshot binding captures the pre-suspension service state, enabling documented justification and post-suspension comparison.\n",
+      "display_name": "Service Suspension",
+      "family": "infrastructure.change",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "service.suspend"
+    },
+    {
+      "act_id": "ACT-0018",
+      "ai_risk": "High",
+      "canon_id": "CANON-000015",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for resuming a suspended service — bringing a service back online after planned or emergency maintenance. Service resumption carries its own risks: resuming a service before the underlying issue is resolved can cause immediate re-failure. State snapshot binding captures the post-fix service configuration, enabling documented validation that the root cause was addressed before resumption.\n",
+      "display_name": "Service Resumption",
+      "family": "infrastructure.change",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "service.resume"
+    },
+    {
+      "act_id": "ACT-0019",
+      "ai_risk": "Low",
+      "canon_id": "CANON-000016",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for workflow escalation steps — capturing the moment when an AI agent, automated system, or human acknowledges it cannot proceed without additional authority and escalates to a higher-level decision maker. Escalation is intentionally low-friction (any-role, no human approval gate) because the goal is to capture and attribute escalations, not to gate them. A well-documented escalation trail proves AI agents recognized their limits and deferred to humans rather than proceeding autonomously.\n",
+      "display_name": "Workflow Escalation",
+      "family": "production.deploy",
+      "pack_memberships": [],
+      "risk_posture": "standard",
+      "safeguard_action_refs": [],
+      "slug": "workflow.escalate"
+    },
+    {
+      "act_id": "ACT-0020",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000017",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for compliance certification acts — EU AI Act declarations of conformity, SOX §302 CEO/CFO certifications, GxP Qualified Person batch release certifications, HIPAA compliance officer certifications, and ISO/IEC conformity attestations. These are legal acts performed by a qualified authority with personal accountability. No AI system may certify compliance on behalf of a human — this action is structurally machine-blocked. Requires MFA, a qualified human authority, and regulatory + identity + approval assertions proving the certifier understood and accepted the obligations they are certifying.\n",
+      "display_name": "Compliance Certification",
+      "family": "regulated.release",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "compliance.certify"
+    },
+    {
+      "act_id": "ACT-0021",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000018",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for clinical trial unblinding — the irreversible act of revealing randomized treatment assignments to investigators, sponsors, and/or analysts. Unblinding compromises the statistical integrity of ongoing blinded trials and constitutes a regulated consequential transition requiring maximum controls: dual authorization, MFA, a verified human actor, and cryptographic proof of regulatory scope, actor identity, and explicit approval assertion. No AI system or automated process may execute unblinding. Regulatory basis: ICH E6(R2) §4.8.2, 21 CFR Part 11 §11.50/§11.300, EU Annex 11 §7.1.\n",
+      "display_name": "Clinical Trial Unblinding",
+      "family": "clinical.trial",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "trial.unblinding.execute"
+    },
+    {
+      "act_id": "ACT-0022",
+      "ai_risk": "High",
+      "canon_id": "CANON-000019",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for establishing the blind in a clinical trial — the act of sealing randomization codes, binding treatment assignments to subject IDs, and activating the blinded-data enforcement state in trial management systems (RTSM/IVRS). Blinding setup is the prerequisite that makes trial.unblinding.execute irreversible once executed; errors at setup time (wrong randomization list, incorrect stratum assignments) propagate through the entire trial. Only sponsor-designated blinding authority roles may authorize blind establishment. Requires a verified identity, supervisor review of the randomization specification, a cryptographic snapshot of the randomization list hash, and a complete audit trail per 21 CFR Part 11 §11.10(a) and EU Annex 11 §7.1. Machine callers may not execute blinding setup without explicit organizational override.\n",
+      "display_name": "Clinical Trial Blind Establishment",
+      "family": "clinical.trial",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "trial.blinding.setup"
+    },
+    {
+      "act_id": "ACT-0023",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000020",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for emergency single-patient unblinding in a clinical trial — the act of breaking the blind for a specific subject when knowledge of their treatment assignment is required for immediate medical decision-making (e.g., a Serious Adverse Event requiring the treating physician to know whether the patient received drug or placebo). Emergency unblinding is per-subject, not a full trial unblinding, and must be performed by the principal investigator or site physician responsible for the subject's safety. REQUESTER-AUTHORIZED: the act is authorized directly by the verified treating physician (the requester) — no approval artifact, approver, or quorum — with requester-bound MFA, a documented medical-necessity attestation, and an immediate audit record. The blind is broken for one subject only — other subjects remain blinded and the trial may continue. Regulatory basis: ICH E6(R2) §4.8.2–3, ICH E9 §6.5, 21 CFR Part 11 §11.300, EU Annex 11 §14.\n",
+      "display_name": "Emergency Clinical Trial Unblinding",
+      "family": "clinical.trial",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "trial.unblinding.emergency"
+    },
+    {
+      "act_id": "ACT-0024",
+      "ai_risk": "High",
+      "canon_id": "CANON-000021",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for releasing a payment above an organization's auto-approval threshold — an ACH batch, card settlement, or ERP payment run. High-value payments carry direct financial-loss and fraud exposure, so release must be gated behind two-person integrity with separation of duties: the caller who initiates a payment cannot be the caller who approves it. Every release binds a tamper-evident permit to the amount, counterparty, and account, giving auditors a machine-checkable four-eyes record. Regulatory basis: SOX §404, PCI DSS v4.0, NIST SP 800-53 AC-5.\n",
+      "display_name": "High-Value Payment Authorization",
+      "family": "finance.payment",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "finance.payment.authorize"
+    },
+    {
+      "act_id": "ACT-0025",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000022",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for releasing a high-value or cross-border wire (SWIFT / Fedwire). Wires are fast and irreversible, making them the highest-consequence money movement an organization performs and a prime target for business-email-compromise fraud. Release must be gated behind two-person integrity, phishing-resistant MFA for the releasing caller, and a cryptographically verified actor identity — a self-asserted actor_id is not sufficient. The permit binds the beneficiary and amount so the authorization cannot be reused for a different payee. Regulatory basis: SOX §404, SWIFT CSP v2024, NIST SP 800-53 IA-2/AC-5.\n",
+      "display_name": "High-Value Wire Transfer",
+      "family": "finance.payment",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "finance.wire.transfer"
+    },
+    {
+      "act_id": "ACT-0026",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000023",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for a consequential command to a physical-process controller — a breaker or switch operation on a power grid, a valve or pump actuation on a pipeline, or a control setpoint change on a DCS/PLC. These commands have direct physical, safety, and reliability consequences, so they are gated at an OT control gateway that sits between the operator's HMI and the field device, outside the real-time safety loop. Release requires two-person integrity, phishing-resistant MFA, and a state snapshot of the command and target device tag. An unverified or automated caller never reaches the actuator. Regulatory basis: NERC CIP-004/007/010, IEC 62443-3-3 SR 1.1/2.1.\n",
+      "display_name": "Industrial Control Actuation",
+      "family": "industrial.control",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "industrial.control.actuate"
+    },
+    {
+      "act_id": "ACT-0027",
+      "ai_risk": "High",
+      "canon_id": "CANON-000024",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for amending a finalized (signed) patient health record in an EHR — an addendum or correction to a closed encounter note. A finalized clinical record is a legal document; amending it must preserve the original, attribute the change to a verified clinician with a treatment relationship, and capture the reason. The gate requires a cryptographically verified actor (a self-asserted actor_id from a hospital system is not sufficient), human approval, and a state snapshot that preserves the pre-amendment record. Regulatory basis: HIPAA Security Rule §164.312, 21 CFR Part 11 §11.10(e), ISO 27799.\n",
+      "display_name": "Patient Health Record Amendment",
+      "family": "healthcare.record",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "healthcare.record.amend"
+    },
+    {
+      "act_id": "ACT-0028",
+      "ai_risk": "High",
+      "canon_id": "CANON-000025",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for granting privileged or administrative access — writing an elevated entitlement into an IdP, PAM vault, or directory. Privileged access can dissolve every other control, so the grant itself is a governed action: it requires human approval, phishing-resistant MFA for the approver, and a cryptographically verified actor. The grant is time-boxed via the permit so it can auto-revert on expiry. Regulatory basis: NIST SP 800-53 AC-6, ISO/IEC 27001 A.8.2, SOC 2 CC6.1.\n",
+      "display_name": "Privileged Access Grant",
+      "family": "identity.access",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "identity.privileged.grant"
+    },
+    {
+      "act_id": "ACT-0029",
+      "ai_risk": "High",
+      "canon_id": "CANON-000026",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for an autonomous AI agent invoking a tool, function, or downstream action at execution time. The agent's asserted identity is not trusted on its own — a self-declared actor_id can be spoofed — so the request must carry a cryptographically verified actor identity before the tool runs. This is the flagship execution-time authorization surface: every agent action is gated, permitted, and audited before it touches a real system.\n",
+      "display_name": "Agent Tool Invocation",
+      "family": "agent.execute",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [
+        "SG-ACT-006"
+      ],
+      "slug": "agent.tool.invoke"
+    },
+    {
+      "act_id": "ACT-0030",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000027",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for promoting an AI/ML model to a production-serving environment. Promoting a model is a consequential transition: an unvetted or tampered model can make autonomous decisions at scale. Promotion requires human approval, a verified actor, a bound snapshot of the exact model artifact, and a model-trust assertion establishing the base model and evaluation provenance before a permit is issued.\n",
+      "display_name": "Model Promotion",
+      "family": "agent.execute",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "model.promote"
+    },
+    {
+      "act_id": "ACT-0031",
+      "ai_risk": "High",
+      "canon_id": "CANON-000028",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for exporting a bulk dataset out of a system of record — a data-egress transition with high privacy and compliance blast radius. A large export of personal data can breach residency obligations or consent scope. Export requires human approval and verified residency and consent assertions before a permit is issued, and direct-identifier fields are denied unless explicitly permitted.\n",
+      "display_name": "Bulk Data Export",
+      "family": "data.release",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [
+        "SG-ACT-005"
+      ],
+      "slug": "data.export"
+    },
+    {
+      "act_id": "ACT-0032",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000029",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for emergency break-glass access — an intentional, time-bounded exception that grants elevated privilege during an incident. Break-glass is the most abused path in any system, so it is the most heavily gated: it requires a verified human actor, multi-factor authentication, an explicit approval artifact, and a bound snapshot of the incident context. A machine can never invoke it. Every use produces a tamper-evident permit for post-incident review.\n",
+      "display_name": "Break-Glass Access",
+      "family": "security.exception",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [
+        "SG-ACT-004"
+      ],
+      "slug": "security.breakglass"
+    },
+    {
+      "act_id": "ACT-0033",
+      "ai_risk": "High",
+      "canon_id": "CANON-000030",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for creating an identified, releasable production version — assembling an approved set of changes into a versioned, reproducible release artifact. Release creation is the point where a set of merged changes becomes a candidate for deployment; an unidentified or unapproved release undermines every downstream deploy and audit. State snapshot binding captures the release's content identity (git SHA range, artifact digest, changelog hash) so the permit is bound to exactly what was released.\n",
+      "display_name": "Release Creation",
+      "family": "production.deploy",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "release.create"
+    },
+    {
+      "act_id": "ACT-0034",
+      "ai_risk": "High",
+      "canon_id": "CANON-000031",
+      "classification": {
+        "actor_categories": [
+          "ai_agent",
+          "human",
+          "service_account"
+        ],
+        "buyers": [
+          "enterprise-systems-leader",
+          "vp-it"
+        ],
+        "departments": [
+          "engineering",
+          "enterprise-applications",
+          "platform",
+          "security"
+        ],
+        "environments": [
+          "non-production",
+          "production"
+        ],
+        "industries": [
+          "enterprise",
+          "saas"
+        ],
+        "role_terms_grant_authority": false,
+        "roles": [
+          "auditor",
+          "authorized-approver",
+          "change-requester",
+          "enterprise-systems-leader",
+          "integration-owner",
+          "release-operator",
+          "support",
+          "vp-it"
+        ],
+        "semantics": "discovery-only",
+        "systems": [
+          "gearset",
+          "netsuite",
+          "salesforce",
+          "salto"
+        ]
+      },
+      "description": "Authorization gate for rolling back a production deployment to a prior version. A rollback is itself a production change — it can restore a version with a known vulnerability, revert a data-affecting migration, or mask an unresolved incident — and must be governed, not treated as an exempt safety valve. State snapshot binding captures the current and target versions so the permit records exactly what state the system was moved to.\n",
+      "display_name": "Production Rollback",
+      "family": "production.deploy",
+      "pack_memberships": [
+        {
+          "binding_profile_refs": [],
+          "fresh_authorization_required": true,
+          "maturity": {
+            "customer_acceptance": "not_started",
+            "customer_acceptance_evidence": null,
+            "definition_status": "proposed",
+            "eligible_lifecycle_modes": [
+              "shadow",
+              "advisory"
+            ],
+            "implementation_status": "contract_only",
+            "proof_evidence_cutoff": null,
+            "proof_evidence_refs": [],
+            "proof_rung": null,
+            "surface_tier": "Experimental"
+          },
+          "pack_id": "AP-000001",
+          "pack_version": "0.1.0",
+          "relationship": "triggered"
+        }
+      ],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "production.rollback"
+    },
+    {
+      "act_id": "ACT-0035",
+      "ai_risk": "High",
+      "canon_id": "CANON-000032",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for executing a schema or data migration against a production database. Migrations are among the hardest-to-reverse production changes — a bad migration can corrupt or drop data, lock tables, or leave the schema in an inconsistent state — and carry strong change-control and record-integrity evidence demands under SOX and GxP. Human approval plus a state snapshot binding the migration's content hash gate the action to a reviewed, identified migration.\n",
+      "display_name": "Database Migration",
+      "family": "infrastructure.change",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [
+        "SG-ACT-003"
+      ],
+      "slug": "database.migrate"
+    },
+    {
+      "act_id": "ACT-0036",
+      "ai_risk": "High",
+      "canon_id": "CANON-000033",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for changing production infrastructure or its configuration — applying Terraform/Helm, altering gateway routing, changing network controls (WAF rules, security groups, ingress, DNS, load balancers), and changing monitoring/alerting configuration (alert routing and thresholds, silences/mutes, health checks, on-call escalation policies, dashboards and retention windows that feed incident response). Infrastructure changes carry broad blast radius: a routing or firewall change can expose or sever production traffic across all services, and a monitoring-configuration change can blind the organization to the consequences of that same failure. Human approval plus a state snapshot binding the planned change (plan hash) gate the action to a reviewed, identified change. Production network-control and monitoring-configuration changes are governed under this action as scenarios of infrastructure change, not as separate actions.\nMonitoring-configuration scope (governed scenario, not a separate action): a change that SUPPRESSES, DISABLES, or MATERIALLY WEAKENS a monitoring or alerting capability — muting or snoozing an alert, raising an alert threshold, disabling a health check, removing a service from a paging rotation or dashboard, or shortening a retention window that would hide the change later — is a \"cover your tracks\" risk pattern: it reduces the organization's ability to detect the consequences of the very change (or a related change) it accompanies. This scenario ALWAYS requires human approval, REGARDLESS of whether the organization has otherwise configured infrastructure.change to allow change-window-based or other lower-friction handling for routine infrastructure changes. No org-level relaxation of this action's friction may ever exempt a monitoring-weakening change, even one that would otherwise qualify as \"routine\" and route through a low-friction path. See the header comment above for the CAR schema's per-scenario-override limitation this note works around, and `policy_template.controls[human_approval].description` below for the same requirement stated as a control-level note.\n",
+      "display_name": "Infrastructure Change",
+      "family": "infrastructure.change",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [
+        "SG-ACT-002"
+      ],
+      "slug": "infrastructure.change"
+    },
+    {
+      "act_id": "ACT-0037",
+      "ai_risk": "Medium",
+      "canon_id": "CANON-000034",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for enabling a high-impact feature flag in production. A feature flag flip is a de-facto production change — it can expose an unfinished feature, change data-handling behavior, or shift load — without going through a deploy. This action gates the enablement of flags marked high-impact to an authorized role, so a flag flip carries the same accountability as a deploy while staying a lightweight, standard-risk operation.\n",
+      "display_name": "Feature Enablement",
+      "family": "production.deploy",
+      "pack_memberships": [],
+      "risk_posture": "standard",
+      "safeguard_action_refs": [],
+      "slug": "feature.enable"
+    },
+    {
+      "act_id": "ACT-0038",
+      "ai_risk": "High",
+      "canon_id": "CANON-000035",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for rotating a production credential or signing key — API keys, database passwords, service tokens, or signing material. Rotation is a privileged operation: a botched or malicious rotation can cause a widespread outage (every consumer of the old secret breaks) or, worse, hand an attacker fresh valid credentials. State snapshot binding captures the secret identity and key version so the permit records exactly which secret was rotated to which version.\nSCOPE (2026-08-25): this action governs rotating a secret's VALUE only — producing a new credential/key version for an existing secret. It does NOT cover changing a secret's ACCESS-CONTROL or GOVERNANCE configuration (who or what may read it, where it is stored, its rotation policy or schedule) — that is a materially broader, higher-authority access-control decision governed by secret.configuration.change (CANON-000054, ACT-0057), which requires human approval and a verified, MFA'd approver. A caller widening who can read a secret, or relocating/reconfiguring its storage or rotation policy, must call secret.configuration.change, not this action. trust_root.publish (CANON-000035; SPECIALIZATIONS.yaml) remains a value-rotation-shaped specialization of THIS action; secret.configuration.change is a distinct standalone canonical action, not a specialization of secret.rotate.\n",
+      "display_name": "Secret Rotation",
+      "family": "privileged.operation",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "secret.rotate"
+    },
+    {
+      "act_id": "ACT-0039",
+      "ai_risk": "High",
+      "canon_id": "CANON-000036",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for failing over production traffic — transferring live traffic to a standby region, cluster, or provider to preserve availability. A failover is a first-class operational action with its own intent (preserve availability), evidence, and risk profile: it can move traffic to an under-capacity or stale standby, split-brain a stateful system, or mask a regional dependency failure. State snapshot binding captures the pre-failover topology and the failover target so the permit records exactly where traffic was moved.\n",
+      "display_name": "Traffic Failover",
+      "family": "infrastructure.change",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "traffic.failover"
+    },
+    {
+      "act_id": "ACT-0040",
+      "ai_risk": "High",
+      "canon_id": "CANON-000037",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for network-isolating a compromised host or endpoint as an incident containment action — cutting a machine off from the network (EDR quarantine, security-group lockdown, NAC quarantine) to stop lateral movement or exfiltration while preserving it for forensics. Host isolation is a distinct operational action: unlike a generic infrastructure change it is taken under incident pressure by a reliability or security responder, targets a single host, and its evidence is the containment record — who isolated what, when, and why. State snapshot binding captures the host state at isolation time for the forensic timeline.\n",
+      "display_name": "Host Isolation",
+      "family": "infrastructure.change",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "host.isolate"
+    },
+    {
+      "act_id": "ACT-0041",
+      "ai_risk": "High",
+      "canon_id": "CANON-000038",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for amending the protocol of an active clinical trial — a regulated governance event, not a workflow step. A protocol amendment changes the governing document of a trial and cannot take effect without IRB/EC approval, sponsor authorization, and, for substantial amendments, regulatory notification or approval. It carries distinct authorization (independent, credentialed sign-off) and distinct evidence (the amendment, the approvals, the version) from any routine change. State snapshot binding captures the amendment's content and version so the permit is bound to exactly what was approved.\n",
+      "display_name": "Clinical Protocol Amendment",
+      "family": "clinical.trial",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "protocol.amend"
+    },
+    {
+      "act_id": "ACT-0042",
+      "ai_risk": "High",
+      "canon_id": "CANON-000039",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for terminating the employment relationship of a worker — the consequential employment-status decision, not the downstream technical deprovision. Ending employment carries distinct legal, final-pay, benefits, and works-council consequences that access.revoke (CANON-000008) does not: access revocation is the required EFFECT of a termination, while the decision to end the relationship is its CAUSE. Independent, credentialed sign-off (manager + HR business partner / employment counsel) and a verified actor gate the action to a reviewed, attributable authority, with a captured reason for the record.\n",
+      "display_name": "Employment Termination",
+      "family": "people.operations",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "employment.terminate"
+    },
+    {
+      "act_id": "ACT-0043",
+      "ai_risk": "Medium",
+      "canon_id": "CANON-000040",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for changing an employee's compensation — a SOX-controlled financial event with an approval chain and a downstream payroll disbursement consequence, distinct from a generic data.modify (CANON-000004) record edit. A compensation change alters a recurring financial obligation and is a recognized fraud and control surface. Independent approval (the requesting manager is not the sole authority) and a verified actor gate the action to a reviewed, attributable decision.\n",
+      "display_name": "Compensation Change",
+      "family": "people.operations",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "compensation.change"
+    },
+    {
+      "act_id": "ACT-0044",
+      "ai_risk": "Medium",
+      "canon_id": "CANON-000041",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for posting a journal entry to the general ledger — a COMMIT of an immutable financial record, distinct from a data.modify (CANON-000004) value edit. A posted journal entry cannot be edited, only reversed by a new entry, and carries its own preparer/poster segregation of duties and SOX ICFR evidence demand. Independent approval (the preparer is not the poster) and a state snapshot binding the entry's content hash gate the action to a reviewed, identified posting, so the entry that lands in the ledger is the entry that was approved.\n",
+      "display_name": "Journal Entry Posting",
+      "family": "finance.controllership",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "journal.post"
+    },
+    {
+      "act_id": "ACT-0045",
+      "ai_risk": "Medium",
+      "canon_id": "CANON-000042",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for closing (locking) an accounting period — the state-changing COMMIT that freezes the general ledger for a fiscal period so no further entries post to it. This is an EXECUTION action, distinct from the attestations it consumes: reconciliation certification (compliance.certify) and journal-entry approval (workflow.approve) prove READINESS, but closing the period is the separately-authorized, separately-recorded operational act that has its own consequence. Merging it into the certification would collapse \"the reconciliations are certified and approvals exist\" into \"the period is closed\" — two different points in the control chain. The close cannot reach allow unless all reconciliations are certified and dual approval is on file, and it binds a state snapshot of the period's closing state, so the period that locks is the period whose readiness was authorized.\n",
+      "display_name": "Accounting Period Close",
+      "family": "finance.controllership",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "period.close"
+    },
+    {
+      "act_id": "ACT-0046",
+      "ai_risk": "High",
+      "canon_id": "CANON-000043",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for approving and releasing a corrected or reinterpreted biomarker result in a genomics-enabled clinical trial — a previously reported genomic or biomarker call being revised (e.g. a variant reclassified from VUS to pathogenic, a corrected HER2/EGFR status, or a re-adjudicated companion-diagnostic result). AtlaSent protects the AUTHORIZATION of the consequential change; it does not perform the scientific interpretation — the scientific basis comes from the laboratory method, the classification criteria, the protocol's context of use, and the designated authority. The gate requires authorized reviewers, supporting source evidence, a stated reason for change, the applicable study and laboratory criteria, and a traceable record of the prior and revised classification. A reported result is trial data of record; revising it can change a subject's eligibility, arm assignment, or safety profile, so it cannot be a silent overwrite. It must be attributable to a cryptographically verified qualified reviewer (a self-asserted actor_id from a LIS/LIMS is not sufficient), and no automated pipeline may reclassify a reported result on its own. Regulatory basis: 21 CFR Part 11 §11.10(b)/(e) (change-record and audit trail — not the scientific validity of the reclassification), ICH E6(R2) §5.5.3, ALCOA+, ICH E9 §5.\n",
+      "display_name": "Biomarker Result Reclassification Approval",
+      "family": "clinical.trial",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "trial.biomarker.reclassify"
+    },
+    {
+      "act_id": "ACT-0047",
+      "ai_risk": "High",
+      "canon_id": "CANON-000044",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for overriding biomarker-defined eligibility in a genomics-enabled clinical trial — enrolling or retaining a subject whose genomic or biomarker result does not meet the protocol's inclusion/exclusion criteria (e.g. enrolling an EGFR-negative subject into an EGFR-targeted arm, or waiving a companion-diagnostic cutoff). This is a protocol deviation, not a routine screening decision: it changes who receives an investigational product and can affect subject safety and the analysis population. An override requires a documented medical rationale, a cryptographically verified qualified authorizer (medical monitor or principal investigator — a self-asserted actor_id is not sufficient), and an approval; it may not be granted by an automated screening system. Regulatory basis: ICH E6(R2) §4.5 / §4.3, 21 CFR 312.66, ICH E9 §5.2.\n",
+      "display_name": "Biomarker Eligibility Override",
+      "family": "clinical.trial",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "trial.biomarker.eligibility.override"
+    },
+    {
+      "act_id": "ACT-0048",
+      "ai_risk": "High",
+      "canon_id": "CANON-000045",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for releasing identifiable genomic data from a genomics-enabled trial — disclosing re-identifiable genomic or genetic data (whole-genome/exome sequences, variant call files, or genotype records tied to a subject) to a recipient such as an investigator, a treating clinician, a biobank, or a research collaborator. Genomic data is inherently re-identifiable and is special-category/genetic data under GDPR Art. 9, GINA, and HIPAA; a release is high-blast-radius and hard to recall. The gate requires a verified human authorizer, a verified consent assertion covering the disclosure, and an approved purpose before a permit is issued; a release outside the consented purpose or without a verified authorizer is denied. Regulatory basis: GDPR Art. 9 / Art. 6, HIPAA §164.508/§164.312(b), GINA (2008), 45 CFR 46.116 (informed consent).\n",
+      "display_name": "Identifiable Genomic Data Release",
+      "family": "data.release",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "genomic.data.release"
+    },
+    {
+      "act_id": "ACT-0049",
+      "ai_risk": "High",
+      "canon_id": "CANON-000046",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for exporting genomic data to another organization or jurisdiction in a genomics-enabled trial — transferring genomic or genetic data across an organizational or geographic/legal boundary (to a sponsor abroad, a central sequencing lab in another country, or a partner in a different data-protection regime). A cross-border transfer of genetic data implicates data-residency and international-transfer law on top of consent: GDPR Chapter V (Art. 44–49), data-localization statutes, and jurisdiction-specific genetic-data rules. The gate requires a verified human authorizer, a verified data-residency assertion proving the destination is a permitted jurisdiction with a valid transfer mechanism, a verified consent covering cross-border transfer, and an approved purpose before a permit is issued. A transfer to a disallowed jurisdiction or outside the consented purpose is denied. Regulatory basis: GDPR Art. 44–49, GDPR Art. 9, data-localization statutes, GINA (2008).\n",
+      "display_name": "Cross-Border Genomic Data Export",
+      "family": "data.release",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "genomic.data.export"
+    },
+    {
+      "act_id": "ACT-0050",
+      "ai_risk": "High",
+      "canon_id": "CANON-000047",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for sending a communication (email or equivalent message) to a recipient outside the organization's boundary — the same \"release data beyond its original boundary\" consequence as a bulk export, at the scale of a single message. An outbound email carrying sensitive or customer information to a new external recipient is functionally a data-egress event: once sent, it cannot be recalled. The permit is bound to the exact recipient and attachment content authorized; any change to either after approval invalidates it. Applies identically whether the send is composed by a person, a workflow, a script, or an AI agent — none of them gain independent authority to release data externally merely by holding a connector credential to the mail platform.\n",
+      "display_name": "External Communication Send",
+      "family": "data.release",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "communication.external.send"
+    },
+    {
+      "act_id": "ACT-0051",
+      "ai_risk": "High",
+      "canon_id": "CANON-000048",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for breaking a clinical trial's randomization code for a single subject — revealing that one subject's treatment assignment (distinct from trial.unblinding.execute, CANON-000018, which reveals assignments trial-wide). A code break is typically triggered by a safety event and must be attributable to a named, verified approver, bound to the trial and subject, with an explicit reason. Mints this record from the shape already enforced in production by the authoritative life-sciences seeder (seed_life_sciences_action_classes) since 2026-07-09 — this CAR documents deployed behavior, it does not change it.\n",
+      "display_name": "Trial Randomization Code Break",
+      "family": "clinical.trial",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "trial.randomization.break"
+    },
+    {
+      "act_id": "ACT-0052",
+      "ai_risk": "High",
+      "canon_id": "CANON-000049",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for certifying a period-end account reconciliation as complete and accurate — the officer certification step underlying SOX §302/§404. Allow requires the reviewer to have attested; runtime enforcement also requires a cryptographically resolvable, verified actor identity AND an issuer-scoped independent approver (the certifying approver cannot be the same identity as the requester) — a separation-of-duties gate added 2026-07-26 (migration 20260733000000) that the CAR schema does not yet have a field for (see the note above). Mints this record from the shape already enforced in production by the authoritative financial-services seeder (seed_financial_services_action_classes) since 2026-07-10 — this CAR documents deployed behavior, it does not change it.\n",
+      "display_name": "Reconciliation — Certify",
+      "family": "finance.controllership",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "reconciliation.certify"
+    },
+    {
+      "act_id": "ACT-0053",
+      "ai_risk": "High",
+      "canon_id": "CANON-000050",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for approving a manual journal entry above threshold — the decision that authorizes the entry for posting, distinct from journal.post (CANON-000041), which commits an already-approved entry to the ledger. Allow requires both journal_entry_id and approver_id to be present; runtime enforcement also requires a cryptographically resolvable, verified actor identity AND an issuer-scoped independent approver distinct from the preparer — the same segregation-of-duties gate as reconciliation.certify (ACT-0052), added 2026-07-26 (migration 20260733000000). Mints this record from the shape already enforced in production by the authoritative financial-services seeder (seed_financial_services_action_classes) since 2026-07-10 — this CAR documents deployed behavior, it does not change it.\n",
+      "display_name": "Journal Entry — Approve",
+      "family": "finance.controllership",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "journal_entry.approve"
+    },
+    {
+      "act_id": "ACT-0054",
+      "ai_risk": "Medium",
+      "canon_id": "CANON-000051",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for escalating a budget/close variance review to a named reviewer — a lower-stakes review-routing action, not a dual-control certification like reconciliation.certify (CANON-000049) or journal_entry.approve (CANON-000050). Allow requires both variance_id and reason to be present; the runtime does not require MFA, a verified actor identity, or an independent approver for this class — a deliberately lighter gate than its two SOX-certification siblings, matching its lower blast radius. Mints this record from the shape already enforced in production by the authoritative financial-services seeder (seed_financial_services_action_classes) since 2026-07-10 — this CAR documents deployed behavior, it does not change it.\n",
+      "display_name": "Variance Review — Escalate",
+      "family": "finance.controllership",
+      "pack_memberships": [],
+      "risk_posture": "standard",
+      "safeguard_action_refs": [],
+      "slug": "variance_review.escalate"
+    },
+    {
+      "act_id": "ACT-0055",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000052",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for bypassing or inhibiting a safety instrumented function (SIF) — a pressure trip, an emergency shutdown interlock, a fire & gas detection loop — to permit maintenance, testing, or a degraded operating mode. This is distinct from control.override (generic security-control bypass): a SIS bypass disables a layer of protection against a physical hazard (overpressure, fire, toxic release), not a security or compliance control, and carries its own regulatory regime (IEC 61511 bypass/inhibit management, OSHA PSM 1910.119(l) Management of Change, API RP 754). The permit binds the bypassed function tag, the mandatory compensating measure, and a hard expiry — the bypass must auto-revert; there is no open-ended bypass. Verification proves the function was RESTORED, not merely that it was disabled.\n",
+      "display_name": "Safety Instrumented System Bypass",
+      "family": "industrial.safety",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "industrial.safety.bypass"
+    },
+    {
+      "act_id": "ACT-0056",
+      "ai_risk": "Extreme",
+      "canon_id": "CANON-000053",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for downloading new control logic, program, or firmware to a physical-process controller — a PLC ladder-logic or function-block program, an RTU/IED configuration, or a DCS controller firmware image. This changes what the controller DOES the next time it runs, not a single command (industrial.control.actuate) and not IT/cloud infrastructure (infrastructure.change): it is a configuration-management event against a safety- and reliability-relevant device, gated at the engineering workstation before the download reaches the field controller. Release requires an isolated engineering workstation, offline test/simulation evidence, and a verified configuration-management sign-off; the resulting running configuration is snapshotted so a later evaluate can detect configuration drift against the approved version. Regulatory basis: IEC 62443-3-3 SR 3.4 / SR 7.6, NERC CIP-010-4.\n",
+      "display_name": "Industrial Controller Configuration Change",
+      "family": "industrial.control",
+      "pack_memberships": [],
+      "risk_posture": "critical",
+      "safeguard_action_refs": [],
+      "slug": "industrial.controller.configure"
+    },
+    {
+      "act_id": "ACT-0057",
+      "ai_risk": "High",
+      "canon_id": "CANON-000054",
+      "classification": {
+        "actor_categories": [],
+        "buyers": [],
+        "departments": [],
+        "environments": [],
+        "industries": [],
+        "role_terms_grant_authority": false,
+        "roles": [],
+        "semantics": "discovery-only",
+        "systems": []
+      },
+      "description": "Authorization gate for changing a secret's ACCESS-CONTROL or GOVERNANCE configuration — granting or narrowing WHO or WHAT may read a secret (an IAM policy, KMS key policy, or Vault/Secrets Manager access policy attached to it), moving or re-provisioning WHERE it is stored, or changing its rotation policy or schedule. This is distinct from secret.rotate (CANON-000035, ACT-0038), which governs rotating the secret's VALUE — a role-only, non- approved, machine-executable operation. Configuration changes are broader and higher-authority: widening who can read a live credential is a privilege-escalation-shaped decision (the same risk identity.privileged.grant governs for general entitlements), and relocating or degrading a secret's storage or rotation posture can silently weaken every control that depends on that secret staying rotated and access-scoped. Human approval, a verified and MFA'd approver, and a state snapshot binding the before/after configuration gate this action to a reviewed, identified change. secret.rotate's own scope is limited to VALUE rotation; see that CAR's description for the cross-reference this change adds.\n",
+      "display_name": "Secret Configuration Change",
+      "family": "infrastructure.change",
+      "pack_memberships": [],
+      "risk_posture": "high",
+      "safeguard_action_refs": [],
+      "slug": "secret.configuration.change"
+    }
+  ],
+  "catalog_version": "2026.08.28.1",
+  "evidence_cutoff": "2026-08-28",
+  "future_capabilities": [
+    {
+      "availability_horizon": "future",
+      "build_state": "schema_implemented",
+      "capability_id": "EXP-1",
+      "contract_state": "accepted",
+      "disclosure_state": "gated",
+      "display_name": "Experiment",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/specs/experiment-contract-v1.md"
+      ],
+      "summary": "Accepted contract with additive schema substrate implemented; it remains unavailable to authorization, permit, and product runtime paths."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "implementation_deferred",
+      "capability_id": "OAS-1",
+      "contract_state": "accepted",
+      "disclosure_state": "gated",
+      "display_name": "OutcomeAssessment",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/specs/outcome-assessment-model-v1.md"
+      ],
+      "summary": "Accepted design contract whose implementation is deliberately deferred pending a real ControlEffectivenessAssessment substrate."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "schema_implemented",
+      "capability_id": "LRN-1",
+      "contract_state": "accepted",
+      "disclosure_state": "gated",
+      "display_name": "LearningRecord",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/specs/learning-record-model-v1.md"
+      ],
+      "summary": "Accepted contract with additive schema substrate implemented and database-enforced zero authority; it is not consulted by authorization runtime paths."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "EAI-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "Enterprise Authority Intelligence",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/INTELLIGENCE_EXPANSION_BOUNDARY_2026-08-27.md"
+      ],
+      "summary": "Planned intelligence for understanding enterprise authority structures without inferring runtime authority."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "BEM-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "Bounded Exploration Mandate",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/design/BOUNDED_EXPLORATION_MANDATE_V0_1.md"
+      ],
+      "summary": "Planned contract for explicitly bounded exploration that cannot itself authorize consequential action."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "PLE-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "Plan-level exposure",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/INTELLIGENCE_EXPANSION_BOUNDARY_2026-08-27.md"
+      ],
+      "summary": "Planned visibility into exposure accumulated across a plan rather than a single protected action."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "GAL-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "Governed adoption loop",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/INTELLIGENCE_EXPANSION_BOUNDARY_2026-08-27.md"
+      ],
+      "summary": "Planned loop for proposing, evaluating, and separately authorizing adoption of learned changes."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "HOM-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "hiCoach and Mirro contribution/outcome alignment",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/INTELLIGENCE_EXPANSION_BOUNDARY_2026-08-27.md",
+        "docs/CYBERNETIC_GOVERNANCE_DOCTRINE.md"
+      ],
+      "summary": "Planned alignment profile for contribution and outcome signals from hiCoach and Mirro contexts."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "PGC-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "PublishedGoalCommitment",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/INTELLIGENCE_EXPANSION_BOUNDARY_2026-08-27.md"
+      ],
+      "summary": "Planned contract for a published goal commitment with separately governed change and adoption paths."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "H8-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "Identity registry",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/INTELLIGENCE_EXPANSION_BOUNDARY_2026-08-27.md"
+      ],
+      "summary": "Planned H8 identity-registry capability for durable subject references and identity lineage."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "H14-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "Continuity",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "ROADMAP.md"
+      ],
+      "summary": "Planned H14 continuity capability for preserving governed state across handoffs and interruptions."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "H15-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "Effect-profile productization",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/INTELLIGENCE_EXPANSION_BOUNDARY_2026-08-27.md"
+      ],
+      "summary": "Planned H15 productization of explicit provider effect profiles and their acceptance boundaries."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "OGP-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "Outcome-governed policy evolution",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "docs/INTELLIGENCE_EXPANSION_BOUNDARY_2026-08-27.md"
+      ],
+      "summary": "Planned proposal path for policy evolution informed by outcomes but requiring fresh organizational authority."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "ACM-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "AuthZEN, COAZ, and MCP adapters",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "ROADMAP.md"
+      ],
+      "summary": "Planned portable adapters for AuthZEN, COAZ, and MCP interoperability contracts."
+    },
+    {
+      "availability_horizon": "future",
+      "build_state": "planned",
+      "capability_id": "PPB-1",
+      "contract_state": "draft",
+      "disclosure_state": "gated",
+      "display_name": "Portable proof bundle",
+      "flags": {
+        "activatable": false,
+        "commercially_claimable": false,
+        "has_authority": false,
+        "implementation_authorized": false,
+        "required_dependency_eligible": false,
+        "runtime_authorized": false
+      },
+      "source_refs": [
+        "ROADMAP.md"
+      ],
+      "summary": "Planned portable bundle for independently verifying authority, permit, execution, observation, and effect evidence."
+    }
+  ],
+  "generation_provenance": {
+    "generator": {
+      "path": "scripts/generate-protection-catalog.py",
+      "sha256": "sha256:1865483325c38d65debd1e591693c16325903da45d4286a9ae7557e4a4cdfc56"
+    },
+    "schemas": {
+      "action_pack": {
+        "path": "contract/action-packs/schemas/action-pack.schema.json",
+        "sha256": "sha256:73d7890ad6a07b96ad2a663773f8fce6f10d1d4e7b0b98723ad1d61a774ed9fe"
+      },
+      "future_capability": {
+        "path": "contract/protection-catalog/schemas/future-capability-registry.schema.json",
+        "sha256": "sha256:b47e527ce8a68c5da1fb00577aa04f895096cae5e9fa524fa49bdbd44a92da4c"
+      },
+      "protection_catalog": {
+        "path": "contract/protection-catalog/schemas/protection-catalog.schema.json",
+        "sha256": "sha256:c552b4a78a1616cb707fcccda7f9123ab169bce0a817798662179a4ad5a64145"
+      }
+    },
+    "source_manifest": [
+      {
+        "path": "ROADMAP.md",
+        "sha256": "sha256:890cf77b9dbb9e4eb0480d2f9c6282499c3eb6571fca827d85039a157f857485"
+      },
+      {
+        "path": "contract/action-packs/registry.yaml",
+        "sha256": "sha256:1f4d681c43f63831b62a8e1628df52304c8cddbede7106ed4971a689e4f50689"
+      },
+      {
+        "path": "contract/action-packs/schemas/action-pack.schema.json",
+        "sha256": "sha256:73d7890ad6a07b96ad2a663773f8fce6f10d1d4e7b0b98723ad1d61a774ed9fe"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0001-production-deploy.yaml",
+        "sha256": "sha256:2ef258c7ed8eeed272f79d7c4e9c61732a79696f2abc5277791d8ee05964899b"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0002-artifact-release.yaml",
+        "sha256": "sha256:3f8f8ad54579b696d57e4ffca422102c19c86740204ccc0d72b9e7befd0dc931"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0003-workflow-approve.yaml",
+        "sha256": "sha256:7f058f13b69296f15e21dcb5c47f994c71477ec5ee2e3839f182e43dbf2f8916"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0005-data-modify.yaml",
+        "sha256": "sha256:9577ccc55fa10fdbbdd738f6851f4659865678079dbc2ea49f3d85b0652e6faf"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0007-data-import.yaml",
+        "sha256": "sha256:c0198421ed686d6dbd829a91a85d810779e42f32ca51c535d39d442296ccd60b"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0008-data-delete.yaml",
+        "sha256": "sha256:bac6e8aa9aea172314790cb263fdea12c0c3ae5a4311429bd8b9196e46f40625"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0009-access-grant.yaml",
+        "sha256": "sha256:5981a5feda5f1e925c440b101f771a4b8625e877ebd26bdb4adc628bd03554d8"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0010-access-revoke.yaml",
+        "sha256": "sha256:7510ea5c6c33e33b596ad84b6ff160ada5927dcc2116492652de6c9a2ae84b9d"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0011-control-override.yaml",
+        "sha256": "sha256:49e1f310b34faa5770f15f3b02fc01d19789736ce6ee37c74931ddea4958bca2"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0013-content-publish.yaml",
+        "sha256": "sha256:fc2451d6734b298dfce6908825c507da15a0f19f920256b1026fcf3197175c7a"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0014-identity-sign.yaml",
+        "sha256": "sha256:30288ae5d87f169f454c66d2d7487a014ed218a994c766f1937d86e5edf5f26e"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0015-resource-create.yaml",
+        "sha256": "sha256:99cac5c87dc80b100b93ccd9fe18699a1715717150cca2779c9d1fd28fb0ea86"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0016-resource-destroy.yaml",
+        "sha256": "sha256:0ada1780fb5cb73f9dc411379ffff9d2ba94f034774c08c220c10b2d05bc844e"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0017-service-suspend.yaml",
+        "sha256": "sha256:3bbc2a525574fa1f0cb83d43ca8a84443a5f1313aed9c29bb1fd982682efef52"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0018-service-resume.yaml",
+        "sha256": "sha256:59145ae8038b6e87369da22f214854977abc0fc33cfdf5af5fc2bbad2f15866f"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0019-workflow-escalate.yaml",
+        "sha256": "sha256:f3d5c7cc177df8cba1b546f92b21c98303873b77162c1d4509701e3d7aeeae85"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0020-compliance-certify.yaml",
+        "sha256": "sha256:b3a03ed17ab6a403e32a33da70abb1678ea6df932b6c3f596702404c55d61a3f"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0021-trial-unblinding.yaml",
+        "sha256": "sha256:2226ce44f4c21afd946ffb91baf130320990dd02d870a579232cefd97189e2c5"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0022-trial-blinding-setup.yaml",
+        "sha256": "sha256:ccc68501ce351d9c461e058adc04e09a03085ece02db99aadcd1a4f5a568a77f"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0023-trial-unblinding-emergency.yaml",
+        "sha256": "sha256:d1354009a2f1ba0fe389c4fa38c61d8b7f7eeeb6c5b483f593671c63a96d4e75"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0024-finance-payment-authorize.yaml",
+        "sha256": "sha256:ecdcef3a37dfee38b925cd0ad496ee056763278cb8be2838149438834c192a54"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0025-finance-wire-transfer.yaml",
+        "sha256": "sha256:4650f1584f7a5128f8bde69f6e899148f5451279955c5f65ceee1f1eb2eaffff"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0026-industrial-control-actuate.yaml",
+        "sha256": "sha256:76d077b95da95d41c15ff15b88ccaa975cd964fe68199214cc236b9d66ba9afe"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0027-healthcare-record-amend.yaml",
+        "sha256": "sha256:8cb830e3f14ab3c781d8489d6a2fa6e9d55f3cc63a2282ed48e434e1ed540701"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0028-identity-privileged-grant.yaml",
+        "sha256": "sha256:89ae55e1b28b2dc8cdef6e1c69d05294200891281010322b091e9d3bb842d557"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0029-agent-tool-invoke.yaml",
+        "sha256": "sha256:687167fa0c35bd5801a98202c66012de37e65d5b94d90cbea4d10b59e90b3331"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0030-model-promote.yaml",
+        "sha256": "sha256:0fa016ba16fd81f7e42c2dc8b0f706785e2d9150a212a920fd337c05a1776bb2"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0031-data-export.yaml",
+        "sha256": "sha256:c0c46be1a7a3dc85ddf9fddcf224c6ef787d183834c6724c05a78cc0112910e4"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0032-security-breakglass.yaml",
+        "sha256": "sha256:b0bb0cce4d9d12cdb9fd3513262c73f24d2839069d4d01abb5479c37494cb3e7"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0033-release-create.yaml",
+        "sha256": "sha256:97e9655224fb421e0fa578d852509dbe2db4f1425a056224c04f25a686510ae2"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0034-production-rollback.yaml",
+        "sha256": "sha256:28d41374812ef0c27b5afcce7fb051bed3b2ed8c276f5e397a07f5fbac5fcebb"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0035-database-migrate.yaml",
+        "sha256": "sha256:31a32398c74c443daf5d39c6f081968672a6ee828d4b7db707a6d889fe095bb4"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0036-infrastructure-change.yaml",
+        "sha256": "sha256:5c08f99c587bb837080659424d24b387acf4211325b28db87761ef0c9e89ddbb"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0037-feature-enable.yaml",
+        "sha256": "sha256:9ffa53419f281c66d959a06e404069f8e20284155bc2b5e3268029f24b359b78"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0038-secret-rotate.yaml",
+        "sha256": "sha256:7165771f3e4f743c023137161f1ddf3c2121837ece3308a0f2b33a1ed2f5ceeb"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0039-traffic-failover.yaml",
+        "sha256": "sha256:99fa2f02e4b9d80e412a04d9afeb88a8fb23dbe8944d3688e5c1b706adbce4fa"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0040-host-isolate.yaml",
+        "sha256": "sha256:231742a337a549b659ed525c3c6e08e3484b05c25f4b01bcd173a356832f4915"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0041-protocol-amend.yaml",
+        "sha256": "sha256:a741f433d458e9da5a76ef80f4ce37c439300e23669050df9bebb5ab76df731b"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0042-employment-terminate.yaml",
+        "sha256": "sha256:aa500792944c9be1a489cf68c2a7ab8e4d00d225465b978d37502fde6f55cb1f"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0043-compensation-change.yaml",
+        "sha256": "sha256:28e379e51a4396b40d6ea6c66cc2b2dba27fd674ac8261bfc3bf31137dc6b3fa"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0044-journal-post.yaml",
+        "sha256": "sha256:f492e8a2139801bb701489a4ee937adc455a9403e33238b5e9bf2b9c8ffd6da2"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0045-period-close.yaml",
+        "sha256": "sha256:68a995beff84931518aab0a909af975a4950649c30e9505e8780e076b31c4259"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0046-trial-biomarker-reclassify.yaml",
+        "sha256": "sha256:539089a044ae97ed0e4cd20aeffe3cef3cbf963721480dd21683d38779eb42a0"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0047-trial-biomarker-eligibility-override.yaml",
+        "sha256": "sha256:43482b15d7143e4f1e2cd3559642cf18b37db171853d04fa43141cb973be0b87"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0048-genomic-data-release.yaml",
+        "sha256": "sha256:f25c7e8c6740d6333e36237e968b8672c472519af88bb8073a8b67c5c4c3bcf8"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0049-genomic-data-export.yaml",
+        "sha256": "sha256:539befe0d87d728213e59e7aee6263530b6e2149d157656b03dc87ed8adb9220"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0050-communication-external-send.yaml",
+        "sha256": "sha256:b985049ec3951deba00e8dac1c49f5cba2deed931e6b7c843da9d457c3786bc0"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0051-trial-randomization-break.yaml",
+        "sha256": "sha256:ffc3b17458f50b25bb1593ee451be5ec67c3eb3baa2e4e9cd7bd91ce529c751a"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0052-reconciliation-certify.yaml",
+        "sha256": "sha256:d195bb690321c0d3ff57e922f04872ff514c001d402b912f6bff326c64f8ef6a"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0053-journal-entry-approve.yaml",
+        "sha256": "sha256:a9924088eab5ac79afbc319a68c52d9fbb10e86c447f81b8948350d9ae9d33b7"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0054-variance-review-escalate.yaml",
+        "sha256": "sha256:99b91bfe0b2f961e3337a7bbd5b683cda5edf2a48b5ae17c37b6dddf97752236"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0055-industrial-safety-bypass.yaml",
+        "sha256": "sha256:1896366883a6d2b264f2f38b2f740c7cfb2008ed030f35d8705b3861038ad665"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0056-industrial-controller-configure.yaml",
+        "sha256": "sha256:ecbcf5c989f32f86f4dd37efa1e241ae1f643c6ab1fc5bbe0286a12b8d4feb74"
+      },
+      {
+        "path": "contract/canonical-actions/ACT-0057-secret-configuration-change.yaml",
+        "sha256": "sha256:d57cbe2b46cbb5e6b5155fc0e60145c602a28cba37225969099c2d9bcbc08744"
+      },
+      {
+        "path": "contract/canonical-actions/CANON_REGISTRY.json",
+        "sha256": "sha256:eeb5173471811c19348850de9e4474714b7282b11310c090e7c7cb131439dc1b"
+      },
+      {
+        "path": "contract/canonical-actions/SPECIALIZATIONS.yaml",
+        "sha256": "sha256:6b1764ad456e70ad40539f1c3f49b7c0eb03795cc28d65eb8de017b283f14f61"
+      },
+      {
+        "path": "contract/protection-catalog/README.md",
+        "sha256": "sha256:d038eeed848b4cfb64974707dd5ed51d3478a34b35ff1dcde7f930d0c1c86e7e"
+      },
+      {
+        "path": "contract/protection-catalog/catalog.yaml",
+        "sha256": "sha256:3036689de7dfd07a5f84a3f61338428c8eb126d06c01750e07a49936dcb96202"
+      },
+      {
+        "path": "contract/protection-catalog/future-capabilities.yaml",
+        "sha256": "sha256:ca7b8cd33b8cbddf5448f86d1654f8341a2b9ed6372e9f3d41bc74998282cdbd"
+      },
+      {
+        "path": "contract/protection-catalog/schemas/future-capability-registry.schema.json",
+        "sha256": "sha256:b47e527ce8a68c5da1fb00577aa04f895096cae5e9fa524fa49bdbd44a92da4c"
+      },
+      {
+        "path": "contract/protection-catalog/schemas/protection-catalog.schema.json",
+        "sha256": "sha256:c552b4a78a1616cb707fcccda7f9123ab169bce0a817798662179a4ad5a64145"
+      },
+      {
+        "path": "contract/safeguard-pack/connector-readiness/netsuite.readiness.yaml",
+        "sha256": "sha256:41ee7f9ef29e571c58560d978c990f054ceddded4d5822e69403ba53fc37a074"
+      },
+      {
+        "path": "contract/safeguard-pack/connector-readiness/salesforce.readiness.yaml",
+        "sha256": "sha256:bac61c518f0f4b67dd84b7279e4e991b46506dc11055d61d00cf38bc7d9d26cc"
+      },
+      {
+        "path": "contract/safeguard-pack/index.yaml",
+        "sha256": "sha256:56c2b94712fbc8b18a0fe01db2845f2e45a393d38b9430e77ce0bb2e3f49be44"
+      },
+      {
+        "path": "contract/safeguard-pack/protected-actions/safeguard-actions.yaml",
+        "sha256": "sha256:6932a4c9c7aac3e9e7a17480ca9921ecf1f1942115778963f82488bb2738de68"
+      },
+      {
+        "path": "docs/CYBERNETIC_GOVERNANCE_DOCTRINE.md",
+        "sha256": "sha256:b0037755ace5edeb2e116af80da4d58b1192f8529b2c5bb681043b43d167a50f"
+      },
+      {
+        "path": "docs/INTELLIGENCE_EXPANSION_BOUNDARY_2026-08-27.md",
+        "sha256": "sha256:823e7dfc2e6c4ab4be00e5e3805e7289a444d795c63bdb2a370eb9ef0a91e7ee"
+      },
+      {
+        "path": "docs/design/BOUNDED_EXPLORATION_MANDATE_V0_1.md",
+        "sha256": "sha256:1fd0232902d8f4aec16f173d7674e0305fd11dbcf16159dcd2eff2e6f32419b5"
+      },
+      {
+        "path": "docs/product/action-packs/FLOQAST_PRODUCTION_CHANGE_AUTHORITY.md",
+        "sha256": "sha256:7012d294447ea24576a27ec11eb4ba204f4b831ecbbb2f83c6fe220f627ab056"
+      },
+      {
+        "path": "docs/product/action-packs/PROPEL_ACCESS_AUTHORITY.md",
+        "sha256": "sha256:8e50ba9974c5fb742b31548fb420957b1a095a08ad07d5792ecae238ff26c6c2"
+      },
+      {
+        "path": "docs/specs/experiment-contract-v1.md",
+        "sha256": "sha256:94ac605cc66a2991baa80f21a482cf77c015572f721c914c2fc60a3ef296ea76"
+      },
+      {
+        "path": "docs/specs/learning-record-model-v1.md",
+        "sha256": "sha256:fba5e609b6c06cb7e67ef055d557fe0c4f5489b82bf160947fe33c6ab6ef51cf"
+      },
+      {
+        "path": "docs/specs/outcome-assessment-model-v1.md",
+        "sha256": "sha256:334be3fa28dcfdaf4037738bb084bc26dd829dbea19e98327a7e62eafdd1dc63"
+      },
+      {
+        "path": "scripts/generate-protection-catalog.py",
+        "sha256": "sha256:1865483325c38d65debd1e591693c16325903da45d4286a9ae7557e4a4cdfc56"
+      }
+    ]
+  },
+  "kind": "protection-catalog",
+  "released_at": "2026-08-28T01:25:00Z",
+  "schema_version": "1.0",
+  "source_digests": {
+    "action_pack_registry": "sha256:1f4d681c43f63831b62a8e1628df52304c8cddbede7106ed4971a689e4f50689",
+    "action_pack_schema": "sha256:73d7890ad6a07b96ad2a663773f8fce6f10d1d4e7b0b98723ad1d61a774ed9fe",
+    "canonical_action_records": "sha256:fd160c5a7f1f8991856f36c96da52ea25d9825d8ab159b879a1200a005723bd2",
+    "canonical_registry": "sha256:eeb5173471811c19348850de9e4474714b7282b11310c090e7c7cb131439dc1b",
+    "catalog_config": "sha256:3036689de7dfd07a5f84a3f61338428c8eb126d06c01750e07a49936dcb96202",
+    "future_capability_registry": "sha256:ca7b8cd33b8cbddf5448f86d1654f8341a2b9ed6372e9f3d41bc74998282cdbd",
+    "future_capability_schema": "sha256:b47e527ce8a68c5da1fb00577aa04f895096cae5e9fa524fa49bdbd44a92da4c",
+    "generator": "sha256:1865483325c38d65debd1e591693c16325903da45d4286a9ae7557e4a4cdfc56",
+    "protection_catalog_readme": "sha256:d038eeed848b4cfb64974707dd5ed51d3478a34b35ff1dcde7f930d0c1c86e7e",
+    "protection_catalog_schema": "sha256:c552b4a78a1616cb707fcccda7f9123ab169bce0a817798662179a4ad5a64145",
+    "referenced_evidence_sources": "sha256:806aa396f31fb7d5f5b1ff9e6bd9626215f4f3ca29ca490c57eed68ae79bc189",
+    "safeguard_actions": "sha256:6932a4c9c7aac3e9e7a17480ca9921ecf1f1942115778963f82488bb2738de68",
+    "safeguard_index": "sha256:56c2b94712fbc8b18a0fe01db2845f2e45a393d38b9430e77ce0bb2e3f49be44",
+    "specialization_registry": "sha256:6b1764ad456e70ad40539f1c3f49b7c0eb03795cc28d65eb8de017b283f14f61"
+  },
+  "summary": {
+    "action_pack_count": 2,
+    "active_canonical_action_count": 54,
+    "future_capability_count": 15
+  }
+}
