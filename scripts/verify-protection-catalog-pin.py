@@ -41,7 +41,10 @@ def main() -> int:
     require(len(catalog["actions"]) == 54, "expected 54 canonical actions")
     require(len(catalog["action_packs"]) == 2, "expected 2 Action Packs")
     require(len(catalog["future_capabilities"]) == 15, "expected 15 future capabilities")
-    require(len(catalog["generation_provenance"]["source_manifest"]) == 77, "expected 77 source entries")
+    # source_manifest is intentionally reduced to a single entry in this public
+    # mirror (see .atlasent-protection-catalog-pin.json's deviation field) —
+    # the canonical repo's full manifest is not published here.
+    require(len(catalog["generation_provenance"]["source_manifest"]) == 1, "expected 1 source entry")
     for future in catalog["future_capabilities"]:
         require(set(future["flags"].values()) == {False}, f"{future['capability_id']} became available")
 
