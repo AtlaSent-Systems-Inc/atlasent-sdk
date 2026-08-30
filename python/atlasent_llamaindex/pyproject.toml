@@ -30,7 +30,16 @@ classifiers = [
 # that raised ModuleNotFoundError on import — caught by the smoke-test
 # step added in publish-pypi-llamaindex.yml, which installs only the built
 # wheel (no dev extras) before importing it.
-dependencies = ["atlasent>=1.5.0"]
+#
+# Floor is >=2.15.0, not >=1.5.0: guard.py's wrapper always passes
+# state_snapshot=state_snapshot to client.protect(), and that parameter
+# was only added to atlasent in 2.15.0 (see atlasent/CHANGELOG.md's
+# "2.15.0 -- state_snapshot field" entry). Below 2.15.0, protect() has no
+# such parameter and every guarded call raises TypeError: protect() got
+# an unexpected keyword argument 'state_snapshot'. This README already
+# documented ">= 2.15.0 peer dependency" (see "## Version" below); the
+# installable constraint just hadn't matched it.
+dependencies = ["atlasent>=2.15.0"]
 
 [project.optional-dependencies]
 dev = [

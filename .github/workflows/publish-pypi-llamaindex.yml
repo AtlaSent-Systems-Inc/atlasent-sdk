@@ -118,9 +118,24 @@ jobs:
 
       # -- AtlaSent release gate --------------------------------------
       # Gate closed: if the permit is not verified the job exits here and
-      # nothing builds or publishes. Same shape as publish-npm-llamaindex.yml
-      # (the TS sibling package's gate), for consistency across the
-      # llamaindex package family.
+      # nothing builds or publishes.
+      #
+      # Action type is `package.release` (NOT production.deploy), matching
+      # publish-pypi.yml's documented reasoning (see that file's own AtlaSent
+      # release gate comment): package publishing has its own runtime policy
+      # that does not require PR approvals, whereas production.deploy keeps
+      # its human-approval gate. publish-npm-llamaindex.yml (the TS sibling
+      # package's gate) currently uses production.deploy instead -- flagged
+      # by review as a pre-existing inconsistency in that file, not
+      # reproduced here.
+      #
+      # NOTE: publish-pypi.yml's comment says the package.release policy's
+      # trusted-workflow template is keyed in part to the workflow's `name:`
+      # field. If that trust list is an explicit allowlist rather than a
+      # pattern, the policy owner may need to add this workflow's name
+      # ("Publish atlasent-llamaindex to PyPI") to it before this gate can
+      # reach `allow` -- verify against the live policy before relying on
+      # this gate for an actual release.
       - name: AtlaSent release gate
         if: ${{ !inputs.skip_gate }}
         uses: AtlaSent-Systems-Inc/atlasent-action@v1
@@ -128,7 +143,7 @@ jobs:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          action: production.deploy
+          action: package.release
           api-url: https://kttccumlnmdtupgbyfue.supabase.co/functions/v1
           actor: ${{ github.actor }}
           environment: production
