@@ -1,5 +1,7 @@
 # AtlaSent SDKs
 
+SDK layer for AtlaSent — thin wrappers around atlasent-api. Python (`atlasent` on PyPI) and TypeScript (`@atlasent/sdk` on npm), plus framework guards.
+
 [![PyPI](https://img.shields.io/pypi/v/atlasent.svg)](https://pypi.org/project/atlasent/)
 [![npm](https://img.shields.io/npm/v/@atlasent/sdk.svg)](https://www.npmjs.com/package/@atlasent/sdk)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
