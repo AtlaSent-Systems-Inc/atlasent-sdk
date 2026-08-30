@@ -24,7 +24,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["atlasent", "langchain", "authorization", "middleware", "agent-security"],
+  "keywords": ["atlasent", "langchain", "authorization", "middleware", "agent-security", "guardrails", "ai-agent-gating", "llm-security"],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AtlaSent-Systems-Inc/atlasent-sdk.git",

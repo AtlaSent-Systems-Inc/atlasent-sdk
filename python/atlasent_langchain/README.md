@@ -1,7 +1,9 @@
 # atlasent-langchain
 
-AtlaSent authorization wrapper for LangChain tools. Wraps any Python callable
-with authorize-before-execute semantics:
+[![PyPI](https://img.shields.io/pypi/v/atlasent-langchain.svg)](https://pypi.org/project/atlasent-langchain/)
+
+AtlaSent authorization wrapper (guardrails / AI agent gating) for LangChain
+tools. Wraps any Python callable with authorize-before-execute semantics:
 
 1. `client.protect()` — evaluate the policy engine + verify the permit (fail-closed)
 2. Execute the original function — only when both pass

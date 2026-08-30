@@ -1,7 +1,10 @@
 # `@atlasent/llamaindex`
 
-AtlaSent authorization wrapper for LlamaIndex tools. Wraps any LlamaIndex
-tool's call function with authorize-first semantics:
+[![npm](https://img.shields.io/npm/v/@atlasent/llamaindex.svg)](https://www.npmjs.com/package/@atlasent/llamaindex)
+
+AtlaSent authorization wrapper (guardrails / AI agent gating) for LlamaIndex
+tools. Wraps any LlamaIndex tool's call function with authorize-first
+semantics:
 
 1. `evaluate` — check the policy engine
 2. `verifyPermit` — confirm the permit cryptographically

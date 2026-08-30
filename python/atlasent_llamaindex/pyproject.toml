@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [
     { name = "AtlaSent Systems Inc.", email = "sdk@atlasent.io" },
 ]
-keywords = ["atlasent", "llamaindex", "llama-index", "authorization", "middleware", "agent-security"]
+keywords = ["atlasent", "llamaindex", "llama-index", "authorization", "middleware", "agent-security", "guardrails", "ai-agent-gating", "llm-security"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -23,11 +23,17 @@ classifiers = [
     "Topic :: Security",
     "Typing :: Typed",
 ]
-dependencies = []
+# atlasent is a real runtime import (guard.py imports
+# atlasent.exceptions.AtlaSentDeniedError), not merely a dev/test
+# dependency. It was previously declared only under the `dev` extra below,
+# which meant `pip install atlasent-llamaindex` alone installed a package
+# that raised ModuleNotFoundError on import — caught by the smoke-test
+# step added in publish-pypi-llamaindex.yml, which installs only the built
+# wheel (no dev extras) before importing it.
+dependencies = ["atlasent>=1.5.0"]
 
 [project.optional-dependencies]
 dev = [
-    "atlasent>=1.5.0",
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
     "pytest-cov>=4.1.0",

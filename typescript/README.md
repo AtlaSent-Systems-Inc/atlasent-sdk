@@ -1,5 +1,7 @@
 # @atlasent/sdk
 
+[![npm](https://img.shields.io/npm/v/@atlasent/sdk.svg)](https://www.npmjs.com/package/@atlasent/sdk)
+
 Execution-time authorization for AI agents, in TypeScript. Two methods, zero runtime dependencies, one function call per decision.
 
 ```bash

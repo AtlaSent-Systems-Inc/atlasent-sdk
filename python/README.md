@@ -1,5 +1,8 @@
 # AtlaSent Python SDK
 
+[![PyPI](https://img.shields.io/pypi/v/atlasent.svg)](https://pypi.org/project/atlasent/)
+[![Python versions](https://img.shields.io/pypi/pyversions/atlasent.svg)](https://pypi.org/project/atlasent/)
+
 **Execution-time authorization for AI agents.** One call before a sensitive
 action runs. Fail-closed by design — no action proceeds without an explicit,
 verified permit.
