@@ -3,8 +3,9 @@
   "canonical_repository": "AtlaSent-Systems-Inc/atlasent",
   "canonical_commit": "23b3194a4eb6b022405702ad6d671f22f43500a1",
   "catalog_path": "vendor/atlasent-canonical/protection-catalog/v1/catalog.json",
-  "catalog_sha256": "daaf85e62057774dc073f16d66fc240050039568ec1d798c244d09ef97bed85c",
+  "catalog_sha256": "39f6bd9359860cca4136ebccfdb125917c51d6a8b1df6e4333f63f8a0fd4e4d8",
   "schema_path": "vendor/atlasent-canonical/protection-catalog/v1/protection-catalog.schema.json",
   "schema_sha256": "bbbe1ee5251160b509e05f588c9d6dc6bb15241ee81f67c83a22f9d3acde3877",
-  "pinned_at": "2026-08-28T05:00:00Z"
+  "pinned_at": "2026-08-30T00:00:00Z",
+  "deviation_from_canonical_commit": "2026-08-30 confidentiality redaction: this repo is public and the pinned commit's catalog.json embedded two customer-identifying doc filenames (FLOQAST_PRODUCTION_CHANGE_AUTHORITY.md, PROPEL_ACCESS_AUTHORITY.md) in commercial offer_ref / source_manifest path strings. Those two path strings were hand-redacted to generic filenames (PRODUCTION_CHANGE_AUTHORITY.md, GOOGLE_WORKSPACE_ACCESS_AUTHORIZATION.md, matching the existing generic action_pack slugs) without bumping canonical_commit — no other bytes changed. catalog_sha256 above reflects the redacted file, not the byte-identical canonical mirror at canonical_commit. Follow-up: rename the source files at those paths in atlasent (private repo) and re-vendor normally via the standard bump_procedure once done, which will make this field obsolete."
 }
