@@ -40,8 +40,12 @@ goes wrong on a publish.
 - [x] **`README.md`** is set as `readme` in `pyproject.toml` so PyPI
   renders the right thing.
 - [x] **Trusted publishing** configured: `.github/workflows/publish-
-  python-sdk.yml` uses `id-token: write` and PyPI's GitHub OIDC
-  trusted publisher (no API tokens on disk).
+  pypi.yml` (core `atlasent`), plus `publish-pypi-enforce.yml`,
+  `publish-pypi-v2alpha.yml`, `publish-pypi-langchain.yml`, and
+  `publish-pypi-llamaindex.yml` for the other Python packages, all use
+  `id-token: write` and PyPI's GitHub OIDC trusted publisher (no API
+  tokens on disk). (Corrected 2026-08-30: this previously named a
+  `publish-python-sdk.yml` file that does not exist in this repo.)
 - [ ] **Dry-run** with `python -m twine upload --repository testpypi`
   succeeds. Verify install from TestPyPI.
 - [x] **Sigstore signing** enabled — `pypa/gh-action-pypi-publish` with

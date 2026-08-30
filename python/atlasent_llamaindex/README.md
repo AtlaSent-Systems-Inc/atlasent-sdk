@@ -1,7 +1,9 @@
 # atlasent-llamaindex
 
-AtlaSent authorization wrapper for LlamaIndex tools. Wraps any Python callable
-with authorize-before-execute semantics:
+[![PyPI](https://img.shields.io/pypi/v/atlasent-llamaindex.svg)](https://pypi.org/project/atlasent-llamaindex/)
+
+AtlaSent authorization wrapper (guardrails / AI agent gating) for LlamaIndex
+tools. Wraps any Python callable with authorize-before-execute semantics:
 
 1. `client.protect()` — evaluate the policy engine + verify the permit (fail-closed)
 2. Execute the original function — only when both pass

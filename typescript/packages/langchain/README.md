@@ -1,7 +1,10 @@
 # `@atlasent/langchain`
 
-AtlaSent authorization wrapper for LangChain tools. Wraps any LangChain
-tool's `execute` callback with authorize-first semantics:
+[![npm](https://img.shields.io/npm/v/@atlasent/langchain.svg)](https://www.npmjs.com/package/@atlasent/langchain)
+
+AtlaSent authorization wrapper (guardrails / AI agent gating) for LangChain
+tools. Wraps any LangChain tool's `execute` callback with authorize-first
+semantics:
 
 1. `evaluate` — check the policy engine
 2. `verifyPermit` — confirm the permit cryptographically
