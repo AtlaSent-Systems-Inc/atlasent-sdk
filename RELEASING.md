@@ -30,6 +30,31 @@ four tags in a single command if releasing all four packages at once.
 
 All four tag-prefix filters are mutually exclusive.
 
+### Framework integration packages (Python)
+
+| Package               | Tag format              | Workflow                                     |
+|------------------------|--------------------------|-----------------------------------------------|
+| `atlasent-langchain`   | `langchain-py-v<semver>` | `.github/workflows/publish-pypi-langchain.yml`|
+| `atlasent-llamaindex`  | `llamaindex-py-v<semver>`| `.github/workflows/publish-pypi-llamaindex.yml`|
+
+These are standalone PyPI distributions (see `python/atlasent_langchain/`
+and `python/atlasent_llamaindex/`), versioned independently of `atlasent`
+itself via a static `version` field in each package's own `pyproject.toml`
+(not a `_version.py` module). Bump that field, then:
+
+```sh
+git tag langchain-py-v1.5.2
+git push origin langchain-py-v1.5.2
+```
+
+(substitute `llamaindex-py-v<semver>` for the other package). Each tag
+fires exactly one publisher — the tag prefix is the whole dispatch
+mechanism, same as the tables above. This section documents only the
+langchain/llamaindex pair; other sibling packages under `python/` follow
+the same `<name>-py-v*` / `publish-pypi-<name>.yml` shape where such a
+workflow exists (check `.github/workflows/` for the current list — this
+file does not enumerate every one).
+
 ## Pre-flight (both languages)
 
 Before tagging:

@@ -90,6 +90,11 @@ jobs:
       # ── AtlaSent release gate ────────────────────────────────────────
       # Gate closed: if the permit is not verified the job exits here and
       # nothing builds or publishes.
+      # This was previously gated on `production.deploy`, the wrong
+      # protected action for package publication (same release-control
+      # inconsistency corrected in publish-npm.yml/publish-pypi.yml —
+      # see those files' comments). Corrected here to match, rather than
+      # left in a permanently-guaranteed-deny state.
       - name: AtlaSent release gate
         if: ${{ !inputs.skip_gate }}
         uses: AtlaSent-Systems-Inc/atlasent-action@v1
@@ -97,7 +102,7 @@ jobs:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          action: production.deploy
+          action: package.release
           api-url: https://kttccumlnmdtupgbyfue.supabase.co/functions/v1
           actor: ${{ github.actor }}
           environment: production
