@@ -72,6 +72,7 @@ class TestWithLlamaIndexGuard:
             agent="svc:app",
             action="search",
             context={"tool_input": {"query": "x"}},
+            state_snapshot=None,
         )
 
     def test_uses_custom_action(self) -> None:
