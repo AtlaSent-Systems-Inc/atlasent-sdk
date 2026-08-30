@@ -18,7 +18,10 @@ describe("ProtectionCatalogSchema", () => {
     expect(catalog.actions).toHaveLength(54);
     expect(catalog.action_packs).toHaveLength(2);
     expect(catalog.future_capabilities).toHaveLength(15);
-    expect(catalog.generation_provenance.source_manifest).toHaveLength(77);
+    // source_manifest is intentionally reduced to a single entry in this public
+    // mirror (see .atlasent-protection-catalog-pin.json's deviation field) —
+    // the canonical repo's full manifest is not published here.
+    expect(catalog.generation_provenance.source_manifest).toHaveLength(1);
   });
 
   it("preserves the exact rollback identity", () => {

@@ -91,27 +91,27 @@
             "readiness_gates": {
               "G1_access": {
                 "evidence_refs": [],
-                "notes": "Salesforce has a separate L1 readiness record, but no evidence establishes the complete Gearset-to-Salesforce binding profile.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G2_security": {
                 "evidence_refs": [],
-                "notes": "Exact profile-level credential, target, and permit-boundary review has not been evidenced.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G3_behavior": {
                 "evidence_refs": [],
-                "notes": "Deterministic end-to-end behavior for this binding profile has not been evidenced.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G4_customer_acceptance": {
                 "evidence_refs": [],
-                "notes": "No customer-controlled sandbox acceptance has been earned.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G5_production": {
                 "evidence_refs": [],
-                "notes": "No controlled production validation has been earned.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               }
             }
@@ -146,27 +146,27 @@
             "readiness_gates": {
               "G1_access": {
                 "evidence_refs": [],
-                "notes": "NetSuite has a separate L2 readiness record, but no evidence establishes the complete Salto-to-NetSuite binding profile.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G2_security": {
                 "evidence_refs": [],
-                "notes": "The profile-level runner, credentials, content binding, and observation boundary have not been evidenced.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G3_behavior": {
                 "evidence_refs": [],
-                "notes": "Deterministic end-to-end behavior for this binding profile has not been evidenced.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G4_customer_acceptance": {
                 "evidence_refs": [],
-                "notes": "No customer-controlled sandbox acceptance has been earned.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G5_production": {
                 "evidence_refs": [],
-                "notes": "No controlled production validation has been earned.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               }
             }
@@ -583,27 +583,27 @@
             "readiness_gates": {
               "G1_access": {
                 "evidence_refs": [],
-                "notes": "No Google Groups binding-readiness artifact establishes a live access path.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G2_security": {
                 "evidence_refs": [],
-                "notes": "Profile-level minimum scopes, credential handling, and target binding have not been evidenced in a readiness ledger.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G3_behavior": {
                 "evidence_refs": [],
-                "notes": "Product prose documents implementation shape but is not a binding-readiness proof record.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G4_customer_acceptance": {
                 "evidence_refs": [],
-                "notes": "No customer-controlled Google resource acceptance has been earned.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G5_production": {
                 "evidence_refs": [],
-                "notes": "No controlled production validation has been earned.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               }
             }
@@ -645,27 +645,27 @@
             "readiness_gates": {
               "G1_access": {
                 "evidence_refs": [],
-                "notes": "No Google Drive binding-readiness artifact establishes a live access path.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G2_security": {
                 "evidence_refs": [],
-                "notes": "Profile-level minimum scopes, credential handling, and target binding have not been evidenced in a readiness ledger.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G3_behavior": {
                 "evidence_refs": [],
-                "notes": "Product prose documents implementation shape but is not a binding-readiness proof record.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G4_customer_acceptance": {
                 "evidence_refs": [],
-                "notes": "No customer-controlled Google resource acceptance has been earned.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               },
               "G5_production": {
                 "evidence_refs": [],
-                "notes": "No controlled production validation has been earned.",
+                "notes": "Redacted for public distribution; internal readiness detail is not published in the public catalog mirror.",
                 "status": "not_started"
               }
             }
@@ -2786,310 +2786,6 @@
       }
     },
     "source_manifest": [
-      {
-        "path": "ROADMAP.md",
-        "sha256": "sha256:890cf77b9dbb9e4eb0480d2f9c6282499c3eb6571fca827d85039a157f857485"
-      },
-      {
-        "path": "contract/action-packs/registry.yaml",
-        "sha256": "sha256:1f4d681c43f63831b62a8e1628df52304c8cddbede7106ed4971a689e4f50689"
-      },
-      {
-        "path": "contract/action-packs/schemas/action-pack.schema.json",
-        "sha256": "sha256:74ab882ea0d9dadc97218766cab4e5a9bdb44e890ebcc075db61b709d24dd0a1"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0001-production-deploy.yaml",
-        "sha256": "sha256:2ef258c7ed8eeed272f79d7c4e9c61732a79696f2abc5277791d8ee05964899b"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0002-artifact-release.yaml",
-        "sha256": "sha256:3f8f8ad54579b696d57e4ffca422102c19c86740204ccc0d72b9e7befd0dc931"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0003-workflow-approve.yaml",
-        "sha256": "sha256:7f058f13b69296f15e21dcb5c47f994c71477ec5ee2e3839f182e43dbf2f8916"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0005-data-modify.yaml",
-        "sha256": "sha256:9577ccc55fa10fdbbdd738f6851f4659865678079dbc2ea49f3d85b0652e6faf"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0007-data-import.yaml",
-        "sha256": "sha256:c0198421ed686d6dbd829a91a85d810779e42f32ca51c535d39d442296ccd60b"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0008-data-delete.yaml",
-        "sha256": "sha256:bac6e8aa9aea172314790cb263fdea12c0c3ae5a4311429bd8b9196e46f40625"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0009-access-grant.yaml",
-        "sha256": "sha256:5981a5feda5f1e925c440b101f771a4b8625e877ebd26bdb4adc628bd03554d8"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0010-access-revoke.yaml",
-        "sha256": "sha256:7510ea5c6c33e33b596ad84b6ff160ada5927dcc2116492652de6c9a2ae84b9d"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0011-control-override.yaml",
-        "sha256": "sha256:49e1f310b34faa5770f15f3b02fc01d19789736ce6ee37c74931ddea4958bca2"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0013-content-publish.yaml",
-        "sha256": "sha256:fc2451d6734b298dfce6908825c507da15a0f19f920256b1026fcf3197175c7a"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0014-identity-sign.yaml",
-        "sha256": "sha256:30288ae5d87f169f454c66d2d7487a014ed218a994c766f1937d86e5edf5f26e"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0015-resource-create.yaml",
-        "sha256": "sha256:99cac5c87dc80b100b93ccd9fe18699a1715717150cca2779c9d1fd28fb0ea86"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0016-resource-destroy.yaml",
-        "sha256": "sha256:0ada1780fb5cb73f9dc411379ffff9d2ba94f034774c08c220c10b2d05bc844e"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0017-service-suspend.yaml",
-        "sha256": "sha256:3bbc2a525574fa1f0cb83d43ca8a84443a5f1313aed9c29bb1fd982682efef52"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0018-service-resume.yaml",
-        "sha256": "sha256:59145ae8038b6e87369da22f214854977abc0fc33cfdf5af5fc2bbad2f15866f"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0019-workflow-escalate.yaml",
-        "sha256": "sha256:f3d5c7cc177df8cba1b546f92b21c98303873b77162c1d4509701e3d7aeeae85"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0020-compliance-certify.yaml",
-        "sha256": "sha256:b3a03ed17ab6a403e32a33da70abb1678ea6df932b6c3f596702404c55d61a3f"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0021-trial-unblinding.yaml",
-        "sha256": "sha256:2226ce44f4c21afd946ffb91baf130320990dd02d870a579232cefd97189e2c5"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0022-trial-blinding-setup.yaml",
-        "sha256": "sha256:ccc68501ce351d9c461e058adc04e09a03085ece02db99aadcd1a4f5a568a77f"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0023-trial-unblinding-emergency.yaml",
-        "sha256": "sha256:d1354009a2f1ba0fe389c4fa38c61d8b7f7eeeb6c5b483f593671c63a96d4e75"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0024-finance-payment-authorize.yaml",
-        "sha256": "sha256:ecdcef3a37dfee38b925cd0ad496ee056763278cb8be2838149438834c192a54"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0025-finance-wire-transfer.yaml",
-        "sha256": "sha256:4650f1584f7a5128f8bde69f6e899148f5451279955c5f65ceee1f1eb2eaffff"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0026-industrial-control-actuate.yaml",
-        "sha256": "sha256:76d077b95da95d41c15ff15b88ccaa975cd964fe68199214cc236b9d66ba9afe"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0027-healthcare-record-amend.yaml",
-        "sha256": "sha256:8cb830e3f14ab3c781d8489d6a2fa6e9d55f3cc63a2282ed48e434e1ed540701"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0028-identity-privileged-grant.yaml",
-        "sha256": "sha256:89ae55e1b28b2dc8cdef6e1c69d05294200891281010322b091e9d3bb842d557"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0029-agent-tool-invoke.yaml",
-        "sha256": "sha256:687167fa0c35bd5801a98202c66012de37e65d5b94d90cbea4d10b59e90b3331"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0030-model-promote.yaml",
-        "sha256": "sha256:0fa016ba16fd81f7e42c2dc8b0f706785e2d9150a212a920fd337c05a1776bb2"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0031-data-export.yaml",
-        "sha256": "sha256:c0c46be1a7a3dc85ddf9fddcf224c6ef787d183834c6724c05a78cc0112910e4"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0032-security-breakglass.yaml",
-        "sha256": "sha256:b0bb0cce4d9d12cdb9fd3513262c73f24d2839069d4d01abb5479c37494cb3e7"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0033-release-create.yaml",
-        "sha256": "sha256:97e9655224fb421e0fa578d852509dbe2db4f1425a056224c04f25a686510ae2"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0034-production-rollback.yaml",
-        "sha256": "sha256:28d41374812ef0c27b5afcce7fb051bed3b2ed8c276f5e397a07f5fbac5fcebb"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0035-database-migrate.yaml",
-        "sha256": "sha256:31a32398c74c443daf5d39c6f081968672a6ee828d4b7db707a6d889fe095bb4"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0036-infrastructure-change.yaml",
-        "sha256": "sha256:5c08f99c587bb837080659424d24b387acf4211325b28db87761ef0c9e89ddbb"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0037-feature-enable.yaml",
-        "sha256": "sha256:9ffa53419f281c66d959a06e404069f8e20284155bc2b5e3268029f24b359b78"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0038-secret-rotate.yaml",
-        "sha256": "sha256:7165771f3e4f743c023137161f1ddf3c2121837ece3308a0f2b33a1ed2f5ceeb"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0039-traffic-failover.yaml",
-        "sha256": "sha256:99fa2f02e4b9d80e412a04d9afeb88a8fb23dbe8944d3688e5c1b706adbce4fa"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0040-host-isolate.yaml",
-        "sha256": "sha256:231742a337a549b659ed525c3c6e08e3484b05c25f4b01bcd173a356832f4915"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0041-protocol-amend.yaml",
-        "sha256": "sha256:a741f433d458e9da5a76ef80f4ce37c439300e23669050df9bebb5ab76df731b"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0042-employment-terminate.yaml",
-        "sha256": "sha256:aa500792944c9be1a489cf68c2a7ab8e4d00d225465b978d37502fde6f55cb1f"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0043-compensation-change.yaml",
-        "sha256": "sha256:28e379e51a4396b40d6ea6c66cc2b2dba27fd674ac8261bfc3bf31137dc6b3fa"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0044-journal-post.yaml",
-        "sha256": "sha256:f492e8a2139801bb701489a4ee937adc455a9403e33238b5e9bf2b9c8ffd6da2"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0045-period-close.yaml",
-        "sha256": "sha256:68a995beff84931518aab0a909af975a4950649c30e9505e8780e076b31c4259"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0046-trial-biomarker-reclassify.yaml",
-        "sha256": "sha256:539089a044ae97ed0e4cd20aeffe3cef3cbf963721480dd21683d38779eb42a0"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0047-trial-biomarker-eligibility-override.yaml",
-        "sha256": "sha256:43482b15d7143e4f1e2cd3559642cf18b37db171853d04fa43141cb973be0b87"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0048-genomic-data-release.yaml",
-        "sha256": "sha256:f25c7e8c6740d6333e36237e968b8672c472519af88bb8073a8b67c5c4c3bcf8"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0049-genomic-data-export.yaml",
-        "sha256": "sha256:539befe0d87d728213e59e7aee6263530b6e2149d157656b03dc87ed8adb9220"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0050-communication-external-send.yaml",
-        "sha256": "sha256:b985049ec3951deba00e8dac1c49f5cba2deed931e6b7c843da9d457c3786bc0"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0051-trial-randomization-break.yaml",
-        "sha256": "sha256:ffc3b17458f50b25bb1593ee451be5ec67c3eb3baa2e4e9cd7bd91ce529c751a"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0052-reconciliation-certify.yaml",
-        "sha256": "sha256:d195bb690321c0d3ff57e922f04872ff514c001d402b912f6bff326c64f8ef6a"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0053-journal-entry-approve.yaml",
-        "sha256": "sha256:a9924088eab5ac79afbc319a68c52d9fbb10e86c447f81b8948350d9ae9d33b7"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0054-variance-review-escalate.yaml",
-        "sha256": "sha256:99b91bfe0b2f961e3337a7bbd5b683cda5edf2a48b5ae17c37b6dddf97752236"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0055-industrial-safety-bypass.yaml",
-        "sha256": "sha256:1896366883a6d2b264f2f38b2f740c7cfb2008ed030f35d8705b3861038ad665"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0056-industrial-controller-configure.yaml",
-        "sha256": "sha256:ecbcf5c989f32f86f4dd37efa1e241ae1f643c6ab1fc5bbe0286a12b8d4feb74"
-      },
-      {
-        "path": "contract/canonical-actions/ACT-0057-secret-configuration-change.yaml",
-        "sha256": "sha256:d57cbe2b46cbb5e6b5155fc0e60145c602a28cba37225969099c2d9bcbc08744"
-      },
-      {
-        "path": "contract/canonical-actions/CANON_REGISTRY.json",
-        "sha256": "sha256:eeb5173471811c19348850de9e4474714b7282b11310c090e7c7cb131439dc1b"
-      },
-      {
-        "path": "contract/canonical-actions/SPECIALIZATIONS.yaml",
-        "sha256": "sha256:6b1764ad456e70ad40539f1c3f49b7c0eb03795cc28d65eb8de017b283f14f61"
-      },
-      {
-        "path": "contract/protection-catalog/README.md",
-        "sha256": "sha256:27c1b11c7ffe215015d05dc738d6fd4fdc8a63bbbed035bd8190e08db6945a64"
-      },
-      {
-        "path": "contract/protection-catalog/catalog.yaml",
-        "sha256": "sha256:3036689de7dfd07a5f84a3f61338428c8eb126d06c01750e07a49936dcb96202"
-      },
-      {
-        "path": "contract/protection-catalog/future-capabilities.yaml",
-        "sha256": "sha256:ca7b8cd33b8cbddf5448f86d1654f8341a2b9ed6372e9f3d41bc74998282cdbd"
-      },
-      {
-        "path": "contract/protection-catalog/schemas/future-capability-registry.schema.json",
-        "sha256": "sha256:b47e527ce8a68c5da1fb00577aa04f895096cae5e9fa524fa49bdbd44a92da4c"
-      },
-      {
-        "path": "contract/protection-catalog/schemas/protection-catalog.schema.json",
-        "sha256": "sha256:bbbe1ee5251160b509e05f588c9d6dc6bb15241ee81f67c83a22f9d3acde3877"
-      },
-      {
-        "path": "contract/safeguard-pack/connector-readiness/netsuite.readiness.yaml",
-        "sha256": "sha256:41ee7f9ef29e571c58560d978c990f054ceddded4d5822e69403ba53fc37a074"
-      },
-      {
-        "path": "contract/safeguard-pack/connector-readiness/salesforce.readiness.yaml",
-        "sha256": "sha256:bac61c518f0f4b67dd84b7279e4e991b46506dc11055d61d00cf38bc7d9d26cc"
-      },
-      {
-        "path": "contract/safeguard-pack/index.yaml",
-        "sha256": "sha256:56c2b94712fbc8b18a0fe01db2845f2e45a393d38b9430e77ce0bb2e3f49be44"
-      },
-      {
-        "path": "contract/safeguard-pack/protected-actions/safeguard-actions.yaml",
-        "sha256": "sha256:6932a4c9c7aac3e9e7a17480ca9921ecf1f1942115778963f82488bb2738de68"
-      },
-      {
-        "path": "docs/CYBERNETIC_GOVERNANCE_DOCTRINE.md",
-        "sha256": "sha256:b0037755ace5edeb2e116af80da4d58b1192f8529b2c5bb681043b43d167a50f"
-      },
-      {
-        "path": "docs/INTELLIGENCE_EXPANSION_BOUNDARY_2026-08-27.md",
-        "sha256": "sha256:823e7dfc2e6c4ab4be00e5e3805e7289a444d795c63bdb2a370eb9ef0a91e7ee"
-      },
-      {
-        "path": "docs/design/BOUNDED_EXPLORATION_MANDATE_V0_1.md",
-        "sha256": "sha256:1fd0232902d8f4aec16f173d7674e0305fd11dbcf16159dcd2eff2e6f32419b5"
-      },
-      {
-        "path": "docs/product/action-packs/PRODUCTION_CHANGE_AUTHORITY.md",
-        "sha256": "sha256:7012d294447ea24576a27ec11eb4ba204f4b831ecbbb2f83c6fe220f627ab056"
-      },
-      {
-        "path": "docs/product/action-packs/GOOGLE_WORKSPACE_ACCESS_AUTHORIZATION.md",
-        "sha256": "sha256:8e50ba9974c5fb742b31548fb420957b1a095a08ad07d5792ecae238ff26c6c2"
-      },
-      {
-        "path": "docs/specs/experiment-contract-v1.md",
-        "sha256": "sha256:94ac605cc66a2991baa80f21a482cf77c015572f721c914c2fc60a3ef296ea76"
-      },
-      {
-        "path": "docs/specs/learning-record-model-v1.md",
-        "sha256": "sha256:fba5e609b6c06cb7e67ef055d557fe0c4f5489b82bf160947fe33c6ab6ef51cf"
-      },
-      {
-        "path": "docs/specs/outcome-assessment-model-v1.md",
-        "sha256": "sha256:334be3fa28dcfdaf4037738bb084bc26dd829dbea19e98327a7e62eafdd1dc63"
-      },
       {
         "path": "scripts/generate-protection-catalog.py",
         "sha256": "sha256:1865483325c38d65debd1e591693c16325903da45d4286a9ae7557e4a4cdfc56"
