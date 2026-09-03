@@ -17,9 +17,26 @@ on:
   push:
     tags:
       - 'go/v*'   # MUST use go/vX.Y.Z — required for pkg.go.dev sub-module indexing
+  workflow_dispatch: # Safe verification path: runs setup-go + tests only; never publishes.
 
 jobs:
+  dry-run:
+    name: Verify Go toolchain and tests (no publish)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.22'
+      - name: Run tests
+        working-directory: go
+        run: go test ./...
+
   test-and-publish:
+    if: github.event_name == 'push'
     name: Test and publish Go SDK
     runs-on: ubuntu-latest
     permissions:
