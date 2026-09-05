@@ -254,7 +254,30 @@ describe("protectStream (real V2-D4 wire shape)", () => {
       expect(ev.decision).toBe("allow");
       // permit_id resolves from the canonical `permit_token` field.
       expect(ev.permitId).toBe("pt.v4.final");
+      // The real wire never sends `is_final` at all — since protectStream()
+      // always submits a single-item `items` array, this decision IS the
+      // final (and only) one for the call and must be marked final so the
+      // documented `if (event.isFinal) verifyPermit(...)` pattern fires.
+      expect(ev.isFinal).toBe(true);
     }
+  });
+
+  it("fires the documented `if (event.isFinal) verifyPermit(...)` pattern exactly once for a real single-item response", async () => {
+    // Mirrors protectStream()'s own doc example verbatim, against a real
+    // V2-D4 response (decision frame with no `is_final`, then `complete`).
+    const chunks = [decisionWire({ permit_token: "pt.v4.verify-me" }), completeWire()];
+    const fetch = vi.fn(() => Promise.resolve(sseResponse(chunks)));
+    const client = makeClient(fetch);
+
+    const verifyPermit = vi.fn();
+    for await (const event of client.protectStream({ agent: "bot", action: "read" })) {
+      if (event.type === "decision" && event.isFinal) {
+        verifyPermit(event.permitId);
+      }
+    }
+
+    expect(verifyPermit).toHaveBeenCalledTimes(1);
+    expect(verifyPermit).toHaveBeenCalledWith("pt.v4.verify-me");
   });
 
   it("yields a deny decision", async () => {

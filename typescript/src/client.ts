@@ -3659,10 +3659,14 @@ function parseRetryAfter(raw: string | null): number | undefined {
  *
  * Decision frames tolerate both the real wire shape (`{index, decision,
  * permit_token, reason, audit_hash, timestamp}` — the same canonical shape
- * `evaluate()` parses) and the legacy `{permitted, decision_id, is_final}`
- * shape some older mocks/servers still emit. `permit_token` is preferred
- * over `decision_id` when both are present. Error frames prefer the real
- * `error_code` field over the legacy `code`.
+ * `evaluate()` parses, with no `is_final` field at all) and the legacy
+ * `{permitted, decision_id, is_final}` shape some older mocks/servers still
+ * emit. `permit_token` is preferred over `decision_id` when both are
+ * present. Because the caller (`protectStream()`) always submits a
+ * single-item `items` array, a canonical decision frame with no `is_final`
+ * field defaults to final — it IS the one and only decision for that call.
+ * An explicit legacy `is_final: false` is still honoured when present.
+ * Error frames prefer the real `error_code` field over the legacy `code`.
  */
 async function* parseSseStream(
   body: ReadableStream<Uint8Array>,
@@ -3819,7 +3823,17 @@ async function* parseSseStream(
           // Prefer the canonical `permit_token`; fall back to the legacy
           // `decision_id` when both are present.
           const permitId = d.permit_token ?? d.decision_id ?? "";
-          const isFinal = d.is_final ?? false;
+          // The real V2-D4 wire's `event: decision` frames never carry
+          // `is_final` at all (see the decisionWire fixture in
+          // test/stream.test.ts) — the legacy/generic shape is the only one
+          // that ever sets it explicitly. protectStream() always submits a
+          // single-item `items` array (see the request body above), so a
+          // canonical decision frame with no `is_final` field IS the final
+          // (and only) decision for this call: default to final rather than
+          // non-final so the documented `if (event.isFinal) verifyPermit(...)`
+          // pattern actually fires. Explicit legacy `is_final: false` (an
+          // interim decision) is still honoured when present.
+          const isFinal = typeof d.is_final === "boolean" ? d.is_final : true;
           yield {
             type: "decision",
             decision: streamDecision,
