@@ -6,6 +6,34 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## 2.21.2
+
+### Fixed
+
+- `protectStream()` was POSTing a flat `{action, agent, context, api_key}`
+  body to `/v1/evaluate/stream` (falling back to legacy `/v1-evaluate-stream`
+  on 404/405). The real handler (`atlasent-api`
+  `supabase/functions/v1-evaluate-stream/handler.ts`) is body-compatible
+  with `/v1/evaluate/batch`: `{items: [{action_type, actor_id, context,
+  ...}]}` — a different shape, not just different field names — and rejects
+  the old body outright via its `!Array.isArray(body.items)` check. Auth
+  also incorrectly rode a body `api_key` field instead of the
+  `Authorization` header every other call path in this SDK already uses.
+  Same class of bug as the Python `protect_stream()` fix in #499; see
+  `src/v2.ts`'s `authorizeStream()` for the reference implementation this
+  fix mirrors.
+  - `protectStream()` now builds a single-item `items` array
+    (`{action_type, actor_id, context}`); `api_key` is no longer sent in
+    the body.
+  - `parseSseStream()` now treats the real terminal `event: complete`
+    (`{batch_id, count, partial}`) as an end-of-stream signal alongside the
+    legacy/generic `event: done`.
+  - `parseSseStream()`'s error-frame handling now reads the real
+    `error_code` field (falling back to legacy `code`).
+  - Decision-frame parsing now prefers the canonical `permit_token` field
+    over the legacy `decision_id`, mirroring the pattern `evaluate()`
+    already uses.
+
 ## 2.21.1
 
 ### Fixed

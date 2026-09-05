@@ -1941,13 +1941,25 @@ export class AtlaSentClient {
   * Open a streaming evaluation session against `POST /v1/evaluate/stream`
   * (with fallback to `POST /v1-evaluate-stream` on older runtimes).
    *
+   * Wire contract (V2-D4, `atlasent-api`
+   * `supabase/functions/v1-evaluate-stream/handler.ts`): the endpoint is
+   * body-compatible with `/v1/evaluate/batch` — a single-item
+   * `{items: [{action_type, actor_id, context}]}` array, NOT a flat
+   * `{action, agent, context, api_key}` body. Auth rides the `Authorization`
+   * header (below), never a body `api_key` field. See {@link authorizeStream}
+   * in `./v2.js` for the canonical reference implementation of this same
+   * contract.
+   *
    * Yields {@link StreamDecisionEvent} and {@link StreamProgressEvent} objects
    * as the server emits them. The iterator ends cleanly when the server sends
-   * `event: done`; it throws {@link AtlaSentError} on transport errors or when
-   * the server sends `event: error`.
+   * the real terminal `event: complete` frame (`{batch_id, count, partial}`)
+   * or the legacy/generic `event: done`; it throws {@link AtlaSentError} on
+   * transport errors or when the server sends `event: error`.
    *
    * The final {@link StreamDecisionEvent} (isFinal: true) carries a `permitId`
    * suitable for passing to {@link verifyPermit} after the stream closes.
+   * `permitId` prefers the canonical `permit_token` field over the legacy
+   * `decision_id` when both are present.
    *
    * Hardening:
    * - Throws {@link StreamTimeoutError} when no event arrives within
@@ -1957,7 +1969,8 @@ export class AtlaSentClient {
    *   on reconnect when the server has emitted event IDs.
    * - Throws {@link StreamParseError} on partial / malformed JSON rather than
    *   crashing with a raw `SyntaxError`.
-   * - Closes cleanly on `event: done` or a decision event with `done: true`.
+   * - Closes cleanly on `event: complete`, `event: done`, or a decision event
+   *   with `done: true`.
    *
    * ```ts
    * for await (const event of client.protectStream({ agent, action })) {
@@ -1975,17 +1988,23 @@ export class AtlaSentClient {
     const maxRetries = opts.maxRetries ?? 3;
 
     // Accept both the canonical {action_type, actor_id} and the legacy
-    // {action, agent} input shape. The decisions-stream endpoint keeps its
-    // own {action, agent} wire contract (unchanged here); source those fields
-    // from the resolved canonical identity so canonical callers work too.
+    // {action, agent} input shape, matching evaluate()/evaluateMany(). The
+    // real /v1-evaluate-stream handler is body-compatible with
+    // /v1/evaluate/batch: {items: [{action_type, actor_id, context, ...}]} —
+    // a single-item array, not a flat body. `api_key` never rides the body;
+    // auth is carried by the Authorization header set below, same as every
+    // other call path in this SDK.
     const { action_type, actor_id } = resolveEvaluateIdentity(
       input as LegacyEvaluateRequest | V2EvaluateRequest,
     );
     const body = {
-      action: action_type,
-      agent: actor_id,
-      context: input.context ?? {},
-      api_key: this.apiKey,
+      items: [
+        {
+          action_type,
+          actor_id,
+          context: input.context ?? {},
+        },
+      ],
     };
 
     const requestId = globalThis.crypto.randomUUID();
@@ -3634,8 +3653,20 @@ function parseRetryAfter(raw: string | null): number | undefined {
  *   rather than letting the raw `SyntaxError` escape.
  * - Calls `onEventId` whenever the server emits an `id:` field so the caller
  *   can track the `Last-Event-ID` for reconnection.
- * - Terminal detection: returns on `event: done` OR when a `decision` event
- *   carries `done: true` at the top level (server-side terminal signal).
+ * - Terminal detection: returns on the real V2-D4 `event: complete` frame
+ *   (`{batch_id, count, partial}`), the legacy/generic `event: done`, OR when
+ *   a `decision` event carries `done: true` at the top level.
+ *
+ * Decision frames tolerate both the real wire shape (`{index, decision,
+ * permit_token, reason, audit_hash, timestamp}` — the same canonical shape
+ * `evaluate()` parses, with no `is_final` field at all) and the legacy
+ * `{permitted, decision_id, is_final}` shape some older mocks/servers still
+ * emit. `permit_token` is preferred over `decision_id` when both are
+ * present. Because the caller (`protectStream()`) always submits a
+ * single-item `items` array, a canonical decision frame with no `is_final`
+ * field defaults to final — it IS the one and only decision for that call.
+ * An explicit legacy `is_final: false` is still honoured when present.
+ * Error frames prefer the real `error_code` field over the legacy `code`.
  */
 async function* parseSseStream(
   body: ReadableStream<Uint8Array>,
@@ -3716,7 +3747,11 @@ async function* parseSseStream(
         if (eventId !== undefined) onEventId(eventId);
 
         if (!data) continue;
-        if (eventType === "done") return;
+        // "complete" is the real V2-D4 terminal frame emitted by
+        // /v1-evaluate-stream once every item in the request's `items`
+        // array has been evaluated; "done" is the legacy/generic terminal
+        // marker kept for backward compatibility with older mocks/servers.
+        if (eventType === "complete" || eventType === "done") return;
 
         let parsed: unknown;
         try {
@@ -3727,14 +3762,18 @@ async function* parseSseStream(
 
         if (eventType === "error") {
           const e = parsed as {
+            error_code?: string;
             code?: string;
             message?: string;
             request_id?: string;
           };
+          // Real wire frame (`{index, error_code, message}`) uses
+          // `error_code`; `code` is kept as a fallback for the legacy/
+          // generic shape some older mocks and tests still use.
           throw new AtlaSentError(
             e.message ?? "Stream error from AtlaSent API",
             {
-              code: (e.code as AtlaSentErrorCode | undefined) ?? "server_error",
+              code: (e.error_code ?? e.code ?? "server_error") as AtlaSentErrorCode,
               requestId: e.request_id ?? requestId,
             },
           );
@@ -3742,35 +3781,64 @@ async function* parseSseStream(
 
         if (eventType === "decision") {
           const d = parsed as {
+            // Real wire shape: the same canonical {decision, permit_token}
+            // fields evaluate() parses, prefixed with `index` on the batch.
+            decision?: string;
+            permit_token?: string;
+            // Legacy/generic shape, tolerated for backward compatibility.
             permitted?: boolean;
             decision_id?: string;
+            is_final?: boolean;
             reason?: string;
             audit_hash?: string;
             timestamp?: string;
-            is_final?: boolean;
             done?: boolean;
           };
+
+          // Normalise decision to lowercase canonical form, tolerating both
+          // the canonical {decision} string and the legacy {permitted}
+          // boolean — mirrors evaluate()'s own compat handling.
+          let streamDecision: DecisionCanonical | undefined =
+            typeof d.decision === "string"
+              ? (d.decision.toLowerCase() as DecisionCanonical)
+              : undefined;
+          if (streamDecision === undefined && typeof d.permitted === "boolean") {
+            streamDecision = d.permitted ? "allow" : "deny";
+          }
           if (
-            typeof d.permitted !== "boolean" ||
-            typeof d.decision_id !== "string"
+            streamDecision !== "allow" &&
+            streamDecision !== "deny" &&
+            streamDecision !== "hold" &&
+            streamDecision !== "escalate"
           ) {
             throw new AtlaSentError(
-              "Malformed decision event from AtlaSent API",
+              "Malformed decision event from AtlaSent API: missing `decision` (or legacy `permitted`)",
               {
                 code: "bad_response",
                 requestId,
               },
             );
           }
-          // Streaming wire uses legacy {permitted, decision_id} shape;
-          // normalise to canonical lowercase decision vocabulary.
-          const streamDecision = d.permitted ? "allow" : "deny";
-          const isFinal = d.is_final ?? false;
+
+          // Prefer the canonical `permit_token`; fall back to the legacy
+          // `decision_id` when both are present.
+          const permitId = d.permit_token ?? d.decision_id ?? "";
+          // The real V2-D4 wire's `event: decision` frames never carry
+          // `is_final` at all (see the decisionWire fixture in
+          // test/stream.test.ts) — the legacy/generic shape is the only one
+          // that ever sets it explicitly. protectStream() always submits a
+          // single-item `items` array (see the request body above), so a
+          // canonical decision frame with no `is_final` field IS the final
+          // (and only) decision for this call: default to final rather than
+          // non-final so the documented `if (event.isFinal) verifyPermit(...)`
+          // pattern actually fires. Explicit legacy `is_final: false` (an
+          // interim decision) is still honoured when present.
+          const isFinal = typeof d.is_final === "boolean" ? d.is_final : true;
           yield {
             type: "decision",
             decision: streamDecision,
             decision_canonical: streamDecision,
-            permitId: d.decision_id,
+            permitId,
             reason: d.reason ?? "",
             auditHash: d.audit_hash ?? "",
             timestamp: d.timestamp ?? "",
