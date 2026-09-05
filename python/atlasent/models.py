@@ -1243,9 +1243,16 @@ class StreamDecisionEvent(BaseModel):
             if isinstance(raw_decision, str)
             else ("allow" if permitted else "deny")
         )
+        # The real /v1-evaluate-stream `event: decision` frame is
+        # `{index, ...<v1-evaluate response>}` — i.e. the same canonical
+        # {decision, permit_token, ...} shape evaluate() tolerates, not a
+        # stream-specific {permitted, decision_id, is_final} shape. Prefer
+        # the canonical `permit_token`; fall back to legacy `decision_id`
+        # for older/mocked wire shapes.
+        permit_id = data.get("permit_token") or data.get("decision_id", "")
         return cls(
             decision=decision,
-            decision_id=data.get("decision_id", ""),
+            decision_id=permit_id,
             reason=data.get("reason", ""),
             audit_hash=data.get("audit_hash", ""),
             timestamp=data.get("timestamp", ""),

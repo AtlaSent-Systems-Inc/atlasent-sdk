@@ -562,10 +562,13 @@ class AsyncAtlaSentClient:
     ) -> AsyncIterator[StreamDecisionEvent | StreamProgressEvent]:
         """Open a streaming evaluation session against ``POST /v1-evaluate-stream``.
 
-        Yields :class:`StreamDecisionEvent` and :class:`StreamProgressEvent`
-        objects as the server emits them. The iterator ends cleanly when the
-        server sends ``event: done``; it raises :class:`AtlaSentError` on
-        transport errors or when the server sends ``event: error``.
+        Sends a single-item V2-D4 batch (``{items: [{action_type, actor_id,
+        context}]}``) and yields :class:`StreamDecisionEvent` /
+        :class:`StreamProgressEvent` objects as the server emits them. The
+        iterator ends cleanly when the server sends the terminal
+        ``event: complete`` frame (or the legacy/generic ``event: done``); it
+        raises :class:`AtlaSentError` on transport errors or when the server
+        sends ``event: error``.
 
         Hardening:
 
@@ -576,21 +579,32 @@ class AsyncAtlaSentClient:
           ``Last-Event-ID`` on reconnect when the server emitted event IDs.
         - Raises :class:`StreamParseError` on partial / malformed JSON rather
           than letting ``json.JSONDecodeError`` escape.
-        - Closes cleanly on ``event: done`` or a decision event with
-          ``done: true``.
+        - Closes cleanly on ``event: complete``, ``event: done``, or a
+          decision event with ``done: true`` / ``is_final: true``.
 
         Usage::
 
             async for event in client.protect_stream("my-agent", "my-action"):
-                if event.type == "decision" and event.is_final:
+                if event.type == "decision":
                     break
         """
         url = f"{self._base_url}/v1-evaluate-stream"
+        # Wire contract (V2-D4, atlasent-api supabase/functions/v1-evaluate-stream/
+        # handler.ts): the endpoint is body-compatible with /v1/evaluate/batch —
+        # `{batch_id?, items: [{action_type, actor_id, context, ...}]}` — NOT a
+        # flat {action, agent, context, api_key} body. `agent`/`action` are this
+        # SDK's public parameter names; `action_type`/`actor_id` are the real wire
+        # fields, matching how evaluate()/EvaluateRequest and
+        # v2_endpoints.authorize_stream() already build their payloads. Auth is
+        # carried by the Authorization header below, never a body `api_key` field.
         payload = {
-            "action": action,
-            "agent": agent,
-            "context": context or {},
-            "api_key": self._api_key,
+            "items": [
+                {
+                    "action_type": action,
+                    "actor_id": agent,
+                    "context": context or {},
+                }
+            ],
         }
         request_id = uuid.uuid4().hex[:12]
 
@@ -1994,7 +2008,15 @@ async def _parse_sse(
                 if event_id is not None and on_event_id is not None:
                     on_event_id(event_id)
 
-                if event_type == "done":
+                if event_type in ("done", "complete"):
+                    # "done" is the legacy/generic terminal marker; "complete"
+                    # is the real V2-D4 wire terminal frame emitted by
+                    # /v1-evaluate-stream (`{batch_id, count, partial}`) once
+                    # every item in the request's `items` array has been
+                    # evaluated. Neither payload carries information this
+                    # generator's callers currently consume, so both simply
+                    # end the stream cleanly rather than falling through to
+                    # "unknown event types skipped".
                     return
 
                 try:
@@ -2005,9 +2027,14 @@ async def _parse_sse(
                     raise StreamParseError(data, exc) from exc
 
                 if event_type == "error":
+                    # The real wire frame (`event: error\ndata: {error_code,
+                    # message, index}`) uses `error_code`; `code` is kept as a
+                    # fallback for the legacy/generic shape some older mocks
+                    # and tests still use.
                     raise AtlaSentError(
                         parsed.get("message", "Stream error from AtlaSent API"),
-                        code=parsed.get("code", "server_error"),
+                        code=parsed.get("error_code")
+                        or parsed.get("code", "server_error"),
                         request_id=parsed.get("request_id", request_id),
                     )
 
