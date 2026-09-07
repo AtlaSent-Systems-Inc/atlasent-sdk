@@ -9,6 +9,21 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # atlasent-sdk#483: jsdom 30.0.1 raised its Node requirement to
+      # ^22.22.2 || ^24.15.0 || >=26, which drops support for Node 20 --
+      # a version this package's own engines field (>=18) still declares
+      # supported and CI still verifies. A prior Dependabot major-bump PR
+      # (#474) installed with engine warnings on Node 20 and broke the
+      # browser-test worker (jsdom/undici
+      # "webidl.util.markAsUncloneable is not a function"). Decided
+      # (#483): preserve the current Node support contract rather than
+      # silently raise the floor to accept a dev/test dependency bump.
+      # Remove this ignore rule only alongside a deliberate, separately
+      # reviewed Node-floor change (semver/release/customer compatibility
+      # treatment) that also upgrades CI's Node matrix.
+      - dependency-name: "jsdom"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: pip
     directory: /python
     schedule:
