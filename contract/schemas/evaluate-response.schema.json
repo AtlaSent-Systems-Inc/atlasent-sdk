@@ -166,38 +166,6 @@
           }
         }
       }
-    },
-    "authorized_trajectory": {
-      "type": "object",
-      "description": "The authorized execution trajectory returned when the evaluation engine approved a proposed_trajectory. May differ from what was proposed. Present only on allow decisions. Execution MUST follow this trajectory; call POST /v1/trajectory-verify at each step.",
-      "required": ["trajectory_id", "steps", "expires_at"],
-      "additionalProperties": false,
-      "properties": {
-        "trajectory_id": { "type": "string", "format": "uuid" },
-        "steps": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["step", "required"],
-            "additionalProperties": false,
-            "properties": {
-              "step": { "type": "string" },
-              "description": { "type": "string" },
-              "required": { "type": "boolean" },
-              "time_limit_seconds": { "type": "integer", "minimum": 1 },
-              "authorized_by": { "type": "string" },
-              "constraints": { "type": "object", "additionalProperties": true },
-              "expected_intermediate_state": { "type": "object", "additionalProperties": true }
-            }
-          }
-        },
-        "description": { "type": "string" },
-        "forbidden_states": {
-          "type": "array",
-          "items": { "type": "object", "additionalProperties": true }
-        },
-        "expires_at": { "type": "string" }
-      }
     }
   }
 }
