@@ -15,7 +15,7 @@ def test_ghost_trajectory_contract_cannot_reappear() -> None:
     """Keep the unshipped trajectory route and its public types out of the SDK."""
     root = Path(__file__).resolve().parents[2]
     public_files = [
-        *sorted((root / "typescript" / "src").glob("*.ts")),
+        *sorted((root / "typescript" / "src").rglob("*.ts")),
         root / "contract" / "openapi.yaml",
         root / "contract" / "openapi-v2.yaml",
         *sorted((root / "contract" / "schemas").glob("*.json")),
