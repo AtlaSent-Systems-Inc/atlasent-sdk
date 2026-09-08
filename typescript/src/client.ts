@@ -931,8 +931,12 @@ export class AtlaSentClient {
   /**
    * Subscribe to a live stream of decisions for this org.
    *
-   * DISABLED: This endpoint is not deployed in production.
-   * See atlasent-api/supabase/runtime-functions-disabled.json
+   * `v1-decisions-stream` is deployed in production (re-enabled
+   * 2026-06-01; present in `runtime-functions.json`) — it is not one
+   * of the endpoints in `runtime-functions-disabled.json`. It remains
+   * gated per-tenant behind the `v2_decisions_stream` feature flag
+   * (404 when off for a given org), which is a normal rollout gate,
+   * not a "not deployed" marker.
    *
    * Wraps `GET /v1-decisions-stream`. The server emits one SSE frame
    * per audit event and sends a heartbeat every 15 s. The session
