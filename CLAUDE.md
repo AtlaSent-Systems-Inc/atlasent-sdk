@@ -96,11 +96,12 @@ without a schema or a proposal in `contract/` first — see
 ## Disabled Endpoints
 
 **Source of truth:** `atlasent-api/supabase/runtime-functions-disabled.json`. As of
-2026-08-30 the disabled set is **8 entries**, not the 3 SSO skeletons this table
-previously claimed (that count was accurate as of 2026-07-11 but has since drifted —
-5 more entries were added 2026-08-18 through 2026-08-27). Do not write new SDK code
-that depends on any of these endpoints without first confirming they have been
-re-enabled in the runtime manifest.
+2026-08-30 the disabled set was documented here as **8 entries** — that count has since
+drifted again. **Corrected 2026-09-08: the disabled set is now 10 entries.** Two more
+were added after the 2026-08-30 note below: `v1-compliance-packs` (quarantined
+2026-09-06, then permanently retired) and `v1-regulatory-interpretations` (added
+2026-08-31, never deployed). Do not write new SDK code that depends on any of these
+endpoints without first confirming they have been re-enabled in the runtime manifest.
 
 | Endpoint | SDK reference | Notes |
 |---|---|---|
@@ -112,9 +113,16 @@ re-enabled in the runtime manifest.
 | `v1-control-assurance` | none currently | HELD BACK 2026-08-21 (CROSS-022) — fully implemented and tested, but kept out of `runtime-functions.json` because this repo's deploy model has no partial-rollout track and its `classification.json` production_eligibility is still experimental/disabled |
 | `v1-internal-control-assurance-write` | none currently | HELD BACK 2026-08-21 (CROSS-022 step 4) — internal-worker-secret auth only; held back because no worker that calls it has been built yet, same manifest-has-no-partial-rollout reason as above |
 | `v1-outcome-proposals` | none currently | HELD BACK 2026-08-27 (CROSS-042) — disabled-by-default AI Proposed Trajectories slice; production enablement requires first-party Anthropic/US-inference/ZDR attestation and security review not yet done |
+| `v1-compliance-packs` | none currently | QUARANTINED 2026-09-06, then RETIRED PERMANENTLY the same day (`atlasent-api#2983`, founder decision) — its install handler could never succeed (wrote `org_id`/`policy_bundle`/`status`/`source`/`pack_id`/`pack_version` to `constraint_bundles`, none of which exist on that table; the real columns are `organization_id`/`rules`). Zero consumers ever called it, zero tests, absent from the public OpenAPI spec. Stays permanently `410 Gone`; do **not** build a `CompliancePackRule[]` adapter for it — that direction was considered and explicitly declined. Not to be confused with `v1-compliance-evidence-pack`, a distinct, live, deployed function this SDK's `compliance_evidence_pack()` (Python) genuinely calls |
+| `v1-regulatory-interpretations` | none currently | NOT DEPLOYED (added 2026-08-31, CROSS-020 first-caller slice) — fully implemented and tested, but held out of `runtime-functions.json` for three independent reasons: its backing migration (`20260942000000_regulatory_interpretations_registry.sql`) has never been applied to any environment, its three new scopes (`regulatory_interpretations:read/write/ratify`) were never seeded into `enterprise_permissions`, and per CROSS-020 §1 a ratified row here grants no organizational authority — nothing on this route is read by `v1-evaluate`/`_shared/rules.ts`. Re-enable only after all three are independently resolved |
 
-Checked directly against `typescript/src/` and the Python SDK on 2026-08-30: no live or
-dead references to any of the 5 newly-added entries above.
+Checked directly against `typescript/src/`, the Python SDK, `go/`, and `java/` on
+2026-08-30 (the original 5) and again on 2026-09-08 (the 2 newest entries above): no
+live or dead references to any of the 7 newly-added entries. The one near-miss on the
+2026-09-08 pass — `COMPLIANCE_PACK_PAYLOAD` in `python/tests/test_client.py` /
+`test_async_client.py` — is a false match on the variable name only; it backs
+`compliance_evidence_pack()`, which calls the genuinely live `/v1-compliance-evidence-pack`
+(see that row's note above), not the quarantined `v1-compliance-packs`.
 
 > **`v1-sso` is shipped, not disabled** (re-enabled 2026-06-01) and is distinct from the
 > three `v1-sso-*` skeletons above. The full `typescript/src/sso.ts` module (SSO
