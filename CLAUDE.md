@@ -95,12 +95,18 @@ without a schema or a proposal in `contract/` first — see
 
 ## Disabled Endpoints
 
-**Source of truth:** `atlasent-api/supabase/runtime-functions-disabled.json`. As of
-2026-08-30 the disabled set is **8 entries**, not the 3 SSO skeletons this table
-previously claimed (that count was accurate as of 2026-07-11 but has since drifted —
-5 more entries were added 2026-08-18 through 2026-08-27). Do not write new SDK code
-that depends on any of these endpoints without first confirming they have been
-re-enabled in the runtime manifest.
+**Source of truth:** `atlasent-api/supabase/runtime-functions-disabled.json`.
+
+**Corrected 2026-09-08 — the previous "8 entries, as of 2026-08-30" count in this
+section had already drifted.** The live manifest has grown to **10 entries**: two
+more were added after that date — `v1-compliance-packs` (quarantined 2026-09-06,
+then retired permanently the same day, atlasent-api#2983) and
+`v1-regulatory-interpretations` (added 2026-08-31, never deployed — see its notes
+below). This is the same drift pattern the 2026-08-30 correction itself called
+out (3 → 8); check the live manifest's `functions` array length directly rather
+than trusting any count written here, including this one. Do not write new SDK
+code that depends on any of these endpoints without first confirming they have
+been re-enabled in the runtime manifest.
 
 | Endpoint | SDK reference | Notes |
 |---|---|---|
@@ -109,12 +115,15 @@ re-enabled in the runtime manifest.
 | `v1-sso-connections` | none currently | QUARANTINED 2026-08-10 — real table-mismatch bug (POST wrote `sso_connections`; GET/:id, PATCH, DELETE read/wrote `identity_providers`). Do not re-enable without a redesign; `v1-sso` already implements this resource correctly |
 | `v1-policy-rules` | none currently | QUARANTINED 2026-08-18 — plane-mismatch bug (same shape as ADR-032): every route reads/writes `public.policy_rules`, confirmed absent on runtime production (that table lives only in `atlasent-console`'s migrations). Do not re-enable by just adding the table; needs a plane-ownership redesign first |
 | `v1-policy-simulate-layered` | none currently | QUARANTINED 2026-08-24 (#2181 follow-up) — same absent-on-runtime `policy_rules` dependency as `v1-policy-rules`, via its `bundle_id`-driven path. Same redesign prerequisite |
+| `v1-compliance-packs` | none currently | QUARANTINED then RETIRED PERMANENTLY 2026-09-06 (atlasent-api#2983) — its install handler wrote columns (`org_id`/`policy_bundle`/`status`/`source`/`pack_id`/`pack_version`) that don't exist on `constraint_bundles`, so every install attempt had always failed; zero consumers, zero tests. Founder decision was retire, not adapt — do not build a `CompliancePackRule[]` adapter for it |
 | `v1-control-assurance` | none currently | HELD BACK 2026-08-21 (CROSS-022) — fully implemented and tested, but kept out of `runtime-functions.json` because this repo's deploy model has no partial-rollout track and its `classification.json` production_eligibility is still experimental/disabled |
 | `v1-internal-control-assurance-write` | none currently | HELD BACK 2026-08-21 (CROSS-022 step 4) — internal-worker-secret auth only; held back because no worker that calls it has been built yet, same manifest-has-no-partial-rollout reason as above |
 | `v1-outcome-proposals` | none currently | HELD BACK 2026-08-27 (CROSS-042) — disabled-by-default AI Proposed Trajectories slice; production enablement requires first-party Anthropic/US-inference/ZDR attestation and security review not yet done |
+| `v1-regulatory-interpretations` | none currently | NOT DEPLOYED (added 2026-08-31, CROSS-020 first-caller slice) — the migration backing its tables/RPCs has never been applied to any environment, its three new scopes (`regulatory_interpretations:read/write/ratify`) aren't seeded into `enterprise_permissions` yet, and a ratified row here grants no organizational authority (nothing on this route is read by `v1-evaluate`/`_shared/rules.ts`) |
 
-Checked directly against `typescript/src/` and the Python SDK on 2026-08-30: no live or
-dead references to any of the 5 newly-added entries above.
+Checked directly against `typescript/src/` and the Python SDK on 2026-09-08: no live
+or dead references to either of the 2 newly-added entries above (or, re-confirmed,
+the 5 added between 2026-08-18 and 2026-08-27).
 
 > **`v1-sso` is shipped, not disabled** (re-enabled 2026-06-01) and is distinct from the
 > three `v1-sso-*` skeletons above. The full `typescript/src/sso.ts` module (SSO
