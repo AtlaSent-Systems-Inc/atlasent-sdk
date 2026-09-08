@@ -6,6 +6,17 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ---
 
+## Unreleased
+
+### Removed
+
+- Removed the public client, types, and evaluate request/response fields for
+  the unshipped `/v1/trajectory-verify` contract. Evaluate, permit issuance,
+  execution binding, completion proofs, and permit verification remain
+  supported.
+
+---
+
 ## 2.21.2
 
 ### Fixed

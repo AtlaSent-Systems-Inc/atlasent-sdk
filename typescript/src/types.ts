@@ -403,20 +403,8 @@ export interface EvaluateRequest {
   proposed_state?: { description: string; attributes?: Record<string, unknown> };
   /** Execution surface binding — identifies the CI/CD adapter, DB driver, or enforcement point. */
   execution_binding?: { kind: string; adapter_version?: string; resource_id?: string; enforcement_point?: string };
-  /** The desired end-state the actor wants the resource to reach. Enables trajectory-aware authorization. */
+  /** The desired end-state the actor wants the resource to reach. */
   desired_state?: { description: string; attributes?: Record<string, unknown>; fingerprint?: string };
-  /** Actor-proposed execution path from current_state to desired_state. The engine returns an authorized_trajectory that may differ. */
-  proposed_trajectory?: {
-    steps: Array<{
-      step: string;
-      description?: string;
-      required: boolean;
-      time_limit_seconds?: number;
-      authorized_by?: string;
-      constraints?: Record<string, unknown>;
-    }>;
-    description?: string;
-  };
   /**
    * Multi-actor quorum completion proofs. Supply one entry per prior actor
    * whose completed action this evaluation depends on. The runtime verifies
@@ -635,28 +623,6 @@ export interface EvaluateResponse {
    * `undefined` on responses from a runtime predating this field.
    */
   humanApprovalStatus?: "not_required" | "pending" | "satisfied" | "rejected" | "expired" | "revoked";
-  /**
-   * Authorized execution trajectory returned when the engine approved a
-   * `proposed_trajectory`. Present only on `allow` decisions.
-   * May differ from what was proposed — the engine may add checkpoints,
-   * restrict steps, or tighten time limits. Follow this trajectory exactly;
-   * call `POST /v1/trajectory-verify` at each step to confirm on_trajectory.
-   */
-  authorized_trajectory?: {
-    trajectory_id: string;
-    steps: Array<{
-      step: string;
-      description?: string;
-      required: boolean;
-      time_limit_seconds?: number;
-      authorized_by?: string;
-      constraints?: Record<string, unknown>;
-      expected_intermediate_state?: { description: string; attributes?: Record<string, unknown>; fingerprint?: string };
-    }>;
-    description?: string;
-    forbidden_states?: Array<{ description: string; attributes?: Record<string, unknown>; fingerprint?: string }>;
-    expires_at: string;
-  };
 }
 
 /** Per-factor contribution in a {@link EvaluateRiskEnvelope}. */
@@ -1293,115 +1259,6 @@ export interface DecisionStreamEvent {
   hash?: string;
   previousHash?: string;
   occurredAt?: string;
-}
-
-// ── Trajectory authorization ────────────────────────────────────────────────────────────
-
-/** Verified snapshot of resource state. */
-export interface StateSnapshot {
-  description: string;
-  attributes?: Record<string, unknown>;
-  /** Deterministic hash of the state (e.g. schema fingerprint, content hash). */
-  fingerprint?: string;
-  recorded_at?: string;
-}
-
-/** Step in an execution trajectory. */
-export interface TrajectoryStep {
-  step: string;
-  description?: string;
-  required: boolean;
-  time_limit_seconds?: number;
-  authorized_by?: string;
-  constraints?: Record<string, unknown>;
-  expected_intermediate_state?: StateSnapshot;
-}
-
-/** Actor-submitted trajectory proposal. */
-export interface ProposedTrajectory {
-  steps: TrajectoryStep[];
-  description?: string;
-}
-
-/** Evaluation-engine-returned authorized trajectory. May differ from the proposed trajectory. */
-export interface AuthorizedTrajectory extends ProposedTrajectory {
-  trajectory_id: string;
-  forbidden_states?: StateSnapshot[];
-  expires_at: string;
-}
-
-/** Input to POST /v1/trajectory-verify. */
-export interface TrajectoryVerifyRequest {
-  permit_token: string;
-  current_step: string;
-  current_state?: StateSnapshot;
-  completed_steps?: string[];
-  execution_context?: Record<string, unknown>;
-}
-
-/** Response from POST /v1/trajectory-verify. */
-export interface TrajectoryVerifyResponse {
-  on_trajectory: boolean;
-  trajectory_position?: number;
-  trajectory_complete: boolean;
-  deviation?: TrajectoryDeviationEvent;
-  verified_at: string;
-}
-
-/** Deviation type for trajectory deviation events. */
-export type TrajectoryDeviationType =
-  | "step_not_on_trajectory"
-  | "step_out_of_sequence"
-  | "forbidden_state_reached"
-  | "required_step_skipped"
-  | "time_limit_exceeded"
-  | "constraint_violation"
-  | "trajectory_expired";
-
-/** Emitted when execution departs from the authorized trajectory. */
-export interface TrajectoryDeviationEvent {
-  deviation_type: TrajectoryDeviationType;
-  trajectory_id: string;
-  permit_id: string;
-  step?: string;
-  actual_state?: StateSnapshot;
-  expected_state?: StateSnapshot;
-  reason: string;
-  detected_at: string;
-}
-
-/** Evidence artifact: authorized trajectory vs. actual execution trace. */
-export interface ComplianceComparisonArtifact {
-  version: "compliance_comparison.v1";
-  artifact_id: string;
-  authorized_transition: {
-    permit_id: string;
-    desired_state: StateSnapshot;
-    trajectory: AuthorizedTrajectory;
-    spec_signature?: string;
-  };
-  execution_trace: {
-    executed_steps: Array<{
-      step: string;
-      started_at: string;
-      completed_at?: string;
-      outcome: "success" | "failure" | "skipped";
-      state_after?: StateSnapshot;
-    }>;
-    final_state: StateSnapshot;
-    trace_signature?: string;
-  };
-  fidelity: {
-    compliant: boolean;
-    /** Score in [0, 1] measuring closeness of actual to authorized trajectory. */
-    fidelity_score: number;
-    missing_required_steps: string[];
-    unexpected_steps: string[];
-    forbidden_states_reached: StateSnapshot[];
-    deviation_events: TrajectoryDeviationEvent[];
-  };
-  artifact_hash: string;
-  generated_at: string;
 }
 
 // ── License verification (self-hosted / air-gapped) ───────────────────────────

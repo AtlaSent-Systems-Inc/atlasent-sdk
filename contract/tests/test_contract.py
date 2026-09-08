@@ -11,6 +11,35 @@ from pathlib import Path
 from contract.tools import drift, policy_lint, validate_openapi, validate_vectors
 
 
+def test_ghost_trajectory_contract_cannot_reappear() -> None:
+    """Keep the unshipped trajectory route and its public types out of the SDK."""
+    root = Path(__file__).resolve().parents[2]
+    public_files = [
+        *sorted((root / "typescript" / "src").glob("*.ts")),
+        root / "contract" / "openapi.yaml",
+        root / "contract" / "openapi-v2.yaml",
+        *sorted((root / "contract" / "schemas").glob("*.json")),
+    ]
+    public_contract = "\n".join(
+        path.read_text(encoding="utf-8") for path in public_files
+    )
+    retired_claims = (
+        "/v1/trajectory-verify",
+        "proposed_trajectory",
+        "authorized_trajectory",
+        "TrajectoryStep",
+        "ProposedTrajectory",
+        "AuthorizedTrajectory",
+        "TrajectoryVerifyRequest",
+        "TrajectoryVerifyResponse",
+        "TrajectoryDeviationType",
+        "TrajectoryDeviationEvent",
+        "ComplianceComparisonArtifact",
+    )
+    present = [claim for claim in retired_claims if claim in public_contract]
+    assert not present, f"retired trajectory contract claims reappeared: {present}"
+
+
 def test_vectors_match_schemas() -> None:
     assert validate_vectors.main() == 0
 
@@ -37,15 +66,15 @@ def test_permit_approval_binding_is_drift_checked() -> None:
     assert ep in wire, "permit.approval binding must be a drift-checked endpoint"
     model_keys = wire[ep]["response_keys"]
 
-    approval = drift._load_schema("evaluate-response.schema.json")[
-        "properties"
-    ]["permit"]["properties"]["approval"]
+    approval = drift._load_schema("evaluate-response.schema.json")["properties"][
+        "permit"
+    ]["properties"]["approval"]
     required, allowed, extras_allowed = drift._schema_field_sets(approval)
     # The binding is strict — that is exactly why the nested check is needed.
     assert not extras_allowed, "permit.approval must forbid additionalProperties"
-    assert model_keys == required == allowed, (
-        "PermitApprovalBinding must exactly match the strict permit.approval schema"
-    )
+    assert (
+        model_keys == required == allowed
+    ), "PermitApprovalBinding must exactly match the strict permit.approval schema"
 
     # Enforcement: an extra field (schema forbids extras) and a missing required
     # field must BOTH be reported as drift.
@@ -83,9 +112,13 @@ def test_permit_approval_guard_fails_closed_when_schema_absent(monkeypatch) -> N
 
 def test_policy_lint_passes_valid_and_rejects_invalid() -> None:
     policies_dir = Path(__file__).resolve().parents[1] / "vectors" / "policies"
-    valid = sorted(p for p in policies_dir.glob("*.json") if not p.name.startswith("INVALID_"))
+    valid = sorted(
+        p for p in policies_dir.glob("*.json") if not p.name.startswith("INVALID_")
+    )
     invalid = sorted(policies_dir.glob("INVALID_*.json"))
     assert valid, "no positive policy fixtures"
     assert invalid, "no negative policy fixtures"
     assert policy_lint.main([str(p) for p in valid]) == 0
-    assert policy_lint.main([str(p) for p in invalid]) == 0  # negatives expected to fail validation
+    assert (
+        policy_lint.main([str(p) for p in invalid]) == 0
+    )  # negatives expected to fail validation

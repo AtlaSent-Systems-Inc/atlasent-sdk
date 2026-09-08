@@ -1,5 +1,15 @@
 # Release Notes
 
+## Unreleased — remove unshipped trajectory contract
+
+- Removed the TypeScript helper and public types for the nonexistent
+  `/v1/trajectory-verify` route.
+- Removed its trajectory-only fields from the shared evaluate OpenAPI and JSON
+  Schema surfaces. Evaluate, permit issuance, execution binding, completion
+  proofs, and permit verification are unchanged.
+- Added a regression guard preventing the retired route and public symbols from
+  returning to SDK source or shared contract artifacts unnoticed.
+
 ## Unreleased — license normalization before publish
 
 - Normalized framework package licensing artifacts so publish outputs are
