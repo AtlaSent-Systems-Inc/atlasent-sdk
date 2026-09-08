@@ -9,6 +9,18 @@ updates:
         update-types:
           - minor
           - patch
+      # atlasent-sdk#506/#507: vitest and @vitest/coverage-v8 peer-depend on
+      # each other at an EXACT matching version (coverage-v8@5.0.0 requires
+      # vitest@5.0.0 exactly) but major bumps aren't covered by the
+      # minor-and-patch group above, so Dependabot opened them as two
+      # separate PRs -- neither installs standalone (npm ERESOLVE). Group
+      # every vitest-family major bump together so they land as one PR.
+      vitest-major:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - major
     ignore:
       # atlasent-sdk#483: jsdom 30.0.1 raised its Node requirement to
       # ^22.22.2 || ^24.15.0 || >=26, which drops support for Node 20 --
