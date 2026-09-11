@@ -95,6 +95,20 @@ jobs:
             echo "::error::Input version ($INPUT_VERSION) does not match atlasent._version.__version__ ($PKG_VERSION)."
             exit 1
           fi
+          # The AtlaSent release gate below reads context.ref from
+          # github.ref directly (not from this version input), and the
+          # org's package.release policy for this workflow requires a
+          # python-v<semver> tag ref. A dispatch from a non-tag ref (e.g.
+          # main) whose _version.py happens to already read the target
+          # version would pass the check above yet still fail downstream
+          # with a confusing gate denial, since github.ref never matched a
+          # tag. Fail here instead, with an actionable error, before
+          # wasting a build on a run that can't pass the gate.
+          EXPECTED_REF="refs/tags/python-v${INPUT_VERSION}"
+          if [ "${{ github.ref }}" != "$EXPECTED_REF" ]; then
+            echo "::error::workflow_dispatch must be run FROM the release tag $EXPECTED_REF (select it as the dispatch ref), not from a branch. Got ${{ github.ref }}."
+            exit 1
+          fi
           echo "Input and package version agree: $PKG_VERSION"
 
       # ── AtlaSent release gate ────────────────────────────────────────
