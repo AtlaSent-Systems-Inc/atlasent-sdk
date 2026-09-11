@@ -96,10 +96,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify tag matches package version
-        if: github.event_name == 'push'
+      - name: Verify ref matches package version
+        # Runs on every trigger (push AND workflow_dispatch). This
+        # workflow's `workflow_dispatch` declares no inputs, so there's no
+        # separate version value that could diverge from github.ref the
+        # way the input-vs-ref bug fixed elsewhere in this repo describes
+        # -- but until this change, the check was skipped entirely on
+        # workflow_dispatch (previously guarded by
+        # `if: github.event_name == 'push'`), so a manual dispatch from
+        # any ref -- including a tag whose package.json was never bumped
+        # to match it -- published whatever version.json said with zero
+        # verification. Requiring the ref itself to be tag-shaped here
+        # closes that gap without needing a version input.
         run: |
-          TAG_VERSION="${GITHUB_REF#refs/tags/gmail-v}"
+          case "${{ github.ref }}" in
+            refs/tags/gmail-v*)
+              TAG_VERSION="${GITHUB_REF#refs/tags/gmail-v}"
+              ;;
+            *)
+              echo "::error::Must run FROM a gmail-v<semver> release tag (push that tag, or select it as the workflow_dispatch ref), not ${{ github.ref }}."
+              exit 1
+              ;;
+          esac
           PKG_VERSION="$(node -p "require('./package.json').version")"
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
             echo "::error::Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)."

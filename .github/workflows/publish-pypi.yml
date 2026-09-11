@@ -124,10 +124,24 @@ jobs:
       # ("Publish to PyPI") — keep `name:` and the policy in sync.
       #
       # The 2026-06-20 emergency bypass that shipped 2.18.0 (PR #400) is
-      # removed here — the gate is fully blocking again. Before the NEXT
-      # release, the package.release permit-issuance bug in v1-evaluate must
-      # be fixed (the gate returned allow but minted no permit token), or
-      # this gate will hard-block the publish (correctly, fail-closed).
+      # removed here — the gate is fully blocking again.
+      #
+      # UPDATE 2026-09-11: the permit-issuance gap this comment warned about
+      # is fixed. atlasent-api#3304/#3305 found and closed the real bug: for
+      # every action type OTHER than the mandatory-change-control set,
+      # v1-evaluate never echoed execution_hash_expected on a
+      # production-environment permit, so a plain evaluate-then-verify
+      # round-trip structurally denied at verify time with
+      # PAYLOAD_HASH_REQUIRED regardless of policy outcome -- the caller had
+      # no way to learn what hash to re-present. Confirmed fixed
+      # end-to-end, not just in isolation: atlasent-action's release.yml
+      # gates on this exact same action type (package.release), the same
+      # context shape, and the same org policy (see that file's own gate
+      # step) -- its v1.6.0 release ran the full evaluate+verify+permit
+      # flow after this fix landed and completed successfully (GitHub
+      # Release created, floating v1 tag moved). This gate should now be
+      # able to reach allow the same way, assuming this workflow's org
+      # policy otherwise matches.
       - name: AtlaSent release gate
         uses: AtlaSent-Systems-Inc/atlasent-action@v1
         env:
