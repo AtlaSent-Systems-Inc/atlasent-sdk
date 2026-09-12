@@ -19,10 +19,32 @@ from atlasent.audit_bundle import (
     verify_audit_bundle,
     verify_bundle,
 )
+from atlasent.trust_root import TrustRootSnapshot
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = REPO_ROOT / "contract" / "vectors" / "audit-bundles"
 PUBLIC_PEM = (FIXTURES / "signing-key.pub.pem").read_text() if FIXTURES.exists() else ""
+
+# The shared audit-bundle fixtures (contract/tools/gen_audit_bundles.py) use
+# signing_key_id="test-key" as a generic placeholder -- which collides with
+# the real trust root's historical "test-key" entry (now revoked, per
+# atlasent-keys' atlasent-revocations.json). Since the SDK's global trust
+# root is now genuinely populated (see trust_root.py's module docstring on
+# the fix this replaced), verify_bundle()'s default auto-injected trust
+# root would correctly flag these fixtures as using a revoked key -- real,
+# working revocation detection, not a false failure, but not what these
+# tests are exercising. These tests are about signature/chain verification
+# in isolation; revocation semantics have their own dedicated coverage in
+# test_trust_root.py's vector suite. Pass an explicit, revocation-free
+# trust root so these tests stay decoupled from the real global trust
+# root's actual (and correctly enforced) revocation list.
+NO_REVOCATION_TRUST_ROOT = TrustRootSnapshot(
+    valid_until="2099-01-01T00:00:00Z",
+    issued_at="2026-01-01T00:00:00Z",
+    keys=[],
+    revoked_keys=[],
+    revoked_identities=[],
+)
 
 try:
     from atlasent.audit_bundle import _require_crypto
@@ -76,7 +98,11 @@ def test_canonical_json_string_escapes_match_json_dumps() -> None:
 
 
 def test_valid_bundle_all_checks_pass() -> None:
-    r = verify_bundle(FIXTURES / "valid.json", public_keys_pem=[PUBLIC_PEM])
+    r = verify_bundle(
+        FIXTURES / "valid.json",
+        public_keys_pem=[PUBLIC_PEM],
+        trust_root=NO_REVOCATION_TRUST_ROOT,
+    )
     assert r.verified
     assert r.chain_integrity_ok
     assert r.signature_valid
@@ -135,6 +161,7 @@ def test_malformed_pem_is_skipped_not_fatal() -> None:
             "-----BEGIN PUBLIC KEY-----\nnope\n-----END PUBLIC KEY-----",
             PUBLIC_PEM,
         ],
+        trust_root=NO_REVOCATION_TRUST_ROOT,
     )
     assert r.signature_valid
 

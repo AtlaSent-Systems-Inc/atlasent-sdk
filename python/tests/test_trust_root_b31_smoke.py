@@ -131,8 +131,15 @@ class TestTrustRootManagerCoverage:
         mock_refresh.assert_called_once()
         mock_schedule.assert_called_once()
 
-    def test_load_vendor_snapshot_returns_fallback_on_error(self):
-        with mock.patch("pathlib.Path.read_text", side_effect=OSError("no file")):
-            snap = _load_vendor_snapshot()
-        assert snap.valid_until == "2099-01-01T00:00:00Z"
-        assert snap.keys == []
+    def test_load_vendor_snapshot_returns_the_embedded_data_deterministically(self):
+        # _load_vendor_snapshot() now reads a plain dict literal
+        # (vendored_trust_root.py) instead of a file from disk -- there is
+        # no I/O left to fail, so this replaces the old
+        # "falls back to an empty snapshot on file-read error" test (that
+        # failure mode no longer exists; see trust_root.py's module
+        # docstring for why the old design silently hit it on every real
+        # install). Assert it's genuinely populated, not the old fallback.
+        snap = _load_vendor_snapshot()
+        assert snap.valid_until != "2099-01-01T00:00:00Z"
+        assert len(snap.keys) > 0
+        assert _load_vendor_snapshot() == snap

@@ -1,20 +1,44 @@
 /**
  * Hybrid trust-root bootstrap and snapshot management.
  *
- * At module load, seeds from the vendor snapshot in vendor/trust-root/.
- * Optionally refreshes from https://keys.atlasent.io/.well-known/ on
- * a configurable interval (default 4h, floor 5 min per ADR-005 D2).
- * Refresh failure is silent — falls back to the in-memory snapshot.
+ * Seeds synchronously from an embedded baseline snapshot (see
+ * vendoredTrustRoot.generated.ts) — a plain object literal compiled
+ * directly into this module, not read from disk at runtime. Optionally
+ * refreshes from https://keys.atlasent.io/.well-known/ on a configurable
+ * interval (default 4h, floor 5 min per ADR-005 D2). Refresh failure is
+ * silent — falls back to the in-memory snapshot.
  *
  * Snapshot expiry (valid_until) is fail-closed per ADR-005 D3:
  * checkExpiry() emits a one-time console.warn at half-life, and again
  * on expiry. verifyAuditBundle throws BundleVerificationError when
  * expired (unless allowExpiredSnapshot=true is passed).
+ *
+ * CORRECTED: this module previously read vendor/trust-root/*.json via
+ * fs.readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "..",
+ * "..", ...)) at first use. Two independent defects made that path
+ * unreachable in every real install: (1) package.json's `files` field
+ * never listed `vendor`, so those JSON files were never included in the
+ * published npm tarball; (2) even had they been included, tsup bundles
+ * every entry into one flat file per format (dist/index.js), and going
+ * up two directories from dist/ overshoots the package root by one level
+ * — the math only ever "worked" by coincidence in this monorepo's dev
+ * checkout, where vendor/ happens to sit two levels above typescript/src/
+ * at the monorepo root. Confirmed by instantiating the real published
+ * package (2.16.0) and reading its trust root: zero keys, zero
+ * revocations, valid_until 2099 — the hardcoded empty fallback, always.
+ * Every verifyBundle() call that didn't pass its own trustRoot explicitly
+ * silently got a snapshot that can never detect a revoked key or a
+ * role-mismatched key, contradicting this file's own ADR-005 D3/D4
+ * fail-closed design. It was also a static node:fs/node:url/node:path
+ * import, which broke bundling for any browser consumer regardless of
+ * whether the file read itself would have succeeded. Embedding the
+ * snapshot as a plain object literal (this module has zero imports of
+ * its own) fixes both: no file I/O, no path guessing, nothing
+ * Node-specific to bundle, and the data is present the instant the
+ * module loads, in any environment.
  */
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { resolve, dirname } from "node:path";
+import { VENDORED_TRUST_ROOT_SNAPSHOT } from "./vendoredTrustRoot.generated.js";
 
 // Types for the trust-root document shapes
 export interface TrustRootKey {
@@ -222,59 +246,12 @@ export class TrustRootManager {
   }
 }
 
-// ─── Load the embedded (vendor) snapshot ─────────────────────────────────────
+// ─── Load the embedded (vendored) snapshot ───────────────────────────────────
 
 function _loadVendorSnapshot(): TrustRootSnapshot {
-  try {
-    // Resolve relative to the package root. Works both when running from
-    // typescript/ (dev) and from dist/ (published).
-    let packageRoot: string;
-    try {
-      // ESM: use import.meta.url
-      const thisFile = fileURLToPath(import.meta.url);
-      // src/trustRoot.ts → ../../vendor/trust-root  OR
-      // dist/trustRoot.js → ../../vendor/trust-root
-      packageRoot = resolve(dirname(thisFile), "..", "..");
-    } catch {
-      // CJS or bundler: fall back to __dirname if available
-      packageRoot = resolve(__dirname, "..", "..");
-    }
-
-    const vendorDir = resolve(packageRoot, "vendor", "trust-root");
-
-    const index = JSON.parse(
-      readFileSync(resolve(vendorDir, "atlasent-trust-root.json"), "utf8"),
-    ) as { valid_until: string; issued_at: string };
-
-    const verifierKeys = JSON.parse(
-      readFileSync(resolve(vendorDir, "atlasent-verifier-keys.json"), "utf8"),
-    ) as { keys: TrustRootKey[] };
-
-    const revocations = JSON.parse(
-      readFileSync(resolve(vendorDir, "atlasent-revocations.json"), "utf8"),
-    ) as {
-      revoked_keys: TrustRootRevocationEntry[];
-      revoked_identities: Array<{ identity: string; revoked_at: string }>;
-    };
-
-    return {
-      valid_until: index.valid_until,
-      issued_at: index.issued_at,
-      keys: verifierKeys.keys ?? [],
-      revoked_keys: revocations.revoked_keys ?? [],
-      revoked_identities: revocations.revoked_identities ?? [],
-    };
-  } catch {
-    // Fallback: a minimal never-expiring snapshot so the SDK degrades
-    // gracefully in build environments where vendor/ is not present.
-    return {
-      valid_until: "2099-01-01T00:00:00Z",
-      issued_at: "2026-05-26T00:00:00Z",
-      keys: [],
-      revoked_keys: [],
-      revoked_identities: [],
-    };
-  }
+  // The embedded constant is committed source (see vendoredTrustRoot.generated.ts),
+  // always present at build time — there is no I/O and nothing to fall back from.
+  return VENDORED_TRUST_ROOT_SNAPSHOT;
 }
 
 // Process-global manager — created lazily.

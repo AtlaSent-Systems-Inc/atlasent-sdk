@@ -90,6 +90,32 @@
   permit, or CDO shape changed; the ``deny_code`` field remains an open
   string. (atlasent#348 PR 2)
 
+### Fixed
+
+- **The SDK's embedded default trust root was always empty** —
+  `verify_bundle()` (and any `get_global_trust_root_manager()` caller that
+  didn't pass its own `trust_root`) silently got a snapshot with zero keys
+  and zero revocations, valid until 2099, on every real install. Same root
+  cause and same fix as the TypeScript SDK (see that package's CHANGELOG for
+  the full incident writeup): `trust_root.py`'s `_load_vendor_snapshot()`
+  read `vendor/trust-root/*.json` via `Path(__file__).parent.parent.parent
+  / "vendor" / "trust-root"` at first use, but that directory sits outside
+  the packaged `atlasent` module (`pyproject.toml`'s
+  `[tool.setuptools.package-data]` never listed it) and the path math
+  itself pointed short of anywhere it could plausibly live in an installed
+  package — it only ever resolved by coincidence in this monorepo's dev
+  checkout. With an empty snapshot, `verify_audit_bundle()`'s revocation
+  and role-mismatch checks were permanent no-ops, contradicting this
+  module's own ADR-005 D3/D4 fail-closed design.
+  - Fixed by embedding the baseline snapshot as a plain dict literal
+    (`atlasent/vendored_trust_root.py`, generated from atlasent-keys' live
+    `.well-known/*.json` files by the new `scripts/vendor_trust_root.py`)
+    instead of reading it from disk at import time.
+  - `get_global_trust_root_manager()`'s background refresh behavior,
+    `_do_refresh`, and the public `TrustRootManager`/
+    `get_global_trust_root_manager` APIs are unchanged — only how the
+    initial baseline snapshot is sourced changed.
+
 ## 2.20.0
 
 ### Added

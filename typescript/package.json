@@ -85,7 +85,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "typecheck:examples": "tsc --noEmit --project tsconfig.examples.json"
+    "typecheck:examples": "tsc --noEmit --project tsconfig.examples.json",
+    "vendor:trust-root": "node scripts/vendor-trust-root.mjs"
   },
   "keywords": [
     "atlasent",

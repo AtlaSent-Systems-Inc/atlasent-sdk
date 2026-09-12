@@ -19,10 +19,32 @@ import {
   type AuditBundle,
   type VerifyKey,
 } from "../src/auditBundle.js";
+import type { TrustRootSnapshot } from "../src/trustRoot.js";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const FIXTURES = resolve(HERE, "..", "..", "contract", "vectors", "audit-bundles");
 const PUBLIC_PEM = readFileSync(resolve(FIXTURES, "signing-key.pub.pem"), "utf8");
+
+// The shared audit-bundle fixtures (contract/tools/gen_audit_bundles.py) use
+// `signing_key_id: "test-key"` as a generic placeholder — which collides
+// with the real trust root's historical "test-key" entry (now revoked, per
+// atlasent-keys' atlasent-revocations.json). Since the SDK's global trust
+// root is now genuinely populated (see trustRoot.ts's header on the fix
+// this replaced), `verifyBundle()`'s default auto-injected trustRoot would
+// correctly flag these fixtures as using a revoked key — which is real,
+// working revocation detection, not a false failure, but not what these
+// tests are exercising either. These tests are about signature/chain
+// verification in isolation; revocation semantics have their own dedicated
+// coverage in trust-root.test.ts's vector suite. Pass an explicit,
+// revocation-free trustRoot so these tests stay decoupled from the real
+// global trust root's actual (and correctly enforced) revocation list.
+const NO_REVOCATION_TRUST_ROOT: TrustRootSnapshot = {
+  valid_until: "2099-01-01T00:00:00Z",
+  issued_at: "2026-01-01T00:00:00Z",
+  keys: [],
+  revoked_keys: [],
+  revoked_identities: [],
+};
 
 function bundlePath(name: string): string {
   return resolve(FIXTURES, name);
@@ -56,7 +78,10 @@ describe("canonicalJSON", () => {
 
 describe("verifyBundle against shared fixtures", () => {
   it("valid bundle → every check passes", async () => {
-    const r = await verifyBundle(bundlePath("valid.json"), { publicKeysPem: [PUBLIC_PEM] });
+    const r = await verifyBundle(bundlePath("valid.json"), {
+      publicKeysPem: [PUBLIC_PEM],
+      trustRoot: NO_REVOCATION_TRUST_ROOT,
+    });
     expect(r.verified).toBe(true);
     expect(r.chainIntegrityOk).toBe(true);
     expect(r.signatureValid).toBe(true);
@@ -104,7 +129,10 @@ describe("verifyBundle against shared fixtures", () => {
 
   it("accepts an already-parsed bundle object (else branch)", async () => {
     const bundle = loadBundle("valid.json");
-    const r = await verifyBundle(bundle, { publicKeysPem: [PUBLIC_PEM] });
+    const r = await verifyBundle(bundle, {
+      publicKeysPem: [PUBLIC_PEM],
+      trustRoot: NO_REVOCATION_TRUST_ROOT,
+    });
     expect(r.chainIntegrityOk).toBe(true);
     expect(r.signatureValid).toBe(true);
   });
@@ -115,6 +143,7 @@ describe("verifyBundle against shared fixtures", () => {
         "-----BEGIN PUBLIC KEY-----\nnope\n-----END PUBLIC KEY-----",
         PUBLIC_PEM,
       ],
+      trustRoot: NO_REVOCATION_TRUST_ROOT,
     });
     expect(r.signatureValid).toBe(true);
   });
