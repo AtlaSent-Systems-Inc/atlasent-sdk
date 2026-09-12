@@ -8,6 +8,47 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Fixed
+
+- **The SDK's embedded default trust root was always empty** — `verifyBundle()`
+  (and any `AtlaSentClient`/`getGlobalTrustRootManager()` caller that didn't
+  pass its own `trustRoot`) silently got a snapshot with zero keys and zero
+  revocations, valid until 2099, on every real install. Confirmed directly
+  against the published `@atlasent/sdk@2.16.0` package. Root cause was two
+  independent defects in `trustRoot.ts`'s `_loadVendorSnapshot()`: (1)
+  `package.json`'s `files` field never listed `vendor/`, so the vendored
+  `vendor/trust-root/*.json` files were never included in the published npm
+  tarball; (2) even had they been, the path-resolution math
+  (`resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")`) went up
+  one directory too many for tsup's single-file bundle output, so it would
+  have looked in the wrong place regardless. The existing test suite didn't
+  catch this because it only ever ran against the monorepo's dev checkout,
+  where `vendor/` happens to sit two directories above `typescript/src/` at
+  the repo root — an unrelated coincidence of this monorepo's layout, not a
+  correct resolution.
+  - With an empty snapshot, `verifyAuditBundle()`'s revocation check
+    (`revoked_keys.some(...)`) and role-mismatch check (`keys.find(...)`)
+    were permanent no-ops: a bundle signed by a revoked key, or by a key
+    used outside its intended role, was never caught by the default trust
+    root path — contradicting this module's own ADR-005 D3/D4 fail-closed
+    design. The background refresh (`_doRefresh`) could eventually populate
+    real data, but only on a `setInterval` (default 4h) with no immediate
+    refresh on construction, so any short-lived process (a CLI run, a
+    Lambda, a one-off verification script — exactly this feature's intended
+    use case) never got real trust-root data at all.
+  - Fixed by embedding the baseline snapshot as a plain TypeScript object
+    literal (`src/vendoredTrustRoot.generated.ts`, generated from
+    atlasent-keys' live `.well-known/*.json` files by the new
+    `scripts/vendor-trust-root.mjs`) instead of reading it from disk at
+    runtime. `trustRoot.ts` no longer imports `node:fs`/`node:url`/
+    `node:path` at all — this also fixes the SDK's main entry failing to
+    bundle for any browser consumer (confirmed via a real Vite build in a
+    downstream app; the SDK's `crypto`/`fs/promises` usage elsewhere still
+    blocks a full browser build, tracked separately).
+  - `getGlobalTrustRootManager()`'s background refresh behavior, `_doRefresh`,
+    and the public `TrustRootManager`/`getGlobalTrustRootManager` APIs are
+    unchanged — only how the initial baseline snapshot is sourced changed.
+
 ### Removed
 
 - Removed the public client, types, and evaluate request/response fields for

@@ -91,6 +91,10 @@ ignore = ["N818"]
 # limit. The data is generated from the canonical registry
 # (atlasent/contract/taxonomy/v1), not hand-formatted, so E501 is waived here.
 "atlasent/taxonomy.py" = ["E501"]
+# Generated trust-root snapshot module: vendored revocation `reason` strings
+# come verbatim from atlasent-keys and can exceed the 88-char limit.
+# Regenerate with scripts/vendor_trust_root.py; don't hand-wrap the data.
+"atlasent/vendored_trust_root.py" = ["E501"]
 
 [tool.black]
 line-length = 88

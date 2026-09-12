@@ -1,6 +1,8 @@
 """Hybrid trust-root bootstrap and snapshot management.
 
-Loads the vendor snapshot at import time.  Optionally refreshes from
+Seeds synchronously from an embedded baseline snapshot (see
+``vendored_trust_root.py``) -- a plain dict literal compiled directly into
+that module, not read from disk at import time. Optionally refreshes from
 ``https://keys.atlasent.io/.well-known/`` on a configurable interval
 (default 4h, floor 5 min per ADR-005 D2).  Refresh failure is silent.
 
@@ -10,6 +12,24 @@ Snapshot expiry is fail-closed (ADR-005 D3): ``check_expiry()`` returns
 ``BundleVerificationError(reason="trust_snapshot_expired")`` by default.
 A half-life warning is also emitted once per process when the snapshot
 passes its midpoint.
+
+CORRECTED: this module previously read ``vendor/trust-root/*.json`` via
+``Path(__file__).parent.parent.parent / "vendor" / "trust-root"`` at first
+use -- the same design (and the same two independent defects) as the
+TypeScript SDK's ``trustRoot.ts`` before its fix; see that file's header
+for the full incident writeup. In short: (1) ``pyproject.toml``'s
+``[tool.setuptools.package-data]`` never listed anything under ``vendor/``,
+and ``vendor/`` sits outside the ``atlasent`` package directory entirely,
+so it was never part of any real ``pip install``; (2) even had it been
+included, ``Path(__file__).parent.parent.parent`` from the *installed*
+package's ``site-packages/atlasent/trust_root.py`` lands in
+``site-packages`` itself, three levels short of anywhere `vendor/` could
+plausibly live -- the path only ever resolved by coincidence in this
+monorepo's dev checkout. Every real install's ``_load_vendor_snapshot()``
+therefore always hit the ``except Exception`` fallback: a snapshot with
+zero keys and zero revocations, valid until 2099. Fixed the same way as
+the TypeScript SDK: embed the snapshot as a plain dict literal instead of
+reading it from disk.
 """
 
 from __future__ import annotations
@@ -18,8 +38,9 @@ import json
 import logging
 import threading
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Literal
+
+from atlasent.vendored_trust_root import VENDORED_TRUST_ROOT_SNAPSHOT_DATA
 
 logger = logging.getLogger(__name__)
 
@@ -226,39 +247,23 @@ class TrustRootManager:
         self.replace_snapshot(new_snap)
 
 
-# ─── Load the vendor snapshot ─────────────────────────────────────────────────────
-
-_VENDOR_DIR = Path(__file__).parent.parent.parent / "vendor" / "trust-root"
+# ─── Load the embedded (vendored) snapshot ────────────────────────────────────────
 
 
 def _load_vendor_snapshot() -> TrustRootSnapshot:
-    try:
-        index = json.loads((_VENDOR_DIR / "atlasent-trust-root.json").read_text())
-        verifier_keys_raw = json.loads(
-            (_VENDOR_DIR / "atlasent-verifier-keys.json").read_text()
-        )
-        revocations_raw = json.loads(
-            (_VENDOR_DIR / "atlasent-revocations.json").read_text()
-        )
-        keys = [_make_trust_root_key(kd) for kd in verifier_keys_raw.get("keys", [])]
-        revoked_keys = [
-            _make_revocation_entry(rd) for rd in revocations_raw.get("revoked_keys", [])
-        ]
-        return TrustRootSnapshot(
-            valid_until=index["valid_until"],
-            issued_at=index["issued_at"],
-            keys=keys,
-            revoked_keys=revoked_keys,
-            revoked_identities=revocations_raw.get("revoked_identities", []),
-        )
-    except Exception:
-        return TrustRootSnapshot(
-            valid_until="2099-01-01T00:00:00Z",
-            issued_at="2026-05-26T00:00:00Z",
-            keys=[],
-            revoked_keys=[],
-            revoked_identities=[],
-        )
+    # The embedded data is committed source (see vendored_trust_root.py),
+    # always present at import time -- there is no I/O and nothing to fall
+    # back from.
+    data = VENDORED_TRUST_ROOT_SNAPSHOT_DATA
+    return TrustRootSnapshot(
+        valid_until=data["valid_until"],
+        issued_at=data["issued_at"],
+        keys=[_make_trust_root_key(kd) for kd in data.get("keys", [])],
+        revoked_keys=[
+            _make_revocation_entry(rd) for rd in data.get("revoked_keys", [])
+        ],
+        revoked_identities=data.get("revoked_identities", []),
+    )
 
 
 _global_manager: TrustRootManager | None = None
