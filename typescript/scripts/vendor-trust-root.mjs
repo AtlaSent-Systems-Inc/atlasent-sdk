@@ -97,6 +97,22 @@ function optionalBoolean(value, label, problems) {
 }
 
 /**
+ * Returns `value` as-is when it's an array; otherwise records a problem
+ * and returns `[]`. Kept as one function (rather than a ternary calling
+ * `problem()` inline) so the "record the problem" side effect and the
+ * "what value do we use instead" fallback aren't smeared across one
+ * confusing expression — CodeQL flagged exactly that shape ("useless
+ * conditional") in an earlier revision of this file, correctly: `problem()`
+ * always returns `undefined`, so chaining `?? []` off its call site reads
+ * like a conditional whose branch never varies.
+ */
+function requireArray(value, label, problems) {
+  if (Array.isArray(value)) return value;
+  problem(problems, `${label} must be an array, got: ${typeof value}`);
+  return [];
+}
+
+/**
  * Rebuild a trust-root key from untrusted input (a local file, or a live
  * fetch from keys.atlasent.io) field-by-field, keeping only known fields in
  * their expected primitive types. Never passes the input object itself
@@ -163,13 +179,13 @@ function sanitizeSnapshot(trustRoot, verifierKeys, revocations) {
   const validUntil = requireIsoString(trustRoot?.valid_until, "valid_until", problems);
   const issuedAt = requireIsoString(trustRoot?.issued_at, "issued_at", problems);
 
-  const rawKeys = Array.isArray(verifierKeys?.keys) ? verifierKeys.keys : problem(problems, `keys must be an array, got: ${typeof verifierKeys?.keys}`) ?? [];
+  const rawKeys = requireArray(verifierKeys?.keys, "keys", problems);
   const keys = rawKeys.map((k, i) => sanitizeKey(k, i, problems));
 
-  const rawRevokedKeys = Array.isArray(revocations?.revoked_keys) ? revocations.revoked_keys : problem(problems, `revoked_keys must be an array, got: ${typeof revocations?.revoked_keys}`) ?? [];
+  const rawRevokedKeys = requireArray(revocations?.revoked_keys, "revoked_keys", problems);
   const revokedKeys = rawRevokedKeys.map((r, i) => sanitizeRevocation(r, i, problems));
 
-  const rawRevokedIdentities = Array.isArray(revocations?.revoked_identities) ? revocations.revoked_identities : problem(problems, `revoked_identities must be an array, got: ${typeof revocations?.revoked_identities}`) ?? [];
+  const rawRevokedIdentities = requireArray(revocations?.revoked_identities, "revoked_identities", problems);
   const revokedIdentities = rawRevokedIdentities.map((r, i) => sanitizeRevokedIdentity(r, i, problems));
 
   if (problems.length > 0) {
