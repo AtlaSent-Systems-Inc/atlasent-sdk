@@ -63,6 +63,131 @@ async function loadThree(localDir) {
   return { trustRoot, verifierKeys, revocations };
 }
 
+const VALID_KEY_ROLES = new Set(["R1_release", "R2_permit", "R3_audit", "R4_pack"]);
+
+function problem(list, message) {
+  list.push(message);
+  return undefined;
+}
+
+function requireIsoString(value, label, problems) {
+  if (typeof value !== "string" || value.length === 0 || Number.isNaN(Date.parse(value))) {
+    return problem(problems, `${label} must be a parseable ISO-8601 string, got: ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+function requireNonEmptyString(value, label, problems) {
+  if (typeof value !== "string" || value.length === 0) {
+    return problem(problems, `${label} must be a non-empty string, got: ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+function optionalString(value, label, problems) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") return problem(problems, `${label} must be a string or null/absent`);
+  return value;
+}
+
+function optionalBoolean(value, label, problems) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") return problem(problems, `${label} must be a boolean or absent`);
+  return value;
+}
+
+/**
+ * Rebuild a trust-root key from untrusted input (a local file, or a live
+ * fetch from keys.atlasent.io) field-by-field, keeping only known fields in
+ * their expected primitive types. Never passes the input object itself
+ * through — the output is a new object built entirely from validated
+ * primitives, so nothing unvalidated (an unexpected extra field, an
+ * unexpected type) reaches the generated source this gets embedded into.
+ */
+function sanitizeKey(raw, index, problems) {
+  const label = (field) => `keys[${index}].${field}`;
+  const kid = requireNonEmptyString(raw.kid, label("kid"), problems);
+  const role = VALID_KEY_ROLES.has(raw.role)
+    ? raw.role
+    : problem(problems, `${label("role")} must be one of ${[...VALID_KEY_ROLES].join("/")}, got: ${JSON.stringify(raw.role)}`);
+  const kty = requireNonEmptyString(raw.kty, label("kty"), problems);
+  const alg = requireNonEmptyString(raw.alg, label("alg"), problems);
+  return {
+    kid: kid ?? "",
+    role: role ?? "R3_audit",
+    kty: kty ?? "",
+    alg: alg ?? "",
+    x: optionalString(raw.x, label("x"), problems),
+    crv: optionalString(raw.crv, label("crv"), problems),
+    valid_from: optionalString(raw.valid_from, label("valid_from"), problems),
+    valid_until: optionalString(raw.valid_until, label("valid_until"), problems),
+    replaced_by: optionalString(raw.replaced_by, label("replaced_by"), problems),
+    revoked: optionalBoolean(raw.revoked, label("revoked"), problems) ?? false,
+    tenant: optionalString(raw.tenant, label("tenant"), problems),
+  };
+}
+
+function sanitizeRevocation(raw, index, problems) {
+  const label = (field) => `revoked_keys[${index}].${field}`;
+  const kid = requireNonEmptyString(raw.kid, label("kid"), problems);
+  const revokedAt = requireIsoString(raw.revoked_at, label("revoked_at"), problems);
+  return {
+    kid: kid ?? "",
+    role: optionalString(raw.role, label("role"), problems),
+    revoked_at: revokedAt ?? "",
+    reason: optionalString(raw.reason, label("reason"), problems),
+  };
+}
+
+function sanitizeRevokedIdentity(raw, index, problems) {
+  const label = (field) => `revoked_identities[${index}].${field}`;
+  const identity = requireNonEmptyString(raw.identity, label("identity"), problems);
+  const revokedAt = requireIsoString(raw.revoked_at, label("revoked_at"), problems);
+  return {
+    identity: identity ?? "",
+    revoked_at: revokedAt ?? "",
+    reason: optionalString(raw.reason, label("reason"), problems),
+  };
+}
+
+/**
+ * Rebuild the full snapshot from untrusted input field-by-field — never
+ * pass the fetched/loaded objects through directly. This is what actually
+ * gets embedded into committed SDK source (vendoredTrustRoot.generated.ts),
+ * which every consumer of this package compiles into their own bundle, so
+ * this refuses (throwing with every problem found) rather than silently
+ * writing anything unvalidated or unexpectedly-shaped.
+ */
+function sanitizeSnapshot(trustRoot, verifierKeys, revocations) {
+  const problems = [];
+  const validUntil = requireIsoString(trustRoot?.valid_until, "valid_until", problems);
+  const issuedAt = requireIsoString(trustRoot?.issued_at, "issued_at", problems);
+
+  const rawKeys = Array.isArray(verifierKeys?.keys) ? verifierKeys.keys : problem(problems, `keys must be an array, got: ${typeof verifierKeys?.keys}`) ?? [];
+  const keys = rawKeys.map((k, i) => sanitizeKey(k, i, problems));
+
+  const rawRevokedKeys = Array.isArray(revocations?.revoked_keys) ? revocations.revoked_keys : problem(problems, `revoked_keys must be an array, got: ${typeof revocations?.revoked_keys}`) ?? [];
+  const revokedKeys = rawRevokedKeys.map((r, i) => sanitizeRevocation(r, i, problems));
+
+  const rawRevokedIdentities = Array.isArray(revocations?.revoked_identities) ? revocations.revoked_identities : problem(problems, `revoked_identities must be an array, got: ${typeof revocations?.revoked_identities}`) ?? [];
+  const revokedIdentities = rawRevokedIdentities.map((r, i) => sanitizeRevokedIdentity(r, i, problems));
+
+  if (problems.length > 0) {
+    throw new Error(
+      `refusing to vendor a malformed trust-root snapshot (${problems.length} problem(s)):\n` +
+        problems.map((p) => `  - ${p}`).join("\n"),
+    );
+  }
+
+  return {
+    valid_until: validUntil,
+    issued_at: issuedAt,
+    keys,
+    revoked_keys: revokedKeys,
+    revoked_identities: revokedIdentities,
+  };
+}
+
 async function main() {
   const argPath = process.argv[2];
   const defaultLocalDir = resolve(here, "..", "..", "..", "atlasent-keys", ".well-known");
@@ -74,13 +199,7 @@ async function main() {
 
   const { trustRoot, verifierKeys, revocations } = await loadThree(localDir);
 
-  const snapshot = {
-    valid_until: trustRoot.valid_until,
-    issued_at: trustRoot.issued_at,
-    keys: verifierKeys.keys ?? [],
-    revoked_keys: revocations.revoked_keys ?? [],
-    revoked_identities: revocations.revoked_identities ?? [],
-  };
+  const snapshot = sanitizeSnapshot(trustRoot, verifierKeys, revocations);
 
   const j = (v) => JSON.stringify(v, null, 2);
 
