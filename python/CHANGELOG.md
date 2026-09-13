@@ -18,6 +18,23 @@
   `vendor/trust-root/*.json` reference copies were refreshed to the same
   upstream files.
 
+### Fixed
+
+- **ADR-005 revocation was checked against the bundle's unsigned
+  `signing_key_id` hint, not the key that verified the signature.** During a
+  rotation window a verifier legitimately holds both the revoked key and its
+  successor; `verify_audit_bundle()` tried every key, recorded the real
+  `matched_key_id`, and then consulted `revoked_keys` using the hint — so a
+  bundle signed by revoked `v2-audit-2026` but advertising `v1` returned
+  `verified=True` (Codex P1 on #519). `VerifyKey` now carries
+  `public_key_raw` (populated for every key loaded from `public_keys_pem`),
+  and revocation and role are resolved against the trust-root entry whose
+  `x` matches the verifying key's material. The hint is still rejected on its
+  own when it names a revoked kid (fail-closed), and it disambiguates
+  trust-root entries that share one material. Keys supplied without material
+  keep the previous hint-only semantics — pinned as a documented limit in
+  `tests/test_audit_bundle_revocation_material.py`.
+
 ### Added
 
 - `AtlaSentPermitMintFailedError` — the permit-mint operational-error

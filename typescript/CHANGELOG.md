@@ -26,6 +26,22 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ### Fixed
 
+- **ADR-005 revocation was checked against the bundle's unsigned
+  `signing_key_id` hint, not the key that verified the signature.** During a
+  rotation window a verifier legitimately holds both the revoked key and its
+  successor; `verifyAuditBundle()` tried every key, recorded the real
+  `matchedKeyId`, and then consulted `revoked_keys` using the hint — so a
+  bundle signed by revoked `v2-audit-2026` but advertising `v1` returned
+  `verified: true` (Codex P1 on #519). `VerifyKey` now carries
+  `publicKeyRaw` (populated for every key loaded from `publicKeysPem`; new
+  `verifyKeyFromSpkiPem()` helper), and revocation and role are resolved
+  against the trust-root entry whose `x` matches the verifying key's material.
+  The hint is still rejected on its own when it names a revoked kid
+  (fail-closed), and it disambiguates trust-root entries that share one
+  material. Keys supplied without material keep the previous hint-only
+  semantics — pinned as a documented limit in
+  `audit-bundle-revocation-material.test.ts`.
+
 - **The SDK's embedded default trust root was always empty** — `verifyBundle()`
   (and any `AtlaSentClient`/`getGlobalTrustRootManager()` caller that didn't
   pass its own `trustRoot`) silently got a snapshot with zero keys and zero
