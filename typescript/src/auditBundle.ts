@@ -352,14 +352,27 @@ export async function verifyAuditBundle(
             ...keys.filter((k) => k.keyId !== hint),
           ]
         : Array.from(keys);
+      const enforcingTrustRoot = trustRootOpts?.trustRoot !== undefined;
       for (const k of ordered) {
         const ok = await subtle.verify("Ed25519", k.publicKey, sigBytes, envelopeBytes);
-        if (ok) {
-          signatureValid = true;
+        if (!ok) continue;
+        signatureValid = true;
+        const raw = await verifiedRawMaterial(k, sigBytes, envelopeBytes);
+        // The first signature-valid candidate names the match. A later one
+        // replaces it only when it can ALSO anchor its material and the
+        // earlier one could not.
+        if (matchedKeyId === undefined || raw !== undefined) {
           matchedKeyId = k.keyId;
-          matchedKeyRaw = await verifiedRawMaterial(k, sigBytes, envelopeBytes);
-          break;
+          matchedKeyRaw = raw;
         }
+        if (raw !== undefined || !enforcingTrustRoot) break;
+        // Trust root enforced and this candidate's material cannot be
+        // anchored: keep scanning. resolveKeys() places `options.keys` ahead
+        // of `publicKeysPem`, so the SAME key can legitimately appear first as
+        // a caller-built non-extractable CryptoKey and again as the extractable
+        // PEM-derived copy — stopping here would turn a valid bundle into a
+        // false `key_material_unavailable` (atlasent-sdk#519, round 5). If no
+        // candidate can anchor, the trust-root check below still fails closed.
       }
       if (!signatureValid) {
         reason = `signature did not verify under any of ${keys.length} configured public key(s)`;
