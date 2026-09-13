@@ -61,7 +61,13 @@ follows [semver](https://semver.org/): breaking changes bump the major
   `rawEd25519FromSpki()`) are now exported from the package entry point —
   the previous changelog line advertised the helper while `src/index.ts` did
   not re-export it — and the key it returns is imported extractable so the
-  export path is the one exercised.
+  export path is the one exercised. A fourth round fixed the shared contract
+  fixture (`contract/tests/test_trust_root_contract.py`), which still
+  published the signing key's material under all three kids and so failed the
+  contract suite under the corrected verifier; Contract CI had been reading
+  green only because it never installed `cryptography` and silently skipped
+  every behaviour vector. It now installs the `verify` extra and fails, rather
+  than skips, when those vectors would not run.
 
 - **The SDK's embedded default trust root was always empty** — `verifyBundle()`
   (and any `AtlaSentClient`/`getGlobalTrustRootManager()` caller that didn't

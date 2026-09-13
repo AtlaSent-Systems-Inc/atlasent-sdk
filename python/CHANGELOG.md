@@ -47,7 +47,13 @@
   live key while its `public_key` was the revoked one was judged by the
   metadata (`k.public_key_raw or ...`). The material is now always derived
   from the `public_key` object that verified the signature; `public_key_raw`
-  is informational and never consulted by the verifier.
+  is informational and never consulted by the verifier. A fourth round fixed
+  the shared contract fixture (`contract/tests/test_trust_root_contract.py`),
+  which still published the signing key's material under all three kids and
+  so failed the contract suite under the corrected verifier; Contract CI had
+  been reading green only because it never installed `cryptography` and
+  silently skipped every behaviour vector. It now installs the `verify` extra
+  and fails, rather than skips, when those vectors would not run.
 
 ### Added
 
