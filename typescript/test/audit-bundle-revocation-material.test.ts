@@ -40,8 +40,10 @@ interface Signer {
   privateKey: webcrypto.CryptoKey;
   /** With raw material (what `publicKeysPem` loading produces). */
   verifyKey: VerifyKey;
-  /** Without raw material (a caller-constructed VerifyKey, pre-2026-09-13 shape). */
+  /** Without raw material, non-extractable (a caller-constructed VerifyKey, pre-2026-09-13 shape). */
   bareKey: VerifyKey;
+  /** Without raw material but extractable, so the verifier can derive it. */
+  bareExtractableKey: VerifyKey;
 }
 
 async function signer(keyId: string): Promise<Signer> {
@@ -50,12 +52,14 @@ async function signer(keyId: string): Promise<Signer> {
   const raw = rawEd25519FromSpki(spki);
   if (!raw) throw new Error("unexpected SPKI shape");
   const publicKey = await subtle.importKey("spki", spki, { name: "Ed25519" }, false, ["verify"]);
+  const extractable = await subtle.importKey("spki", spki, { name: "Ed25519" }, true, ["verify"]);
   return {
     keyId,
     x: b64url(raw),
     privateKey: kp.privateKey,
     verifyKey: { keyId, publicKey, publicKeyRaw: raw },
     bareKey: { keyId, publicKey },
+    bareExtractableKey: { keyId, publicKey: extractable },
   };
 }
 
@@ -69,6 +73,17 @@ async function signedBy(s: Signer, advertisedKid: string): Promise<AuditBundle> 
   delete b.signature;
   const sig = new Uint8Array(await subtle.sign("Ed25519", s.privateKey, signedBytesFor(b)));
   return { ...b, signature: b64url(sig) } as AuditBundle;
+}
+
+/** The revoked material re-published under a second, LIVE kid ("v3-alias"). */
+function snapshotWithAlias(live: Signer, revoked: Signer, permit: Signer, ledgerEntry: boolean): TrustRootSnapshot {
+  const snap = snapshot(live, revoked, permit);
+  snap.keys.push({
+    kid: "v3-alias", role: "R3_audit", kty: "OKP", crv: "Ed25519", alg: "EdDSA", x: revoked.x,
+    valid_from: null, valid_until: null, replaced_by: null, revoked: false, tenant: null,
+  });
+  if (!ledgerEntry) snap.revoked_keys = [];
+  return snap;
 }
 
 function snapshot(live: Signer, revoked: Signer, permit: Signer): TrustRootSnapshot {
@@ -130,16 +145,61 @@ describe("revocation is checked against the key that verified, not the advertise
     ).rejects.toMatchObject({ reason: "key_revoked", kid: "v2-old" });
   });
 
-  it("keys supplied without raw material fall back to the hint-only check — a documented limit, pinned", async () => {
-    // A caller constructing VerifyKey by hand (no publicKeyRaw) gets the
-    // pre-fix semantics: the verifier cannot tell which trust-root entry the
-    // key is, so only the advertised kid is checked. Load keys via
-    // `publicKeysPem` (or `verifyKeyFromSpkiPem`) to get material matching.
+  it("keys without raw material have it derived — a revoked signer advertising a live kid still fails (bypass 1)", async () => {
+    // Review on atlasent-sdk#519: a caller-constructed VerifyKey with no
+    // publicKeyRaw used to fall back to the unsigned hint. Now the material is
+    // exported from the CryptoKey and the revocation lands on the real signer.
     const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
     const bundle = await signedBy(revoked, "v1");
-    const r = await verifyAuditBundle(bundle, [revoked.bareKey, live.bareKey], {
-      trustRoot: snapshot(live, revoked, permit),
-    });
+    const trustRoot = snapshot(live, revoked, permit);
+    for (const keys of [
+      [revoked.bareExtractableKey, live.bareExtractableKey],
+      [live.bareExtractableKey, revoked.bareExtractableKey],
+    ]) {
+      await expect(verifyAuditBundle(bundle, keys, { trustRoot })).rejects.toMatchObject({
+        reason: "key_revoked",
+        kid: "v2-old",
+      });
+    }
+  });
+
+  it("a non-extractable key with no raw material fails closed with key_material_unavailable, never on the hint", async () => {
+    const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+    const trustRoot = snapshot(live, revoked, permit);
+    // Even a bundle genuinely signed by the LIVE key is refused: with a trust
+    // root present the verifier will not vouch for a key it cannot anchor.
+    for (const bundle of [await signedBy(revoked, "v1"), await signedBy(live, "v1")]) {
+      await expect(verifyAuditBundle(bundle, [revoked.bareKey, live.bareKey], { trustRoot })).rejects.toMatchObject({
+        reason: "key_material_unavailable",
+      });
+    }
+    // Without a trust root the material is not needed and the signature check stands on its own.
+    const r = await verifyAuditBundle(await signedBy(live, "v1"), [live.bareKey]);
     expect(r.signatureValid).toBe(true);
+  });
+
+  it.each([true, false])(
+    "shared material under a live alias kid is still revoked, ledger entry present=%s (bypass 2)",
+    async (ledgerEntry) => {
+      // Review on atlasent-sdk#519: the hint used to narrow verifyingEntries
+      // to the attacker-selected live alias. Every entry sharing the material
+      // is now judged — including one revoked only by its own `revoked` flag.
+      const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+      const trustRoot = snapshotWithAlias(live, revoked, permit, ledgerEntry);
+      const bundle = await signedBy(revoked, "v3-alias");
+      for (const keys of [[revoked.verifyKey, live.verifyKey], [revoked.bareExtractableKey, live.bareExtractableKey]]) {
+        await expect(verifyAuditBundle(bundle, keys, { trustRoot })).rejects.toMatchObject({
+          reason: "key_revoked",
+          kid: "v2-old",
+        });
+      }
+    },
+  );
+
+  it("a live key still verifies when an unrelated alias entry exists", async () => {
+    const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+    const trustRoot = snapshotWithAlias(live, revoked, permit, true);
+    const r = await verifyAuditBundle(await signedBy(live, "v1"), [live.verifyKey], { trustRoot });
+    expect(r.verified).toBe(true);
   });
 });

@@ -36,11 +36,19 @@ follows [semver](https://semver.org/): breaking changes bump the major
   `publicKeyRaw` (populated for every key loaded from `publicKeysPem`; new
   `verifyKeyFromSpkiPem()` helper), and revocation and role are resolved
   against the trust-root entry whose `x` matches the verifying key's material.
-  The hint is still rejected on its own when it names a revoked kid
-  (fail-closed), and it disambiguates trust-root entries that share one
-  material. Keys supplied without material keep the previous hint-only
-  semantics — pinned as a documented limit in
-  `audit-bundle-revocation-material.test.ts`.
+  The hint is still rejected on its own when it names a revoked kid or a
+  non-audit kid (fail-closed). Two follow-up bypasses from review on #519 are
+  closed in the same change: (1) a `VerifyKey` supplied **without** material
+  no longer falls back to the hint — the material is exported from the
+  `CryptoKey`, and a non-extractable key with a trust root present fails
+  closed with the new `key_material_unavailable` reason; (2) the hint no
+  longer narrows the trust-root entries that share the verifying material —
+  **every** entry with that material is judged (`revoked` flag or
+  `revoked_keys` ledger), so a revoked key re-published under a live alias
+  kid is still revoked whichever kid the bundle advertises. Negative tests
+  for both in `audit-bundle-revocation-material.test.ts`; the contract-vector
+  fixture, which published one material under three kids (an invalid trust
+  root that hid bypass 2), now gives each kid distinct material.
 
 - **The SDK's embedded default trust root was always empty** — `verifyBundle()`
   (and any `AtlaSentClient`/`getGlobalTrustRootManager()` caller that didn't

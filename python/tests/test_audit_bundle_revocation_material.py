@@ -157,15 +157,73 @@ def test_advertising_a_revoked_kid_fails_even_when_signed_by_live_key() -> None:
     assert exc.value.kid == "v2-old"
 
 
-def test_keys_without_raw_material_fall_back_to_hint_only_check() -> None:
-    # Documented limit, pinned: a caller-built VerifyKey with no material
-    # gets the pre-fix semantics. Load keys via verify_bundle(public_keys_pem=...)
-    # to get material matching.
+def test_keys_without_raw_material_are_derived_never_trusted_on_the_hint() -> None:
+    # Review on atlasent-sdk#519, bypass 1: a caller-built VerifyKey with no
+    # material used to fall back to the unsigned hint, so a revoked signer
+    # advertising a live kid verified. The material is now derived from the
+    # public key itself and the revocation lands on the real signer.
     live, revoked, permit = _signer("live"), _signer("revoked"), _signer("permit")
     bundle = _signed_by(revoked, "v1")
-    r = verify_audit_bundle(
-        bundle,
+    for keys in (
         [revoked.bare_key, live.bare_key],
-        trust_root=_snapshot(live, revoked, permit),
+        [live.bare_key, revoked.bare_key],
+    ):
+        with pytest.raises(BundleVerificationError) as exc:
+            verify_audit_bundle(
+                bundle, keys, trust_root=_snapshot(live, revoked, permit)
+            )
+        assert exc.value.reason == "key_revoked"
+        assert exc.value.kid == "v2-old"
+
+
+def _snapshot_with_alias(
+    live: Signer, revoked: Signer, permit: Signer, *, ledger_entry: bool
+) -> TrustRootSnapshot:
+    """The revoked material re-published under a second, LIVE kid.
+
+    ``ledger_entry=False`` drops the ``revoked_keys`` row so only the
+    ``revoked`` flag on the original entry carries the revocation.
+    """
+    snap = _snapshot(live, revoked, permit)
+    snap.keys.append(
+        TrustRootKey(
+            kid="v3-alias",
+            role="R3_audit",
+            kty="OKP",
+            alg="EdDSA",
+            crv="Ed25519",
+            x=revoked.x,
+            revoked=False,
+        )
     )
-    assert r.signature_valid is True
+    if not ledger_entry:
+        snap.revoked_keys.clear()
+    return snap
+
+
+@pytest.mark.parametrize("ledger_entry", [True, False])
+def test_shared_material_under_a_live_alias_kid_is_still_revoked(
+    ledger_entry: bool,
+) -> None:
+    # Review on atlasent-sdk#519, bypass 2: the hint used to narrow the
+    # verifying entries to the attacker-selected live alias, contradicting
+    # "revocation of the material under any kid revokes it". Every entry
+    # sharing the material is now judged, whichever kid the bundle advertises.
+    live, revoked, permit = _signer("live"), _signer("revoked"), _signer("permit")
+    snap = _snapshot_with_alias(live, revoked, permit, ledger_entry=ledger_entry)
+    bundle = _signed_by(revoked, "v3-alias")
+    for keys in (
+        [revoked.verify_key, live.verify_key],
+        [revoked.bare_key, live.bare_key],
+    ):
+        with pytest.raises(BundleVerificationError) as exc:
+            verify_audit_bundle(bundle, keys, trust_root=snap)
+        assert exc.value.reason == "key_revoked"
+        assert exc.value.kid == "v2-old"
+
+
+def test_live_key_still_verifies_when_an_unrelated_alias_exists() -> None:
+    live, revoked, permit = _signer("live"), _signer("revoked"), _signer("permit")
+    snap = _snapshot_with_alias(live, revoked, permit, ledger_entry=True)
+    r = verify_audit_bundle(_signed_by(live, "v1"), [live.bare_key], trust_root=snap)
+    assert r.verified is True

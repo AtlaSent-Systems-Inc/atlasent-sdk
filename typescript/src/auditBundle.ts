@@ -283,6 +283,7 @@ export async function verifyAuditBundle(
   let signatureValid = false;
   let matchedKeyId: string | undefined;
   let matchedKeyRaw: Uint8Array | undefined;
+  let matchedKey: VerifyKey | undefined;
   let reason: string | undefined;
 
   if (keys.length === 0) {
@@ -307,6 +308,7 @@ export async function verifyAuditBundle(
           signatureValid = true;
           matchedKeyId = k.keyId;
           matchedKeyRaw = k.publicKeyRaw;
+          matchedKey = k;
           break;
         }
       }
@@ -324,30 +326,53 @@ export async function verifyAuditBundle(
   // is a hint the producer — or an attacker holding a revoked key — chooses
   // freely. The checks below are therefore anchored to the key that ACTUALLY
   // verified the signature, identified in the trust root by raw material
-  // (`TrustRootKey.x`) whenever the verifying key carries it; the hint is used
-  // only to disambiguate trust-root entries that share one material, and is
-  // additionally rejected on its own if it names a revoked kid (fail-closed —
-  // a bundle that advertises a revoked key is wrong either way). Keys supplied
-  // without material (`VerifyKey.publicKeyRaw` absent) fall back to the
-  // hint-only behaviour, which is exactly the pre-2026-09-13 semantics.
+  // (`TrustRootKey.x`). Two properties are load-bearing (both found by review
+  // on atlasent-sdk#519 and pinned by audit-bundle-revocation-material.test.ts):
+  //
+  //   1. Material is REQUIRED once a trust root is present. A VerifyKey that
+  //      carries no `publicKeyRaw` has it derived from the CryptoKey; if that
+  //      is impossible (non-extractable) verification fails closed with
+  //      `key_material_unavailable` — it never falls back to trusting the hint.
+  //   2. EVERY trust-root entry sharing the verifying material counts. The
+  //      hint never narrows that set: a revoked key re-published under a live
+  //      alias kid is still revoked, whichever kid the bundle advertises.
+  //
+  // The hint is still checked on its own — a bundle that names a revoked kid
+  // is wrong either way — and is the only anchor for the role check when the
+  // verifying material is not in the trust root at all (customer-supplied PEM).
   if (signatureValid && trustRootOpts?.trustRoot) {
     const snap = trustRootOpts.trustRoot;
     const hint = typeof bundle.signing_key_id === "string" ? bundle.signing_key_id : null;
-    const matchedX = matchedKeyRaw ? base64UrlEncode(matchedKeyRaw) : null;
-    const byMaterial = matchedX ? snap.keys.filter((k) => k.x === matchedX) : [];
-    const byId = matchedKeyId ? snap.keys.filter((k) => k.kid === matchedKeyId) : [];
-    const sameMaterial = byMaterial.length > 0 ? byMaterial : byId;
-    const hintEntry = hint ? sameMaterial.find((k) => k.kid === hint) : undefined;
-    // The trust-root entries that describe the verifying key. If the hint
-    // names one of them it is authoritative; otherwise every entry with that
-    // material counts (a revocation of the material under any kid revokes it).
-    const verifyingEntries = hintEntry ? [hintEntry] : sameMaterial;
 
-    const revokedKid = [
-      ...verifyingEntries.map((k) => k.kid),
-      ...(matchedKeyId ? [matchedKeyId] : []),
-      ...(hint ? [hint] : []),
-    ].find((kid) => snap.revoked_keys.some((r) => r.kid === kid));
+    let raw = matchedKeyRaw;
+    if (!raw && matchedKey) {
+      try {
+        raw = new Uint8Array(await subtle.exportKey("raw", matchedKey.publicKey));
+      } catch {
+        raw = undefined;
+      }
+    }
+    if (!raw) {
+      throw new BundleVerificationError({
+        reason: "key_material_unavailable",
+        snapshotValidUntil: snap.valid_until,
+        snapshotFetchedAt: snap.issued_at,
+        ...(matchedKeyId !== undefined ? { kid: matchedKeyId } : {}),
+      });
+    }
+
+    const matchedX = base64UrlEncode(raw);
+    const byMaterial = snap.keys.filter((k) => k.x === matchedX);
+    // Only when the material is unknown to the trust root does the VerifyKey's
+    // own (caller-controlled, never bundle-controlled) keyId identify it.
+    const verifyingEntries =
+      byMaterial.length > 0 ? byMaterial : matchedKeyId ? snap.keys.filter((k) => k.kid === matchedKeyId) : [];
+
+    const isRevoked = (kid: string): boolean => snap.revoked_keys.some((r) => r.kid === kid);
+    const revokedEntry = verifyingEntries.find((k) => k.revoked === true || isRevoked(k.kid));
+    const revokedKid =
+      revokedEntry?.kid ??
+      [...(matchedKeyId ? [matchedKeyId] : []), ...(hint ? [hint] : [])].find((kid) => isRevoked(kid));
     if (revokedKid !== undefined) {
       throw new BundleVerificationError({
         reason: "key_revoked",
@@ -356,12 +381,14 @@ export async function verifyAuditBundle(
         kid: revokedKid,
       });
     }
-    // Role: audit bundles must be signed by an R3_audit key. Judge the
-    // verifying key's own entry; fall back to the hint's entry when the
-    // verifying key is not in the trust root at all (customer-supplied PEM).
+    // Role: audit bundles must be signed by an R3_audit key. Any entry sharing
+    // the verifying material with another role fails it, and so does a hint
+    // that names a non-audit kid — a bundle advertising the wrong key is wrong
+    // either way (same fail-closed rule as the hint revocation check above).
+    const hintEntry = hint ? snap.keys.find((k) => k.kid === hint) : undefined;
     const roleEntry =
       verifyingEntries.find((k) => k.role !== "R3_audit") ??
-      (verifyingEntries.length === 0 && hint ? snap.keys.find((k) => k.kid === hint) : undefined);
+      (hintEntry && hintEntry.role !== "R3_audit" ? hintEntry : undefined);
     if (roleEntry && roleEntry.role !== "R3_audit") {
       throw new BundleVerificationError({
         reason: "key_role_mismatch",

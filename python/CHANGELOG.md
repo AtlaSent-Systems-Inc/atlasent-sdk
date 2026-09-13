@@ -30,10 +30,18 @@
   `public_key_raw` (populated for every key loaded from `public_keys_pem`),
   and revocation and role are resolved against the trust-root entry whose
   `x` matches the verifying key's material. The hint is still rejected on its
-  own when it names a revoked kid (fail-closed), and it disambiguates
-  trust-root entries that share one material. Keys supplied without material
-  keep the previous hint-only semantics — pinned as a documented limit in
-  `tests/test_audit_bundle_revocation_material.py`.
+  own when it names a revoked kid or a non-audit kid (fail-closed). Two
+  follow-up bypasses from review on #519 are closed in the same change:
+  (1) a `VerifyKey` supplied **without** `public_key_raw` no longer falls
+  back to the hint — the material is derived from the public key (always
+  possible with `cryptography`); (2) the hint no longer narrows the
+  trust-root entries that share the verifying material — **every** entry
+  with that material is judged (`revoked` flag or `revoked_keys` ledger), so
+  a revoked key re-published under a live alias kid is still revoked
+  whichever kid the bundle advertises. Negative tests for both in
+  `tests/test_audit_bundle_revocation_material.py`; the contract-vector
+  fixture, which published one material under three kids (an invalid trust
+  root that hid bypass 2), now gives each kid distinct material.
 
 ### Added
 

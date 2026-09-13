@@ -67,13 +67,18 @@ def _make_snapshot(**overrides: Any) -> TrustRootSnapshot:
                 crv="Ed25519",
                 x="uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
             ),
+            # Each kid carries DISTINCT material. An earlier fixture published
+            # one material under all three kids, which is not a valid trust
+            # root (a material revoked under any kid is revoked) and hid
+            # exactly the alias bypass test_audit_bundle_revocation_material
+            # now pins.
             TrustRootKey(
                 kid="permit-kid",
                 role="R2_permit",
                 kty="OKP",
                 alg="EdDSA",
                 crv="Ed25519",
-                x="uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
+                x="Z2k8Tva4DJzS7yCSvYLmQdeQ4bxhyFD2kWjjQsPTFsw",
             ),
             TrustRootKey(
                 kid="revoked-kid",
@@ -81,7 +86,7 @@ def _make_snapshot(**overrides: Any) -> TrustRootSnapshot:
                 kty="OKP",
                 alg="EdDSA",
                 crv="Ed25519",
-                x="uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
+                x="qaXEvPU7ffAGgnLUutIn_2Y2vcauh_8ixLj-bzYiddg",
                 revoked=True,
             ),
         ],

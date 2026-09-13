@@ -23,7 +23,7 @@ import {
   type TrustRootSnapshot,
 } from "../src/trustRoot.js";
 import { BundleVerificationError } from "../src/errors.js";
-import { verifyAuditBundle, type VerifyKey } from "../src/auditBundle.js";
+import { verifyAuditBundle, verifyKeyFromSpkiPem, type VerifyKey } from "../src/auditBundle.js";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const VECTORS_DIR = resolve(HERE, "..", "..", "contract", "vectors", "trust-root");
@@ -33,35 +33,29 @@ const PUBLIC_PEM = readFileSync(resolve(FIXTURES_DIR, "signing-key.pub.pem"), "u
 // ─── Helpers ───────────────────────────────────────────────────────────────────────
 
 async function keysFromPem(pem: string, keyId: string): Promise<VerifyKey[]> {
-  const b64 = pem
-    .replace(/-----BEGIN PUBLIC KEY-----/, "")
-    .replace(/-----END PUBLIC KEY-----/, "")
-    .replace(/\s+/g, "");
-  const bytes = Uint8Array.from(Buffer.from(b64, "base64"));
-  const { webcrypto } = await import("node:crypto");
-  const publicKey = await webcrypto.subtle.importKey(
-    "spki",
-    bytes,
-    { name: "Ed25519" },
-    false,
-    ["verify"],
-  );
-  return [{ keyId, publicKey }];
+  // The SDK's own loader: carries the raw material the trust-root checks
+  // anchor on (a hand-imported, non-extractable CryptoKey without material
+  // is refused as key_material_unavailable once a trust root is present).
+  return [await verifyKeyFromSpkiPem(pem, keyId)];
 }
 
 function makeSnapshot(overrides: Partial<TrustRootSnapshot> = {}): TrustRootSnapshot {
   return {
     valid_until: "2099-01-01T00:00:00Z",
     issued_at: "2026-01-01T00:00:00Z",
+    // Each kid carries DISTINCT material. An earlier fixture published one
+    // material under all three kids, which is not a valid trust root (a
+    // material revoked under any kid is revoked) and hid exactly the alias
+    // bypass audit-bundle-revocation-material.test.ts now pins.
     keys: [
       { kid: "test-key", role: "R3_audit", kty: "OKP", crv: "Ed25519", alg: "EdDSA",
         x: "uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ", valid_from: null, valid_until: null,
         replaced_by: null, revoked: false, tenant: null },
       { kid: "permit-kid", role: "R2_permit", kty: "OKP", crv: "Ed25519", alg: "EdDSA",
-        x: "uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ", valid_from: null, valid_until: null,
+        x: "Z2k8Tva4DJzS7yCSvYLmQdeQ4bxhyFD2kWjjQsPTFsw", valid_from: null, valid_until: null,
         replaced_by: null, revoked: false, tenant: null },
       { kid: "revoked-kid", role: "R3_audit", kty: "OKP", crv: "Ed25519", alg: "EdDSA",
-        x: "uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ", valid_from: null, valid_until: null,
+        x: "qaXEvPU7ffAGgnLUutIn_2Y2vcauh_8ixLj-bzYiddg", valid_from: null, valid_until: null,
         replaced_by: null, revoked: true, tenant: null },
     ],
     revoked_keys: [
