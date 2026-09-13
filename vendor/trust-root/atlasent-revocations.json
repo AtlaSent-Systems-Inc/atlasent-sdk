@@ -1,12 +1,30 @@
 {
   "schema": "atlasent-revocations/v1",
-  "issued_at": "2026-05-28T00:00:00Z",
+  "issued_at": "2026-09-12T21:06:42Z",
   "revoked_keys": [
     {
       "kid": "revoked-kid",
       "role": "R3_audit",
-      "revoked_at": "2026-05-01T12:00:00Z",
-      "reason": "test revocation for SDK test vectors"
+      "revoked_at": "2026-05-28T00:00:00Z",
+      "reason": "Test key; superseded by v2-audit-2026"
+    },
+    {
+      "kid": "test-key",
+      "role": "R3_audit",
+      "revoked_at": "2026-06-10T00:00:00Z",
+      "reason": "Replaced by v2-audit-2026; revocation flag corrected to match replaced_by field"
+    },
+    {
+      "kid": "permit-kid",
+      "role": "R2_permit",
+      "revoked_at": "2026-08-10T09:39:34Z",
+      "reason": "Vendor-fixture placeholder R2_permit key, superseded by ak_2026_q3_atlasent_permit; revoked in atlasent-verifier-keys.json commit 0f97f0c but omitted from this ledger at the time"
+    },
+    {
+      "kid": "v2-audit-2026",
+      "role": "R3_audit",
+      "revoked_at": "2026-09-12T21:06:42Z",
+      "reason": "Never the production audit signer: 0/7 sampled production audit_events signatures (2026-06-07 → 2026-09-12) verify under it, and every production v1-export-audit envelope to date recorded an empty key_id, so it never signed an export either. Added 2026-05-28 without a derivation record. Superseded by kid v1, the verified per-row signer (7/7). See atlasent-internal compliance/soc2/audits/2026-09-audit-key-publication-verification.md and its 2026-09-12 resolution record."
     }
   ],
   "revoked_identities": []

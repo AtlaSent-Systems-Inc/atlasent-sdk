@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Changed
+
+- **Re-vendored the embedded trust-root snapshot from `atlasent-keys` main
+  (`f357d8a`, bundles re-signed in `aebdac8`).** Adds `kid: v1` (`R3_audit`,
+  valid 2026-06-07 → 2027-07-08) — the per-row `audit_events.signature`
+  signer on production runtime, verified 7/7 against production rows before
+  publication — and marks `v2-audit-2026` `revoked: true`, `replaced_by:
+  "v1"`, with the matching `revoked_keys` ledger entry. `v2-audit-2026` was
+  never the production audit signer (0/7 sampled rows verify under it). Any
+  `verify_audit_bundle()` caller relying on the embedded baseline now
+  resolves the real production audit key and rejects the revoked one
+  without waiting for `TrustRootManager`'s first background refresh.
+  Regenerated with `scripts/vendor_trust_root.py`; the sibling
+  `vendor/trust-root/*.json` reference copies were refreshed to the same
+  upstream files.
+
 ### Added
 
 - `AtlaSentPermitMintFailedError` — the permit-mint operational-error

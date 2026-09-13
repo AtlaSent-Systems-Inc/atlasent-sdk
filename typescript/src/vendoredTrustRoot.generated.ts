@@ -28,8 +28,8 @@ export const VENDORED_TRUST_ROOT_SNAPSHOT: TrustRootSnapshot = {
       "crv": "Ed25519",
       "valid_from": "2026-05-28T00:00:00Z",
       "valid_until": "2027-06-01T00:00:00Z",
-      "replaced_by": null,
-      "revoked": false,
+      "replaced_by": "v1",
+      "revoked": true,
       "tenant": null
     },
     {
@@ -83,6 +83,19 @@ export const VENDORED_TRUST_ROOT_SNAPSHOT: TrustRootSnapshot = {
       "replaced_by": null,
       "revoked": false,
       "tenant": "atlasent"
+    },
+    {
+      "kid": "v1",
+      "role": "R3_audit",
+      "kty": "OKP",
+      "alg": "EdDSA",
+      "x": "r0leDQfIerrgVCb8M1shVf6L5Qer0C13qV3Dee70D3o",
+      "crv": "Ed25519",
+      "valid_from": "2026-06-07T00:00:00Z",
+      "valid_until": "2027-07-08T00:00:00Z",
+      "replaced_by": null,
+      "revoked": false,
+      "tenant": null
     }
   ],
   "revoked_keys": [
@@ -103,6 +116,12 @@ export const VENDORED_TRUST_ROOT_SNAPSHOT: TrustRootSnapshot = {
       "role": "R2_permit",
       "revoked_at": "2026-08-10T09:39:34Z",
       "reason": "Vendor-fixture placeholder R2_permit key, superseded by ak_2026_q3_atlasent_permit; revoked in atlasent-verifier-keys.json commit 0f97f0c but omitted from this ledger at the time"
+    },
+    {
+      "kid": "v2-audit-2026",
+      "role": "R3_audit",
+      "revoked_at": "2026-09-12T21:06:42Z",
+      "reason": "Never the production audit signer: 0/7 sampled production audit_events signatures (2026-06-07 → 2026-09-12) verify under it, and every production v1-export-audit envelope to date recorded an empty key_id, so it never signed an export either. Added 2026-05-28 without a derivation record. Superseded by kid v1, the verified per-row signer (7/7). See atlasent-internal compliance/soc2/audits/2026-09-audit-key-publication-verification.md and its 2026-09-12 resolution record."
     }
   ],
   "revoked_identities": []
