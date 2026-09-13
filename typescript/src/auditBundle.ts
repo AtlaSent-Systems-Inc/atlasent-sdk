@@ -210,7 +210,10 @@ export function rawEd25519FromSpki(spki: Uint8Array): Uint8Array | undefined {
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  // Node ≥ 16 emits base64url natively; no padding, URL-safe alphabet. This
+  // avoids a trailing-`=` strip regex (CodeQL flags `=+$` as polynomial on
+  // untrusted input, and the bytes here can come from a caller's key).
+  return Buffer.from(bytes).toString("base64url");
 }
 
 /** Import an Ed25519 SPKI PEM as a `VerifyKey`, capturing the raw material for trust-root matching. */

@@ -31,7 +31,7 @@ const FIXTURES = resolve(HERE, "..", "..", "contract", "vectors", "audit-bundles
 const { subtle } = webcrypto;
 
 function b64url(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return Buffer.from(bytes).toString("base64url");
 }
 
 interface Signer {
