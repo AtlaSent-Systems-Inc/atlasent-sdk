@@ -36,13 +36,17 @@ export interface VerifyKey {
   publicKey: WebCryptoKey;
   /**
    * Raw 32-byte Ed25519 public key, when known. Populated automatically for
-   * keys loaded from `publicKeysPem`. Lets the ADR-005 revocation / role
-   * check identify the key that ACTUALLY verified the signature in the trust
+   * keys loaded from `publicKeysPem`. The ADR-005 revocation / role check
+   * identifies the key that ACTUALLY verified the signature in the trust
    * root by material (`TrustRootKey.x`), instead of trusting the bundle's
    * unsigned `signing_key_id` hint — a bundle signed by a revoked key but
    * advertising a live kid must still fail (Codex P1 on atlasent-sdk#519).
-   * `publicKey` is imported non-extractable, so the material is captured
-   * here at load time rather than exported later.
+   *
+   * This field is NOT trusted on its own: the verifier exports the material
+   * from `publicKey` when it can, and only falls back to these bytes for a
+   * non-extractable key after re-importing them and confirming they verify
+   * the same signature. Metadata that disagrees with the verifying key is
+   * ignored, so it can never select a different trust-root entry.
    */
   publicKeyRaw?: Uint8Array;
 }
@@ -216,16 +220,63 @@ function base64UrlEncode(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64url");
 }
 
-/** Import an Ed25519 SPKI PEM as a `VerifyKey`, capturing the raw material for trust-root matching. */
+/**
+ * Import an Ed25519 SPKI PEM as a `VerifyKey`.
+ *
+ * The key is imported extractable so the ADR-005 trust-root check can export
+ * the raw material from the very CryptoKey that verifies a signature. The
+ * raw bytes are also captured from the DER as `publicKeyRaw` for callers
+ * that want them; the verifier never trusts that field on its own (see
+ * `verifiedRawMaterial`).
+ */
 export async function verifyKeyFromSpkiPem(pem: string, keyId: string): Promise<VerifyKey> {
   const b64 = pem
     .replace(/-----BEGIN PUBLIC KEY-----/, "")
     .replace(/-----END PUBLIC KEY-----/, "")
     .replace(/\s+/g, "");
   const bytes = Uint8Array.from(Buffer.from(b64, "base64"));
-  const publicKey = await subtle.importKey("spki", bytes, { name: "Ed25519" }, false, ["verify"]);
+  const publicKey = await subtle.importKey("spki", bytes, { name: "Ed25519" }, true, ["verify"]);
   const publicKeyRaw = rawEd25519FromSpki(bytes);
   return publicKeyRaw ? { keyId, publicKey, publicKeyRaw } : { keyId, publicKey };
+}
+
+/**
+ * Raw 32-byte material of the key that just verified `sigBytes` over
+ * `envelopeBytes` — established from the verifying key itself, never taken
+ * on faith from caller-supplied metadata.
+ *
+ * 1. Export from the CryptoKey that verified (works for any extractable key).
+ * 2. Otherwise, if the caller supplied `publicKeyRaw`, re-import those bytes
+ *    as an Ed25519 key and accept them only if THAT key also verifies the same
+ *    signature — i.e. the bytes are provably the verifying key's material.
+ * 3. Otherwise `undefined`: the trust-root check then fails closed with
+ *    `key_material_unavailable`.
+ *
+ * Without step 2's re-verification a `VerifyKey` whose `publicKeyRaw` named a
+ * live trust-root key while its `publicKey` was a revoked one would have been
+ * judged by the live material (atlasent-sdk#519 review, round 3).
+ */
+async function verifiedRawMaterial(
+  k: VerifyKey,
+  sigBytes: Uint8Array<ArrayBuffer>,
+  envelopeBytes: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array | undefined> {
+  try {
+    return new Uint8Array(await subtle.exportKey("raw", k.publicKey));
+  } catch {
+    // Non-extractable — fall through to the caller-supplied bytes, re-verified.
+  }
+  if (!k.publicKeyRaw) return undefined;
+  try {
+    // Copy into a fresh ArrayBuffer-backed view (BufferSource-typed) so the
+    // returned material is also detached from the caller's buffer.
+    const bytes = Uint8Array.from(k.publicKeyRaw);
+    const fromRaw = await subtle.importKey("raw", bytes, { name: "Ed25519" }, false, ["verify"]);
+    const ok = await subtle.verify("Ed25519", fromRaw, sigBytes, envelopeBytes);
+    return ok ? bytes : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function resolveKeys(options: VerifyBundleOptions | undefined): Promise<VerifyKey[]> {
@@ -283,7 +334,6 @@ export async function verifyAuditBundle(
   let signatureValid = false;
   let matchedKeyId: string | undefined;
   let matchedKeyRaw: Uint8Array | undefined;
-  let matchedKey: VerifyKey | undefined;
   let reason: string | undefined;
 
   if (keys.length === 0) {
@@ -307,8 +357,7 @@ export async function verifyAuditBundle(
         if (ok) {
           signatureValid = true;
           matchedKeyId = k.keyId;
-          matchedKeyRaw = k.publicKeyRaw;
-          matchedKey = k;
+          matchedKeyRaw = await verifiedRawMaterial(k, sigBytes, envelopeBytes);
           break;
         }
       }
@@ -329,10 +378,15 @@ export async function verifyAuditBundle(
   // (`TrustRootKey.x`). Two properties are load-bearing (both found by review
   // on atlasent-sdk#519 and pinned by audit-bundle-revocation-material.test.ts):
   //
-  //   1. Material is REQUIRED once a trust root is present. A VerifyKey that
-  //      carries no `publicKeyRaw` has it derived from the CryptoKey; if that
-  //      is impossible (non-extractable) verification fails closed with
-  //      `key_material_unavailable` — it never falls back to trusting the hint.
+  //   1. Material is REQUIRED once a trust root is present, and it comes from
+  //      the key that VERIFIED (see verifiedRawMaterial): exported from the
+  //      CryptoKey, or — for a non-extractable key — the caller's
+  //      `publicKeyRaw` only after those bytes were re-imported and shown to
+  //      verify the same signature. Caller metadata that disagrees with the
+  //      verifying key is never used, so it cannot select a live trust-root
+  //      alias for a revoked signer. If no material can be established,
+  //      verification fails closed with `key_material_unavailable` — it never
+  //      falls back to trusting the hint.
   //   2. EVERY trust-root entry sharing the verifying material counts. The
   //      hint never narrows that set: a revoked key re-published under a live
   //      alias kid is still revoked, whichever kid the bundle advertises.
@@ -344,14 +398,7 @@ export async function verifyAuditBundle(
     const snap = trustRootOpts.trustRoot;
     const hint = typeof bundle.signing_key_id === "string" ? bundle.signing_key_id : null;
 
-    let raw = matchedKeyRaw;
-    if (!raw && matchedKey) {
-      try {
-        raw = new Uint8Array(await subtle.exportKey("raw", matchedKey.publicKey));
-      } catch {
-        raw = undefined;
-      }
-    }
+    const raw = matchedKeyRaw;
     if (!raw) {
       throw new BundleVerificationError({
         reason: "key_material_unavailable",

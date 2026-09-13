@@ -42,6 +42,12 @@
   `tests/test_audit_bundle_revocation_material.py`; the contract-vector
   fixture, which published one material under three kids (an invalid trust
   root that hid bypass 2), now gives each kid distinct material.
+  A third review round closed the last gap in the same area: a
+  caller-constructed `VerifyKey` whose `public_key_raw` **metadata** named a
+  live key while its `public_key` was the revoked one was judged by the
+  metadata (`k.public_key_raw or ...`). The material is now always derived
+  from the `public_key` object that verified the signature; `public_key_raw`
+  is informational and never consulted by the verifier.
 
 ### Added
 

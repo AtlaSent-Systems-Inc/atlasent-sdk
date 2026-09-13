@@ -49,6 +49,19 @@ follows [semver](https://semver.org/): breaking changes bump the major
   for both in `audit-bundle-revocation-material.test.ts`; the contract-vector
   fixture, which published one material under three kids (an invalid trust
   root that hid bypass 2), now gives each kid distinct material.
+  A third review round closed the last gap in the same area: a
+  caller-constructed `VerifyKey` whose `publicKeyRaw` **metadata** named a
+  live key while its `publicKey` was the revoked one was judged by the
+  metadata. The material now always comes from the key that verified —
+  exported from the `CryptoKey`, or, for a non-extractable key, the caller's
+  `publicKeyRaw` only after those bytes are re-imported and shown to verify
+  the same signature; metadata that disagrees with the verifying key is
+  ignored and, with nothing else to anchor on, fails closed with
+  `key_material_unavailable`. `verifyKeyFromSpkiPem()` (and
+  `rawEd25519FromSpki()`) are now exported from the package entry point —
+  the previous changelog line advertised the helper while `src/index.ts` did
+  not re-export it — and the key it returns is imported extractable so the
+  export path is the one exercised.
 
 - **The SDK's embedded default trust root was always empty** — `verifyBundle()`
   (and any `AtlaSentClient`/`getGlobalTrustRootManager()` caller that didn't

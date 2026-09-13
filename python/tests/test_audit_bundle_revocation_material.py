@@ -227,3 +227,38 @@ def test_live_key_still_verifies_when_an_unrelated_alias_exists() -> None:
     snap = _snapshot_with_alias(live, revoked, permit, ledger_entry=True)
     r = verify_audit_bundle(_signed_by(live, "v1"), [live.bare_key], trust_root=snap)
     assert r.verified is True
+
+
+def test_caller_supplied_public_key_raw_metadata_never_selects_a_live_alias() -> None:
+    """atlasent-sdk#519 round 3: material comes from the key that verified.
+
+    A VerifyKey whose ``public_key`` is the REVOKED key but whose
+    ``public_key_raw`` metadata carries the LIVE key's bytes used to be
+    judged by the live material (``k.public_key_raw or ...``). The raw
+    material is now always derived from ``public_key`` itself, so the
+    metadata cannot steer the trust-root lookup.
+    """
+    live, revoked, permit = _signer("live"), _signer("revoked"), _signer("permit")
+    snap = _snapshot(live, revoked, permit)
+    lying = VerifyKey(
+        key_id="revoked",
+        public_key=revoked.verify_key.public_key,
+        public_key_raw=live.verify_key.public_key_raw,
+    )
+    with pytest.raises(BundleVerificationError) as ei:
+        verify_audit_bundle(_signed_by(revoked, "v1"), [lying], trust_root=snap)
+    assert ei.value.bundle_reason == "key_revoked"
+    assert ei.value.kid == "v2-old"
+
+    # And the honest counterpart: metadata pointing at the revoked material on
+    # a key that is genuinely live does not poison a valid bundle either.
+    honest_but_stale = VerifyKey(
+        key_id="live",
+        public_key=live.verify_key.public_key,
+        public_key_raw=revoked.verify_key.public_key_raw,
+    )
+    result = verify_audit_bundle(
+        _signed_by(live, "v1"), [honest_but_stale], trust_root=snap
+    )
+    assert result.verified is True
+    assert result.matched_key_id == "live"

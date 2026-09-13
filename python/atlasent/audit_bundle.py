@@ -306,7 +306,7 @@ def verify_audit_bundle(
                 if hint
                 else keys
             )
-            InvalidSignature, serialization, _ = _require_crypto()  # noqa: N806 — class type
+            InvalidSignature, serialization, _ = _require_crypto()  # noqa: N806
             for k in ordered:
                 try:
                     k.public_key.verify(sig_bytes, envelope)
@@ -314,11 +314,14 @@ def verify_audit_bundle(
                     continue
                 signature_valid = True
                 matched_key_id = k.key_id
-                # Raw material is required for the trust-root checks below;
-                # ``cryptography`` can always export it, so a caller-built
-                # VerifyKey without ``public_key_raw`` is derived, never
-                # trusted on the hint alone.
-                matched_key_raw = k.public_key_raw or k.public_key.public_bytes(
+                # Raw material is ALWAYS derived from the key object that
+                # just verified the signature -- never read from the
+                # caller-supplied ``public_key_raw`` metadata. A VerifyKey
+                # whose metadata names a different (live) trust-root key
+                # than the one it actually verifies with must be judged by
+                # the key that verified, or the metadata could select a
+                # live alias for a revoked key (atlasent-sdk#519 review).
+                matched_key_raw = k.public_key.public_bytes(
                     serialization.Encoding.Raw, serialization.PublicFormat.Raw
                 )
                 break
@@ -339,8 +342,9 @@ def verify_audit_bundle(
     # (``TrustRootKey.x``). Two properties are load-bearing (review on
     # atlasent-sdk#519, pinned by test_audit_bundle_revocation_material.py):
     #
-    #   1. Material is always available here (derived above when the caller
-    #      did not supply it), so the hint is never the anchor.
+    #   1. Material is always derived above from the key object that verified
+    #      (caller-supplied ``public_key_raw`` metadata is never consulted),
+    #      so neither the hint nor the metadata is the anchor.
     #   2. EVERY trust-root entry sharing the verifying material counts; the
     #      hint never narrows that set. A revoked key re-published under a
     #      live alias kid is still revoked whichever kid the bundle names.

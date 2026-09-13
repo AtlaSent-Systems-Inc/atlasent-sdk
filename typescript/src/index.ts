@@ -221,6 +221,8 @@ export {
   signedBytesFor,
   verifyAuditBundle,
   verifyBundle,
+  verifyKeyFromSpkiPem,
+  rawEd25519FromSpki,
   type AuditBundle,
   type BundleVerificationResult,
   type VerifyBundleOptions,

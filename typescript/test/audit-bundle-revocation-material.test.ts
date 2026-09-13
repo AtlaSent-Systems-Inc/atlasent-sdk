@@ -203,3 +203,63 @@ describe("revocation is checked against the key that verified, not the advertise
     expect(r.verified).toBe(true);
   });
 });
+
+describe("caller-supplied publicKeyRaw can never select a different trust-root entry (round 3)", () => {
+  // Review on atlasent-sdk#519, round 3: `matchedKeyRaw = k.publicKeyRaw` was
+  // trusted whenever present, so a VerifyKey whose metadata carried the LIVE
+  // key's bytes while its CryptoKey was the REVOKED key was judged by the live
+  // material. The material must come from the key that verified.
+
+  it("extractable revoked CryptoKey + live publicKeyRaw metadata → key_revoked (material exported, metadata ignored)", async () => {
+    const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+    const trustRoot = snapshot(live, revoked, permit);
+    const lying: VerifyKey = { ...revoked.bareExtractableKey, publicKeyRaw: live.verifyKey.publicKeyRaw as Uint8Array };
+    const bundle = await signedBy(revoked, "v1");
+    await expect(verifyAuditBundle(bundle, [lying], { trustRoot })).rejects.toMatchObject({
+      reason: "key_revoked",
+      kid: "v2-old",
+    });
+  });
+
+  it("non-extractable revoked CryptoKey + live publicKeyRaw metadata → key_material_unavailable (metadata fails re-verification)", async () => {
+    const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+    const trustRoot = snapshot(live, revoked, permit);
+    const lying: VerifyKey = { ...revoked.bareKey, publicKeyRaw: live.verifyKey.publicKeyRaw as Uint8Array };
+    const bundle = await signedBy(revoked, "v1");
+    // Not `verified`, and not judged as the live key either: the only bytes on
+    // offer do not verify the signature, so no material is established.
+    await expect(verifyAuditBundle(bundle, [lying], { trustRoot })).rejects.toMatchObject({
+      reason: "key_material_unavailable",
+    });
+  });
+
+  it("non-extractable live CryptoKey + its own publicKeyRaw → verified (re-verified bytes are accepted)", async () => {
+    const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+    const trustRoot = snapshot(live, revoked, permit);
+    const r = await verifyAuditBundle(await signedBy(live, "v1"), [live.verifyKey], { trustRoot });
+    expect(r.verified).toBe(true);
+    expect(r.matchedKeyId).toBe("live");
+  });
+
+  it("non-extractable revoked CryptoKey + its own publicKeyRaw → key_revoked (re-verified bytes anchor the real signer)", async () => {
+    const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+    const trustRoot = snapshot(live, revoked, permit);
+    await expect(
+      verifyAuditBundle(await signedBy(revoked, "v1"), [revoked.verifyKey, live.verifyKey], { trustRoot }),
+    ).rejects.toMatchObject({ reason: "key_revoked", kid: "v2-old" });
+  });
+
+  it("verifyKeyFromSpkiPem is exported from the package entry point and yields an extractable key", async () => {
+    const sdk = await import("../src/index.js");
+    expect(typeof sdk.verifyKeyFromSpkiPem).toBe("function");
+    expect(typeof sdk.rawEd25519FromSpki).toBe("function");
+    const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+    const spki = new Uint8Array(await subtle.exportKey("spki", live.bareExtractableKey.publicKey));
+    const pem = `-----BEGIN PUBLIC KEY-----\n${Buffer.from(spki).toString("base64")}\n-----END PUBLIC KEY-----\n`;
+    const key = await sdk.verifyKeyFromSpkiPem(pem, "live");
+    expect(key.publicKey.extractable).toBe(true);
+    expect(key.publicKeyRaw && b64url(key.publicKeyRaw)).toBe(live.x);
+    const r = await verifyAuditBundle(await signedBy(live, "v1"), [key], { trustRoot: snapshot(live, revoked, permit) });
+    expect(r.verified).toBe(true);
+  });
+});
