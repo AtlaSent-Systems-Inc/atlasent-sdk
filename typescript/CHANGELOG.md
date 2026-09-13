@@ -69,6 +69,22 @@ follows [semver](https://semver.org/): breaking changes bump the major
   every behaviour vector. It now installs the `verify` extra and fails, rather
   than skips, when those vectors would not run.
 
+- **A duplicate signing key could produce a false `key_material_unavailable`
+  denial under trust-root enforcement** (review on #519, round 5, landed
+  after that PR merged). `resolveKeys()` places `options.keys` ahead of
+  `publicKeysPem`, so the same key can appear first as a caller-built
+  non-extractable `CryptoKey` (no usable `publicKeyRaw`) and again as the
+  extractable PEM-derived copy; the verify loop stopped at the first
+  signature-valid candidate, so a valid bundle was refused because that
+  copy's material could not be anchored. With a trust root present the loop
+  now keeps scanning signature-valid candidates until one can anchor its
+  material and reports that one as `matchedKeyId`; it still fails closed
+  with `key_material_unavailable` when none can, and still lands
+  `key_revoked` on a revoked signer found on a later copy. Without a trust
+  root the first signature-valid candidate remains the match. Regressions in
+  `audit-bundle-revocation-material.test.ts`, including the exact
+  `verifyBundle({ keys, publicKeysPem })` shape.
+
 - **The SDK's embedded default trust root was always empty** — `verifyBundle()`
   (and any `AtlaSentClient`/`getGlobalTrustRootManager()` caller that didn't
   pass its own `trustRoot`) silently got a snapshot with zero keys and zero

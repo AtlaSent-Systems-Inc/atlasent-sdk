@@ -20,6 +20,7 @@ import {
   rawEd25519FromSpki,
   signedBytesFor,
   verifyAuditBundle,
+  verifyBundle,
   type AuditBundle,
   type VerifyKey,
 } from "../src/auditBundle.js";
@@ -261,5 +262,64 @@ describe("caller-supplied publicKeyRaw can never select a different trust-root e
     expect(key.publicKeyRaw && b64url(key.publicKeyRaw)).toBe(live.x);
     const r = await verifyAuditBundle(await signedBy(live, "v1"), [key], { trustRoot: snapshot(live, revoked, permit) });
     expect(r.verified).toBe(true);
+  });
+});
+
+describe("scanning continues past a signature-valid candidate whose material cannot be anchored (round 5)", () => {
+  // Review on atlasent-sdk#519: resolveKeys() places `options.keys` ahead of
+  // `publicKeysPem`, so the SAME signing key can appear first as a caller-built
+  // non-extractable CryptoKey (no usable publicKeyRaw) and again as the
+  // extractable PEM-derived copy. The loop used to break on the first
+  // signature-valid candidate, so under trust-root enforcement a perfectly
+  // valid bundle failed with a false `key_material_unavailable`.
+
+  async function pemOf(s: Signer): Promise<string> {
+    const spki = new Uint8Array(await subtle.exportKey("spki", s.bareExtractableKey.publicKey));
+    return `-----BEGIN PUBLIC KEY-----\n${Buffer.from(spki).toString("base64")}\n-----END PUBLIC KEY-----\n`;
+  }
+
+  it("duplicate key: non-extractable copy first, extractable copy second → verified on the anchorable copy", async () => {
+    const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+    const trustRoot = snapshot(live, revoked, permit);
+    const second: VerifyKey = { ...live.bareExtractableKey, keyId: "live-pem" };
+    const r = await verifyAuditBundle(await signedBy(live, "v1"), [live.bareKey, second], { trustRoot });
+    expect(r.verified).toBe(true);
+    expect(r.matchedKeyId).toBe("live-pem");
+  });
+
+  it("the exact reported shape: options.keys (non-extractable) + publicKeysPem (same key) through verifyBundle → verified", async () => {
+    const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+    const r = await verifyBundle(await signedBy(live, "v1"), {
+      keys: [live.bareKey],
+      publicKeysPem: [await pemOf(live)],
+      trustRoot: snapshot(live, revoked, permit),
+    });
+    expect(r.verified).toBe(true);
+    expect(r.matchedKeyId).toBe("pem_0");
+  });
+
+  it("still fails closed when NO signature-valid candidate can anchor material", async () => {
+    const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+    const trustRoot = snapshot(live, revoked, permit);
+    const secondBare: VerifyKey = { ...live.bareKey, keyId: "live-again" };
+    await expect(
+      verifyAuditBundle(await signedBy(live, "v1"), [live.bareKey, secondBare], { trustRoot }),
+    ).rejects.toMatchObject({ reason: "key_material_unavailable", kid: "live" });
+  });
+
+  it("scanning past an unanchorable copy still lands the revocation on a revoked signer", async () => {
+    const [live, revoked, permit] = await Promise.all([signer("live"), signer("revoked"), signer("permit")]);
+    const trustRoot = snapshot(live, revoked, permit);
+    await expect(
+      verifyAuditBundle(await signedBy(revoked, "v1"), [revoked.bareKey, revoked.bareExtractableKey], { trustRoot }),
+    ).rejects.toMatchObject({ reason: "key_revoked", kid: "v2-old" });
+  });
+
+  it("without a trust root the first signature-valid candidate is the match (no scan needed)", async () => {
+    const live = await signer("live");
+    const second: VerifyKey = { ...live.bareExtractableKey, keyId: "live-pem" };
+    const r = await verifyAuditBundle(await signedBy(live, "v1"), [live.bareKey, second]);
+    expect(r.verified).toBe(true);
+    expect(r.matchedKeyId).toBe("live");
   });
 });

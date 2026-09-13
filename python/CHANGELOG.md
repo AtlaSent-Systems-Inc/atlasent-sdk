@@ -55,6 +55,14 @@
   silently skipped every behaviour vector. It now installs the `verify` extra
   and fails, rather than skips, when those vectors would not run.
 
+- Duplicate-key ordering regression added to
+  `tests/test_audit_bundle_revocation_material.py` (review on #519, round 5).
+  The TypeScript verifier had to learn to scan past a signature-valid
+  candidate whose material cannot be anchored; the Python verifier always
+  derives material from the key object, so no behaviour change was needed
+  here — the test pins that handing the same key twice, in either order,
+  verifies and reports the first signature-valid candidate.
+
 ### Added
 
 - `AtlaSentPermitMintFailedError` — the permit-mint operational-error

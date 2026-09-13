@@ -262,3 +262,26 @@ def test_caller_supplied_public_key_raw_metadata_never_selects_a_live_alias() ->
     )
     assert result.verified is True
     assert result.matched_key_id == "live"
+
+
+def test_duplicate_key_ordering_bare_copy_first_pem_copy_second_verifies() -> None:
+    """Round 5 on atlasent-sdk#519 (duplicate-key ordering regression).
+
+    ``load_keys``-style callers can hand the verifier the same signing key
+    twice: once as a caller-built ``VerifyKey`` without metadata and once as
+    the PEM-derived copy. The Python verifier always derives material from
+    the key object, so the first copy already anchors; this pins that the
+    ordering never produces a false denial and that the match is reported
+    on the first signature-valid candidate.
+    """
+    live, revoked, permit = _signer("live"), _signer("revoked"), _signer("permit")
+    snap = _snapshot(live, revoked, permit)
+    pem_copy = VerifyKey(
+        key_id="pem_0",
+        public_key=live.verify_key.public_key,
+        public_key_raw=live.verify_key.public_key_raw,
+    )
+    for keys in ([live.bare_key, pem_copy], [pem_copy, live.bare_key]):
+        result = verify_audit_bundle(_signed_by(live, "v1"), keys, trust_root=snap)
+        assert result.verified is True
+        assert result.matched_key_id == keys[0].key_id
