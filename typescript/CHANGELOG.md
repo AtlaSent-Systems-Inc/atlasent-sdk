@@ -8,7 +8,66 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Changed
+
+- **Re-vendored the embedded trust-root snapshot from `atlasent-keys` main
+  (`f357d8a`, bundles re-signed in `aebdac8`).** Adds `kid: v1` (`R3_audit`,
+  valid 2026-06-07 → 2027-07-08) — the per-row `audit_events.signature`
+  signer on production runtime, verified 7/7 against production rows before
+  publication — and marks `v2-audit-2026` `revoked: true`, `replaced_by:
+  "v1"`, with the matching `revoked_keys` ledger entry. `v2-audit-2026` was
+  never the production audit signer (0/7 sampled rows verify under it). Any
+  `verifyAuditBundle()` caller relying on the embedded baseline now resolves
+  the real production audit key and rejects the revoked one without waiting
+  for `TrustRootManager`'s first background refresh. Regenerated with
+  `node scripts/vendor-trust-root.mjs` (validation script from #517); the
+  sibling `vendor/trust-root/*.json` reference copies were refreshed to the
+  same upstream files.
+
 ### Fixed
+
+- **ADR-005 revocation was checked against the bundle's unsigned
+  `signing_key_id` hint, not the key that verified the signature.** During a
+  rotation window a verifier legitimately holds both the revoked key and its
+  successor; `verifyAuditBundle()` tried every key, recorded the real
+  `matchedKeyId`, and then consulted `revoked_keys` using the hint — so a
+  bundle signed by revoked `v2-audit-2026` but advertising `v1` returned
+  `verified: true` (Codex P1 on #519). `VerifyKey` now carries
+  `publicKeyRaw` (populated for every key loaded from `publicKeysPem`; new
+  `verifyKeyFromSpkiPem()` helper), and revocation and role are resolved
+  against the trust-root entry whose `x` matches the verifying key's material.
+  The hint is still rejected on its own when it names a revoked kid or a
+  non-audit kid (fail-closed). Two follow-up bypasses from review on #519 are
+  closed in the same change: (1) a `VerifyKey` supplied **without** material
+  no longer falls back to the hint — the material is exported from the
+  `CryptoKey`, and a non-extractable key with a trust root present fails
+  closed with the new `key_material_unavailable` reason; (2) the hint no
+  longer narrows the trust-root entries that share the verifying material —
+  **every** entry with that material is judged (`revoked` flag or
+  `revoked_keys` ledger), so a revoked key re-published under a live alias
+  kid is still revoked whichever kid the bundle advertises. Negative tests
+  for both in `audit-bundle-revocation-material.test.ts`; the contract-vector
+  fixture, which published one material under three kids (an invalid trust
+  root that hid bypass 2), now gives each kid distinct material.
+  A third review round closed the last gap in the same area: a
+  caller-constructed `VerifyKey` whose `publicKeyRaw` **metadata** named a
+  live key while its `publicKey` was the revoked one was judged by the
+  metadata. The material now always comes from the key that verified —
+  exported from the `CryptoKey`, or, for a non-extractable key, the caller's
+  `publicKeyRaw` only after those bytes are re-imported and shown to verify
+  the same signature; metadata that disagrees with the verifying key is
+  ignored and, with nothing else to anchor on, fails closed with
+  `key_material_unavailable`. `verifyKeyFromSpkiPem()` (and
+  `rawEd25519FromSpki()`) are now exported from the package entry point —
+  the previous changelog line advertised the helper while `src/index.ts` did
+  not re-export it — and the key it returns is imported extractable so the
+  export path is the one exercised. A fourth round fixed the shared contract
+  fixture (`contract/tests/test_trust_root_contract.py`), which still
+  published the signing key's material under all three kids and so failed the
+  contract suite under the corrected verifier; Contract CI had been reading
+  green only because it never installed `cryptography` and silently skipped
+  every behaviour vector. It now installs the `verify` extra and fails, rather
+  than skips, when those vectors would not run.
 
 - **The SDK's embedded default trust root was always empty** — `verifyBundle()`
   (and any `AtlaSentClient`/`getGlobalTrustRootManager()` caller that didn't

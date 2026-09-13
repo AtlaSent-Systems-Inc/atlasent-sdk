@@ -34,6 +34,21 @@ type WebCryptoKey = webcrypto.CryptoKey;
 export interface VerifyKey {
   keyId: string;
   publicKey: WebCryptoKey;
+  /**
+   * Raw 32-byte Ed25519 public key, when known. Populated automatically for
+   * keys loaded from `publicKeysPem`. The ADR-005 revocation / role check
+   * identifies the key that ACTUALLY verified the signature in the trust
+   * root by material (`TrustRootKey.x`), instead of trusting the bundle's
+   * unsigned `signing_key_id` hint — a bundle signed by a revoked key but
+   * advertising a live kid must still fail (Codex P1 on atlasent-sdk#519).
+   *
+   * This field is NOT trusted on its own: the verifier exports the material
+   * from `publicKey` when it can, and only falls back to these bytes for a
+   * non-extractable key after re-importing them and confirming they verify
+   * the same signature. Metadata that disagrees with the verifying key is
+   * ignored, so it can never select a different trust-root entry.
+   */
+  publicKeyRaw?: Uint8Array;
 }
 
 export interface BundleVerificationResult {
@@ -184,13 +199,84 @@ function base64UrlDecode(s: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-async function importSpkiPem(pem: string): Promise<WebCryptoKey> {
+/** DER prefix of an Ed25519 SubjectPublicKeyInfo (RFC 8410): 12 bytes, then the 32-byte raw key. */
+const ED25519_SPKI_PREFIX = Uint8Array.from([
+  0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
+]);
+
+/** Extract the raw 32-byte key from an Ed25519 SPKI DER, or undefined if the DER is not that exact shape. */
+export function rawEd25519FromSpki(spki: Uint8Array): Uint8Array | undefined {
+  if (spki.length !== ED25519_SPKI_PREFIX.length + 32) return undefined;
+  for (let i = 0; i < ED25519_SPKI_PREFIX.length; i++) {
+    if (spki[i] !== ED25519_SPKI_PREFIX[i]) return undefined;
+  }
+  return spki.slice(ED25519_SPKI_PREFIX.length);
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  // Node ≥ 16 emits base64url natively; no padding, URL-safe alphabet. This
+  // avoids a trailing-`=` strip regex (CodeQL flags `=+$` as polynomial on
+  // untrusted input, and the bytes here can come from a caller's key).
+  return Buffer.from(bytes).toString("base64url");
+}
+
+/**
+ * Import an Ed25519 SPKI PEM as a `VerifyKey`.
+ *
+ * The key is imported extractable so the ADR-005 trust-root check can export
+ * the raw material from the very CryptoKey that verifies a signature. The
+ * raw bytes are also captured from the DER as `publicKeyRaw` for callers
+ * that want them; the verifier never trusts that field on its own (see
+ * `verifiedRawMaterial`).
+ */
+export async function verifyKeyFromSpkiPem(pem: string, keyId: string): Promise<VerifyKey> {
   const b64 = pem
     .replace(/-----BEGIN PUBLIC KEY-----/, "")
     .replace(/-----END PUBLIC KEY-----/, "")
     .replace(/\s+/g, "");
   const bytes = Uint8Array.from(Buffer.from(b64, "base64"));
-  return subtle.importKey("spki", bytes, { name: "Ed25519" }, false, ["verify"]);
+  const publicKey = await subtle.importKey("spki", bytes, { name: "Ed25519" }, true, ["verify"]);
+  const publicKeyRaw = rawEd25519FromSpki(bytes);
+  return publicKeyRaw ? { keyId, publicKey, publicKeyRaw } : { keyId, publicKey };
+}
+
+/**
+ * Raw 32-byte material of the key that just verified `sigBytes` over
+ * `envelopeBytes` — established from the verifying key itself, never taken
+ * on faith from caller-supplied metadata.
+ *
+ * 1. Export from the CryptoKey that verified (works for any extractable key).
+ * 2. Otherwise, if the caller supplied `publicKeyRaw`, re-import those bytes
+ *    as an Ed25519 key and accept them only if THAT key also verifies the same
+ *    signature — i.e. the bytes are provably the verifying key's material.
+ * 3. Otherwise `undefined`: the trust-root check then fails closed with
+ *    `key_material_unavailable`.
+ *
+ * Without step 2's re-verification a `VerifyKey` whose `publicKeyRaw` named a
+ * live trust-root key while its `publicKey` was a revoked one would have been
+ * judged by the live material (atlasent-sdk#519 review, round 3).
+ */
+async function verifiedRawMaterial(
+  k: VerifyKey,
+  sigBytes: Uint8Array<ArrayBuffer>,
+  envelopeBytes: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array | undefined> {
+  try {
+    return new Uint8Array(await subtle.exportKey("raw", k.publicKey));
+  } catch {
+    // Non-extractable — fall through to the caller-supplied bytes, re-verified.
+  }
+  if (!k.publicKeyRaw) return undefined;
+  try {
+    // Copy into a fresh ArrayBuffer-backed view (BufferSource-typed) so the
+    // returned material is also detached from the caller's buffer.
+    const bytes = Uint8Array.from(k.publicKeyRaw);
+    const fromRaw = await subtle.importKey("raw", bytes, { name: "Ed25519" }, false, ["verify"]);
+    const ok = await subtle.verify("Ed25519", fromRaw, sigBytes, envelopeBytes);
+    return ok ? bytes : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function resolveKeys(options: VerifyBundleOptions | undefined): Promise<VerifyKey[]> {
@@ -201,8 +287,7 @@ async function resolveKeys(options: VerifyBundleOptions | undefined): Promise<Ve
       const pem = options.publicKeysPem[i];
       if (!pem) continue;
       try {
-        const pk = await importSpkiPem(pem);
-        out.push({ keyId: `pem_${i}`, publicKey: pk });
+        out.push(await verifyKeyFromSpkiPem(pem, `pem_${i}`));
       } catch {
         // Malformed PEM — skip it, try the rest.
       }
@@ -248,6 +333,7 @@ export async function verifyAuditBundle(
 
   let signatureValid = false;
   let matchedKeyId: string | undefined;
+  let matchedKeyRaw: Uint8Array | undefined;
   let reason: string | undefined;
 
   if (keys.length === 0) {
@@ -271,6 +357,7 @@ export async function verifyAuditBundle(
         if (ok) {
           signatureValid = true;
           matchedKeyId = k.keyId;
+          matchedKeyRaw = await verifiedRawMaterial(k, sigBytes, envelopeBytes);
           break;
         }
       }
@@ -282,30 +369,80 @@ export async function verifyAuditBundle(
     }
   }
 
-  // ── ADR-005: revocation check (after signature, before returning) ──
+  // ── ADR-005: revocation + role check (after signature, before returning) ──
+  //
+  // `signing_key_id` is OUTSIDE the signed envelope (see signedBytesFor), so it
+  // is a hint the producer — or an attacker holding a revoked key — chooses
+  // freely. The checks below are therefore anchored to the key that ACTUALLY
+  // verified the signature, identified in the trust root by raw material
+  // (`TrustRootKey.x`). Two properties are load-bearing (both found by review
+  // on atlasent-sdk#519 and pinned by audit-bundle-revocation-material.test.ts):
+  //
+  //   1. Material is REQUIRED once a trust root is present, and it comes from
+  //      the key that VERIFIED (see verifiedRawMaterial): exported from the
+  //      CryptoKey, or — for a non-extractable key — the caller's
+  //      `publicKeyRaw` only after those bytes were re-imported and shown to
+  //      verify the same signature. Caller metadata that disagrees with the
+  //      verifying key is never used, so it cannot select a live trust-root
+  //      alias for a revoked signer. If no material can be established,
+  //      verification fails closed with `key_material_unavailable` — it never
+  //      falls back to trusting the hint.
+  //   2. EVERY trust-root entry sharing the verifying material counts. The
+  //      hint never narrows that set: a revoked key re-published under a live
+  //      alias kid is still revoked, whichever kid the bundle advertises.
+  //
+  // The hint is still checked on its own — a bundle that names a revoked kid
+  // is wrong either way — and is the only anchor for the role check when the
+  // verifying material is not in the trust root at all (customer-supplied PEM).
   if (signatureValid && trustRootOpts?.trustRoot) {
     const snap = trustRootOpts.trustRoot;
-    const kid = typeof bundle.signing_key_id === "string" ? bundle.signing_key_id : null;
-    if (kid !== null) {
-      const isRevoked = snap.revoked_keys.some((r) => r.kid === kid);
-      if (isRevoked) {
-        throw new BundleVerificationError({
-          reason: "key_revoked",
-          snapshotValidUntil: snap.valid_until,
-          snapshotFetchedAt: snap.issued_at,
-          kid,
-        });
-      }
-      // Check role: audit bundles must be signed by R3_audit
-      const keyEntry = snap.keys.find((k) => k.kid === kid);
-      if (keyEntry && keyEntry.role !== "R3_audit") {
-        throw new BundleVerificationError({
-          reason: "key_role_mismatch",
-          snapshotValidUntil: snap.valid_until,
-          snapshotFetchedAt: snap.issued_at,
-          kid,
-        });
-      }
+    const hint = typeof bundle.signing_key_id === "string" ? bundle.signing_key_id : null;
+
+    const raw = matchedKeyRaw;
+    if (!raw) {
+      throw new BundleVerificationError({
+        reason: "key_material_unavailable",
+        snapshotValidUntil: snap.valid_until,
+        snapshotFetchedAt: snap.issued_at,
+        ...(matchedKeyId !== undefined ? { kid: matchedKeyId } : {}),
+      });
+    }
+
+    const matchedX = base64UrlEncode(raw);
+    const byMaterial = snap.keys.filter((k) => k.x === matchedX);
+    // Only when the material is unknown to the trust root does the VerifyKey's
+    // own (caller-controlled, never bundle-controlled) keyId identify it.
+    const verifyingEntries =
+      byMaterial.length > 0 ? byMaterial : matchedKeyId ? snap.keys.filter((k) => k.kid === matchedKeyId) : [];
+
+    const isRevoked = (kid: string): boolean => snap.revoked_keys.some((r) => r.kid === kid);
+    const revokedEntry = verifyingEntries.find((k) => k.revoked === true || isRevoked(k.kid));
+    const revokedKid =
+      revokedEntry?.kid ??
+      [...(matchedKeyId ? [matchedKeyId] : []), ...(hint ? [hint] : [])].find((kid) => isRevoked(kid));
+    if (revokedKid !== undefined) {
+      throw new BundleVerificationError({
+        reason: "key_revoked",
+        snapshotValidUntil: snap.valid_until,
+        snapshotFetchedAt: snap.issued_at,
+        kid: revokedKid,
+      });
+    }
+    // Role: audit bundles must be signed by an R3_audit key. Any entry sharing
+    // the verifying material with another role fails it, and so does a hint
+    // that names a non-audit kid — a bundle advertising the wrong key is wrong
+    // either way (same fail-closed rule as the hint revocation check above).
+    const hintEntry = hint ? snap.keys.find((k) => k.kid === hint) : undefined;
+    const roleEntry =
+      verifyingEntries.find((k) => k.role !== "R3_audit") ??
+      (hintEntry && hintEntry.role !== "R3_audit" ? hintEntry : undefined);
+    if (roleEntry && roleEntry.role !== "R3_audit") {
+      throw new BundleVerificationError({
+        reason: "key_role_mismatch",
+        snapshotValidUntil: snap.valid_until,
+        snapshotFetchedAt: snap.issued_at,
+        kid: roleEntry.kid,
+      });
     }
   }
 

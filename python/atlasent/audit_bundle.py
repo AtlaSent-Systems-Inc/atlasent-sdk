@@ -61,10 +61,20 @@ GENESIS_HASH = "0" * 64
 
 @dataclass
 class VerifyKey:
-    """A public key the verifier will try, tagged with its registry id."""
+    """A public key the verifier will try, tagged with its registry id.
+
+    ``public_key_raw`` is the raw 32-byte Ed25519 public key when known
+    (populated automatically by :func:`_load_keys`). It lets the ADR-005
+    revocation / role check identify the key that ACTUALLY verified the
+    signature in the trust root by material (``TrustRootKey.x``), instead of
+    trusting the bundle's unsigned ``signing_key_id`` hint -- a bundle signed
+    by a revoked key but advertising a live kid must still fail (Codex P1 on
+    atlasent-sdk#519).
+    """
 
     key_id: str
     public_key: Ed25519PublicKey
+    public_key_raw: bytes | None = None
 
 
 @dataclass
@@ -209,8 +219,17 @@ def _load_keys(public_keys_pem: Iterable[str] | None) -> list[VerifyKey]:
         except ValueError:
             continue
         if isinstance(key, Ed25519PublicKey):
-            out.append(VerifyKey(key_id=f"pem_{i}", public_key=key))
+            raw = key.public_bytes(
+                serialization.Encoding.Raw, serialization.PublicFormat.Raw
+            )
+            out.append(VerifyKey(key_id=f"pem_{i}", public_key=key, public_key_raw=raw))
     return out
+
+
+def _b64url_encode(b: bytes) -> str:
+    from base64 import urlsafe_b64encode
+
+    return urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
 
 
 def verify_audit_bundle(
@@ -261,6 +280,7 @@ def verify_audit_bundle(
 
     signature_valid = False
     matched_key_id: str | None = None
+    matched_key_raw: bytes | None = None
     reason: str | None = None
 
     signature = bundle.get("signature")
@@ -286,7 +306,7 @@ def verify_audit_bundle(
                 if hint
                 else keys
             )
-            InvalidSignature, _, __ = _require_crypto()  # noqa: N806 — class type
+            InvalidSignature, serialization, _ = _require_crypto()  # noqa: N806
             for k in ordered:
                 try:
                     k.public_key.verify(sig_bytes, envelope)
@@ -294,6 +314,16 @@ def verify_audit_bundle(
                     continue
                 signature_valid = True
                 matched_key_id = k.key_id
+                # Raw material is ALWAYS derived from the key object that
+                # just verified the signature -- never read from the
+                # caller-supplied ``public_key_raw`` metadata. A VerifyKey
+                # whose metadata names a different (live) trust-root key
+                # than the one it actually verifies with must be judged by
+                # the key that verified, or the metadata could select a
+                # live alias for a revoked key (atlasent-sdk#519 review).
+                matched_key_raw = k.public_key.public_bytes(
+                    serialization.Encoding.Raw, serialization.PublicFormat.Raw
+                )
                 break
             if not signature_valid:
                 reason = (
@@ -304,29 +334,77 @@ def verify_audit_bundle(
             reason = f"signature check failed: {err}"
 
     # ── ADR-005: revocation and role checks (after signature) ───────────
+    #
+    # ``signing_key_id`` is OUTSIDE the signed envelope (see signed_bytes_for),
+    # so it is a hint the producer -- or an attacker holding a revoked key --
+    # chooses freely. The checks are anchored to the key that ACTUALLY
+    # verified the signature, identified in the trust root by raw material
+    # (``TrustRootKey.x``). Two properties are load-bearing (review on
+    # atlasent-sdk#519, pinned by test_audit_bundle_revocation_material.py):
+    #
+    #   1. Material is always derived above from the key object that verified
+    #      (caller-supplied ``public_key_raw`` metadata is never consulted),
+    #      so neither the hint nor the metadata is the anchor.
+    #   2. EVERY trust-root entry sharing the verifying material counts; the
+    #      hint never narrows that set. A revoked key re-published under a
+    #      live alias kid is still revoked whichever kid the bundle names.
+    #
+    # The hint is still checked on its own, and is the only anchor for the
+    # role check when the material is not in the trust root at all.
+    # Mirrors typescript/src/auditBundle.ts (which additionally raises
+    # ``key_material_unavailable`` for a non-extractable WebCrypto key; the
+    # ``cryptography`` backend has no such case).
     if signature_valid and trust_root is not None:
-        kid = (
+        hint = (
             bundle.get("signing_key_id")
             if isinstance(bundle.get("signing_key_id"), str)
             else None
         )
-        if kid is not None:
-            is_revoked = any(r.kid == kid for r in trust_root.revoked_keys)
-            if is_revoked:
-                raise BundleVerificationError(
-                    bundle_reason="key_revoked",
-                    snapshot_valid_until=trust_root.valid_until,
-                    snapshot_fetched_at=trust_root.issued_at,
-                    kid=kid,
-                )
-            key_entry = next((k for k in trust_root.keys if k.kid == kid), None)
-            if key_entry is not None and key_entry.role != "R3_audit":
-                raise BundleVerificationError(
-                    bundle_reason="key_role_mismatch",
-                    snapshot_valid_until=trust_root.valid_until,
-                    snapshot_fetched_at=trust_root.issued_at,
-                    kid=kid,
-                )
+        assert matched_key_raw is not None  # derived in the verify loop
+        matched_x = _b64url_encode(matched_key_raw)
+        by_material = [k for k in trust_root.keys if k.x == matched_x]
+        verifying_entries = (
+            by_material
+            if by_material
+            else (
+                [k for k in trust_root.keys if k.kid == matched_key_id]
+                if matched_key_id
+                else []
+            )
+        )
+
+        revoked_kids = {r.kid for r in trust_root.revoked_keys}
+        revoked_entry = next(
+            (k for k in verifying_entries if k.revoked or k.kid in revoked_kids),
+            None,
+        )
+        revoked_kid = revoked_entry.kid if revoked_entry is not None else None
+        if revoked_kid is None:
+            for candidate in (matched_key_id, hint):
+                if candidate and candidate in revoked_kids:
+                    revoked_kid = candidate
+                    break
+        if revoked_kid is not None:
+            raise BundleVerificationError(
+                bundle_reason="key_revoked",
+                snapshot_valid_until=trust_root.valid_until,
+                snapshot_fetched_at=trust_root.issued_at,
+                kid=revoked_kid,
+            )
+        # A hint naming a non-audit kid is wrong either way (same fail-closed
+        # rule as the hint revocation check above).
+        role_entry = next((k for k in verifying_entries if k.role != "R3_audit"), None)
+        if role_entry is None and hint:
+            hint_entry = next((k for k in trust_root.keys if k.kid == hint), None)
+            if hint_entry is not None and hint_entry.role != "R3_audit":
+                role_entry = hint_entry
+        if role_entry is not None and role_entry.role != "R3_audit":
+            raise BundleVerificationError(
+                bundle_reason="key_role_mismatch",
+                snapshot_valid_until=trust_root.valid_until,
+                snapshot_fetched_at=trust_root.issued_at,
+                kid=role_entry.kid,
+            )
 
     if not chain_integrity_ok and reason is None:
         if tampered:

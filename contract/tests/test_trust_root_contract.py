@@ -11,6 +11,7 @@ The TypeScript SDK's equivalent gate is trust-root.test.ts.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -85,6 +86,26 @@ def test_vector_expected_semantics(name: str, vec: dict[str, Any]) -> None:
 
 # ─── SDK behaviour gate ───────────────────────────────────────────────────────
 
+# Contract CI sets this so the behaviour vectors below can never pass by
+# skipping. Found on atlasent-sdk#519: the job did not install `cryptography`,
+# every `test_vector_sdk_behaviour` case was SKIPPED, and the suite still read
+# as green while the vectors had actually regressed. With the variable set,
+# a missing dependency or fixture is a hard failure, not a skip.
+REQUIRE_SDK_BEHAVIOUR = os.environ.get("ATLASENT_CONTRACT_REQUIRE_SDK_BEHAVIOUR") == "1"
+
+
+def test_sdk_behaviour_gate_is_armed() -> None:
+    """Fail (never skip) when the behaviour vectors would be skipped in CI."""
+    if not REQUIRE_SDK_BEHAVIOUR:
+        pytest.skip("ATLASENT_CONTRACT_REQUIRE_SDK_BEHAVIOUR is not set (local run)")
+    assert HAS_CRYPTO, (
+        "cryptography is not importable via atlasent.audit_bundle; "
+        "Contract CI must install the Python SDK with its `verify` extra "
+        "or test_vector_sdk_behaviour silently skips every vector"
+    )
+    assert PUBLIC_PEM, "contract/vectors/audit-bundles/signing-key.pub.pem is missing"
+    assert _load_vectors(), "no trust-root vectors found — nothing would be exercised"
+
 
 def _make_snapshot(
     valid_until: str = "2099-01-01T00:00:00Z",
@@ -108,13 +129,21 @@ def _make_snapshot(
             revoked=False,
             tenant=None,
         ),
+        # Each kid carries DISTINCT material. The fixture used to publish the
+        # signing key's material under all three kids, which is not a valid
+        # trust root (a material revoked under any kid is revoked) and which
+        # the material-anchored verifier (atlasent-sdk#519) correctly rejects
+        # as `key_revoked` for every vector. Only `test-key` is the real
+        # `signing-key.pub.pem` material; the other two are placeholders that
+        # the vectors reference by kid via the unsigned `signing_key_id` hint.
+        # Mirrors python/tests/test_trust_root.py and typescript/test/trust-root.test.ts.
         TrustRootKey(
             kid="permit-kid",
             role="R2_permit",
             kty="OKP",
             crv="Ed25519",
             alg="EdDSA",
-            x="uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
+            x="Z2k8Tva4DJzS7yCSvYLmQdeQ4bxhyFD2kWjjQsPTFsw",
             valid_from="2026-01-01T00:00:00Z",
             valid_until="2099-01-01T00:00:00Z",
             replaced_by=None,
@@ -127,7 +156,7 @@ def _make_snapshot(
             kty="OKP",
             crv="Ed25519",
             alg="EdDSA",
-            x="uCfAGR92U9gKXqMmGs4MCoaTq-LmzoRe_aiwZE6UcnQ",
+            x="qaXEvPU7ffAGgnLUutIn_2Y2vcauh_8ixLj-bzYiddg",
             valid_from="2026-01-01T00:00:00Z",
             valid_until="2099-01-01T00:00:00Z",
             replaced_by=None,

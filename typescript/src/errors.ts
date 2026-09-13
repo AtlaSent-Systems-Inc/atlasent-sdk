@@ -388,8 +388,15 @@ export interface BundleVerificationErrorInit {
    *   - `key_revoked`: the bundle's `signing_key_id` appears in
    *     `revoked_keys` of the active trust snapshot.
    *   - `key_role_mismatch`: the signing key's `role` is not `"R3_audit"`.
+   *   - `key_material_unavailable`: a trust root was supplied but the key
+   *     that verified the signature carries no raw public-key material and
+   *     cannot be exported (a caller-constructed, non-extractable
+   *     `VerifyKey`), so revocation cannot be anchored to the real signer.
+   *     Fail-closed: with a trust root present, an unanchorable key is
+   *     never trusted on the strength of the bundle's unsigned
+   *     `signing_key_id` hint alone.
    */
-  reason: "trust_snapshot_expired" | "key_revoked" | "key_role_mismatch";
+  reason: "trust_snapshot_expired" | "key_revoked" | "key_role_mismatch" | "key_material_unavailable";
   /** ISO-8601 `valid_until` of the snapshot that caused the failure. */
   snapshotValidUntil?: string;
   /** ISO-8601 `issued_at` of the snapshot (its fetch/pin time). */

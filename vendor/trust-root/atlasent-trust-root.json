@@ -3,13 +3,25 @@
   "issued_at": "2026-05-28T00:00:00Z",
   "valid_until": "2027-06-01T00:00:00Z",
   "trust_root_signer": {
-    "sigstore_identity": "https://github.com/AtlaSent-Systems-Inc/atlasent-keys/.github/workflows/publish.yml@refs/heads/main",
+    "sigstore_identity": "https://github.com/AtlaSent-Systems-Inc/atlasent-keys/.github/workflows/publish-trust-root.yml@refs/heads/main",
     "oidc_issuer": "https://token.actions.githubusercontent.com"
   },
   "resources": [
-    { "path": "/.well-known/atlasent-verifier-keys.json", "sha256": "pending", "sig": "/.well-known/atlasent-verifier-keys.json.sig" },
-    { "path": "/.well-known/atlasent-sigstore-identities.json", "sha256": "pending", "sig": "/.well-known/atlasent-sigstore-identities.json.sig" },
-    { "path": "/.well-known/atlasent-revocations.json", "sha256": "pending", "sig": "/.well-known/atlasent-revocations.json.sig" }
+    {
+      "path": "/.well-known/atlasent-verifier-keys.json",
+      "sha256": "1a0cc906456ba07355a7bb23d2fe70189e61782292b6e0e2d38a6c2d9dd0a223",
+      "sig": "/.well-known/atlasent-verifier-keys.json.bundle"
+    },
+    {
+      "path": "/.well-known/atlasent-sigstore-identities.json",
+      "sha256": "e1e5b768bbd9ba350678b0b3a2e0ffede71c6ade2df63765e36d251db97d32ef",
+      "sig": "/.well-known/atlasent-sigstore-identities.json.bundle"
+    },
+    {
+      "path": "/.well-known/atlasent-revocations.json",
+      "sha256": "73ee83e788203d8e3ae93d33625e234f0f0724adb47537c72554fd7f2ed84ff5",
+      "sig": "/.well-known/atlasent-revocations.json.bundle"
+    }
   ],
   "v2_anchors": {
     "transparency_log_url": null,

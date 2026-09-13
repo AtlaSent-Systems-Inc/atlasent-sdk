@@ -2,6 +2,59 @@
 
 ## Unreleased
 
+### Changed
+
+- **Re-vendored the embedded trust-root snapshot from `atlasent-keys` main
+  (`f357d8a`, bundles re-signed in `aebdac8`).** Adds `kid: v1` (`R3_audit`,
+  valid 2026-06-07 → 2027-07-08) — the per-row `audit_events.signature`
+  signer on production runtime, verified 7/7 against production rows before
+  publication — and marks `v2-audit-2026` `revoked: true`, `replaced_by:
+  "v1"`, with the matching `revoked_keys` ledger entry. `v2-audit-2026` was
+  never the production audit signer (0/7 sampled rows verify under it). Any
+  `verify_audit_bundle()` caller relying on the embedded baseline now
+  resolves the real production audit key and rejects the revoked one
+  without waiting for `TrustRootManager`'s first background refresh.
+  Regenerated with `scripts/vendor_trust_root.py`; the sibling
+  `vendor/trust-root/*.json` reference copies were refreshed to the same
+  upstream files.
+
+### Fixed
+
+- **ADR-005 revocation was checked against the bundle's unsigned
+  `signing_key_id` hint, not the key that verified the signature.** During a
+  rotation window a verifier legitimately holds both the revoked key and its
+  successor; `verify_audit_bundle()` tried every key, recorded the real
+  `matched_key_id`, and then consulted `revoked_keys` using the hint — so a
+  bundle signed by revoked `v2-audit-2026` but advertising `v1` returned
+  `verified=True` (Codex P1 on #519). `VerifyKey` now carries
+  `public_key_raw` (populated for every key loaded from `public_keys_pem`),
+  and revocation and role are resolved against the trust-root entry whose
+  `x` matches the verifying key's material. The hint is still rejected on its
+  own when it names a revoked kid or a non-audit kid (fail-closed). Two
+  follow-up bypasses from review on #519 are closed in the same change:
+  (1) a `VerifyKey` supplied **without** `public_key_raw` no longer falls
+  back to the hint — the material is derived from the public key (always
+  possible with `cryptography`); (2) the hint no longer narrows the
+  trust-root entries that share the verifying material — **every** entry
+  with that material is judged (`revoked` flag or `revoked_keys` ledger), so
+  a revoked key re-published under a live alias kid is still revoked
+  whichever kid the bundle advertises. Negative tests for both in
+  `tests/test_audit_bundle_revocation_material.py`; the contract-vector
+  fixture, which published one material under three kids (an invalid trust
+  root that hid bypass 2), now gives each kid distinct material.
+  A third review round closed the last gap in the same area: a
+  caller-constructed `VerifyKey` whose `public_key_raw` **metadata** named a
+  live key while its `public_key` was the revoked one was judged by the
+  metadata (`k.public_key_raw or ...`). The material is now always derived
+  from the `public_key` object that verified the signature; `public_key_raw`
+  is informational and never consulted by the verifier. A fourth round fixed
+  the shared contract fixture (`contract/tests/test_trust_root_contract.py`),
+  which still published the signing key's material under all three kids and
+  so failed the contract suite under the corrected verifier; Contract CI had
+  been reading green only because it never installed `cryptography` and
+  silently skipped every behaviour vector. It now installs the `verify` extra
+  and fails, rather than skips, when those vectors would not run.
+
 ### Added
 
 - `AtlaSentPermitMintFailedError` — the permit-mint operational-error
