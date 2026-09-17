@@ -5,6 +5,22 @@
 ### Changed
 
 - **Re-vendored the embedded trust-root snapshot from `atlasent-keys` main
+  (`45e8b95`; index and bundles re-signed by the governed publish in
+  `01968e9`, run 34931280498, after an independent approving review on
+  atlasent-keys#35).** Adds `kid: ak_2026_q3_atlasent_audit` (`R3_audit`,
+  `tenant: "atlasent"`, valid 2026-09-13T21:51Z → 2027-03-31) — the outer
+  Ed25519 signer of `v1-export-audit` envelopes on production runtime since
+  the 2026-09-13 export-signer rotation (`key_id` = `EXPORT_KID`, SPKI
+  fingerprint `1903850d6a201501`), verified against a live production
+  export before publication. Until this entry an embedded-baseline
+  `verify_audit_bundle()` caller could not resolve the current export
+  signer's `key_id` and had to wait for `TrustRootManager`'s first
+  background refresh. Nothing is revoked or replaced by this pass; `kid: v1`
+  (the per-row `audit_events.signature` signer) is unchanged. Regenerated
+  with `scripts/vendor_trust_root.py`; the sibling
+  `vendor/trust-root/*.json` reference copies were refreshed to the same
+  upstream files.
+- **Re-vendored the embedded trust-root snapshot from `atlasent-keys` main
   (`f357d8a`, bundles re-signed in `aebdac8`).** Adds `kid: v1` (`R3_audit`,
   valid 2026-06-07 → 2027-07-08) — the per-row `audit_events.signature`
   signer on production runtime, verified 7/7 against production rows before

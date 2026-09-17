@@ -9,7 +9,7 @@
   "resources": [
     {
       "path": "/.well-known/atlasent-verifier-keys.json",
-      "sha256": "1a0cc906456ba07355a7bb23d2fe70189e61782292b6e0e2d38a6c2d9dd0a223",
+      "sha256": "d30011a704ada439c3abd711c15473b0a845183b4adc41a913ceaaf242b27e61",
       "sig": "/.well-known/atlasent-verifier-keys.json.bundle"
     },
     {

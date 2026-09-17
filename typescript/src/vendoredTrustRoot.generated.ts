@@ -96,6 +96,19 @@ export const VENDORED_TRUST_ROOT_SNAPSHOT: TrustRootSnapshot = {
       "replaced_by": null,
       "revoked": false,
       "tenant": null
+    },
+    {
+      "kid": "ak_2026_q3_atlasent_audit",
+      "role": "R3_audit",
+      "kty": "OKP",
+      "alg": "EdDSA",
+      "x": "AXSz2fwodpUxDxL-KV-rwFU2_2VQDORbnClLivQZ9Ug",
+      "crv": "Ed25519",
+      "valid_from": "2026-09-13T21:51:00Z",
+      "valid_until": "2027-03-31T00:00:00Z",
+      "replaced_by": null,
+      "revoked": false,
+      "tenant": "atlasent"
     }
   ],
   "revoked_keys": [
