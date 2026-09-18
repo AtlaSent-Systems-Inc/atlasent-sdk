@@ -103,6 +103,19 @@ VENDORED_TRUST_ROOT_SNAPSHOT_DATA: dict[str, Any] = {
             "revoked": False,
             "tenant": None,
         },
+        {
+            "kid": "ak_2026_q3_atlasent_audit",
+            "role": "R3_audit",
+            "tenant": "atlasent",
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "alg": "EdDSA",
+            "x": "AXSz2fwodpUxDxL-KV-rwFU2_2VQDORbnClLivQZ9Ug",
+            "valid_from": "2026-09-13T21:51:00Z",
+            "valid_until": "2027-03-31T00:00:00Z",
+            "replaced_by": None,
+            "revoked": False,
+        },
     ],
     "revoked_keys": [
         {
