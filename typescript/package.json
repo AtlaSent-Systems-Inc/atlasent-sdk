@@ -118,7 +118,7 @@
     "@vitest/coverage-v8": "^5.0.0",
     "hono": "^4.12.15",
     "jsdom": "^29.1.0",
-    "size-limit": "^13.0.1",
+    "size-limit": "^14.0.0",
     "tsup": "^8.0.2",
     "tsx": "^4.7.2",
     "typescript": "^6.0.3",
