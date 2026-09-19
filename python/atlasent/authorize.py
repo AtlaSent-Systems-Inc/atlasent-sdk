@@ -100,6 +100,7 @@ def protect(
     agent: str,
     action: str,
     context: dict[str, Any] | None = None,
+    execution_payload_hash: str | None = None,
 ) -> Permit:
     """Authorize an action end-to-end — the category primitive.
 
@@ -138,7 +139,12 @@ def protect(
 
         run_deploy(commit)
     """
-    return _get_default_client().protect(agent=agent, action=action, context=context)
+    return _get_default_client().protect(
+        agent=agent,
+        action=action,
+        context=context,
+        execution_payload_hash=execution_payload_hash,
+    )
 
 
 def authorize(
