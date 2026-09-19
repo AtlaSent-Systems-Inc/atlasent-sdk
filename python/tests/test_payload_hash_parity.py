@@ -231,9 +231,7 @@ def test_python_and_typescript_goldens_are_the_same_values() -> None:
     # Documents the intent of this file: these constants are not
     # independently-derived Python expectations, they are the server's values,
     # shared verbatim with the TypeScript suite.
-    assert GOLDEN_SERVER_HASH["minimal"] == (
-        "sha256:" + GOLDEN_HEX["minimal"]
-    )
+    assert GOLDEN_SERVER_HASH["minimal"] == ("sha256:" + GOLDEN_HEX["minimal"])
     assert (
         GOLDEN_HEX["minimal"]
         == "8b873b92e37bacd9176d5c9e9074ba6dfc227b0cad3ceb5f6c3f9bd30e4e8c32"

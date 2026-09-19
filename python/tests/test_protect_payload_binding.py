@@ -176,9 +176,7 @@ class TestPresentedDigestDependsOnTheRequest:
         evaluate_body, verify_body = _posted_bodies(post)
         assert verify_body["execution_hash"] == _server_bound_hash_of(evaluate_body)
 
-    def test_two_different_contexts_produce_two_different_digests(
-        self, mocker
-    ) -> None:
+    def test_two_different_contexts_produce_two_different_digests(self, mocker) -> None:
         # A constant binding would satisfy every assertion above while
         # authorizing any payload.
         _, a = _protect(mocker)
