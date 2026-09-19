@@ -28,6 +28,14 @@ export interface LegacyEvaluateRequest {
   action?: string;
   agent?: string;
   context?: Record<string, unknown>;
+  /**
+   * Present on the LEGACY shape too, because `protect()` builds its request
+   * with the legacy `{agent, action}` field names — so the digest arrives
+   * here, not on the canonical shape, for the one caller that most needs it.
+   * Typing it only on `V2EvaluateRequest` compiled fine and silently excluded
+   * `protect()`.
+   */
+  execution_payload_hash?: string;
 }
 
 /** v2.0 evaluate request shape (canonical wire format). */
@@ -48,18 +56,31 @@ export interface V2EvaluateRequest {
   /** Execution surface binding (CI/CD adapter, DB driver, etc.). */
   execution_binding?: { kind: string; adapter_version?: string; resource_id?: string; enforcement_point?: string };
   /**
-   * SHA-256 digest of the payload that will actually execute, as BARE
-   * lowercase 64-hex. `v1-evaluate` signs a value matching `/^[0-9a-f]{64}$/i`
-   * into the permit as `execution_hash_expected`; re-present it at verify and
-   * a payload altered after authorization fails closed with
-   * `PAYLOAD_MISMATCH`.
+   * SHA-256 digest of the exact payload this action will execute, as BARE
+   * 64-character lowercase hex.
    *
-   * Two shapes silently DROP the binding rather than rejecting it — allow,
-   * permit, 200, no error: a `sha256:` prefix (fails the bare-hex regex), and
-   * the field nested under `context` (the handler reads it from the top level
-   * of the body, alongside `context`, not within it). Prefer
-   * `ProtectRequest.executionPayloadHash`, which normalizes the first and
-   * cannot express the second.
+   * This is the field the runtime binds into the signed permit's
+   * `execution_hash_expected`, and it is what makes `PAYLOAD_MISMATCH`
+   * meaningful: without it the permit is bound to the runtime's own hash of
+   * the whole request body, which your digest can never equal — so
+   * re-presenting one at verify yields a deterministic mismatch on every
+   * call, and presenting nothing on a non-production permit passes with no
+   * payload check at all.
+   *
+   * TWO PROPERTIES ARE LOAD-BEARING, and getting either wrong disables the
+   * check silently, with no error anywhere:
+   *   1. BARE hex. A `sha256:` prefix fails the runtime's
+   *      `/^[0-9a-f]{64}$/i` test and is DROPPED, not rejected, on the
+   *      ordinary-action path.
+   *   2. TOP LEVEL. The runtime destructures it from the body ALONGSIDE
+   *      `context`, never from within it. Nested under `context` it is never
+   *      a binding.
+   * `normalizeExecutionPayloadHash` in `protect.ts` enforces (1) by throwing;
+   * this field's position in the wire body enforces (2).
+   *
+   * Both `atlasent-action` and `atlasent-mcp-server` already send it in this
+   * exact shape. See atlasent-api's CLAUDE.md, "A caller-supplied
+   * `execution_payload_hash` is DROPPED, not rejected".
    */
   execution_payload_hash?: string;
   /**
@@ -162,6 +183,13 @@ export function normalizeEvaluateRequest(
   if (src.current_state !== undefined) normalized.current_state = src.current_state;
   if (src.proposed_state !== undefined) normalized.proposed_state = src.proposed_state;
   if (src.execution_binding !== undefined) normalized.execution_binding = src.execution_binding;
+  // MUST be carried here as well as in client.evaluate's body whitelist. This
+  // legacy branch REBUILDS the request field by field, so anything missing
+  // from this list is dropped — and `protect()` uses the legacy `{agent,
+  // action}` shape, so its requests always take this branch. Omitting this one
+  // line would make the digest vanish for exactly the caller that most needs
+  // it, with no error, which is the same silent-drop defect the comment block
+  // in client.evaluate already records for three other fields.
   if (src.execution_payload_hash !== undefined) normalized.execution_payload_hash = src.execution_payload_hash;
   if (src.state_snapshot !== undefined) normalized.state_snapshot = src.state_snapshot;
   if (src.evaluation_profile !== undefined) normalized.evaluation_profile = src.evaluation_profile;

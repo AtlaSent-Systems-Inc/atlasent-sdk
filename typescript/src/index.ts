@@ -138,7 +138,6 @@ export {
 export {
   canonicalizePayload,
   isBarePayloadHash,
-  normalizeCallerPayloadHash,
   serverPayloadHash,
 } from "./payloadHash.js";
 export {

@@ -10,9 +10,13 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ### Fixed
 
-- **`protect()` / `withPermit()` / `protectWithEvidence()` presented an
-  execution-payload digest the runtime could never match, so every call was a
-  deterministic `PAYLOAD_MISMATCH` deny at the verify boundary.** The digest
+- **The no-caller-digest path still presented an execution-payload digest the
+  runtime could never match, so every `protect()` / `withPermit()` /
+  `protectWithEvidence()` call that does not opt into a digest — the default —
+  was a deterministic `PAYLOAD_MISMATCH` deny at the verify boundary.** The
+  previous change on this line fixed the caller-digest path and explicitly
+  preserved this one ("With no caller digest, behaviour is exactly as
+  before"); the unchanged behaviour is the deny. The digest
   was emitted as bare hex; the value it is compared against —
   `execution_evaluations.payload_hash`, or the permit's signed
   `execution_hash_expected` — is written by the runtime's `hashPayload`, which
@@ -34,31 +38,27 @@ follows [semver](https://semver.org/): breaking changes bump the major
   not the arguments handed to a client method — an argument-level assertion
   cannot see which field a value lands in, or whether it reaches the wire).
 
+- **`protectWithEvidence()` silently ignored `executionPayloadHash` entirely.**
+  The camelCase field never matches `client.evaluate`'s snake_case allowlist, so
+  the digest was dropped and the permit was never bound to it — the exact
+  silent-drop defect `normalizeExecutionPayloadHash` exists to prevent, in the
+  sibling of the function that received the fix. It now normalizes, sends and
+  re-presents the digest on the same contract as `protect()`. Found by mutation
+  testing: reverting this survived the whole suite, because nothing covered
+  this entry point's digest handling.
+
 ### Added
 
-- **`ProtectRequest.executionPayloadHash`** — a digest of the payload that will
-  actually execute, sent as a top-level `execution_payload_hash` on the
-  evaluate request and re-presented at verify. This is the binding that
-  constrains execution: a payload altered between authorization and execution
-  then fails closed with `PAYLOAD_MISMATCH`. Omitted, the permit is still bound
-  — but only to the server's own hash of the evaluate request, which
-  `protect()` recomputes from the same in-memory object microseconds later, so
-  that comparison is self-referential and cannot detect a substituted payload.
-  Callers whose arguments are attacker-influenceable (an AI agent's tool
-  arguments) should supply it.
+- **`serverPayloadHash`, `canonicalizePayload`, `isBarePayloadHash`** exported
+  from `@atlasent/sdk`. `serverPayloadHash` reproduces the runtime's fallback
+  binding, prefix included; `canonicalizePayload` is a byte-identical port of
+  the server's canonicalization, pinned by the parity suite.
 
-  A malformed value throws rather than being forwarded. The runtime drops one
-  silently — allow, permit, 200, no error — which mints a permit that looks
-  bound and is not; a `sha256:` prefix is accepted and stripped, since that is
-  the conventional container-image / `sha256sum` form.
-
-- **`serverPayloadHash`, `canonicalizePayload`, `normalizeCallerPayloadHash`,
-  `isBarePayloadHash`** exported from `@atlasent/sdk` for callers that need to
-  compute or validate either digest form themselves.
-
-- `execution_payload_hash` on `V2EvaluateRequest`, forwarded by
-  `AtlaSentClient.evaluate` and declared in
-  `contract/schemas/evaluate-request.schema.json`.
+- `buildEvaluateBody` exported from `client.ts` as the single evaluate-body
+  construction site, so `protect()` hashes the body it actually posts instead
+  of a hand-written mirror of it. There is deliberately only one
+  digest normalizer (`normalizeExecutionPayloadHash`, from the previous change
+  on this line) rather than a second invention.
 
 ### Changed
 

@@ -22,7 +22,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 
-import { AtlaSentError, configure, protect } from "../src/index.js";
+import {
+  AtlaSentError,
+  configure,
+  protect,
+  protectWithEvidence,
+} from "../src/index.js";
 import { __resetSharedClientForTests } from "../src/protect.js";
 import { canonicalizePayload } from "../src/payloadHash.js";
 
@@ -380,6 +385,69 @@ describe("protect(): execution-payload binding on the wire", () => {
 
       await expect(
         protect({
+          agent: "a",
+          action: "t.x",
+          context: { environment: "production" },
+          executionPayloadHash: "not-a-digest",
+        }),
+      ).rejects.toThrow(AtlaSentError);
+
+      expect(captured, "a rejected digest must not reach the runtime").toHaveLength(0);
+    });
+  });
+
+  describe("protectWithEvidence(): the same contract as protect()", () => {
+    // Found by mutation testing: reverting this entry point to ignore the
+    // caller digest survived the whole suite, because nothing covered it. It
+    // shipped that way — the camelCase `executionPayloadHash` never matches
+    // client.evaluate's snake_case allowlist, so the digest was silently
+    // dropped and the permit was never bound to it, in the sibling of the
+    // function that got the fix.
+    it("sends the caller digest at evaluate and presents it at verify", async () => {
+      const captured: Captured[] = [];
+      configure({
+        apiKey: "ask_live_test",
+        fetch: recordingFetch(captured, [EVALUATE_ALLOW_WIRE, VERIFY_OK_WIRE]),
+      });
+
+      await protectWithEvidence({
+        agent: "a",
+        action: "t.x",
+        context: { environment: "production" },
+        executionPayloadHash: HEX_A,
+      });
+
+      expect(captured[0]?.body["execution_payload_hash"]).toBe(HEX_A);
+      expect(captured[1]?.body["execution_hash"]).toBe(HEX_A);
+    });
+
+    it("presents the prefixed server-bound hash when no digest was supplied", async () => {
+      const captured: Captured[] = [];
+      configure({
+        apiKey: "ask_live_test",
+        fetch: recordingFetch(captured, [EVALUATE_ALLOW_WIRE, VERIFY_OK_WIRE]),
+      });
+
+      await protectWithEvidence({
+        agent: "a",
+        action: "t.x",
+        context: { environment: "production" },
+      });
+
+      const [evaluate, verify] = captured as [Captured, Captured];
+      expect(verify.body["execution_hash"]).toBe(serverBoundHashOf(evaluate.body));
+      expect(verify.body["execution_hash"]).toMatch(/^sha256:[0-9a-f]{64}$/);
+    });
+
+    it("THROWS before any network call on a malformed digest", async () => {
+      const captured: Captured[] = [];
+      configure({
+        apiKey: "ask_live_test",
+        fetch: recordingFetch(captured, [EVALUATE_ALLOW_WIRE, VERIFY_OK_WIRE]),
+      });
+
+      await expect(
+        protectWithEvidence({
           agent: "a",
           action: "t.x",
           context: { environment: "production" },

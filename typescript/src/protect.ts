@@ -37,8 +37,8 @@ import {
   type AtlaSentDecision,
 } from "./errors.js";
 import { getGlobalTrustRootManager } from "./trustRoot.js";
+import { serverPayloadHash } from "./payloadHash.js";
 import type { AtlaSentClientOptions, ConstraintTrace } from "./types.js";
-import type { LegacyEvaluateRequest, V2EvaluateRequest } from "./compat.js";
 import {
   buildDecisionReceiptPayload,
   buildWhyTrace,
@@ -49,10 +49,6 @@ import type {
   DecisionReceipt,
   DecisionReceiptAlgorithm,
 } from "./evidenceEngine.js";
-import {
-  normalizeCallerPayloadHash,
-  serverPayloadHash,
-} from "./payloadHash.js";
 
 /** Input to {@link protect}. Same shape as `EvaluateRequest`. */
 export interface ProtectRequest {
@@ -60,28 +56,55 @@ export interface ProtectRequest {
   action: string;
   context?: Record<string, unknown>;
   /**
-   * SHA-256 digest of the payload this call will actually execute — the tool
-   * arguments, the request body, the artifact bytes. Bare 64-char hex; a
-   * `sha256:` prefix is accepted and stripped.
+   * SHA-256 digest of the exact payload this action will execute — the
+   * arguments, the body, the diff: whatever "what is about to happen" means
+   * for this action.
    *
-   * Supplying it is what makes the permit constrain execution. It is sent as
-   * a top-level `execution_payload_hash` on the evaluate request, which
-   * `v1-evaluate` signs into the permit as `execution_hash_expected`, and is
-   * re-presented at the verify boundary. A payload that changed between
-   * authorization and execution then fails closed with `PAYLOAD_MISMATCH`
-   * instead of running.
+   * Supplying it is what makes `PAYLOAD_MISMATCH` a real check. Without it,
+   * the runtime binds the permit to its OWN hash of the whole evaluate
+   * request, which your payload's digest can never equal, so nothing about
+   * the payload actually constrains execution.
    *
-   * Omit it and the permit is still bound — but only to the server's own hash
-   * of this evaluate request, which `protect()` recomputes from the same
-   * in-memory object microseconds later. That comparison is self-referential:
-   * it cannot detect a substituted payload, because nothing re-derives the
-   * digest from the thing about to execute. For an AI agent whose tool
-   * arguments are attacker-influenceable, supply this.
-   *
-   * A malformed value THROWS rather than being forwarded — the runtime drops
-   * one silently, which mints a permit that looks bound and is not.
+   * Accepts bare 64-hex or a `sha256:`-prefixed digest; the prefix is
+   * stripped, because the runtime silently DROPS a prefixed value rather than
+   * rejecting it. Anything else THROWS — see
+   * {@link normalizeExecutionPayloadHash} for why throwing is the fail-closed
+   * choice.
    */
   executionPayloadHash?: string;
+}
+
+/**
+ * Normalize a caller-supplied execution payload digest, or throw.
+ *
+ * WHY THIS THROWS RATHER THAN DROPS. The runtime binds
+ * `execution_hash_expected` only when the value matches `/^[0-9a-f]{64}$/i`
+ * at the TOP LEVEL of the evaluate body. A `sha256:` prefix, or a value
+ * nested under `context`, fails that test and is **dropped, not rejected**
+ * on the ordinary-action path: allow, permit, 200, no error anywhere. The
+ * caller believes the execution is bound to its payload and it is not.
+ *
+ * Two shipped clients each got one half of this wrong and neither could tell
+ * — `atlasent-llm-integrations`' LangChain wrapper sent a `sha256:`-prefixed
+ * digest nested under `context`, and its unit test asserted exactly that
+ * shape and passed green for months. Sending something the runtime will
+ * quietly discard is strictly worse than refusing at the client boundary, so
+ * this refuses. Same fail-closed form as `normalizePayloadHash` in
+ * `atlasent-mcp-server`'s `src/engine.ts`, deliberately rather than a second
+ * invention.
+ */
+export function normalizeExecutionPayloadHash(value: string): string {
+  const bare = value.startsWith("sha256:") ? value.slice("sha256:".length) : value;
+  if (!/^[0-9a-fA-F]{64}$/.test(bare)) {
+    throw new AtlaSentError(
+      "executionPayloadHash must be a SHA-256 digest as 64 hex characters " +
+        `(optionally "sha256:"-prefixed); got ${bare.length} character(s). ` +
+        "The runtime silently DROPS a malformed digest rather than rejecting " +
+        "it, so sending one would leave the execution unbound with no error.",
+      { code: "bad_request" },
+    );
+  }
+  return bare.toLowerCase();
 }
 
 /**
@@ -193,45 +216,35 @@ function wireDecisionToDenied(serverDecision: string): AtlaSentDecision {
 // ── Execution-hash helpers ────────────────────────────────────────────────────
 
 /**
- * Resolve the digest to present at the verify boundary, in the form
- * `v1-verify-permit` will actually compare it against.
+ * Reproduce the binding the runtime falls back to when the caller supplied no
+ * digest: `"sha256:" + hex` over the canonical form of the evaluate request
+ * body, with the three fields `v1-evaluate` strips removed first.
  *
- * There are two bindings and the presented form must follow whichever one is
- * in force — the comparison folds case and normalizes nothing else, so the
- * right digest in the wrong form is a deterministic `PAYLOAD_MISMATCH`:
+ * CORRECTED: this used to return BARE hex, and `#523` explicitly preserved
+ * that on the no-caller-digest path ("behaviour is exactly as before"). That
+ * path is the one that denies. `execution_evaluations.payload_hash` and the
+ * permit's `execution_hash_expected` are written by the runtime's `hashPayload`,
+ * which PREFIXES the scheme, and `/v1-verify-permit` folds case and normalizes
+ * nothing else — so bare hex could never compare equal and every call without
+ * a caller digest was a deterministic `PAYLOAD_MISMATCH`. The canonical BYTES
+ * were always correct; `test/payload-hash-parity.test.ts` pins all ten vectors
+ * against digests generated from the real server source, and only the prefix
+ * was missing.
  *
- *   - Caller supplied `executionPayloadHash` -> `v1-evaluate` signed that bare
- *     lowercase hex into the permit as `execution_hash_expected`. Present it
- *     unchanged.
- *   - Caller supplied nothing -> the permit is bound to the server's own
- *     `sha256:`-prefixed hash of the whole evaluate request body. Reproduce it,
- *     prefix included.
- *
- * Presenting the un-prefixed mirror is not a hypothetical: it is what this
- * function replaced, and it denied every `protect()` /
- * `protectWithEvidence()` call against a runtime that populates the binding.
- * `test/protect-execution-binding.test.ts` pins the posted body for both
- * branches; `test/payload-hash-parity.test.ts` pins the digest itself against
- * the server's own canonicalization.
- *
- * `postedBody` must be the body that was ACTUALLY sent, from
- * {@link buildEvaluateBody} — never a second, hand-written reconstruction of
- * it. A field that reaches the wire without reaching the hash yields a digest
- * the server cannot match, and that is not hypothetical either: the Python
- * SDK's hand-written mirror omitted `state_snapshot`, so every
- * `protect(state_snapshot=...)` call was a guaranteed mismatch on its own.
+ * `postedBody` must come from {@link buildEvaluateBody} — the body that is
+ * actually sent — never a hand-written reconstruction of it. A field that
+ * reaches the wire without reaching the hash yields a digest the server cannot
+ * match. Not hypothetical: the Python SDK's mirror omitted `state_snapshot`,
+ * so every `protect(state_snapshot=...)` call was a guaranteed mismatch on its
+ * own, independently of the prefix.
  */
-async function resolvePresentedPayloadHash(
-  request: ProtectRequest,
+async function computeBoundPayloadHash(
   postedBody: Record<string, unknown>,
 ): Promise<string | undefined> {
-  if (request.executionPayloadHash !== undefined) {
-    // Already normalized (and validated) by the caller path below, but
-    // normalizing again is free and keeps this function correct on its own.
-    return normalizeCallerPayloadHash(request.executionPayloadHash);
-  }
-
-  // The server hashes the request body minus these three fields.
+  // v1-evaluate removes these three from the body before hashing it. Omitting
+  // this strip survived the entire test suite until a test sent `explain`,
+  // which is reachable through protect() — found by mutation testing, not by
+  // reading.
   const {
     traceparent: _traceparent,
     shadow: _shadow,
@@ -244,10 +257,10 @@ async function resolvePresentedPayloadHash(
   } catch {
     // Neither crypto.subtle nor node:crypto is available (a very old Node, a
     // restricted runtime). Omit the field rather than throw, preserving the
-    // long-standing behavior here: the server then requires it on a
+    // long-standing behaviour here: the server then requires it on a
     // production permit and denies with PAYLOAD_HASH_REQUIRED, which is
     // fail-closed. Warn, because a silently absent binding is the thing this
-    // whole module exists to prevent.
+    // module exists to prevent.
     // eslint-disable-next-line no-console
     console.warn(
       "[atlasent] Could not compute the execution payload hash: neither " +
@@ -256,58 +269,6 @@ async function resolvePresentedPayloadHash(
         "production permit will be DENIED at verify.",
     );
     return undefined;
-  }
-}
-
-/**
- * Map a {@link ProtectRequest} onto the evaluate request the client posts.
- *
- * Exists because the two shapes differ in more than case: `ProtectRequest`
- * spells the digest `executionPayloadHash`, the wire field is a TOP-LEVEL
- * `execution_payload_hash`, and the value must be bare lowercase hex before it
- * leaves here. Passing the `ProtectRequest` straight through — which this
- * module did — type-checks, drops the digest, and mints an unbound permit.
- *
- * Every OTHER property is forwarded untouched, by spread rather than by an
- * allowlist. That is deliberate and is behavior-preserving: `protect()`
- * previously handed its request object directly to `client.evaluate`, so any
- * evaluate field a caller set (`state_snapshot`, `resource`, `environment`, …)
- * reached the wire even though `ProtectRequest` does not declare it. An
- * allowlist here would silently stop forwarding those — the same class of
- * silent drop this whole change exists to remove. Caught by a precondition
- * assertion in `test/protect-execution-binding.test.ts` after a first version
- * of this function did exactly that.
- */
-function toEvaluateRequest(
-  request: ProtectRequest,
-): LegacyEvaluateRequest & Pick<V2EvaluateRequest, "execution_payload_hash"> {
-  const { agent, action, executionPayloadHash, ...rest } = request as ProtectRequest &
-    Record<string, unknown>;
-
-  const evaluateRequest = {
-    ...rest,
-    action,
-    agent,
-  } as LegacyEvaluateRequest & Pick<V2EvaluateRequest, "execution_payload_hash">;
-
-  if (executionPayloadHash !== undefined) {
-    evaluateRequest.execution_payload_hash =
-      normalizeCallerPayloadHash(executionPayloadHash);
-  }
-  return evaluateRequest;
-}
-
-/**
- * Validate a caller-supplied digest up front, before any network call.
- *
- * Separate from {@link resolvePresentedPayloadHash} so the throw happens at
- * the top of the flow: forwarding a malformed digest would have the runtime
- * drop it silently and mint a permit bound to its own request hash instead —
- * indistinguishable, to the caller, from a real binding.
- */
-function validateCallerPayloadHash(request: ProtectRequest): void {
-  if (request.executionPayloadHash !== undefined) {
-    normalizeCallerPayloadHash(request.executionPayloadHash);
   }
 }
 
@@ -338,10 +299,6 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
       { code: "bad_request" },
     );
   }
-  // Reject a malformed caller digest here, before any network call: the
-  // runtime would DROP it silently and mint a permit bound to its own request
-  // hash instead, which the caller cannot distinguish from a real binding.
-  validateCallerPayloadHash(request);
   // ADR-005 D3: fail-closed on expired trust snapshot. checkExpiry() also
   // emits the one-time half-life warning if >50% of validity window has elapsed.
   const trustMgr = getGlobalTrustRootManager({ disableRefresh: false });
@@ -353,13 +310,29 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
       snapshotFetchedAt: snap.issued_at,
     });
   }
+  // Normalize BEFORE the evaluate call, so a malformed digest fails the
+  // request outright instead of minting a permit the caller wrongly believes
+  // is bound to its payload.
+  const executionPayloadHash =
+    request.executionPayloadHash !== undefined
+      ? normalizeExecutionPayloadHash(request.executionPayloadHash)
+      : undefined;
+
   const client = getClient();
-  // One construction site, one input: `client.evaluate` builds its wire body
-  // with buildEvaluateBody from this exact object, so hashing
-  // buildEvaluateBody(evaluateRequest) below hashes the bytes that were
-  // posted. Same pure function, same input — not a reconstruction that can
-  // drift. See resolvePresentedPayloadHash.
-  const evaluateRequest = toEvaluateRequest(request);
+  // Spread rather than mutate: `request` is the caller's object.
+  // `executionPayloadHash` (camelCase, this SDK's surface) becomes
+  // `execution_payload_hash` (the wire name) at TOP LEVEL — never inside
+  // `context`, where the runtime never reads it. A caller that supplies no
+  // digest sends a byte-identical request to before.
+  //
+  // Named rather than inlined so the fallback digest below can hash
+  // buildEvaluateBody(evaluateRequest) — the same pure function on the same
+  // input client.evaluate() gets, so it hashes the bytes that were posted
+  // rather than a reconstruction that can drift from them.
+  const evaluateRequest =
+    executionPayloadHash !== undefined
+      ? { ...request, execution_payload_hash: executionPayloadHash }
+      : request;
   const evaluation = await client.evaluate(evaluateRequest);
 
   // decision is now canonical lowercase: "allow" | "deny" | "hold" | "escalate"
@@ -380,13 +353,28 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
     );
   }
 
-  // Resolve the digest to present at the boundary. Which form is correct
-  // depends on which binding the permit carries — see
-  // resolvePresentedPayloadHash.
-  const execution_hash = await resolvePresentedPayloadHash(
-    request,
-    buildEvaluateBody(evaluateRequest),
-  );
+  // What to present at the verify boundary.
+  //
+  // `v1-verify-permit` resolves ONE `callerPayloadHash` from the request —
+  // `payload_hash` if present, else `execution_hash` as a back-compat alias —
+  // and compares it against the permit's `boundPayloadHash`. So these two are
+  // alternatives, never both, and presenting the WRONG one is a denial, not a
+  // no-op.
+  //
+  // When the caller supplied a payload digest, that digest IS what the runtime
+  // bound (`execution_hash_expected`), so it is the only value that can match.
+  // Presenting the computed evaluate-payload hash instead would be a
+  // DETERMINISTIC `PAYLOAD_MISMATCH` on every call — a hash of the request can
+  // never equal a hash of the payload. That is not a hypothetical: it is the
+  // defect the first draft of this change shipped, caught by reading
+  // `v1-verify-permit/handler.ts`'s absence/comparison policy rather than by a
+  // test, because no test here talks to a real runtime.
+  //
+  // With no caller digest, behaviour is exactly as before: hash the evaluate
+  // payload so the server can validate integrity on consume.
+  const execution_hash =
+    executionPayloadHash ??
+    (await computeBoundPayloadHash(buildEvaluateBody(evaluateRequest)));
 
   const verifyRequest: {
     permitId: string;
@@ -501,19 +489,24 @@ export async function protectWithEvidence(
       { code: "bad_request" },
     );
   }
-  // Reject a malformed caller digest here, before any network call: the
-  // runtime would DROP it silently and mint a permit bound to its own request
-  // hash instead, which the caller cannot distinguish from a real binding.
-  validateCallerPayloadHash(request);
+  // Same normalize-before-evaluate contract as protect(). This entry point
+  // previously ignored `executionPayloadHash` entirely: the camelCase field
+  // never matches client.evaluate's snake_case allowlist, so the digest was
+  // silently dropped and the permit was never bound to it — the exact
+  // silent-drop defect the normalizer exists to prevent, in the sibling of
+  // the function that got the fix.
+  const executionPayloadHash =
+    request.executionPayloadHash !== undefined
+      ? normalizeExecutionPayloadHash(request.executionPayloadHash)
+      : undefined;
+
   const client = getClient();
 
   // 1. Evaluate (same logic as protect()).
-  // One construction site, one input: `client.evaluate` builds its wire body
-  // with buildEvaluateBody from this exact object, so hashing
-  // buildEvaluateBody(evaluateRequest) below hashes the bytes that were
-  // posted. Same pure function, same input — not a reconstruction that can
-  // drift. See resolvePresentedPayloadHash.
-  const evaluateRequest = toEvaluateRequest(request);
+  const evaluateRequest =
+    executionPayloadHash !== undefined
+      ? { ...request, execution_payload_hash: executionPayloadHash }
+      : request;
   const evaluation = await client.evaluate(evaluateRequest);
 
   if (evaluation.decision !== "allow") {
@@ -534,13 +527,9 @@ export async function protectWithEvidence(
     );
   }
 
-  // Resolve the digest to present at the boundary. Which form is correct
-  // depends on which binding the permit carries — see
-  // resolvePresentedPayloadHash.
-  const execution_hash = await resolvePresentedPayloadHash(
-    request,
-    buildEvaluateBody(evaluateRequest),
-  );
+  const execution_hash =
+    executionPayloadHash ??
+    (await computeBoundPayloadHash(buildEvaluateBody(evaluateRequest)));
 
   const verifyRequest: {
     permitId: string;

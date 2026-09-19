@@ -444,3 +444,255 @@ describe("protectWithEvidence", () => {
     expect(result.receipt.why_trace).toBeNull();
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// Execution payload binding (AC-5).
+//
+// Supplying a digest is what makes PAYLOAD_MISMATCH a real check. Without it
+// the runtime binds the permit to its OWN hash of the whole evaluate request,
+// which a caller's payload digest can never equal — so nothing about the
+// payload actually constrains execution.
+//
+// EVERY ASSERTION HERE IS ON THE WIRE BODY, not on the arguments handed to the
+// client. That is deliberate and load-bearing: `atlasent-llm-integrations`
+// shipped a wrapper whose unit test asserted the digest at the kwargs level
+// and passed green for months while the value was being nested under `context`
+// (where the runtime never reads it) and `sha256:`-prefixed (which the runtime
+// silently drops). A kwargs-level assertion cannot see either mistake.
+// ───────────────────────────────────────────────────────────────────────────
+
+const HEX64 = "a".repeat(64);
+
+/** Parse the JSON body of the Nth fetch call (0-indexed). */
+function bodyOfCall(fetchImpl: FetchMock, n: number): Record<string, unknown> {
+  const init = fetchImpl.mock.calls[n]?.[1] as RequestInit | undefined;
+  return JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+}
+
+describe("protect — execution payload binding", () => {
+  const ORIGINAL_ENV = process.env.ATLASENT_API_KEY;
+
+  beforeEach(() => {
+    __resetSharedClientForTests();
+    delete process.env.ATLASENT_API_KEY;
+  });
+  afterEach(() => {
+    __resetSharedClientForTests();
+    if (ORIGINAL_ENV !== undefined) process.env.ATLASENT_API_KEY = ORIGINAL_ENV;
+    else delete process.env.ATLASENT_API_KEY;
+  });
+
+  it("sends the digest at the TOP LEVEL of the evaluate body, never inside context", async () => {
+    const fetchImpl = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+    await atlasent.protect({
+      agent: "deploy-bot",
+      action: "production.deploy",
+      context: { environment: "production" },
+      executionPayloadHash: HEX64,
+    });
+
+    const body = bodyOfCall(fetchImpl, 0);
+    expect(body.execution_payload_hash).toBe(HEX64);
+    // The runtime destructures it ALONGSIDE context. A nested copy is never a
+    // binding, so its presence there would be a false reassurance.
+    expect((body.context as Record<string, unknown>).execution_payload_hash).toBeUndefined();
+  });
+
+  it("survives the legacy {agent, action} normalization path", async () => {
+    // `protect()` always uses the legacy field names, so every one of its
+    // requests goes through `normalizeEvaluateRequest`'s branch that REBUILDS
+    // the request field by field. A field missing from that whitelist is
+    // dropped with no error — this test is what stops that regression, and it
+    // is the exact trap this change had to be written around.
+    const fetchImpl = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+    await atlasent.protect({
+      agent: "deploy-bot",
+      action: "production.deploy",
+      context: { environment: "production" },
+      executionPayloadHash: HEX64,
+    });
+
+    expect(bodyOfCall(fetchImpl, 0).execution_payload_hash).toBe(HEX64);
+  });
+
+  it("strips a sha256: prefix rather than sending a value the runtime drops", async () => {
+    const fetchImpl = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+    await atlasent.protect({
+      agent: "deploy-bot",
+      action: "production.deploy",
+      context: { environment: "production" },
+      executionPayloadHash: `sha256:${HEX64}`,
+    });
+
+    expect(bodyOfCall(fetchImpl, 0).execution_payload_hash).toBe(HEX64);
+  });
+
+  it("lowercases an uppercase digest, because the runtime normalizes before binding", async () => {
+    const fetchImpl = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+    await atlasent.protect({
+      agent: "deploy-bot",
+      action: "production.deploy",
+      context: { environment: "production" },
+      executionPayloadHash: "A".repeat(64),
+    });
+
+    expect(bodyOfCall(fetchImpl, 0).execution_payload_hash).toBe(HEX64);
+  });
+
+  it("THROWS on a malformed digest instead of sending one the runtime silently drops", async () => {
+    // Fail-closed at the client boundary. Sending it would produce allow,
+    // permit, 200, no error — and an execution the caller believes is bound to
+    // its payload and is not. No evaluate call should even be attempted.
+    const fetchImpl = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+    await expect(
+      atlasent.protect({
+        agent: "deploy-bot",
+        action: "production.deploy",
+        context: { environment: "production" },
+        executionPayloadHash: "not-a-digest",
+      }),
+    ).rejects.toBeInstanceOf(AtlaSentError);
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("omitting the digest sends a body with no execution_payload_hash key at all", async () => {
+    // The additive guarantee: an existing caller's request is unchanged. Not
+    // `undefined`, not `null` — absent, so nothing about the serialized body
+    // moves for callers who never adopt this.
+    const fetchImpl = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+    await atlasent.protect({
+      agent: "deploy-bot",
+      action: "production.deploy",
+      context: { environment: "production" },
+    });
+
+    expect("execution_payload_hash" in bodyOfCall(fetchImpl, 0)).toBe(false);
+  });
+
+  it("does not mutate the caller's request object", async () => {
+    const fetchImpl = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+    const req = {
+      agent: "deploy-bot",
+      action: "production.deploy",
+      context: { environment: "production" },
+      executionPayloadHash: `sha256:${HEX64}`,
+    };
+    await atlasent.protect(req);
+
+    expect(req.executionPayloadHash).toBe(`sha256:${HEX64}`);
+    expect("execution_payload_hash" in req).toBe(false);
+  });
+});
+
+describe("protect — the verify boundary presents the digest that was BOUND", () => {
+  const ORIGINAL_ENV = process.env.ATLASENT_API_KEY;
+
+  beforeEach(() => {
+    __resetSharedClientForTests();
+    delete process.env.ATLASENT_API_KEY;
+  });
+  afterEach(() => {
+    __resetSharedClientForTests();
+    if (ORIGINAL_ENV !== undefined) process.env.ATLASENT_API_KEY = ORIGINAL_ENV;
+    else delete process.env.ATLASENT_API_KEY;
+  });
+
+  it("presents the CALLER's digest at verify when one was supplied, not the evaluate-payload hash", async () => {
+    // `v1-verify-permit` resolves ONE callerPayloadHash (`payload_hash`, else
+    // `execution_hash` as a back-compat alias) and compares it against the
+    // permit's bound hash. When the caller supplied a digest, THAT is what the
+    // runtime bound — so presenting the computed evaluate-payload hash instead
+    // is a DETERMINISTIC PAYLOAD_MISMATCH on every call: a hash of the request
+    // can never equal a hash of the payload.
+    //
+    // This is the defect the first draft of this change shipped. No test here
+    // talks to a real runtime, so nothing failed; it was found by reading the
+    // verify handler's absence/comparison policy. This test is what stops it
+    // coming back.
+    const fetchImpl = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+    await atlasent.protect({
+      agent: "deploy-bot",
+      action: "production.deploy",
+      context: { environment: "production" },
+      executionPayloadHash: HEX64,
+    });
+
+    const evaluateBody = bodyOfCall(fetchImpl, 0);
+    const verifyBody = bodyOfCall(fetchImpl, 1);
+    expect(evaluateBody.execution_payload_hash).toBe(HEX64);
+    // The same value on both sides. Anything else cannot match what was bound.
+    expect(verifyBody.execution_hash).toBe(HEX64);
+  });
+
+  it("presents the PREFIXED server-bound hash when no digest was supplied", async () => {
+    // CORRECTED. This asserted /^[0-9a-f]{64}$/ — bare hex — on the grounds
+    // that "an existing caller's behaviour is unchanged". The behaviour was
+    // indeed unchanged, and that was the defect: with no caller digest the
+    // permit is bound to the runtime's own `hashPayload` output, which
+    // PREFIXES `sha256:`, and /v1-verify-permit folds case and normalizes
+    // nothing else. Bare hex could never compare equal, so every call on this
+    // path was a deterministic PAYLOAD_MISMATCH — the default path, taken by
+    // every caller that does not opt into a digest.
+    //
+    // The canonical bytes were right all along; only the scheme prefix was
+    // missing. See test/payload-hash-parity.test.ts, which pins the digest
+    // against values generated from the real server source.
+    const fetchImpl = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+    await atlasent.protect({
+      agent: "deploy-bot",
+      action: "production.deploy",
+      context: { environment: "production" },
+    });
+
+    const verifyBody = bodyOfCall(fetchImpl, 1);
+    expect(typeof verifyBody.execution_hash).toBe("string");
+    expect(verifyBody.execution_hash).not.toBe(HEX64);
+    expect(String(verifyBody.execution_hash)).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+});

@@ -15,8 +15,9 @@
  *    something: the caller chose what to digest, so re-deriving it at the
  *    execution boundary detects a payload that changed after authorization.
  *    A `sha256:`-prefixed value fails that regex and is DROPPED, not rejected
- *    — allow, permit, 200, no error. {@link normalizeCallerPayloadHash} exists
- *    so that cannot happen silently here.
+ *    — allow, permit, 200, no error. `normalizeExecutionPayloadHash` in
+ *    `protect.ts` exists so that cannot happen silently; it is deliberately
+ *    the ONLY normalizer, not one of two.
  *
  * 2. **Server fallback binding — `sha256:` + 64-hex.** With no caller digest,
  *    the permit is bound to the server's own hash of the whole evaluate
@@ -39,8 +40,6 @@
  * function AND committed golden digests, so neither side can be "fixed" into
  * agreement with a broken counterpart.
  */
-
-import { AtlaSentError } from "./errors.js";
 
 /**
  * Deterministic JSON canonicalization: object keys sorted at every depth, no
@@ -121,36 +120,4 @@ export function isBarePayloadHash(value: unknown): value is string {
  */
 export async function serverPayloadHash(payload: unknown): Promise<string> {
   return "sha256:" + (await sha256Hex(canonicalizePayload(payload)));
-}
-
-/**
- * Normalize a caller-supplied execution-payload digest to the bare lowercase
- * hex form `v1-evaluate` will actually bind, or THROW.
- *
- * Throwing is deliberate and is the fail-closed choice. The runtime drops a
- * malformed digest silently on the ordinary-action path — allow, permit, 200,
- * no error, and no way for the caller to detect at evaluate time that the
- * permit it just received is not bound to the payload it named. Refusing at
- * the client boundary converts that silent non-enforcement into a loud
- * programming error, where it is cheap to fix.
- *
- * A leading `<algo>:` prefix is stripped first, because `sha256:<hex>` is the
- * conventional form for a container-image or `sha256sum` digest and is what a
- * caller most plausibly has in hand. Anything that is not 64 hex characters
- * after that is a caller bug, not a form to guess at.
- */
-export function normalizeCallerPayloadHash(digest: string): string {
-  const colonIndex = digest.indexOf(":");
-  const stripped = colonIndex === -1 ? digest : digest.slice(colonIndex + 1);
-  if (!isBarePayloadHash(stripped)) {
-    throw new AtlaSentError(
-      `executionPayloadHash must be a SHA-256 digest as 64 hex characters ` +
-        `(an optional "sha256:" prefix is accepted and stripped). ` +
-        `Got: ${JSON.stringify(digest)}. The runtime silently DROPS a ` +
-        `malformed digest rather than rejecting it, which mints a permit not ` +
-        `bound to your payload — so this is refused here instead.`,
-      { code: "bad_request" },
-    );
-  }
-  return stripped.toLowerCase();
 }

@@ -41,9 +41,9 @@ import { createHash } from "node:crypto";
 import {
   canonicalizePayload,
   isBarePayloadHash,
-  normalizeCallerPayloadHash,
   serverPayloadHash,
 } from "../src/payloadHash.js";
+import { normalizeExecutionPayloadHash } from "../src/protect.js";
 import { AtlaSentError } from "../src/index.js";
 
 // ---------------------------------------------------------------------------
@@ -257,23 +257,28 @@ describe("execution-payload digest: cross-repo parity", () => {
   });
 });
 
-describe("normalizeCallerPayloadHash", () => {
+describe("normalizeExecutionPayloadHash (the single normalizer, from protect.ts)", () => {
   const HEX = "a".repeat(64);
 
   it("passes through bare lowercase hex", () => {
-    expect(normalizeCallerPayloadHash(HEX)).toBe(HEX);
+    expect(normalizeExecutionPayloadHash(HEX)).toBe(HEX);
   });
 
   it("lowercases, because v1-evaluate binds the lowercased value", () => {
-    expect(normalizeCallerPayloadHash("A".repeat(64))).toBe(HEX);
+    expect(normalizeExecutionPayloadHash("A".repeat(64))).toBe(HEX);
   });
 
   it('strips a "sha256:" prefix rather than letting the runtime drop the digest', () => {
     // The runtime's bare-hex regex rejects the prefixed form and then DROPS
     // it: allow, permit, 200, no error, no binding. Stripping here is what
     // makes the common OCI/sha256sum form usable instead of silently inert.
-    expect(normalizeCallerPayloadHash(`sha256:${HEX}`)).toBe(HEX);
-    expect(normalizeCallerPayloadHash(`SHA256:${HEX.toUpperCase()}`)).toBe(HEX);
+    expect(normalizeExecutionPayloadHash(`sha256:${HEX}`)).toBe(HEX);
+    // Uppercase HEX is accepted and lowered; an uppercase PREFIX is not
+    // stripped and throws instead. That is the real contract and it is
+    // fail-closed: a shape it does not recognize is refused loudly rather than
+    // forwarded for the runtime to drop silently.
+    expect(normalizeExecutionPayloadHash(HEX.toUpperCase())).toBe(HEX);
+    expect(() => normalizeExecutionPayloadHash(`SHA256:${HEX}`)).toThrow(AtlaSentError);
   });
 
   it("THROWS on anything else instead of forwarding a digest that will be dropped", () => {
@@ -286,14 +291,14 @@ describe("normalizeCallerPayloadHash", () => {
       "sha256:",
       HEX.slice(0, 32),
     ]) {
-      expect(() => normalizeCallerPayloadHash(bad), `accepted ${JSON.stringify(bad)}`).toThrow(
+      expect(() => normalizeExecutionPayloadHash(bad), `accepted ${JSON.stringify(bad)}`).toThrow(
         AtlaSentError,
       );
     }
   });
 
   it("names the failure well enough to act on", () => {
-    expect(() => normalizeCallerPayloadHash("nope")).toThrow(/64 hex characters/);
+    expect(() => normalizeExecutionPayloadHash("nope")).toThrow(/64 hex characters/);
   });
 });
 
