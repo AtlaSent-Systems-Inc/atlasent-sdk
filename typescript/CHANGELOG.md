@@ -8,6 +8,58 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Fixed
+
+- **`protect()` / `withPermit()` / `protectWithEvidence()` presented an
+  execution-payload digest the runtime could never match, so every call was a
+  deterministic `PAYLOAD_MISMATCH` deny at the verify boundary.** The digest
+  was emitted as bare hex; the value it is compared against —
+  `execution_evaluations.payload_hash`, or the permit's signed
+  `execution_hash_expected` — is written by the runtime's `hashPayload`, which
+  prefixes `sha256:`. `/v1-verify-permit` folds case and normalizes nothing
+  else, so the two could not compare equal. The canonical BYTES were always
+  correct: verified byte-identical to the server's canonicalization across
+  unicode, escape-sequence, `undefined`, numeric and key-ordering vectors. The
+  scheme prefix alone denied the permit. Affects every caller of these three
+  entry points, including `ProtectToolWrapper` and `ProtectFunctionDispatch`
+  in `atlasent-llm-integrations`.
+
+  Nothing caught it because the two implementations were only ever tested
+  against themselves — the SDK suite mocks `fetch`, so the server's digest
+  appeared in no assertion. Now pinned from both sides by
+  `test/payload-hash-parity.test.ts` (a vendored reference copy of the server
+  function AND committed golden digests generated from the real server source,
+  so neither can be edited into agreement with a broken counterpart) and
+  `test/protect-execution-binding.test.ts` (asserts the posted request bodies,
+  not the arguments handed to a client method — an argument-level assertion
+  cannot see which field a value lands in, or whether it reaches the wire).
+
+### Added
+
+- **`ProtectRequest.executionPayloadHash`** — a digest of the payload that will
+  actually execute, sent as a top-level `execution_payload_hash` on the
+  evaluate request and re-presented at verify. This is the binding that
+  constrains execution: a payload altered between authorization and execution
+  then fails closed with `PAYLOAD_MISMATCH`. Omitted, the permit is still bound
+  — but only to the server's own hash of the evaluate request, which
+  `protect()` recomputes from the same in-memory object microseconds later, so
+  that comparison is self-referential and cannot detect a substituted payload.
+  Callers whose arguments are attacker-influenceable (an AI agent's tool
+  arguments) should supply it.
+
+  A malformed value throws rather than being forwarded. The runtime drops one
+  silently — allow, permit, 200, no error — which mints a permit that looks
+  bound and is not; a `sha256:` prefix is accepted and stripped, since that is
+  the conventional container-image / `sha256sum` form.
+
+- **`serverPayloadHash`, `canonicalizePayload`, `normalizeCallerPayloadHash`,
+  `isBarePayloadHash`** exported from `@atlasent/sdk` for callers that need to
+  compute or validate either digest form themselves.
+
+- `execution_payload_hash` on `V2EvaluateRequest`, forwarded by
+  `AtlaSentClient.evaluate` and declared in
+  `contract/schemas/evaluate-request.schema.json`.
+
 ### Changed
 
 - **Re-vendored the embedded trust-root snapshot from `atlasent-keys` main

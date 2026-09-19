@@ -48,6 +48,21 @@ export interface V2EvaluateRequest {
   /** Execution surface binding (CI/CD adapter, DB driver, etc.). */
   execution_binding?: { kind: string; adapter_version?: string; resource_id?: string; enforcement_point?: string };
   /**
+   * SHA-256 digest of the payload that will actually execute, as BARE
+   * lowercase 64-hex. `v1-evaluate` signs a value matching `/^[0-9a-f]{64}$/i`
+   * into the permit as `execution_hash_expected`; re-present it at verify and
+   * a payload altered after authorization fails closed with
+   * `PAYLOAD_MISMATCH`.
+   *
+   * Two shapes silently DROP the binding rather than rejecting it — allow,
+   * permit, 200, no error: a `sha256:` prefix (fails the bare-hex regex), and
+   * the field nested under `context` (the handler reads it from the top level
+   * of the body, alongside `context`, not within it). Prefer
+   * `ProtectRequest.executionPayloadHash`, which normalizes the first and
+   * cannot express the second.
+   */
+  execution_payload_hash?: string;
+  /**
    * State snapshot of the system at evaluation time. Required when the action
    * class has `requires_state_snapshot = true`. Omitting causes a
    * `SNAPSHOT_REQUIRED` deny on affected action classes.
@@ -147,6 +162,7 @@ export function normalizeEvaluateRequest(
   if (src.current_state !== undefined) normalized.current_state = src.current_state;
   if (src.proposed_state !== undefined) normalized.proposed_state = src.proposed_state;
   if (src.execution_binding !== undefined) normalized.execution_binding = src.execution_binding;
+  if (src.execution_payload_hash !== undefined) normalized.execution_payload_hash = src.execution_payload_hash;
   if (src.state_snapshot !== undefined) normalized.state_snapshot = src.state_snapshot;
   if (src.evaluation_profile !== undefined) normalized.evaluation_profile = src.evaluation_profile;
   if (src.override !== undefined) normalized.override = src.override;

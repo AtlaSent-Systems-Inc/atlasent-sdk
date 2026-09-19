@@ -27,7 +27,7 @@
  * record (deploy logs, payment records, close workflows).
  */
 
-import { AtlaSentClient } from "./client.js";
+import { AtlaSentClient, buildEvaluateBody } from "./client.js";
 import type { DeployGateRequest, DeployGateResponse } from "./types.js";
 import {
   AtlaSentDeniedError,
@@ -38,6 +38,7 @@ import {
 } from "./errors.js";
 import { getGlobalTrustRootManager } from "./trustRoot.js";
 import type { AtlaSentClientOptions, ConstraintTrace } from "./types.js";
+import type { LegacyEvaluateRequest, V2EvaluateRequest } from "./compat.js";
 import {
   buildDecisionReceiptPayload,
   buildWhyTrace,
@@ -48,12 +49,39 @@ import type {
   DecisionReceipt,
   DecisionReceiptAlgorithm,
 } from "./evidenceEngine.js";
+import {
+  normalizeCallerPayloadHash,
+  serverPayloadHash,
+} from "./payloadHash.js";
 
 /** Input to {@link protect}. Same shape as `EvaluateRequest`. */
 export interface ProtectRequest {
   agent: string;
   action: string;
   context?: Record<string, unknown>;
+  /**
+   * SHA-256 digest of the payload this call will actually execute — the tool
+   * arguments, the request body, the artifact bytes. Bare 64-char hex; a
+   * `sha256:` prefix is accepted and stripped.
+   *
+   * Supplying it is what makes the permit constrain execution. It is sent as
+   * a top-level `execution_payload_hash` on the evaluate request, which
+   * `v1-evaluate` signs into the permit as `execution_hash_expected`, and is
+   * re-presented at the verify boundary. A payload that changed between
+   * authorization and execution then fails closed with `PAYLOAD_MISMATCH`
+   * instead of running.
+   *
+   * Omit it and the permit is still bound — but only to the server's own hash
+   * of this evaluate request, which `protect()` recomputes from the same
+   * in-memory object microseconds later. That comparison is self-referential:
+   * it cannot detect a substituted payload, because nothing re-derives the
+   * digest from the thing about to execute. For an AI agent whose tool
+   * arguments are attacker-influenceable, supply this.
+   *
+   * A malformed value THROWS rather than being forwarded — the runtime drops
+   * one silently, which mints a permit that looks bound and is not.
+   */
+  executionPayloadHash?: string;
 }
 
 /**
@@ -165,67 +193,121 @@ function wireDecisionToDenied(serverDecision: string): AtlaSentDecision {
 // ── Execution-hash helpers ────────────────────────────────────────────────────
 
 /**
- * Sort all object keys recursively so the JSON serialization is
- * deterministic (RFC-8785-style canonical form). Arrays are preserved
- * in insertion order; only object keys are sorted.
+ * Resolve the digest to present at the verify boundary, in the form
+ * `v1-verify-permit` will actually compare it against.
+ *
+ * There are two bindings and the presented form must follow whichever one is
+ * in force — the comparison folds case and normalizes nothing else, so the
+ * right digest in the wrong form is a deterministic `PAYLOAD_MISMATCH`:
+ *
+ *   - Caller supplied `executionPayloadHash` -> `v1-evaluate` signed that bare
+ *     lowercase hex into the permit as `execution_hash_expected`. Present it
+ *     unchanged.
+ *   - Caller supplied nothing -> the permit is bound to the server's own
+ *     `sha256:`-prefixed hash of the whole evaluate request body. Reproduce it,
+ *     prefix included.
+ *
+ * Presenting the un-prefixed mirror is not a hypothetical: it is what this
+ * function replaced, and it denied every `protect()` /
+ * `protectWithEvidence()` call against a runtime that populates the binding.
+ * `test/protect-execution-binding.test.ts` pins the posted body for both
+ * branches; `test/payload-hash-parity.test.ts` pins the digest itself against
+ * the server's own canonicalization.
+ *
+ * `postedBody` must be the body that was ACTUALLY sent, from
+ * {@link buildEvaluateBody} — never a second, hand-written reconstruction of
+ * it. A field that reaches the wire without reaching the hash yields a digest
+ * the server cannot match, and that is not hypothetical either: the Python
+ * SDK's hand-written mirror omitted `state_snapshot`, so every
+ * `protect(state_snapshot=...)` call was a guaranteed mismatch on its own.
  */
-function sortKeysDeep(val: unknown): unknown {
-  if (Array.isArray(val)) return val.map(sortKeysDeep);
-  if (val !== null && typeof val === "object") {
-    return Object.keys(val as object)
-      .sort()
-      .reduce<Record<string, unknown>>((acc, k) => {
-        acc[k] = sortKeysDeep((val as Record<string, unknown>)[k]);
-        return acc;
-      }, {});
+async function resolvePresentedPayloadHash(
+  request: ProtectRequest,
+  postedBody: Record<string, unknown>,
+): Promise<string | undefined> {
+  if (request.executionPayloadHash !== undefined) {
+    // Already normalized (and validated) by the caller path below, but
+    // normalizing again is free and keeps this function correct on its own.
+    return normalizeCallerPayloadHash(request.executionPayloadHash);
   }
-  return val;
+
+  // The server hashes the request body minus these three fields.
+  const {
+    traceparent: _traceparent,
+    shadow: _shadow,
+    explain: _explain,
+    ...core
+  } = postedBody;
+
+  try {
+    return await serverPayloadHash(core);
+  } catch {
+    // Neither crypto.subtle nor node:crypto is available (a very old Node, a
+    // restricted runtime). Omit the field rather than throw, preserving the
+    // long-standing behavior here: the server then requires it on a
+    // production permit and denies with PAYLOAD_HASH_REQUIRED, which is
+    // fail-closed. Warn, because a silently absent binding is the thing this
+    // whole module exists to prevent.
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[atlasent] Could not compute the execution payload hash: neither " +
+        "crypto.subtle nor node:crypto is available in this runtime. The " +
+        "permit will not be verified against a payload binding, and a " +
+        "production permit will be DENIED at verify.",
+    );
+    return undefined;
+  }
 }
 
 /**
- * Compute a SHA-256 hex digest of the recursively key-sorted canonical
- * JSON of `payload`. Used as `execution_hash` on the permit-consume
- * (verify) request so the server can validate the evaluate payload
- * was not tampered with between evaluate and consume.
+ * Map a {@link ProtectRequest} onto the evaluate request the client posts.
  *
- * Falls back to `node:crypto` when `crypto.subtle` is unavailable
- * (Node < 20 without the Web Crypto global).
+ * Exists because the two shapes differ in more than case: `ProtectRequest`
+ * spells the digest `executionPayloadHash`, the wire field is a TOP-LEVEL
+ * `execution_payload_hash`, and the value must be bare lowercase hex before it
+ * leaves here. Passing the `ProtectRequest` straight through — which this
+ * module did — type-checks, drops the digest, and mints an unbound permit.
+ *
+ * Every OTHER property is forwarded untouched, by spread rather than by an
+ * allowlist. That is deliberate and is behavior-preserving: `protect()`
+ * previously handed its request object directly to `client.evaluate`, so any
+ * evaluate field a caller set (`state_snapshot`, `resource`, `environment`, …)
+ * reached the wire even though `ProtectRequest` does not declare it. An
+ * allowlist here would silently stop forwarding those — the same class of
+ * silent drop this whole change exists to remove. Caught by a precondition
+ * assertion in `test/protect-execution-binding.test.ts` after a first version
+ * of this function did exactly that.
  */
-async function computeExecutionHash(payload: unknown): Promise<string> {
-  const sorted = sortKeysDeep(payload);
-  const canonical = JSON.stringify(sorted);
+function toEvaluateRequest(
+  request: ProtectRequest,
+): LegacyEvaluateRequest & Pick<V2EvaluateRequest, "execution_payload_hash"> {
+  const { agent, action, executionPayloadHash, ...rest } = request as ProtectRequest &
+    Record<string, unknown>;
 
-  // Prefer the Web Crypto API (available in browsers, Node 20+,
-  // Cloudflare Workers, Deno, etc.).
-  if (
-    typeof globalThis !== "undefined" &&
-    globalThis.crypto?.subtle?.digest
-  ) {
-    const bytes = new TextEncoder().encode(canonical);
-    const buf = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-    return Array.from(new Uint8Array(buf))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
+  const evaluateRequest = {
+    ...rest,
+    action,
+    agent,
+  } as LegacyEvaluateRequest & Pick<V2EvaluateRequest, "execution_payload_hash">;
+
+  if (executionPayloadHash !== undefined) {
+    evaluateRequest.execution_payload_hash =
+      normalizeCallerPayloadHash(executionPayloadHash);
   }
+  return evaluateRequest;
+}
 
-  // Fallback: node:crypto (Node < 20 or environments without crypto.subtle).
-  try {
-    // Dynamic import so bundlers that target browsers don't pull in
-    // node internals. The `node:` prefix avoids any user-land shim.
-    const { createHash } =
-      await import(/* @vite-ignore */ /* webpackIgnore: true */ "node:crypto");
-    return createHash("sha256").update(canonical, "utf8").digest("hex");
-  } catch {
-    // Last-resort: if neither crypto.subtle nor node:crypto is available
-    // (very old Node, restricted runtime), return an empty string so the
-    // verify call still proceeds — the server will reject if execution_hash
-    // is required for production permits.
-    // eslint-disable-next-line no-console
-    console.warn(
-      "[atlasent] Could not compute execution_hash: neither crypto.subtle " +
-        "nor node:crypto is available in this runtime.",
-    );
-    return "";
+/**
+ * Validate a caller-supplied digest up front, before any network call.
+ *
+ * Separate from {@link resolvePresentedPayloadHash} so the throw happens at
+ * the top of the flow: forwarding a malformed digest would have the runtime
+ * drop it silently and mint a permit bound to its own request hash instead —
+ * indistinguishable, to the caller, from a real binding.
+ */
+function validateCallerPayloadHash(request: ProtectRequest): void {
+  if (request.executionPayloadHash !== undefined) {
+    normalizeCallerPayloadHash(request.executionPayloadHash);
   }
 }
 
@@ -256,6 +338,10 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
       { code: "bad_request" },
     );
   }
+  // Reject a malformed caller digest here, before any network call: the
+  // runtime would DROP it silently and mint a permit bound to its own request
+  // hash instead, which the caller cannot distinguish from a real binding.
+  validateCallerPayloadHash(request);
   // ADR-005 D3: fail-closed on expired trust snapshot. checkExpiry() also
   // emits the one-time half-life warning if >50% of validity window has elapsed.
   const trustMgr = getGlobalTrustRootManager({ disableRefresh: false });
@@ -268,7 +354,13 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
     });
   }
   const client = getClient();
-  const evaluation = await client.evaluate(request);
+  // One construction site, one input: `client.evaluate` builds its wire body
+  // with buildEvaluateBody from this exact object, so hashing
+  // buildEvaluateBody(evaluateRequest) below hashes the bytes that were
+  // posted. Same pure function, same input — not a reconstruction that can
+  // drift. See resolvePresentedPayloadHash.
+  const evaluateRequest = toEvaluateRequest(request);
+  const evaluation = await client.evaluate(evaluateRequest);
 
   // decision is now canonical lowercase: "allow" | "deny" | "hold" | "escalate"
   if (evaluation.decision !== "allow") {
@@ -288,14 +380,13 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
     );
   }
 
-  // Compute execution_hash over the original evaluate payload so
-  // the server can validate integrity on permit consume.
-  const evaluatePayload = {
-    action_type: request.action,
-    actor_id: request.agent,
-    context: request.context ?? {},
-  };
-  const execution_hash = await computeExecutionHash(evaluatePayload);
+  // Resolve the digest to present at the boundary. Which form is correct
+  // depends on which binding the permit carries — see
+  // resolvePresentedPayloadHash.
+  const execution_hash = await resolvePresentedPayloadHash(
+    request,
+    buildEvaluateBody(evaluateRequest),
+  );
 
   const verifyRequest: {
     permitId: string;
@@ -410,10 +501,20 @@ export async function protectWithEvidence(
       { code: "bad_request" },
     );
   }
+  // Reject a malformed caller digest here, before any network call: the
+  // runtime would DROP it silently and mint a permit bound to its own request
+  // hash instead, which the caller cannot distinguish from a real binding.
+  validateCallerPayloadHash(request);
   const client = getClient();
 
   // 1. Evaluate (same logic as protect()).
-  const evaluation = await client.evaluate(request);
+  // One construction site, one input: `client.evaluate` builds its wire body
+  // with buildEvaluateBody from this exact object, so hashing
+  // buildEvaluateBody(evaluateRequest) below hashes the bytes that were
+  // posted. Same pure function, same input — not a reconstruction that can
+  // drift. See resolvePresentedPayloadHash.
+  const evaluateRequest = toEvaluateRequest(request);
+  const evaluation = await client.evaluate(evaluateRequest);
 
   if (evaluation.decision !== "allow") {
     throw new AtlaSentDeniedError({
@@ -433,12 +534,13 @@ export async function protectWithEvidence(
     );
   }
 
-  const evaluatePayload = {
-    action_type: request.action,
-    actor_id: request.agent,
-    context: request.context ?? {},
-  };
-  const execution_hash = await computeExecutionHash(evaluatePayload);
+  // Resolve the digest to present at the boundary. Which form is correct
+  // depends on which binding the permit carries — see
+  // resolvePresentedPayloadHash.
+  const execution_hash = await resolvePresentedPayloadHash(
+    request,
+    buildEvaluateBody(evaluateRequest),
+  );
 
   const verifyRequest: {
     permitId: string;

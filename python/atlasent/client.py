@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
@@ -83,6 +82,7 @@ from .models import (
     VerifyRequest,
     VerifyResult,
 )
+from .payload_hash import server_payload_hash
 from .sso_client import SsoClient
 
 if TYPE_CHECKING:
@@ -102,26 +102,43 @@ _RETRY_MAX_DELAY = 16.0
 
 
 def _compute_execution_hash(payload: dict) -> str:
-    """SHA-256 of RFC-8785-style canonical JSON (keys sorted recursively).
+    """The server's fallback payload binding for ``payload``.
 
-    Used as ``execution_hash`` on the permit-consume (verify) request so
-    the server can validate the evaluate payload was not tampered with
-    between evaluate and consume.
+    Thin alias for :func:`atlasent.payload_hash.server_payload_hash`, kept
+    because this private name is imported by ``async_client`` and covered by
+    existing tests.
 
-    P1-5: Required by the API for production permits as of 2026-05-14.
+    CORRECTED: this used to return BARE hex. The value it is compared against
+    — ``execution_evaluations.payload_hash`` / the permit's
+    ``execution_hash_expected`` — is written by the server's ``hashPayload``,
+    which PREFIXES ``sha256:``. ``/v1-verify-permit`` folds case and normalizes
+    nothing else, so bare hex could never compare equal: a deterministic
+    ``PAYLOAD_MISMATCH`` on every ``protect()`` / ``with_permit()`` call.
+
+    The canonical BYTES were always right — see
+    ``tests/test_payload_hash_parity.py``, which pins all eight applicable
+    vectors against digests generated from the real server source. Only the
+    scheme prefix was missing.
     """
-
-    def _sort_deep(obj):
-        if isinstance(obj, dict):
-            return {k: _sort_deep(v) for k, v in sorted(obj.items())}
-        if isinstance(obj, list):
-            return [_sort_deep(i) for i in obj]
-        return obj
-
-    canonical = json.dumps(
-        _sort_deep(payload), separators=(",", ":"), ensure_ascii=False
+    # v1-evaluate removes these three from the body before hashing it. The
+    # strip belongs HERE and not inside server_payload_hash, which is a
+    # faithful port of the server's hashPayload — hashPayload does not strip;
+    # its caller does. None of the three is reachable from protect() today
+    # (tests/test_protect_payload_binding.py compares against a reference that
+    # strips them, so a newly-emitted `explain: false` fails there rather than
+    # silently), but the server contract is the contract. Mutation testing
+    # found this exact gap on the TypeScript side, where `explain` IS
+    # reachable.
+    core = (
+        {
+            k: v
+            for k, v in payload.items()
+            if k not in ("traceparent", "shadow", "explain")
+        }
+        if isinstance(payload, dict)
+        else payload
     )
-    return hashlib.sha256(canonical.encode()).hexdigest()
+    return server_payload_hash(core)
 
 
 # API-key prefix contract per atlasent-api/supabase/functions/_shared/auth.ts:
@@ -564,11 +581,25 @@ class AtlaSentClient:
                 code="bad_request",
             )
 
-        _eval_payload: dict[str, Any] = {
-            "action_type": action,
-            "actor_id": agent,
-            "context": ctx,
-        }
+        # Hash the body that was ACTUALLY POSTED, not a hand-written mirror of
+        # it. The server hashes the whole evaluate body (minus traceparent /
+        # shadow / explain), so any field that reaches the wire without
+        # appearing here yields a digest that cannot match — which is exactly
+        # what happened: the old three-key literal omitted `state_snapshot`,
+        # so every protect(state_snapshot=...) call was a guaranteed
+        # PAYLOAD_MISMATCH independently of the scheme-prefix defect.
+        #
+        # Reconstructed through the same EvaluateRequest model and the same
+        # model_dump options evaluate() uses, so a field added to that model is
+        # picked up automatically instead of silently dropped here.
+        # `tests/test_protect_payload_binding.py` asserts this equals the body
+        # the transport actually saw.
+        _eval_payload: dict[str, Any] = EvaluateRequest(
+            action_type=action,
+            actor_id=agent,
+            context=ctx,
+            state_snapshot=state_snapshot,
+        ).model_dump(by_alias=True, exclude_none=True)
         _execution_hash = _compute_execution_hash(_eval_payload)
 
         # verify_unavailable: if the verify step returns 5xx, surface a typed

@@ -120,6 +120,11 @@
         "enforcement_point": { "type": "string" }
       }
     },
+    "execution_payload_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 digest of the payload that will actually execute, as BARE lowercase 64-char hex. A value matching this pattern is signed into the permit as `execution_hash_expected`; re-present it at /v1-verify-permit and a payload altered after authorization fails closed with PAYLOAD_MISMATCH. TOP-LEVEL ONLY — the handler destructures this alongside `context`, not within it, so a copy placed inside `context` is not a binding. A non-matching value (notably the `sha256:`-prefixed form) is DROPPED rather than rejected on the ordinary-action path — allow, permit, 200, no error — so a client sending the wrong form cannot detect at evaluate time that its permit is unbound. Mandatory-change-control action types, and classes declaring `material_execution_fields`, deny instead and derive the binding server-side."
+    },
     "desired_state": {
       "type": "object",
       "description": "The desired end-state the actor wants the resource to reach.",

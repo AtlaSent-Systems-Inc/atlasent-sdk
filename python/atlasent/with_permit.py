@@ -41,38 +41,27 @@ before reaching ``fn``.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Callable
 from typing import Any, TypeVar
 
 from .authorize import protect
 from .models import Permit
+from .payload_hash import server_payload_hash
 
 T = TypeVar("T")
 
 
 def _compute_execution_hash(payload: dict) -> str:
-    """SHA-256 of RFC-8785-style canonical JSON (keys sorted recursively).
+    """The server's fallback payload binding for ``payload``.
 
-    Used as ``execution_hash`` on the permit-consume (verify) request so
-    the server can validate the evaluate payload was not tampered with
-    between evaluate and consume.
-
-    P1-5: Required by the API for production permits as of 2026-05-14.
+    Was a third hand-written copy of this canonicalization, returning BARE hex
+    — the same defect as ``client._compute_execution_hash``, and the reason
+    every ``with_permit()`` call was a deterministic ``PAYLOAD_MISMATCH`` at
+    verify. Now delegates, so there is one implementation to keep in lock-step
+    with the server rather than three that can drift apart. See
+    :mod:`atlasent.payload_hash`.
     """
-
-    def sort_deep(obj: Any) -> Any:
-        if isinstance(obj, dict):
-            return {k: sort_deep(v) for k, v in sorted(obj.items())}
-        if isinstance(obj, list):
-            return [sort_deep(i) for i in obj]
-        return obj
-
-    canonical = json.dumps(
-        sort_deep(payload), separators=(",", ":"), ensure_ascii=False
-    )
-    return hashlib.sha256(canonical.encode()).hexdigest()
+    return server_payload_hash(payload)
 
 
 def with_permit(
