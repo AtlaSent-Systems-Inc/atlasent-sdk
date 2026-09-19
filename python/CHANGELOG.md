@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Added
+
+- **`execution_payload_hash` on every protect surface** — `AtlaSentClient.protect`,
+  `AsyncAtlaSentClient.protect`, the module-level `protect()`, and
+  `with_permit()`. Sent TOP LEVEL on the evaluate request, where the runtime
+  signs it into the permit as `execution_hash_expected`, and re-presented at the
+  verify boundary in place of the server mirror — with a caller digest bound,
+  `execution_hash_expected` IS that bare hex, so presenting the prefixed
+  whole-body mirror would be the mismatch instead.
+
+  This is the binding that constrains execution. Without it the permit is bound
+  only to the server's own hash of the evaluate request, which `protect()`
+  recomputes from the same in-memory object moments later — a self-referential
+  comparison that cannot detect a substituted payload. Callers whose arguments
+  are attacker-influenceable (an AI agent's tool arguments) should supply it.
+
+  Two shapes are silently non-binding rather than rejected by the runtime: a
+  `sha256:` prefix fails its bare-hex gate, and a copy nested under `context` is
+  read from nowhere — both yield allow, permit, 200, no error. The client
+  normalizes the first before the evaluate call and raises on anything else; the
+  nested shape is unreachable through this parameter.
+
+  Additive: omitting it posts a body unchanged from before, pinned by a test,
+  since the server's fallback hash is computed over that body.
+
+
 ### Fixed
 
 - **`protect()` and `with_permit()` presented an execution-payload digest the
