@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+### Fixed
+
+- **`protect()` and `with_permit()` presented an execution-payload digest the
+  runtime could never match, so every call was a deterministic
+  `PAYLOAD_MISMATCH` deny at the verify boundary.** Two independent defects,
+  either sufficient on its own:
+
+  1. The digest was emitted as bare hex, while the value it is compared against
+     is written by the runtime's `hashPayload`, which prefixes `sha256:`.
+     `/v1-verify-permit` folds case and normalizes nothing else. The canonical
+     bytes were always correct — verified byte-identical to the server's
+     canonicalization across unicode, escape, numeric and key-ordering vectors
+     — so the scheme prefix alone denied the permit.
+  2. The hashed payload was a hand-written three-key literal
+     (`action_type` / `actor_id` / `context`) while the POSTED body also
+     carried `state_snapshot` whenever the caller passed one. The server hashes
+     the whole body, so `protect(state_snapshot=...)` could never match even
+     with the prefix corrected. The digest is now taken from the body actually
+     posted, reconstructed through the same `EvaluateRequest` model and
+     `model_dump` options `evaluate()` uses, so a field added to that model is
+     picked up instead of silently dropped.
+
+  The three duplicate copies of this canonicalization (`client`,
+  `async_client` via import, `with_permit`) are collapsed into one
+  implementation in the new `atlasent.payload_hash` module.
+
+  The two tests that existed over the old helper asserted only that it was
+  deterministic for reordered payloads and that it changed when the payload
+  changed — both true of the broken version. Now pinned by
+  `tests/test_payload_hash_parity.py` (a vendored reference copy of the server
+  function plus committed goldens generated from the real server source, shared
+  verbatim with the TypeScript suite, making this a three-implementation gate)
+  and `tests/test_protect_payload_binding.py` (asserts the posted bodies, which
+  is the only way defect 2 is visible).
+
+### Added
+
+- **`atlasent.payload_hash`** — `server_payload_hash`, `canonicalize_payload`,
+  `normalize_caller_payload_hash`, `is_bare_payload_hash`. The module docstring
+  records both binding forms the runtime recognizes and why they are not
+  interchangeable.
+
 ### Changed
 
 - **Re-vendored the embedded trust-root snapshot from `atlasent-keys` main

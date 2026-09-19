@@ -196,14 +196,46 @@ def _typescript_sdk_wire_fields() -> dict[str, dict[str, set[str]]]:
 
     def _body_keys_in_method(method_name: str) -> set[str]:
         # Find `async <method>(` — case-sensitive — then the FIRST
-        # `const body = {` after it.
+        # `const body` after it.
         m = re.search(rf"async\s+{re.escape(method_name)}\s*\(", src)
         if not m:
             raise RuntimeError(f"Could not locate method '{method_name}' in client.ts")
         body_marker = src.find("const body", m.end())
         if body_marker == -1:
-            raise RuntimeError(f"No `const body = {{...}}` in method '{method_name}'")
-        literal = _extract_object_literal(src, body_marker)
+            raise RuntimeError(f"No `const body` in method '{method_name}'")
+
+        # A method may DELEGATE the body construction instead of inlining an
+        # object literal — `const body = buildEvaluateBody(input);` — which is
+        # how `evaluate` is written now that `protect()` has to hash the body it
+        # actually posts rather than a hand-written mirror of it. Follow one hop
+        # to the named function so this check keeps measuring the real wire
+        # shape. Without this the delegating form parses as a single field named
+        # `body`, which reads as "the SDK sends one unknown field and no
+        # action_type" — a loud, misleading failure rather than a silent one,
+        # but still the wrong answer.
+        delegate = re.match(
+            r"const\s+body(?:\s*:\s*[^=]+?)?\s*=\s*(?P<fn>[A-Za-z_$][\w$]*)\s*\(",
+            src[body_marker:],
+        )
+        if delegate:
+            fn = delegate.group("fn")
+            fm = re.search(rf"function\s+{re.escape(fn)}\s*\(", src)
+            if not fm:
+                # Deliberately fatal: resolving to an empty or partial set here
+                # would report a passing check over a shape never examined.
+                raise RuntimeError(
+                    f"Method '{method_name}' delegates its body to '{fn}', which "
+                    f"was not found in client.ts. Introspection cannot resolve "
+                    f"the wire shape, so this is a failure rather than a pass."
+                )
+            inner = src.find("const body", fm.end())
+            if inner == -1:
+                raise RuntimeError(
+                    f"No `const body = {{...}}` in delegated builder '{fn}'"
+                )
+            literal = _extract_object_literal(src, inner)
+        else:
+            literal = _extract_object_literal(src, body_marker)
         return set(_BODY_KEY_RE.findall(literal))
 
     def _wire_interface_keys(name: str) -> set[str]:

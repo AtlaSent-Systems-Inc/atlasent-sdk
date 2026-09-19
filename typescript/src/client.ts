@@ -569,6 +569,60 @@ interface VerifyPermitWire {
   timestamp?: string;
 }
 
+/**
+ * Build the `/v1-evaluate` request body from either accepted input shape.
+ *
+ * Exported and used as the SINGLE construction site on purpose. `protect()`
+ * has to hash the body it actually posts, because the runtime binds the permit
+ * to its own hash of that body and `/v1-verify-permit` compares the presented
+ * digest against it verbatim. A second, hand-written "mirror" of this
+ * construction is exactly the shape that fails: the Python SDK's mirror
+ * omitted `state_snapshot`, so every `protect(state_snapshot=...)` call was a
+ * guaranteed `PAYLOAD_MISMATCH`. With one function there is nothing to drift.
+ *
+ * The server strips `traceparent` / `shadow` / `explain` before hashing, so a
+ * caller that hashes this output must strip the same three.
+ */
+export function buildEvaluateBody(
+  input: EvaluateRequest | LegacyEvaluateRequest,
+): Record<string, unknown> {
+  // Run the dual-shape bridge: legacy {action, agent} → {action_type, actor_id}.
+  // For callers already on the current EvaluateRequest shape the bridge is a
+  // transparent pass-through (no warn, no allocation).
+  const normalized = normalizeEvaluateRequest(
+    input as LegacyEvaluateRequest | V2EvaluateRequest,
+  );
+
+  const body: Record<string, unknown> = {
+    action_type: normalized.action_type,
+    actor_id: normalized.actor_id,
+    context: normalized.context ?? {},
+  };
+  if (normalized.explain !== undefined) body.explain = normalized.explain;
+  if (normalized.environment !== undefined) body.environment = normalized.environment;
+  if (normalized.resource !== undefined) body.resource = normalized.resource;
+  if (normalized.current_state !== undefined) body.current_state = normalized.current_state;
+  if (normalized.proposed_state !== undefined) body.proposed_state = normalized.proposed_state;
+  if (normalized.execution_binding !== undefined) body.execution_binding = normalized.execution_binding;
+  // TOP-LEVEL, never inside `context` — the handler destructures it from the
+  // body alongside `context`, so a copy placed within `context` is not a
+  // binding and is dropped without an error. Forwarded verbatim: the
+  // runtime's bare-hex gate is the authority on the accepted form, and
+  // `ProtectRequest.executionPayloadHash` normalizes before it reaches here.
+  if (normalized.execution_payload_hash !== undefined) body.execution_payload_hash = normalized.execution_payload_hash;
+  if (normalized.state_snapshot !== undefined) body.state_snapshot = normalized.state_snapshot;
+  // These three are genuinely read server-side (resolveProfile(),
+  // the emergency-override gate, and the quorum check respectively) —
+  // silently dropping them here would mean a caller's evaluation_profile
+  // selection, emergency override, or completion_proofs never actually
+  // reach the runtime despite the public EvaluateRequest type declaring
+  // them as accepted fields.
+  if (normalized.evaluation_profile !== undefined) body.evaluation_profile = normalized.evaluation_profile;
+  if (normalized.override !== undefined) body.override = normalized.override;
+  if (normalized.completion_proofs !== undefined) body.completion_proofs = normalized.completion_proofs;
+  return body;
+}
+
 export class AtlaSentClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -712,37 +766,7 @@ export class AtlaSentClient {
   ): Promise<EvaluateResponse> {
     _warnOversizeContext(input.context);
 
-    // Run the dual-shape bridge: legacy {action, agent} → {action_type, actor_id}.
-    // For callers already on the current EvaluateRequest shape the bridge is a
-    // transparent pass-through (no warn, no allocation).
-    const normalized = normalizeEvaluateRequest(
-      input as LegacyEvaluateRequest | V2EvaluateRequest,
-    );
-
-    const body: Record<string, unknown> = {
-      action_type: normalized.action_type,
-      actor_id: normalized.actor_id,
-      context: normalized.context ?? {},
-    };
-    if (normalized.explain !== undefined) body.explain = normalized.explain;
-    if (normalized.environment !== undefined) body.environment = normalized.environment;
-    if (normalized.resource !== undefined) body.resource = normalized.resource;
-    if (normalized.current_state !== undefined) body.current_state = normalized.current_state;
-    if (normalized.proposed_state !== undefined) body.proposed_state = normalized.proposed_state;
-    if (normalized.execution_binding !== undefined) body.execution_binding = normalized.execution_binding;
-    // TOP LEVEL, never inside `context` — the runtime destructures it from the
-    // body alongside context, and a nested copy is never a binding.
-    if (normalized.execution_payload_hash !== undefined) body.execution_payload_hash = normalized.execution_payload_hash;
-    if (normalized.state_snapshot !== undefined) body.state_snapshot = normalized.state_snapshot;
-    // These three are genuinely read server-side (resolveProfile(),
-    // the emergency-override gate, and the quorum check respectively) —
-    // silently dropping them here would mean a caller's evaluation_profile
-    // selection, emergency override, or completion_proofs never actually
-    // reach the runtime despite the public EvaluateRequest type declaring
-    // them as accepted fields.
-    if (normalized.evaluation_profile !== undefined) body.evaluation_profile = normalized.evaluation_profile;
-    if (normalized.override !== undefined) body.override = normalized.override;
-    if (normalized.completion_proofs !== undefined) body.completion_proofs = normalized.completion_proofs;
+    const body = buildEvaluateBody(input);
     const { body: wire, rateLimit } = await this.post<EvaluateWire>(
       "/v1-evaluate",
       body,

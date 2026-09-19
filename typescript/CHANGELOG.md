@@ -8,6 +8,58 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Fixed
+
+- **The no-caller-digest path still presented an execution-payload digest the
+  runtime could never match, so every `protect()` / `withPermit()` /
+  `protectWithEvidence()` call that does not opt into a digest — the default —
+  was a deterministic `PAYLOAD_MISMATCH` deny at the verify boundary.** The
+  previous change on this line fixed the caller-digest path and explicitly
+  preserved this one ("With no caller digest, behaviour is exactly as
+  before"); the unchanged behaviour is the deny. The digest
+  was emitted as bare hex; the value it is compared against —
+  `execution_evaluations.payload_hash`, or the permit's signed
+  `execution_hash_expected` — is written by the runtime's `hashPayload`, which
+  prefixes `sha256:`. `/v1-verify-permit` folds case and normalizes nothing
+  else, so the two could not compare equal. The canonical BYTES were always
+  correct: verified byte-identical to the server's canonicalization across
+  unicode, escape-sequence, `undefined`, numeric and key-ordering vectors. The
+  scheme prefix alone denied the permit. Affects every caller of these three
+  entry points, including `ProtectToolWrapper` and `ProtectFunctionDispatch`
+  in `atlasent-llm-integrations`.
+
+  Nothing caught it because the two implementations were only ever tested
+  against themselves — the SDK suite mocks `fetch`, so the server's digest
+  appeared in no assertion. Now pinned from both sides by
+  `test/payload-hash-parity.test.ts` (a vendored reference copy of the server
+  function AND committed golden digests generated from the real server source,
+  so neither can be edited into agreement with a broken counterpart) and
+  `test/protect-execution-binding.test.ts` (asserts the posted request bodies,
+  not the arguments handed to a client method — an argument-level assertion
+  cannot see which field a value lands in, or whether it reaches the wire).
+
+- **`protectWithEvidence()` silently ignored `executionPayloadHash` entirely.**
+  The camelCase field never matches `client.evaluate`'s snake_case allowlist, so
+  the digest was dropped and the permit was never bound to it — the exact
+  silent-drop defect `normalizeExecutionPayloadHash` exists to prevent, in the
+  sibling of the function that received the fix. It now normalizes, sends and
+  re-presents the digest on the same contract as `protect()`. Found by mutation
+  testing: reverting this survived the whole suite, because nothing covered
+  this entry point's digest handling.
+
+### Added
+
+- **`serverPayloadHash`, `canonicalizePayload`, `isBarePayloadHash`** exported
+  from `@atlasent/sdk`. `serverPayloadHash` reproduces the runtime's fallback
+  binding, prefix included; `canonicalizePayload` is a byte-identical port of
+  the server's canonicalization, pinned by the parity suite.
+
+- `buildEvaluateBody` exported from `client.ts` as the single evaluate-body
+  construction site, so `protect()` hashes the body it actually posts instead
+  of a hand-written mirror of it. There is deliberately only one
+  digest normalizer (`normalizeExecutionPayloadHash`, from the previous change
+  on this line) rather than a second invention.
+
 ### Changed
 
 - **Re-vendored the embedded trust-root snapshot from `atlasent-keys` main

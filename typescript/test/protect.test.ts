@@ -665,10 +665,19 @@ describe("protect — the verify boundary presents the digest that was BOUND", (
     expect(verifyBody.execution_hash).toBe(HEX64);
   });
 
-  it("still presents the computed evaluate-payload hash when no digest was supplied", async () => {
-    // The additive guarantee at the verify boundary: an existing caller's
-    // behaviour is unchanged. A 64-hex value is still sent, just not the
-    // caller's — there isn't one.
+  it("presents the PREFIXED server-bound hash when no digest was supplied", async () => {
+    // CORRECTED. This asserted /^[0-9a-f]{64}$/ — bare hex — on the grounds
+    // that "an existing caller's behaviour is unchanged". The behaviour was
+    // indeed unchanged, and that was the defect: with no caller digest the
+    // permit is bound to the runtime's own `hashPayload` output, which
+    // PREFIXES `sha256:`, and /v1-verify-permit folds case and normalizes
+    // nothing else. Bare hex could never compare equal, so every call on this
+    // path was a deterministic PAYLOAD_MISMATCH — the default path, taken by
+    // every caller that does not opt into a digest.
+    //
+    // The canonical bytes were right all along; only the scheme prefix was
+    // missing. See test/payload-hash-parity.test.ts, which pins the digest
+    // against values generated from the real server source.
     const fetchImpl = mockFetchSequence([
       jsonResponse(EVALUATE_ALLOW_WIRE),
       jsonResponse(VERIFY_OK_WIRE),
@@ -684,6 +693,6 @@ describe("protect — the verify boundary presents the digest that was BOUND", (
     const verifyBody = bodyOfCall(fetchImpl, 1);
     expect(typeof verifyBody.execution_hash).toBe("string");
     expect(verifyBody.execution_hash).not.toBe(HEX64);
-    expect(String(verifyBody.execution_hash)).toMatch(/^[0-9a-f]{64}$/);
+    expect(String(verifyBody.execution_hash)).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 });

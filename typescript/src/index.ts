@@ -136,6 +136,11 @@ export {
   protectWithEvidence,
 } from "./protect.js";
 export {
+  canonicalizePayload,
+  isBarePayloadHash,
+  serverPayloadHash,
+} from "./payloadHash.js";
+export {
   requirePermit,
   classifyCommand,
   CanonicalProtectedActionType,

@@ -500,11 +500,25 @@ class AsyncAtlaSentClient:
                 code="bad_request",
             )
 
-        _eval_payload: dict[str, Any] = {
-            "action_type": action,
-            "actor_id": agent,
-            "context": ctx,
-        }
+        # Hash the body that was ACTUALLY POSTED, not a hand-written mirror of
+        # it. The server hashes the whole evaluate body (minus traceparent /
+        # shadow / explain), so any field that reaches the wire without
+        # appearing here yields a digest that cannot match — which is exactly
+        # what happened: the old three-key literal omitted `state_snapshot`,
+        # so every protect(state_snapshot=...) call was a guaranteed
+        # PAYLOAD_MISMATCH independently of the scheme-prefix defect.
+        #
+        # Reconstructed through the same EvaluateRequest model and the same
+        # model_dump options evaluate() uses, so a field added to that model is
+        # picked up automatically instead of silently dropped here.
+        # `tests/test_protect_payload_binding.py` asserts this equals the body
+        # the transport actually saw.
+        _eval_payload: dict[str, Any] = EvaluateRequest(
+            action_type=action,
+            actor_id=agent,
+            context=ctx,
+            state_snapshot=state_snapshot,
+        ).model_dump(by_alias=True, exclude_none=True)
         _execution_hash = _compute_execution_hash(_eval_payload)
 
         # Suppress the DeprecationWarning from the public verify() method:
