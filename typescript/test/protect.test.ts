@@ -619,3 +619,71 @@ describe("protect — execution payload binding", () => {
     expect("execution_payload_hash" in req).toBe(false);
   });
 });
+
+describe("protect — the verify boundary presents the digest that was BOUND", () => {
+  const ORIGINAL_ENV = process.env.ATLASENT_API_KEY;
+
+  beforeEach(() => {
+    __resetSharedClientForTests();
+    delete process.env.ATLASENT_API_KEY;
+  });
+  afterEach(() => {
+    __resetSharedClientForTests();
+    if (ORIGINAL_ENV !== undefined) process.env.ATLASENT_API_KEY = ORIGINAL_ENV;
+    else delete process.env.ATLASENT_API_KEY;
+  });
+
+  it("presents the CALLER's digest at verify when one was supplied, not the evaluate-payload hash", async () => {
+    // `v1-verify-permit` resolves ONE callerPayloadHash (`payload_hash`, else
+    // `execution_hash` as a back-compat alias) and compares it against the
+    // permit's bound hash. When the caller supplied a digest, THAT is what the
+    // runtime bound — so presenting the computed evaluate-payload hash instead
+    // is a DETERMINISTIC PAYLOAD_MISMATCH on every call: a hash of the request
+    // can never equal a hash of the payload.
+    //
+    // This is the defect the first draft of this change shipped. No test here
+    // talks to a real runtime, so nothing failed; it was found by reading the
+    // verify handler's absence/comparison policy. This test is what stops it
+    // coming back.
+    const fetchImpl = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+    await atlasent.protect({
+      agent: "deploy-bot",
+      action: "production.deploy",
+      context: { environment: "production" },
+      executionPayloadHash: HEX64,
+    });
+
+    const evaluateBody = bodyOfCall(fetchImpl, 0);
+    const verifyBody = bodyOfCall(fetchImpl, 1);
+    expect(evaluateBody.execution_payload_hash).toBe(HEX64);
+    // The same value on both sides. Anything else cannot match what was bound.
+    expect(verifyBody.execution_hash).toBe(HEX64);
+  });
+
+  it("still presents the computed evaluate-payload hash when no digest was supplied", async () => {
+    // The additive guarantee at the verify boundary: an existing caller's
+    // behaviour is unchanged. A 64-hex value is still sent, just not the
+    // caller's — there isn't one.
+    const fetchImpl = mockFetchSequence([
+      jsonResponse(EVALUATE_ALLOW_WIRE),
+      jsonResponse(VERIFY_OK_WIRE),
+    ]);
+    configure({ apiKey: "ask_live_test", fetch: fetchImpl });
+
+    await atlasent.protect({
+      agent: "deploy-bot",
+      action: "production.deploy",
+      context: { environment: "production" },
+    });
+
+    const verifyBody = bodyOfCall(fetchImpl, 1);
+    expect(typeof verifyBody.execution_hash).toBe("string");
+    expect(verifyBody.execution_hash).not.toBe(HEX64);
+    expect(String(verifyBody.execution_hash)).toMatch(/^[0-9a-f]{64}$/);
+  });
+});

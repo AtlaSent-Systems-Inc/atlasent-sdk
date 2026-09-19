@@ -355,14 +355,32 @@ export async function protect(request: ProtectRequest): Promise<Permit> {
     );
   }
 
-  // Compute execution_hash over the original evaluate payload so
-  // the server can validate integrity on permit consume.
-  const evaluatePayload = {
-    action_type: request.action,
-    actor_id: request.agent,
-    context: request.context ?? {},
-  };
-  const execution_hash = await computeExecutionHash(evaluatePayload);
+  // What to present at the verify boundary.
+  //
+  // `v1-verify-permit` resolves ONE `callerPayloadHash` from the request —
+  // `payload_hash` if present, else `execution_hash` as a back-compat alias —
+  // and compares it against the permit's `boundPayloadHash`. So these two are
+  // alternatives, never both, and presenting the WRONG one is a denial, not a
+  // no-op.
+  //
+  // When the caller supplied a payload digest, that digest IS what the runtime
+  // bound (`execution_hash_expected`), so it is the only value that can match.
+  // Presenting the computed evaluate-payload hash instead would be a
+  // DETERMINISTIC `PAYLOAD_MISMATCH` on every call — a hash of the request can
+  // never equal a hash of the payload. That is not a hypothetical: it is the
+  // defect the first draft of this change shipped, caught by reading
+  // `v1-verify-permit/handler.ts`'s absence/comparison policy rather than by a
+  // test, because no test here talks to a real runtime.
+  //
+  // With no caller digest, behaviour is exactly as before: hash the evaluate
+  // payload so the server can validate integrity on consume.
+  const execution_hash =
+    executionPayloadHash ??
+    (await computeExecutionHash({
+      action_type: request.action,
+      actor_id: request.agent,
+      context: request.context ?? {},
+    }));
 
   const verifyRequest: {
     permitId: string;
