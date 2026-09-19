@@ -70,6 +70,7 @@ def with_permit(
     action: str,
     context: dict[str, Any] | None = None,
     fn: Callable[[Permit], T],
+    execution_payload_hash: str | None = None,
 ) -> T:
     """Authorize a request and run ``fn`` only on verified permit.
 
@@ -81,6 +82,17 @@ def with_permit(
         fn: Callable invoked with the verified
             :class:`~atlasent.models.Permit`. Its return value is
             propagated back to the caller.
+        execution_payload_hash: Optional SHA-256 digest of the payload
+            ``fn`` will actually execute, as bare 64-hex (a ``sha256:``
+            prefix is accepted and stripped). Supplying it is what makes
+            the permit constrain execution: a payload altered between
+            authorization and execution then fails closed with
+            ``PAYLOAD_MISMATCH``. Omitted, the permit is bound only to the
+            server's own hash of the evaluate request, which is recomputed
+            from the same in-memory object moments later -- a
+            self-referential comparison that cannot detect a substituted
+            payload. A malformed value raises rather than being forwarded,
+            because the runtime drops one silently.
 
     Returns:
         Whatever ``fn`` returns.
@@ -98,5 +110,10 @@ def with_permit(
     # never drift in fail-closed semantics or error taxonomy. If
     # `protect` ever grows new pre-action checks, `with_permit` picks
     # them up for free.
-    permit = protect(agent=agent, action=action, context=context)
+    permit = protect(
+        agent=agent,
+        action=action,
+        context=context,
+        execution_payload_hash=execution_payload_hash,
+    )
     return fn(permit)

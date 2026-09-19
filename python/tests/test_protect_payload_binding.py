@@ -27,7 +27,8 @@ from typing import Any
 import httpx
 import pytest
 
-from atlasent import AtlaSentClient
+from atlasent import AsyncAtlaSentClient, AtlaSentClient
+from atlasent.exceptions import AtlaSentError
 from atlasent.payload_hash import canonicalize_payload
 
 EVALUATE_PERMIT = {
@@ -198,3 +199,153 @@ class TestPresentedDigestDependsOnTheRequest:
         _, b = _posted_bodies(post)
 
         assert a["execution_hash"] != b["execution_hash"]
+
+
+HEX_A = "a1b2c3d4" * 8
+
+
+class TestCallerSuppliedDigest:
+    """The binding that actually constrains execution.
+
+    Without a caller digest the permit is bound to the server's own hash of
+    the evaluate request, which ``protect()`` recomputes from the same
+    in-memory object moments later -- a self-referential comparison that
+    cannot detect a substituted payload. These tests cover the opt-in path
+    where the caller names what it will execute.
+    """
+
+    def test_sent_top_level_as_execution_payload_hash(self, mocker) -> None:
+        # Both properties are load-bearing and each was wrong in a shipped
+        # client: nested under ``context`` is never a binding, and a prefixed
+        # value fails the runtime's bare-hex gate and is dropped silently.
+        evaluate_body, _ = _protect(mocker, execution_payload_hash=HEX_A)
+        assert evaluate_body["execution_payload_hash"] == HEX_A
+        assert "execution_payload_hash" not in evaluate_body.get("context", {})
+
+    def test_caller_digest_is_presented_at_verify_not_the_server_mirror(
+        self, mocker
+    ) -> None:
+        # With a caller digest bound, execution_hash_expected IS that bare
+        # hex -- so presenting the prefixed whole-body mirror would now be
+        # the mismatch. The presented form has to follow which binding is in
+        # force.
+        evaluate_body, verify_body = _protect(mocker, execution_payload_hash=HEX_A)
+        assert verify_body["execution_hash"] == HEX_A
+        assert not verify_body["execution_hash"].startswith("sha256:")
+        assert verify_body["execution_hash"] != _server_bound_hash_of(evaluate_body)
+
+    def test_prefixed_digest_is_normalized_rather_than_dropped(self, mocker) -> None:
+        evaluate_body, verify_body = _protect(
+            mocker, execution_payload_hash=f"sha256:{HEX_A.upper()}"
+        )
+        assert evaluate_body["execution_payload_hash"] == HEX_A
+        assert verify_body["execution_hash"] == HEX_A
+
+    def test_digest_depends_on_what_was_hashed(self, mocker) -> None:
+        # A correctly-shaped but constant binding is worse than none: it reads
+        # as bound in every audit row while authorizing any payload.
+        a, _ = _protect(
+            mocker, execution_payload_hash=hashlib.sha256(b"alpha").hexdigest()
+        )
+        b, _ = _protect(
+            mocker, execution_payload_hash=hashlib.sha256(b"omega").hexdigest()
+        )
+        assert a["execution_payload_hash"] != b["execution_payload_hash"]
+
+    def test_malformed_digest_raises_before_any_network_call(self, mocker) -> None:
+        # Fail closed at the client boundary. Forwarding it would mint a permit
+        # bound to the server's own request hash instead, which the caller has
+        # no way to distinguish from a real binding.
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
+        post = mocker.patch.object(client._client, "post")
+        with pytest.raises(AtlaSentError):
+            client.protect(
+                agent="a",
+                action="t.x",
+                context={"environment": "production"},
+                execution_payload_hash="not-a-digest",
+            )
+        assert post.call_count == 0, "a rejected digest must not reach the runtime"
+
+    def test_omitting_it_is_byte_identical_to_before(self, mocker) -> None:
+        # Additive by default: a caller that binds nothing must post a body
+        # unchanged from before this parameter existed, or the server's own
+        # fallback hash changes and every such permit breaks.
+        evaluate_body, _ = _protect(mocker)
+        assert "execution_payload_hash" not in evaluate_body
+
+
+class TestCallerSuppliedDigestAsync:
+    @pytest.mark.asyncio
+    async def test_async_protect_honors_the_caller_digest(self, mocker) -> None:
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
+
+        async def _post(*args, **kwargs):
+            return _mock_resp(mocker, _post.queue.pop(0))
+
+        _post.queue = [EVALUATE_PERMIT, VERIFY_OK]
+        post = mocker.patch.object(client._client, "post", side_effect=_post)
+
+        await client.protect(
+            agent="a",
+            action="t.x",
+            context={"environment": "production"},
+            execution_payload_hash=HEX_A,
+        )
+        evaluate_body, verify_body = _posted_bodies(post)
+        assert evaluate_body["execution_payload_hash"] == HEX_A
+        assert verify_body["execution_hash"] == HEX_A
+
+    @pytest.mark.asyncio
+    async def test_async_presents_the_prefixed_mirror_without_a_digest(
+        self, mocker
+    ) -> None:
+        client = AsyncAtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
+
+        async def _post(*args, **kwargs):
+            return _mock_resp(mocker, _post.queue.pop(0))
+
+        _post.queue = [EVALUATE_PERMIT, VERIFY_OK]
+        post = mocker.patch.object(client._client, "post", side_effect=_post)
+
+        await client.protect(
+            agent="a", action="t.x", context={"environment": "production"}
+        )
+        evaluate_body, verify_body = _posted_bodies(post)
+        assert verify_body["execution_hash"] == _server_bound_hash_of(evaluate_body)
+
+
+class TestWithPermitPassthrough:
+    def test_with_permit_forwards_the_caller_digest(self, mocker) -> None:
+        # with_permit delegates to protect so the two never drift; this pins
+        # that the new parameter actually reaches it.
+        import sys
+
+        from atlasent.with_permit import with_permit
+
+        # `atlasent.authorize` the NAME resolves to the exported protect-family
+        # function, not the module, so reach the module through sys.modules.
+        _authorize = sys.modules["atlasent.authorize"]
+
+        client = AtlaSentClient(api_key="ask_test_xxxxxxxx", max_retries=0)
+        post = mocker.patch.object(
+            client._client,
+            "post",
+            side_effect=[
+                _mock_resp(mocker, EVALUATE_PERMIT),
+                _mock_resp(mocker, VERIFY_OK),
+            ],
+        )
+        mocker.patch.object(_authorize, "_get_default_client", return_value=client)
+
+        result = with_permit(
+            agent="a",
+            action="t.x",
+            context={"environment": "production"},
+            fn=lambda permit: "ran",
+            execution_payload_hash=HEX_A,
+        )
+        assert result == "ran"
+        evaluate_body, verify_body = _posted_bodies(post)
+        assert evaluate_body["execution_payload_hash"] == HEX_A
+        assert verify_body["execution_hash"] == HEX_A

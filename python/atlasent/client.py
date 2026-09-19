@@ -82,7 +82,10 @@ from .models import (
     VerifyRequest,
     VerifyResult,
 )
-from .payload_hash import server_payload_hash
+from .payload_hash import (
+    normalize_caller_payload_hash,
+    server_payload_hash,
+)
 from .sso_client import SsoClient
 
 if TYPE_CHECKING:
@@ -302,6 +305,7 @@ class AtlaSentClient:
         proposed_state: dict[str, Any] | None = None,
         execution_binding: dict[str, Any] | None = None,
         state_snapshot: dict[str, Any] | None = None,
+        execution_payload_hash: str | None = None,
     ) -> EvaluateResult:
         ctx = context or {}
         if isinstance(approval, dict):
@@ -330,6 +334,7 @@ class AtlaSentClient:
             proposed_state=proposed_state,
             execution_binding=execution_binding,
             state_snapshot=state_snapshot,
+            execution_payload_hash=execution_payload_hash,
         )
         logger.debug("evaluate action=%r actor=%r", action_type, actor_id)
         data, rate_limit, request_id = self._post(
@@ -506,6 +511,7 @@ class AtlaSentClient:
         action: str,
         context: dict[str, Any] | None = None,
         state_snapshot: dict[str, Any] | None = None,
+        execution_payload_hash: str | None = None,
     ) -> Permit:
         """Authorize an action end-to-end — the fail-closed execution primitive.
 
@@ -553,9 +559,22 @@ class AtlaSentClient:
             )
 
         ctx = context or {}
+        # Normalize BEFORE the evaluate call. A malformed digest is DROPPED by
+        # the runtime, not rejected -- allow, permit, 200, no error -- which
+        # mints a permit the caller wrongly believes is bound to its payload.
+        # Refusing here turns silent non-enforcement into a loud caller error.
+        _caller_hash = (
+            normalize_caller_payload_hash(execution_payload_hash)
+            if execution_payload_hash is not None
+            else None
+        )
         try:
             eval_result = self.evaluate(
-                action, agent, ctx, state_snapshot=state_snapshot
+                action,
+                agent,
+                ctx,
+                state_snapshot=state_snapshot,
+                execution_payload_hash=_caller_hash,
             )
         except AtlaSentDenied as exc:
             audit_hash = ""
@@ -594,13 +613,23 @@ class AtlaSentClient:
         # picked up automatically instead of silently dropped here.
         # `tests/test_protect_payload_binding.py` asserts this equals the body
         # the transport actually saw.
-        _eval_payload: dict[str, Any] = EvaluateRequest(
-            action_type=action,
-            actor_id=agent,
-            context=ctx,
-            state_snapshot=state_snapshot,
-        ).model_dump(by_alias=True, exclude_none=True)
-        _execution_hash = _compute_execution_hash(_eval_payload)
+        # Which digest to present depends on which binding the permit carries,
+        # and presenting the wrong FORM is a denial rather than a no-op:
+        #
+        #   caller digest supplied -> the server signed THAT bare hex into
+        #     execution_hash_expected. Present it unchanged.
+        #   none supplied -> the permit is bound to the server's own
+        #     sha256:-prefixed hash of the whole evaluate body. Reproduce it.
+        if _caller_hash is not None:
+            _execution_hash = _caller_hash
+        else:
+            _eval_payload: dict[str, Any] = EvaluateRequest(
+                action_type=action,
+                actor_id=agent,
+                context=ctx,
+                state_snapshot=state_snapshot,
+            ).model_dump(by_alias=True, exclude_none=True)
+            _execution_hash = _compute_execution_hash(_eval_payload)
 
         # verify_unavailable: if the verify step returns 5xx, surface a typed
         # denial rather than propagating a raw AtlaSentError — fail-closed.

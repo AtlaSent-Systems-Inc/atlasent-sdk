@@ -197,6 +197,19 @@ class EvaluateRequest(BaseModel):
     # them lets producers compute a matching hash off-line.
     resource_id: str | None = Field(default=None, max_length=512)
     amount: float | None = Field(default=None)
+    # SHA-256 digest of the payload that will actually execute, as BARE
+    # lowercase 64-hex. The server signs a value matching ``^[0-9a-f]{64}$``
+    # into the permit as ``execution_hash_expected``; re-present it at
+    # /v1-verify-permit and a payload altered after authorization fails closed
+    # with PAYLOAD_MISMATCH.
+    #
+    # TOP LEVEL only -- the handler destructures it from the body alongside
+    # ``context``, never from within it, so a copy nested under ``context`` is
+    # not a binding. A non-matching value (notably the ``sha256:``-prefixed
+    # form) is DROPPED rather than rejected on the ordinary-action path: allow,
+    # permit, 200, no error. ``normalize_caller_payload_hash`` refuses both
+    # shapes at the client boundary instead.
+    execution_payload_hash: str | None = Field(default=None)
     # Optional signed approval. When the action requires human
     # approval (rule-driven OR action-type prefix per
     # ``requiresHumanApproval``), the server verifies this artifact
