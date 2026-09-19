@@ -730,6 +730,9 @@ export class AtlaSentClient {
     if (normalized.current_state !== undefined) body.current_state = normalized.current_state;
     if (normalized.proposed_state !== undefined) body.proposed_state = normalized.proposed_state;
     if (normalized.execution_binding !== undefined) body.execution_binding = normalized.execution_binding;
+    // TOP LEVEL, never inside `context` — the runtime destructures it from the
+    // body alongside context, and a nested copy is never a binding.
+    if (normalized.execution_payload_hash !== undefined) body.execution_payload_hash = normalized.execution_payload_hash;
     if (normalized.state_snapshot !== undefined) body.state_snapshot = normalized.state_snapshot;
     // These three are genuinely read server-side (resolveProfile(),
     // the emergency-override gate, and the quorum check respectively) —

@@ -403,6 +403,19 @@ export interface EvaluateRequest {
   proposed_state?: { description: string; attributes?: Record<string, unknown> };
   /** Execution surface binding — identifies the CI/CD adapter, DB driver, or enforcement point. */
   execution_binding?: { kind: string; adapter_version?: string; resource_id?: string; enforcement_point?: string };
+  /**
+   * SHA-256 digest of the exact payload this action will execute, as BARE
+   * 64-character lowercase hex, sent at the TOP LEVEL of the wire body.
+   *
+   * This is what the runtime binds into the signed permit's
+   * `execution_hash_expected`, and therefore what makes `PAYLOAD_MISMATCH`
+   * a real check. A `sha256:` prefix, or a copy nested under `context`, is
+   * DROPPED rather than rejected on the ordinary-action path — allow,
+   * permit, 200, no error — leaving execution unbound to the payload.
+   * `protect()`'s `executionPayloadHash` normalizes and fails closed; a
+   * caller building this shape directly is responsible for the bare-hex form.
+   */
+  execution_payload_hash?: string;
   /** The desired end-state the actor wants the resource to reach. */
   desired_state?: { description: string; attributes?: Record<string, unknown>; fingerprint?: string };
   /**

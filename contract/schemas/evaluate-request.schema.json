@@ -120,6 +120,11 @@
         "enforcement_point": { "type": "string" }
       }
     },
+    "execution_payload_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 digest of the exact payload this action will execute, as BARE 64-character lowercase hex. Bound into the signed permit's `execution_hash_expected`, which is what makes PAYLOAD_MISMATCH a real check at verify time. TWO PROPERTIES ARE LOAD-BEARING, and a violation of either is DROPPED, not rejected, on the ordinary-action path — allow, permit, 200, no error anywhere: (1) BARE hex — a `sha256:` prefix fails the runtime's /^[0-9a-f]{64}$/i test; (2) TOP LEVEL — the runtime destructures it from the body ALONGSIDE `context`, never from within it, so a copy nested under `context` is never a binding. Omitted, the permit is bound to the runtime's own hash of the whole request body instead, which a caller's payload digest can never equal — so re-presenting one at verify yields a deterministic mismatch on every call, and presenting nothing on a non-production permit passes with no payload check at all. The four mandatory-change-control action types and any class declaring `material_execution_fields` REJECT a caller digest with a deny instead of dropping it. As of atlasent-api#3355 the response carries `execution_payload_hash_accepted` so a caller can tell. See atlasent-api's CLAUDE.md, \"A caller-supplied `execution_payload_hash` is DROPPED, not rejected\"."
+    },
     "desired_state": {
       "type": "object",
       "description": "The desired end-state the actor wants the resource to reach.",
