@@ -15,6 +15,13 @@ updates:
       # minor-and-patch group above, so Dependabot opened them as two
       # separate PRs -- neither installs standalone (npm ERESOLVE). Group
       # every vitest-family major bump together so they land as one PR.
+      # These plugins require the exact size-limit version; upgrade together.
+      size-limit-major:
+        patterns:
+          - "size-limit"
+          - "@size-limit/*"
+        update-types:
+          - major
       vitest-major:
         patterns:
           - "vitest"

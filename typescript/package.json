@@ -110,15 +110,15 @@
     "access": "public"
   },
   "devDependencies": {
-    "@size-limit/esbuild": "^13.0.1",
-    "@size-limit/file": "^13.0.1",
+    "@size-limit/esbuild": "^14.0.0",
+    "@size-limit/file": "^14.0.0",
     "@types/express": "^5.0.6",
     "@types/jsdom": "^28.0.1",
     "@types/node": "^26.1.0",
     "@vitest/coverage-v8": "^5.0.0",
     "hono": "^4.12.15",
     "jsdom": "^29.1.0",
-    "size-limit": "^13.0.1",
+    "size-limit": "^14.0.0",
     "tsup": "^8.0.2",
     "tsx": "^4.7.2",
     "typescript": "^6.0.3",
@@ -140,3 +140,4 @@
     "zod": "^4.4.3"
   }
 }
+
