@@ -155,7 +155,7 @@ jobs:
       # this gate for an actual release.
       - name: AtlaSent release gate
         if: ${{ !inputs.skip_gate }}
-        uses: AtlaSent-Systems-Inc/atlasent-action@v1
+        uses: Atlasent/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}

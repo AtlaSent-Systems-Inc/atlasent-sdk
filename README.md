@@ -151,7 +151,7 @@ be relevant facts; none of them alone establishes that the organization
 currently authorizes this exact consequential Action.
 
 For MCP-compatible hosts, use the public
-[`atlasent-mcp-server`](https://github.com/AtlaSent-Systems-Inc/atlasent-mcp-server).
+[`atlasent-mcp-server`](https://github.com/Atlasent/atlasent-mcp-server).
 A framework wrapper or prompt instruction is not by itself a non-bypassable Gate.
 Security claims belong to the actual execution topology that controls the native
 side effect.
@@ -159,7 +159,7 @@ side effect.
 ## GitHub Actions
 
 For CI/CD integration, use the public
-[`atlasent-action`](https://github.com/AtlaSent-Systems-Inc/atlasent-action).
+[`atlasent-action`](https://github.com/Atlasent/atlasent-action).
 It can derive GitHub execution facts and place the AtlaSent authorization /
 Permit-verification path before a governed deployment or other consequential CI
 step.
@@ -223,11 +223,11 @@ describe those modes as enforced execution protection.
 ## Independent evidence verification
 
 The public
-[`atlasent-verify`](https://github.com/AtlaSent-Systems-Inc/atlasent-verify)
+[`atlasent-verify`](https://github.com/Atlasent/atlasent-verify)
 repository contains the standalone offline evidence verifier and its public
 canonical-form contract. Public verifier keys, revocations, and trust-root
 material are published in
-[`atlasent-keys`](https://github.com/AtlaSent-Systems-Inc/atlasent-keys).
+[`atlasent-keys`](https://github.com/Atlasent/atlasent-keys).
 
 These repositories are public so a customer or reviewer can inspect applicable
 verification material without private AtlaSent infrastructure.
@@ -281,10 +281,10 @@ merely log a Decision and continue.
 
 ## Public ecosystem
 
-- [`atlasent-action`](https://github.com/AtlaSent-Systems-Inc/atlasent-action) — GitHub Actions integration for production-change authorization
-- [`atlasent-mcp-server`](https://github.com/AtlaSent-Systems-Inc/atlasent-mcp-server) — MCP authorize-before-execute integration
-- [`atlasent-verify`](https://github.com/AtlaSent-Systems-Inc/atlasent-verify) — independent offline evidence verifier
-- [`atlasent-keys`](https://github.com/AtlaSent-Systems-Inc/atlasent-keys) — public verification material
+- [`atlasent-action`](https://github.com/Atlasent/atlasent-action) — GitHub Actions integration for production-change authorization
+- [`atlasent-mcp-server`](https://github.com/Atlasent/atlasent-mcp-server) — MCP authorize-before-execute integration
+- [`atlasent-verify`](https://github.com/Atlasent/atlasent-verify) — independent offline evidence verifier
+- [`atlasent-keys`](https://github.com/Atlasent/atlasent-keys) — public verification material
 
 ## License
 

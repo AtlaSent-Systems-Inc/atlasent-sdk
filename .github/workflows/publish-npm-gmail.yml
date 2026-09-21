@@ -81,7 +81,7 @@ jobs:
       # left in a permanently-guaranteed-deny state.
       - name: AtlaSent release gate
 
-        uses: AtlaSent-Systems-Inc/atlasent-action@v1
+        uses: Atlasent/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -150,7 +150,7 @@ jobs:
         run: |
           cosign verify-blob \
             --bundle="${TARBALL}.bundle" \
-            --certificate-identity-regexp='https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/.github/workflows/publish-npm-gmail.yml@refs/tags/gmail-v.*' \
+            --certificate-identity-regexp='https://github.com/Atlasent/atlasent-sdk/.github/workflows/publish-npm-gmail.yml@refs/tags/gmail-v.*' \
             --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
             "${TARBALL}"
 

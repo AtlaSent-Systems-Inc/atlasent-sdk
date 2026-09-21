@@ -1,7 +1,7 @@
 name: canonical-schema-parity
 
 # Phase 1 cross-repo parity gate for the AtlaSent canonical schema
-# freeze (schema/v1-rc, defined in AtlaSent-Systems-Inc/atlasent).
+# freeze (schema/v1-rc, defined in Atlasent/atlasent).
 #
 # The five canonical schema files are vendored under
 # vendor/atlasent-canonical/v1-rc/ at the commit recorded in

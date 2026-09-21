@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     # Block fork PRs from probing for the staging secret; only run the
     # gate (and downstream jobs) when the workflow is on the trunk repo.
-    if: github.repository == 'AtlaSent-Systems-Inc/atlasent-sdk'
+    if: github.repository == 'Atlasent/atlasent-sdk'
     outputs:
       has_key: ${{ steps.check.outputs.has_key }}
     steps:
@@ -44,7 +44,7 @@ jobs:
   python:
     name: Python integration (staging)
     needs: gate
-    if: needs.gate.outputs.has_key == 'true' && github.repository == 'AtlaSent-Systems-Inc/atlasent-sdk'
+    if: needs.gate.outputs.has_key == 'true' && github.repository == 'Atlasent/atlasent-sdk'
     runs-on: ubuntu-latest
     environment: staging
     defaults:
@@ -71,7 +71,7 @@ jobs:
   typescript:
     name: TypeScript integration (staging)
     needs: gate
-    if: needs.gate.outputs.has_key == 'true' && github.repository == 'AtlaSent-Systems-Inc/atlasent-sdk'
+    if: needs.gate.outputs.has_key == 'true' && github.repository == 'Atlasent/atlasent-sdk'
     runs-on: ubuntu-latest
     environment: staging
     defaults:
