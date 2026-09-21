@@ -1,6 +1,6 @@
 {
-  "$comment": "Pins the canonical schema commit in AtlaSent-Systems-Inc/atlasent that this SDK's hand-written shapes have been verified against. The schemas themselves are vendored read-only under vendor/atlasent-canonical/v1-rc/. Bumping this pin requires re-confirming that local types (python/atlasent/models.py, typescript/src/client.ts, typescript/src/types.ts) still conform to the canonical schemas at the new commit. See atlasent/schemas/v1_1/CANONICAL-FREEZE.md for the freeze doctrine.",
-  "canonical_repo": "AtlaSent-Systems-Inc/atlasent",
+  "$comment": "Pins the canonical schema commit in Atlasent/atlasent that this SDK's hand-written shapes have been verified against. The schemas themselves are vendored read-only under vendor/atlasent-canonical/v1-rc/. Bumping this pin requires re-confirming that local types (python/atlasent/models.py, typescript/src/client.ts, typescript/src/types.ts) still conform to the canonical schemas at the new commit. See atlasent/schemas/v1_1/CANONICAL-FREEZE.md for the freeze doctrine.",
+  "canonical_repo": "Atlasent/atlasent",
   "canonical_commit": "ec1f2d6bfbeac38a3c7b13540fb0b1291b671df1",
   "canonical_freeze_id": "schema/v1-rc",
   "vendor_path": "vendor/atlasent-canonical/v1-rc/",
