@@ -28,7 +28,7 @@ def main() -> int:
     schema_path = ROOT / PIN["schema_path"]
     require(digest(catalog_path) == PIN["catalog_sha256"], "catalog SHA-256 does not match pin")
     require(digest(schema_path) == PIN["schema_sha256"], "schema SHA-256 does not match pin")
-    require(PIN["canonical_repository"] == "AtlaSent-Systems-Inc/atlasent", "unexpected canonical source")
+    require(PIN["canonical_repository"] == "Atlasent/atlasent", "unexpected canonical source")
     require(len(PIN["canonical_commit"]) == 40, "canonical commit must be a full SHA")
 
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
