@@ -9,7 +9,7 @@
 #   git push origin go/v2.0.0
 #
 # pkg.go.dev will index the module at:
-#   https://pkg.go.dev/github.com/atlasent-systems-inc/atlasent-sdk/go/v2
+#   https://pkg.go.dev/github.com/Atlasent/atlasent-sdk/go/v2
 
 name: Go SDK release (alias — see publish-go.yml)
 
