@@ -141,7 +141,7 @@ jobs:
       # inconsistency vs. publish-pypi.yml, corrected here rather than
       # worked around via workflow_dispatch or a gate bypass).
       - name: AtlaSent release gate
-        uses: AtlaSent-Systems-Inc/atlasent-action@v1
+        uses: Atlasent/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -190,7 +190,7 @@ jobs:
         run: |
           cosign verify-blob \
             --bundle="${TARBALL}.bundle" \
-            --certificate-identity-regexp='https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/.github/workflows/publish-npm.yml@refs/(tags/typescript-v|heads/main).*' \
+            --certificate-identity-regexp='https://github.com/Atlasent/atlasent-sdk/.github/workflows/publish-npm.yml@refs/(tags/typescript-v|heads/main).*' \
             --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
             "${TARBALL}"
 
