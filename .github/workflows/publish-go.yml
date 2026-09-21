@@ -2,14 +2,14 @@
 #
 # Go sub-modules in a mono-repo MUST be tagged with the directory prefix.
 # pkg.go.dev indexes this module at:
-#   https://pkg.go.dev/github.com/atlasent-systems-inc/atlasent-sdk/go
+#   https://pkg.go.dev/github.com/Atlasent/atlasent-sdk/go
 #
 # To release:
 #   git tag go/v1.0.0
 #   git push origin go/v1.0.0
 #
 # The version after stripping the prefix (v1.0.0) is what consumers specify:
-#   go get github.com/atlasent-systems-inc/atlasent-sdk/go@v1.0.0
+#   go get github.com/Atlasent/atlasent-sdk/go@v1.0.0
 
 name: Publish Go SDK
 
@@ -60,7 +60,7 @@ jobs:
       # see those files' comments). Corrected here to match, rather than
       # left in a permanently-guaranteed-deny state.
       - name: AtlaSent release gate
-        uses: AtlaSent-Systems-Inc/atlasent-action@v1
+        uses: Atlasent/atlasent-action@v1
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -91,7 +91,7 @@ jobs:
           # crawled the tag yet — it will catch up on its own.
           GOPROXY=https://proxy.golang.org \
             go list -m \
-            "github.com/atlasent-systems-inc/atlasent-sdk/go@${{ steps.version.outputs.version }}" \
+            "github.com/Atlasent/atlasent-sdk/go@${{ steps.version.outputs.version }}" \
             || echo "Proxy indexing in progress — pkg.go.dev will index within minutes"
 
       # ── R4: cosign keyless signing ───────────────────────────────────────
@@ -105,7 +105,7 @@ jobs:
         # fetch from the module proxy) so we can sign it with cosign.
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          MODULE="github.com/atlasent-systems-inc/atlasent-sdk/go"
+          MODULE="github.com/Atlasent/atlasent-sdk/go"
           # GOMODCACHE the zip to a known path
           go mod download -json "${MODULE}@${VERSION}" 2>/dev/null || true
           # Fall back: use the proxy download endpoint directly
@@ -134,7 +134,7 @@ jobs:
         run: |
           cosign verify-blob \
             --bundle=go-module.zip.bundle \
-            --certificate-identity-regexp='https://github.com/AtlaSent-Systems-Inc/atlasent-sdk/.github/workflows/publish-go.yml@refs/tags/go/v.*' \
+            --certificate-identity-regexp='https://github.com/Atlasent/atlasent-sdk/.github/workflows/publish-go.yml@refs/tags/go/v.*' \
             --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
             go-module.zip
 
@@ -154,6 +154,6 @@ jobs:
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Tag | \`${{ steps.version.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Version | \`${{ steps.version.outputs.version }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Module | \`github.com/atlasent-systems-inc/atlasent-sdk/go\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| pkg.go.dev | https://pkg.go.dev/github.com/atlasent-systems-inc/atlasent-sdk/go@${{ steps.version.outputs.version }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Module | \`github.com/Atlasent/atlasent-sdk/go\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| pkg.go.dev | https://pkg.go.dev/github.com/Atlasent/atlasent-sdk/go@${{ steps.version.outputs.version }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Cosign bundle | \`go-module.zip.bundle\` (attached to GitHub release) |" >> "$GITHUB_STEP_SUMMARY"
