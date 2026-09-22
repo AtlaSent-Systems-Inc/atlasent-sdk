@@ -136,6 +136,28 @@ jobs:
       # See atlasent-api migration 20260958000000 for the corresponding
       # release-manager template (template G).
       #
+      # BLOCKED as of 2026-09-22, and NOT by anything in this file. Template
+      # G exists, is correct, and its migration is applied on runtime prod —
+      # but release-manager templates are seeded PER ORGANIZATION, and that
+      # migration seeds two tenants, neither of which is the one this
+      # workflow's ATLASENT_API_KEY actually authenticates as. So every
+      # publish here has denied with `No template condition matched` since
+      # 2026-08-22 (3 npm attempts, plus the langchain/llamaindex PyPI
+      # workflows on 2026-08-30), while sibling repos' release gates allow.
+      # npm therefore still serves 2.16.0 from 2026-06-04 against a main at
+      # 2.21.2 — a denied publish looks exactly like a quiet week.
+      #
+      # Do NOT try to make this pass from this file. Renaming this workflow
+      # to match another pipeline's template would be a lie, and adding a
+      # `signed_tag: true` context field would be a self-asserted claim of
+      # exactly the kind this repo family repeatedly refuses (no client
+      # sends that field and the runtime does not derive it, so the template
+      # reading it is unsatisfiable by any atlasent-action caller). The fix
+      # is to point this workflow's credential at the tenant that carries
+      # template G — a GitHub secret change, founder-only. Diagnosis with
+      # identifiers: atlasent-internal
+      # planning/PACKAGE_RELEASE_GATE_ORG_TARGETING_2026-09-22.md.
+      #
       # This was previously gated on `production.deploy`, the wrong
       # protected action for package publication (a release-control
       # inconsistency vs. publish-pypi.yml, corrected here rather than
