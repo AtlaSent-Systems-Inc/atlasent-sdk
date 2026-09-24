@@ -1,7 +1,7 @@
 {
   "name": "@atlasent/sdk",
   "version": "2.21.2",
-  "description": "TypeScript SDK for the AtlaSent authorization API",
+  "description": "AtlaSent TypeScript SDK: stop risky changes to production unless someone approved them, and get proof for your auditor.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.cjs",
