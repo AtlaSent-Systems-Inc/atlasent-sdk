@@ -125,9 +125,21 @@ The `publish-npm.yml` workflow then:
 4. `npm publish --access public --provenance` — Sigstore attestations
    link the tarball to this workflow run.
 
-First-time setup (once per project): store an automation token with
-*Publish* scope as the repo secret `NPM_TOKEN`. Provenance requires
-`id-token: write` permission (already set in the workflow).
+First-time setup (once per package): npm publishes use **trusted
+publishing** (OIDC) — there is no `NPM_TOKEN`. On npmjs.com →
+the package → Settings → Trusted Publisher → GitHub Actions, set
+organization `Atlasent`, repository `atlasent-sdk`, the workflow file
+that publishes the package (e.g. `publish-npm.yml` for `@atlasent/sdk`),
+and that job's environment (`npm`; `npm-enforce` for `publish-npm-enforce.yml`),
+and check **Allow npm publish**. The job's `id-token: write` (already set)
+is what npm authenticates, and it also signs the provenance attestation.
+The workflow upgrades npm to >= 11.5.1, which trusted publishing requires.
+
+The AtlaSent release gate authenticates with the repo secret
+`ATLASENT_API_KEY`; it must belong to the organization whose
+`package.release` bundle carries this workflow's template, or every
+publish denies with `No template condition matched` (see the comment on
+the gate step in `publish-npm.yml`).
 
 Post-publish: check the release on npm
 (<https://www.npmjs.com/package/@atlasent/sdk>) and that

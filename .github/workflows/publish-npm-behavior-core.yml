@@ -192,7 +192,13 @@ jobs:
           path: typescript/packages/behavior/${{ env.TARBALL }}.bundle
           retention-days: 90
 
+      # npm trusted publishing (OIDC): npm authenticates this workflow via the
+      # job's id-token (already granted for provenance/cosign), so no NPM_TOKEN.
+      # Requires npm >= 11.5.1 and a Trusted Publisher configured for this
+      # package on npmjs.com (repo Atlasent/atlasent-sdk, this workflow file,
+      # this job's environment).
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@^11.5.1 && npm --version
+
       - name: Publish (with provenance)
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
