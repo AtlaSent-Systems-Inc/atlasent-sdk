@@ -1,6 +1,6 @@
 {
   "name": "@atlasent/behavior",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": false,
   "description": "AtlaSent Behavior Verification System (BVS) integration — state summary, category aggregates, and evaluate context enrichment",
   "license": "Apache-2.0",
