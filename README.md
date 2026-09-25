@@ -50,6 +50,13 @@ Action proposed
 SDK SemVer is independent of the stable AtlaSent `/v1-*` platform contract. A
 package major version does not create a separate AtlaSent product generation.
 
+## Get an API key
+
+1. Create an account at **[console.atlasent.io/auth/sign-up](https://console.atlasent.io/auth/sign-up?utm_source=sdk&utm_medium=github-readme)**.
+2. In the console, open **API keys** and create a key with the `evaluate:write`
+   and `verify:execute` scopes.
+3. Export it as `ATLASENT_API_KEY`.
+
 ## Python quick start
 
 ```python
