@@ -60,6 +60,14 @@ export interface LangChainGuardedTool<
   execute: (input: TInput) => Promise<string>;
 }
 
+/**
+ * Action type evaluated when no `action` option is given: the canonical
+ * action for an agent invoking a tool (Canon ACT-0029). Its action class
+ * requires context inputs `tool` (supplied by the guard) and `environment`
+ * (supplied by the caller).
+ */
+export const DEFAULT_TOOL_ACTION = "agent.tool.invoke";
+
 // ── Options ───────────────────────────────────────────────────────────────────
 
 type Resolver<T> =
@@ -82,7 +90,21 @@ async function resolve<T>(
 export interface LangChainGuardOptions {
   /** Agent identifier (e.g. `"service:analytics-bot"`). */
   agent: Resolver<string>;
-  /** Action name. Defaults to the tool's name. */
+  /**
+   * Action type evaluated for every tool call. Defaults to
+   * {@link DEFAULT_TOOL_ACTION} (`"agent.tool.invoke"`, Canon ACT-0029) — the
+   * canonical action for an agent invoking a tool. The tool's own name is
+   * always sent as `context.tool`, so policy can distinguish tools without a
+   * per-tool action class.
+   *
+   * Before this default existed the action was the bare tool name (e.g.
+   * `"delete_user"`), which names no runtime action class, so every call was
+   * denied. Pass a resolver returning the tool name to restore that behaviour.
+   *
+   * The `agent.tool.invoke` action class requires context inputs `tool` and
+   * `environment`. The guard supplies `tool`; supply `environment` yourself
+   * via `extraContext` — the guard never invents one.
+   */
   action?: Resolver<string>;
   /** Extra context forwarded to every AtlaSent evaluation. */
   extraContext?: Resolver<Record<string, unknown>>;
@@ -231,11 +253,18 @@ export function withLangChainGuard<T extends LangChainGuardedTool>(
       const agent = await resolve(options.agent, name, input);
       const action = options.action
         ? await resolve(options.action, name, input)
-        : name;
+        : DEFAULT_TOOL_ACTION;
       const extra = options.extraContext
         ? await resolve(options.extraContext, name, input)
         : {};
-      const context: Record<string, unknown> = { ...extra, tool_input: input };
+      // `tool` is spread AFTER `extra` on purpose: the tool actually being
+      // invoked is authoritative. A caller-supplied `extraContext.tool` must
+      // not be able to make a call to one tool evaluate as another.
+      const context: Record<string, unknown> = {
+        ...extra,
+        tool: name,
+        tool_input: input,
+      };
       const stateSnapshot = options.stateSnapshot
         ? await resolve(options.stateSnapshot, name, input)
         : undefined;

@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 from atlasent.exceptions import AtlaSentDeniedError
 
 from atlasent_langchain import (
+    DEFAULT_TOOL_ACTION,
     DenialResult,
     async_with_langchain_guard,
     with_langchain_guard,
@@ -71,8 +72,8 @@ class TestWithLangChainGuard:
 
         client.protect.assert_called_once_with(
             agent="svc:app",
-            action="search",
-            context={"tool_input": {"query": "x"}},
+            action="agent.tool.invoke",
+            context={"tool_input": {"query": "x"}, "tool": "search"},
             state_snapshot=None,
         )
 
@@ -228,3 +229,105 @@ class TestAsyncWithLangChainGuard:
 
         assert isinstance(result, DenialResult)
         assert "net down" in result.reason
+
+
+# ── default action: agent.tool.invoke (Canon ACT-0029) ───────────────────────
+
+class TestDefaultToolAction:
+    def test_constant_is_agent_tool_invoke(self) -> None:
+        assert DEFAULT_TOOL_ACTION == "agent.tool.invoke"
+
+    def test_defaults_action_to_agent_tool_invoke_not_func_name(self) -> None:
+        def delete_user(user_id: str) -> str:
+            return ""
+
+        client = make_sync_client()
+        with_langchain_guard(delete_user, client, agent="bot")(user_id="u1")
+
+        _, kwargs = client.protect.call_args
+        assert kwargs["action"] == "agent.tool.invoke"
+        assert kwargs["action"] != "delete_user"
+
+    def test_context_tool_is_func_name(self) -> None:
+        def delete_user(user_id: str) -> str:
+            return ""
+
+        client = make_sync_client()
+        with_langchain_guard(delete_user, client, agent="bot")(user_id="u1")
+
+        _, kwargs = client.protect.call_args
+        assert kwargs["context"]["tool"] == "delete_user"
+        assert kwargs["context"]["tool_input"] == {"user_id": "u1"}
+
+    def test_extra_context_cannot_override_tool(self) -> None:
+        def delete_user(user_id: str) -> str:
+            return ""
+
+        client = make_sync_client()
+        with_langchain_guard(
+            delete_user,
+            client,
+            agent="bot",
+            extra_context={"tool": "read_only_lookup", "environment": "production"},
+        )(user_id="u1")
+
+        _, kwargs = client.protect.call_args
+        assert kwargs["context"]["tool"] == "delete_user"
+        assert kwargs["context"]["environment"] == "production"
+
+    def test_extra_context_dict_is_not_mutated(self) -> None:
+        def fn() -> str:
+            return ""
+
+        extra = {"tool": "x", "environment": "staging"}
+        client = make_sync_client()
+        with_langchain_guard(fn, client, agent="bot", extra_context=extra)()
+        assert extra == {"tool": "x", "environment": "staging"}
+
+    def test_explicit_action_still_used(self) -> None:
+        def fn() -> str:
+            return ""
+
+        client = make_sync_client()
+        with_langchain_guard(
+            fn, client, agent="bot", action="database.query.execute"
+        )()
+
+        _, kwargs = client.protect.call_args
+        assert kwargs["action"] == "database.query.execute"
+        assert kwargs["context"]["tool"] == "fn"
+
+    def test_does_not_invent_environment(self) -> None:
+        def fn() -> str:
+            return ""
+
+        client = make_sync_client()
+        with_langchain_guard(fn, client, agent="bot")()
+
+        _, kwargs = client.protect.call_args
+        assert "environment" not in kwargs["context"]
+
+    async def test_async_defaults_and_tool_binding(self) -> None:
+        async def delete_user(user_id: str) -> str:
+            return ""
+
+        client = make_async_client()
+        await async_with_langchain_guard(
+            delete_user, client, agent="bot", extra_context={"tool": "spoofed"}
+        )(user_id="u1")
+
+        _, kwargs = client.protect.call_args
+        assert kwargs["action"] == "agent.tool.invoke"
+        assert kwargs["context"]["tool"] == "delete_user"
+
+    async def test_async_explicit_action_still_used(self) -> None:
+        async def fn() -> str:
+            return ""
+
+        client = make_async_client()
+        await async_with_langchain_guard(
+            fn, client, agent="bot", action="custom.action.run"
+        )()
+
+        _, kwargs = client.protect.call_args
+        assert kwargs["action"] == "custom.action.run"

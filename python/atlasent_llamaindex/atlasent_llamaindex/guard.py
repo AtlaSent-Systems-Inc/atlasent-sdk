@@ -48,6 +48,13 @@ from typing import Any
 
 from atlasent.exceptions import AtlaSentDeniedError  # type: ignore[import]
 
+#: Action evaluated when no ``action`` is given: the canonical action for an
+#: agent invoking a tool (Canon ACT-0029). Its action class requires context
+#: inputs ``tool`` (always supplied by the guard, from ``func.__name__``) and
+#: ``environment`` (supply it via ``extra_context`` -- the guard never invents
+#: one).
+DEFAULT_TOOL_ACTION = "agent.tool.invoke"
+
 
 # ── DenialResult ──────────────────────────────────────────────────────────────
 
@@ -98,7 +105,11 @@ def with_llamaindex_guard(
         func: The callable to wrap.
         client: A sync ``AtlaSentClient`` instance.
         agent: Agent identifier (e.g. ``"service:knowledge-bot"``).
-        action: Action name. Defaults to ``func.__name__``.
+        action: Action type. Defaults to :data:`DEFAULT_TOOL_ACTION`
+            (``"agent.tool.invoke"``). The tool's own name (``func.__name__``)
+            is always sent as ``context["tool"]``. Pass
+            ``action=func.__name__`` to restore the previous default (which
+            names no runtime action class, so every call was denied).
         extra_context: Additional context merged into every evaluation.
         on_deny: ``"throw"`` (default) propagates :class:`AtlaSentDeniedError`;
             ``"tool-result"`` returns a :class:`DenialResult` instead.
@@ -107,12 +118,17 @@ def with_llamaindex_guard(
         A wrapped callable. Pass it to ``FunctionTool.from_defaults(fn=...)``,
         ``QueryEngineTool``, etc. as the underlying function.
     """
-    resolved_action = action or func.__name__
+    resolved_action = action or DEFAULT_TOOL_ACTION
+    tool_name = func.__name__
 
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         ctx: dict[str, Any] = dict(extra_context or {})
         ctx["tool_input"] = kwargs if kwargs else (args[0] if args else {})
+        # Set AFTER extra_context is copied: the tool actually being invoked
+        # is authoritative, so extra_context cannot relabel this call as a
+        # different tool.
+        ctx["tool"] = tool_name
 
         try:
             permit = client.protect(
@@ -174,16 +190,25 @@ def async_with_llamaindex_guard(
         func: The async callable to wrap.
         client: An ``AsyncAtlaSentClient`` instance.
         agent: Agent identifier.
-        action: Action name. Defaults to ``func.__name__``.
+        action: Action type. Defaults to :data:`DEFAULT_TOOL_ACTION`
+            (``"agent.tool.invoke"``). The tool's own name (``func.__name__``)
+            is always sent as ``context["tool"]``. Pass
+            ``action=func.__name__`` to restore the previous default (which
+            names no runtime action class, so every call was denied).
         extra_context: Additional context merged into every evaluation.
         on_deny: ``"throw"`` or ``"tool-result"``.
     """
-    resolved_action = action or func.__name__
+    resolved_action = action or DEFAULT_TOOL_ACTION
+    tool_name = func.__name__
 
     @functools.wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
         ctx: dict[str, Any] = dict(extra_context or {})
         ctx["tool_input"] = kwargs if kwargs else (args[0] if args else {})
+        # Set AFTER extra_context is copied: the tool actually being invoked
+        # is authoritative, so extra_context cannot relabel this call as a
+        # different tool.
+        ctx["tool"] = tool_name
 
         try:
             permit = await client.protect(

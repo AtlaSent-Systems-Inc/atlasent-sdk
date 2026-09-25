@@ -34,7 +34,13 @@ def search(query: str) -> str:
     return f"Results for: {query}"
 
 # Wrap the function — AtlaSent evaluates before every call
-guarded_search = with_langchain_guard(search, client, agent="service:analytics-bot")
+guarded_search = with_langchain_guard(
+    search,
+    client,
+    agent="service:analytics-bot",
+    # agent.tool.invoke (the default action) requires `environment`
+    extra_context={"environment": "production"},
+)
 
 # Pass to LangChain exactly as you would the original function
 langchain_tool = tool(guarded_search)
@@ -73,13 +79,49 @@ tool = StructuredTool.from_function(coroutine=guarded_fetch)
 | `func` | callable | required | The sync callable to wrap |
 | `client` | `AtlaSentClient` | required | Authenticated AtlaSent client |
 | `agent` | `str` | required | Agent identifier (e.g. `"service:bot"`) |
-| `action` | `str` | `func.__name__` | Action type for policy evaluation |
-| `extra_context` | `dict` | `{}` | Additional context merged into every evaluation |
+| `action` | `str` | `"agent.tool.invoke"` | Action type for policy evaluation (see [Action and context](#action-and-context)) |
+| `extra_context` | `dict` | `{}` | Additional context merged into every evaluation. Must carry `environment` for the default `agent.tool.invoke` action. Cannot override `tool`. |
 | `on_deny` | `"throw"` \| `"tool-result"` | `"throw"` | What to do when denied |
 
 ### `async_with_langchain_guard(func, client, *, agent, action=None, extra_context=None, on_deny="throw")`
 
 Same parameters as above, wraps an async callable instead.
+
+## Action and context
+
+Every guarded call is evaluated as **`agent.tool.invoke`** (Canon ACT-0029,
+exported as `DEFAULT_TOOL_ACTION`) unless you pass `action`. That is the
+canonical action for an agent invoking a tool. Earlier builds defaulted the
+action to `func.__name__` (e.g. `"search"`), which names no runtime action
+class, so every call was denied.
+
+The guard always sends the wrapped function's `__name__` as
+`context["tool"]`, alongside `context["tool_input"]`. `tool` is written after
+`extra_context` is copied, so `extra_context` cannot relabel a call as a
+different tool (your `extra_context` dict is not mutated).
+
+**The `agent.tool.invoke` action class requires two context inputs: `tool`
+and `environment`.** The guard supplies `tool`. It does **not** invent an
+`environment` -- pass it yourself, or the runtime denies the call for a
+missing required input:
+
+```python
+guarded = with_langchain_guard(
+    search,
+    client,
+    agent="service:bot",
+    extra_context={"environment": "production"},
+    state_snapshot={"source": "my-service", "complete": True},
+)
+```
+
+To keep a per-tool action class of your own, pass `action="..."`; it is used
+exactly as before, and must name an action class that exists in your org.
+
+**Target binding is not applied.** `AtlaSentClient.protect()` takes no
+`resource_id` / `target_id`, so the permit is not bound to the specific tool
+the way `@atlasent/mcp-server`'s tool gate binds it. `context["tool"]` is
+policy input and audit evidence, not a verify-time target check.
 
 ## Error handling
 

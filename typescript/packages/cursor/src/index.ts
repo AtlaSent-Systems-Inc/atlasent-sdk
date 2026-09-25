@@ -1,4 +1,5 @@
 export {
+  DEFAULT_TOOL_ACTION,
   withCursorGuard,
   type CursorGuardedTool,
   type CursorGuardOptions,
