@@ -7,6 +7,11 @@ on:
   push:
     tags:
       - "python-v*"
+      # `python-v*` also matches atlasent-v2-alpha's `python-v2-alpha-v*`
+      # tags, which would start a doomed main-SDK publish (tag/version
+      # mismatch) on every v2-alpha release. That package has its own
+      # workflow (publish-pypi-v2alpha.yml).
+      - "!python-v2-alpha-v*"
   workflow_dispatch:
     inputs:
       version:
@@ -152,7 +157,12 @@ jobs:
           api-url: https://kttccumlnmdtupgbyfue.supabase.co/functions/v1
           actor: ${{ github.actor }}
           environment: production
-          context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'
+          # `package` selects this package's package.release template
+          # (package_release_atlasent_sdk_*_pypi_tag_release_manager,
+          # atlasent-api docs/runbooks/package_release_v10). Without it no
+          # template matches and the gate denies. Keep it equal to the
+          # PyPI project name.
+          context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}", "package": "atlasent"}'
 
       - name: Install build dependencies
         run: |
