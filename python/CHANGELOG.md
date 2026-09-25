@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-### Framework guards — `atlasent-langchain`, `atlasent-llamaindex` (unpublished)
+### Framework guards — `atlasent-langchain`, `atlasent-llamaindex` 1.5.2 (unpublished)
+
+Version 1.5.2: the `langchain-py-v1.5.1` tag already exists on an older commit and its
+release run was denied at the AtlaSent gate, so it was never published; 1.5.2 is the first release.
 
 - **Fixed: the guards evaluated `func.__name__` as the action, so every
   guarded call was denied.** `with_langchain_guard` /

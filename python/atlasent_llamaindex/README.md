@@ -188,7 +188,7 @@ Environment variable alternative: `ATLASENT_API_KEY` and `ATLASENT_BASE_URL`.
 
 ## Version
 
-`atlasent-llamaindex` 1.5.1 · Python ≥ 3.10 · `atlasent` ≥ 2.15.0 peer dependency
+`atlasent-llamaindex` 1.5.2 · Python ≥ 3.10 · `atlasent` ≥ 2.15.0 peer dependency
 
 ## License
 
