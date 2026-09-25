@@ -33,6 +33,13 @@ jobs:
           cache: npm
           cache-dependency-path: typescript/packages/langchain/package-lock.json
 
+      # The package depends on the root SDK via file:../../ and its tests load
+      # typescript/vitest.config.ts, so the root must be installed and built
+      # first. Without this, a clean checkout fails (ERR_MODULE_NOT_FOUND 'vitest').
+      - name: Install and build the root SDK
+        working-directory: typescript
+        run: npm ci && npm run build
+
       - name: Install dependencies
         run: npm ci
 
@@ -91,6 +98,13 @@ jobs:
           environment: production
           context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'
 
+
+      # The package depends on the root SDK via file:../../ and its tests load
+      # typescript/vitest.config.ts, so the root must be installed and built
+      # first. Without this, a clean checkout fails (ERR_MODULE_NOT_FOUND 'vitest').
+      - name: Install and build the root SDK
+        working-directory: typescript
+        run: npm ci && npm run build
 
       - name: Install dependencies
         run: npm ci
