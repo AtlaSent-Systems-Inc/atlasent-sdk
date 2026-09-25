@@ -34,7 +34,8 @@ permit = protect(
 ```
 
 Set `ATLASENT_API_KEY` in the environment, or call
-`atlasent.configure(api_key=...)`. That's the whole setup.
+`atlasent.configure(api_key=...)`. That's the whole setup. No key yet? See
+[Get an API key](#get-an-api-key).
 
 ## State snapshots (required)
 
@@ -322,7 +323,10 @@ Override with the `base_url` argument.
 
 ## Get an API key
 
-Sign up at [atlasent.io](https://atlasent.io) → Settings → API Keys.
+1. Create an account at **[console.atlasent.io/auth/sign-up](https://console.atlasent.io/auth/sign-up?utm_source=sdk&utm_medium=pypi-readme)**.
+2. In the console, open **API keys** and create a key with the `evaluate:write`
+   and `verify:execute` scopes.
+3. Export it as `ATLASENT_API_KEY`.
 
 ## License
 
