@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AtlaSentClient } from "@atlasent/sdk";
 import { AtlaSentDeniedError } from "@atlasent/sdk";
 import {
+  DEFAULT_TOOL_ACTION,
   withLlamaIndexGuard,
   type LlamaIndexGuardedTool,
 } from "../src/index.js";
@@ -42,7 +43,11 @@ const VERIFY_REVOKED = {
   rateLimit: null,
 };
 
-function makeClient(overrides: Partial<AtlaSentClient> = {}): AtlaSentClient {
+// Overrides are test doubles with partial response fixtures, so they are typed
+// loosely; the full client is cast below as before.
+function makeClient(
+  overrides: Partial<Record<keyof AtlaSentClient, unknown>> = {},
+): AtlaSentClient {
   return {
     evaluate: vi.fn(async () => ALLOW_EVAL),
     verifyPermit: vi.fn(async () => VERIFY_OK),
@@ -76,6 +81,84 @@ const countTool: LlamaIndexGuardedTool = {
 // ── withLlamaIndexGuard ───────────────────────────────────────────────────────
 
 describe("withLlamaIndexGuard", () => {
+
+  // ── default action: agent.tool.invoke (Canon ACT-0029) ───────────────────
+
+  it("exports DEFAULT_TOOL_ACTION as agent.tool.invoke", () => {
+    expect(DEFAULT_TOOL_ACTION).toBe("agent.tool.invoke");
+  });
+
+  it("defaults the action to agent.tool.invoke, never the bare tool name", async () => {
+    const client = makeClient();
+    const [guarded] = withLlamaIndexGuard([searchTool], client, { agent: "bot" });
+    await guarded!.execute({ query: "x" });
+    const evalArg = (client.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Record<string, unknown>;
+    expect(evalArg["action"]).toBe("agent.tool.invoke");
+    expect(evalArg["action"]).not.toBe("vector_search");
+    // verify is presented with the same action the permit was minted for
+    expect(client.verifyPermit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "agent.tool.invoke" }),
+    );
+  });
+
+  it("sets context.tool to the invoked tool's name", async () => {
+    const client = makeClient();
+    const [guarded] = withLlamaIndexGuard([searchTool], client, { agent: "bot" });
+    await guarded!.execute({ query: "x" });
+    const evalArg = (client.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]![0] as { context: Record<string, unknown> };
+    expect(evalArg.context["tool"]).toBe("vector_search");
+    expect(evalArg.context["tool_input"]).toEqual({ query: "x" });
+  });
+
+  it("does not let extraContext override context.tool", async () => {
+    const client = makeClient();
+    const [guarded] = withLlamaIndexGuard([searchTool], client, {
+      agent: "bot",
+      extraContext: { tool: "some_harmless_tool", environment: "production" },
+    });
+    await guarded!.execute({ query: "x" });
+    const evalArg = (client.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]![0] as { context: Record<string, unknown> };
+    expect(evalArg.context["tool"]).toBe("vector_search");
+    // other extraContext fields still pass through untouched
+    expect(evalArg.context["environment"]).toBe("production");
+  });
+
+  it("does not let an extraContext resolver override context.tool", async () => {
+    const client = makeClient();
+    const [guarded] = withLlamaIndexGuard([searchTool], client, {
+      agent: "bot",
+      extraContext: () => ({ tool: "spoofed" }),
+    });
+    await guarded!.execute({ query: "x" });
+    const evalArg = (client.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]![0] as { context: Record<string, unknown> };
+    expect(evalArg.context["tool"]).toBe("vector_search");
+  });
+
+  it("uses an explicit string action exactly as before", async () => {
+    const client = makeClient();
+    const [guarded] = withLlamaIndexGuard([searchTool], client, {
+      agent: "bot",
+      action: "database.query.execute",
+    });
+    await guarded!.execute({ query: "x" });
+    expect(client.evaluate).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "database.query.execute" }),
+    );
+    expect(client.verifyPermit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "database.query.execute" }),
+    );
+  });
+
+  it("does not invent an environment when the caller supplies none", async () => {
+    const client = makeClient();
+    const [guarded] = withLlamaIndexGuard([searchTool], client, { agent: "bot" });
+    await guarded!.execute({ query: "x" });
+    const evalArg = (client.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]![0] as { context: Record<string, unknown> };
+    expect("environment" in evalArg.context).toBe(false);
+    const verifyArg = (client.verifyPermit as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Record<string, unknown>;
+    expect("environment" in verifyArg).toBe(false);
+  });
+
   it("executes tool and annotates object result on ALLOW + verified", async () => {
     const client = makeClient();
     const [guarded] = withLlamaIndexGuard([searchTool], client, { agent: "bot" });
@@ -85,14 +168,14 @@ describe("withLlamaIndexGuard", () => {
     expect(result["_atlasent_audit_hash"]).toBe("hash_alpha");
   });
 
-  it("calls evaluate with metadata.name as action by default", async () => {
+  it("calls evaluate with agent.tool.invoke and context.tool by default", async () => {
     const client = makeClient();
     const [guarded] = withLlamaIndexGuard([searchTool], client, { agent: "svc:app" });
     await guarded!.execute({ query: "x" });
     expect(client.evaluate).toHaveBeenCalledWith({
       agent: "svc:app",
-      action: "vector_search",
-      context: { tool_input: { query: "x" } },
+      action: "agent.tool.invoke",
+      context: { tool: "vector_search", tool_input: { query: "x" } },
     });
   });
 
@@ -198,7 +281,7 @@ describe("withLlamaIndexGuard", () => {
     await guarded!.execute({ query: "x" });
     expect(client.evaluate).toHaveBeenCalledWith(
       expect.objectContaining({
-        context: { env: "prod", tool_input: { query: "x" } },
+        context: { env: "prod", tool: "vector_search", tool_input: { query: "x" } },
       }),
     );
   });

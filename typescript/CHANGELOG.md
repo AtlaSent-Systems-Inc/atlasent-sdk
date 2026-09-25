@@ -8,6 +8,29 @@ follows [semver](https://semver.org/): breaking changes bump the major
 
 ## Unreleased
 
+### Framework guards — `@atlasent/langchain`, `@atlasent/llamaindex`, `@atlasent/cursor` 1.6.0 (unpublished)
+
+- **Fixed: the guards evaluated the bare tool name as the action, so every
+  guarded call was denied.** With no `action` option, `withLangChainGuard`,
+  `withLlamaIndexGuard` and `withCursorGuard` sent the tool's name (e.g.
+  `"delete_user"`) as the action type. The runtime has no action class named
+  after arbitrary tools, so every call failed closed. The default is now
+  **`agent.tool.invoke`** (Canon ACT-0029), exported as `DEFAULT_TOOL_ACTION`.
+- **Added: `context.tool` is always the invoked tool's name.** It is written
+  after `extraContext` is merged, so a caller-supplied `extraContext.tool`
+  cannot relabel the call as a different tool. `context.tool_input` is
+  unchanged.
+- The `agent.tool.invoke` action class requires context inputs `tool` and
+  `environment`. The guard supplies `tool` and does **not** invent an
+  `environment`; pass it via `extraContext` (see each package README).
+- An explicit `action` option (string or resolver) is used exactly as before.
+- Not changed: the permit is **not** bound to the tool as a verify-time target
+  (`@atlasent/sdk`'s evaluate request carries no top-level `resource_id` and
+  `verifyPermit` presents no `target_id`).
+- Test-only: the guard test suites' `makeClient` doubles are typed loosely so
+  `npm run typecheck` (a step in each `publish-npm-*.yml`) passes; it
+  previously failed with 4 `TS2322` errors per package.
+
 ### Fixed
 
 - **The no-caller-digest path still presented an execution-payload digest the

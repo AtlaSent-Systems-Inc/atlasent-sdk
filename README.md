@@ -6,6 +6,16 @@ SDK layer for AtlaSent — thin wrappers around atlasent-api. Python (`atlasent`
 [![npm](https://img.shields.io/npm/v/@atlasent/sdk.svg)](https://www.npmjs.com/package/@atlasent/sdk)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
+**AtlaSent stops risky changes to production unless someone approved them, and gives you proof for your auditor.**
+
+These SDKs add that check to your own code in Python or TypeScript:
+
+1. **Wrap the risky call** (a deploy, a migration, a payment, an agent's tool call) with `protect()`.
+2. **It waits for approval** if your policy says a person must sign off. If not approved, it doesn't run.
+3. **Every run gets a signed receipt** your auditor can check, without trusting us.
+
+### For engineers
+
 Client SDKs for **authorization of consequential computational actions**.
 
 AtlaSent performs **execution-time authorization**: before a governed side effect,

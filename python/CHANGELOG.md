@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Framework guards — `atlasent-langchain`, `atlasent-llamaindex` 1.5.2 (unpublished)
+
+Version 1.5.2: the `langchain-py-v1.5.1` tag already exists on an older commit and its
+release run was denied at the AtlaSent gate, so it was never published; 1.5.2 is the first release.
+
+- **Fixed: the guards evaluated `func.__name__` as the action, so every
+  guarded call was denied.** `with_langchain_guard` /
+  `async_with_langchain_guard` / `with_llamaindex_guard` /
+  `async_with_llamaindex_guard` now default `action` to **`agent.tool.invoke`**
+  (Canon ACT-0029), exported as `DEFAULT_TOOL_ACTION`.
+- **Added: `context["tool"]` is always the wrapped function's `__name__`**,
+  set after `extra_context` is copied so it cannot be overridden (the caller's
+  dict is not mutated). `context["tool_input"]` is unchanged.
+- The `agent.tool.invoke` action class requires context inputs `tool` and
+  `environment`. The guard does **not** invent an `environment`; pass it via
+  `extra_context`.
+- An explicit `action=` is used exactly as before.
+- Not changed: no verify-time target binding (`protect()` takes no
+  `resource_id` / `target_id`).
+
 ### Added
 
 - **`execution_payload_hash` on every protect surface** — `AtlaSentClient.protect`,
